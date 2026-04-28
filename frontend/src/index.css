@@ -1415,6 +1415,21 @@ select {
 }
 .modal-titlebar h2 { margin: 0; font-size: 22px; font-weight: 800; }
 .modal-titlebar .eyebrow { margin: 0 0 3px; }
+.modal-titlebar.installment-modal-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--card);
+}
+.modal-titlebar.installment-modal-titlebar h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
 .modal-icon {
   width: 46px;
   height: 46px;
@@ -1523,6 +1538,194 @@ select {
 .invoice-modal-body select {
   width: 100%;
 }
+.installment-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.installment-per-value {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: -2px;
+  padding: 18px 16px;
+  border: 1px solid rgba(59,130,246,0.18);
+  border-radius: 10px;
+  background: rgba(59,130,246,0.08);
+  color: var(--primary);
+  text-align: center;
+}
+.installment-per-value strong {
+  font-size: 18px;
+  font-weight: 800;
+}
+.installment-per-value small {
+  color: #1D4ED8;
+  font-size: 12px;
+  font-weight: 700;
+}
+.installment-selector {
+  display: grid;
+  gap: 14px;
+}
+.installment-selector-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.installment-selector-head strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 15px;
+}
+.template-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.template-picker-card {
+  display: grid;
+  gap: 10px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(59,130,246,0.04));
+  color: var(--text);
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.template-picker-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--template-color) 55%, var(--border));
+}
+.template-picker-card.active {
+  border-color: var(--template-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--template-color) 22%, transparent);
+}
+.template-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.template-picker-title i,
+.month-selector-summary strong i {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--template-color);
+  flex: 0 0 auto;
+}
+.template-picker-card strong {
+  font-size: 15px;
+}
+.template-picker-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.month-selector-panel {
+  --month-scroll-fade-bg: rgba(15,23,42,0.16);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--month-scroll-fade-bg);
+  animation: selector-slide-down .22s ease;
+}
+.month-selector-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.month-selector-summary strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+.link-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+.month-selector-content {
+  display: grid;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.month-selector-content::before,
+.month-selector-content::after {
+  content: "";
+  position: absolute;
+  top: 28px;
+  bottom: 0;
+  width: 36px;
+  z-index: 1;
+  pointer-events: none;
+}
+.month-selector-content::before {
+  left: 0;
+  width: 10px;
+  background: linear-gradient(to right, var(--month-scroll-fade-bg), transparent);
+}
+.month-selector-content::after {
+  right: 0;
+  background: linear-gradient(to left, var(--month-scroll-fade-bg) 36%, transparent);
+}
+.month-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  padding: 8px 36px 12px 0;
+  scrollbar-color: rgba(59,130,246,0.72) rgba(148,163,184,0.18);
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+.month-chip-row::after {
+  content: "";
+  flex: 0 0 12px;
+}
+.month-chip {
+  min-width: 88px;
+  flex-shrink: 0;
+  display: grid;
+  gap: 5px;
+  padding: 12px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.month-chip strong {
+  font-size: 15px;
+}
+.month-chip span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.month-chip.active {
+  border-color: var(--template-color);
+  background: color-mix(in srgb, var(--template-color) 11%, var(--card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--template-color) 18%, transparent);
+}
 .computed-value {
   margin: -4px 0 0;
   color: var(--primary);
@@ -1591,6 +1794,34 @@ select {
   font-weight: 700;
 }
 .duplicate-summary { margin: 0; color: var(--text); font-size: 13px; font-weight: 700; }
+.installment-modal .duplicate-summary {
+  font-size: 14px;
+  font-weight: 800;
+}
+.installment-modal .month-chip-row::-webkit-scrollbar {
+  height: 7px;
+}
+.installment-modal .month-chip-row::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(148,163,184,0.18);
+}
+.installment-modal .month-chip-row::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(59,130,246,0.85), rgba(139,92,246,0.85));
+}
+.installment-modal .month-chip-row::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(59,130,246,1), rgba(139,92,246,1));
+}
+@keyframes selector-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .modal-actions {
   display: grid;
   grid-template-columns: 1fr 1.4fr;
@@ -1891,6 +2122,9 @@ select {
   .stepper-item:last-child { justify-content: flex-start; }
   .modal-actions, .review-toolbar { grid-template-columns: 1fr; }
   .transaction-modal-body {
+    grid-template-columns: 1fr;
+  }
+  .installment-form-row {
     grid-template-columns: 1fr;
   }
   .transaction-modal-actions {

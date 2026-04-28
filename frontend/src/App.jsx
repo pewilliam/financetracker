@@ -956,13 +956,44 @@ function InstallmentsPage({ installments, onNew, onDetails }) {
 function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
-  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
-  const installmentAmount = parseMoneyInput(form.total_amount);
-  const total = installmentAmount * count;
-  const firstInvoice = invoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
-  const sortedInvoices = [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const filteredInvoices = sortedInvoices.filter((invoice) => `${invoice.name} ${invoice.due_date}`.toLowerCase().includes(invoiceSearch.toLowerCase()));
+  const total = parseMoneyInput(form.total_amount);
+  const totalCents = Number(String(form.total_amount || "").replace(/\D/g, "") || 0);
+  const baseInstallmentCents = count ? Math.floor(totalCents / count) : 0;
+  const lastInstallmentCents = count ? totalCents - (baseInstallmentCents * (count - 1)) : 0;
+  const hasRoundingAdjustment = count > 1 && totalCents % count !== 0;
+  const installmentAmount = baseInstallmentCents / 100;
+  const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
+  const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date)), [invoices]);
+  const firstInvoice = sortedInvoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
+  const templateOptions = useMemo(() => {
+    const grouped = new Map();
+    sortedInvoices.forEach((invoice) => {
+      const templateId = String(invoice.template_id ?? invoice.id);
+      const current = grouped.get(templateId);
+      if (current) {
+        current.invoices.push(invoice);
+        current.count += 1;
+        return;
+      }
+      grouped.set(templateId, {
+        id: templateId,
+        name: invoice.name,
+        color: normalizeInvoiceColor(invoice.color),
+        invoices: [invoice],
+        count: 1
+      });
+    });
+    return [...grouped.values()].sort((a, b) => (
+      a.name.localeCompare(b.name, "pt-BR") ||
+      a.invoices[0].due_date.localeCompare(b.invoices[0].due_date)
+    ));
+  }, [sortedInvoices]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(() => String(firstInvoice?.template_id ?? ""));
+  const [showTemplatePicker, setShowTemplatePicker] = useState(() => !firstInvoice);
+  const selectedTemplate = templateOptions.find((template) => template.id === selectedTemplateId) || null;
+  const templateInvoices = selectedTemplate?.invoices || [];
   const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
 
   const matchingInvoice = (dateString) => invoices.find((invoice) => (
@@ -970,18 +1001,55 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
     invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
   ));
 
-  const updateForm = (patch) => setForm({ ...form, ...patch });
   const handleMoneyChange = (value) => updateForm({ total_amount: formatMoneyInput(value) });
+
+  useEffect(() => {
+    if (!templateOptions.length) {
+      setSelectedTemplateId("");
+      setShowTemplatePicker(false);
+      return;
+    }
+    if (firstInvoice?.template_id) {
+      setSelectedTemplateId(String(firstInvoice.template_id));
+      setShowTemplatePicker(false);
+      return;
+    }
+    if (templateOptions.length === 1) {
+      const [onlyTemplate] = templateOptions;
+      setSelectedTemplateId(onlyTemplate.id);
+      setShowTemplatePicker(false);
+      if (!form.first_invoice_id && onlyTemplate.invoices[0]) {
+        updateForm({ first_invoice_id: String(onlyTemplate.invoices[0].id) });
+      }
+      return;
+    }
+    setShowTemplatePicker(true);
+  }, [firstInvoice, form.first_invoice_id, templateOptions]);
+
+  const selectTemplate = (template) => {
+    setSelectedTemplateId(template.id);
+    setShowTemplatePicker(false);
+    if (!template.invoices.some((invoice) => String(invoice.id) === String(form.first_invoice_id))) {
+      updateForm({ first_invoice_id: String(template.invoices[0]?.id || "") });
+    }
+  };
+
+  const resetTemplateSelection = () => {
+    setSelectedTemplateId("");
+    setShowTemplatePicker(true);
+    updateForm({ first_invoice_id: "" });
+  };
 
   const buildDrafts = () => Array.from({ length: count }, (_, index) => {
     const dueDate = addMonthsToDate(firstInvoice.due_date, index);
     const matched = matchingInvoice(dueDate);
+    const amount = index === count - 1 ? adjustedLastInstallmentAmount : installmentAmount;
     return {
       id: `${Date.now()}-${index}`,
       number: index + 1,
       month: dueDate,
       invoice_id: matched?.id || "",
-      amount: formatMoney(installmentAmount)
+      amount: formatMoney(amount)
     };
   });
 
@@ -1021,9 +1089,8 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
     <div className="modal-layer">
       <button className="modal-backdrop" onClick={onClose} />
       <form className={`modal-card invoice-modal installment-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts}>
-        <div className="modal-titlebar">
-          <div className="modal-icon"><CreditCard size={22} /></div>
-          <div><p className="eyebrow">Compra parcelada</p><h2>Adicionar compra parcelada</h2></div>
+        <div className="modal-titlebar installment-modal-titlebar">
+          <h2>Adicionar compra parcelada</h2>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-stepper">
@@ -1034,21 +1101,76 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
         {step === 1 ? (
           <>
             <div className="invoice-modal-body">
-              <label><span>Descrição da compra</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
-              <label><span>Valor por parcela</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
-              <label><span>Número de parcelas</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
-              <p className="computed-value">Total estimado: {formatMoney(total)}</p>
+              <label><span>Descrição da compra</span><input placeholder="Ex: PlayStation 5, iPhone, Notebook..." value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
+              <div className="installment-form-row">
+                <label><span>Valor total da compra</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
+                <label><span>Número de parcelas</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
+              </div>
+              <div className="installment-per-value" aria-live="polite">
+                <strong>{`= ${formatMoney(installmentAmount)} por parcela`}</strong>
+                {hasRoundingAdjustment && <small>{`Última parcela será ${formatMoney(adjustedLastInstallmentAmount)} (ajuste de centavos)`}</small>}
+              </div>
               <label className={`duplicate-option ${form.different_values ? "active" : ""}`}>
                 <input type="checkbox" checked={form.different_values} onChange={(event) => updateForm({ different_values: event.target.checked })} />
                 <span className="duplicate-icon"><CreditCard size={20} /></span>
                 <span><strong>Parcelas com valores diferentes</strong><small>Edite cada valor na revisão.</small></span>
               </label>
-              <label><span>Buscar fatura inicial</span><input value={invoiceSearch} onChange={(event) => setInvoiceSearch(event.target.value)} placeholder="Nome ou data" /></label>
-              <label><span>Fatura inicial</span><select value={form.first_invoice_id} onChange={(event) => updateForm({ first_invoice_id: event.target.value })} required>
-                <option value="">Selecione uma fatura</option>
-                {filteredInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} ({normalizeInvoiceColor(invoice.color)}) — vence {formatDateShort(invoice.due_date)}</option>)}
-              </select></label>
-              <p className="duplicate-summary">{firstInvoice ? `Parcelas distribuídas de ${formatMonthShort(firstInvoice.due_date)} até ${formatMonthShort(endDate)}` : "Selecione a fatura inicial para ver a distribuição."}</p>
+              <section className="installment-selector">
+                <div className="installment-selector-head">
+                  <div>
+                    <span className="field-label">Fatura inicial</span>
+                    <strong>Escolha o template e o mês da 1ª parcela</strong>
+                  </div>
+                </div>
+
+                {(showTemplatePicker || !selectedTemplate) && (
+                  <div className="template-picker-grid">
+                    {templateOptions.map((template) => (
+                      <button
+                        key={template.id}
+                        className={`template-picker-card ${template.id === selectedTemplateId ? "active" : ""}`}
+                        type="button"
+                        style={{ "--template-color": template.color }}
+                        onClick={() => selectTemplate(template)}
+                      >
+                        <span className="template-picker-title">
+                          <i aria-hidden="true" />
+                          <strong>{template.name}</strong>
+                        </span>
+                        <small>{template.count} {template.count === 1 ? "fatura disponível" : "faturas disponíveis"}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedTemplate && !showTemplatePicker && (
+                  <div className="month-selector-panel">
+                    <div className="month-selector-summary">
+                      <span>Template selecionado:</span>
+                      <strong><i aria-hidden="true" style={{ "--template-color": selectedTemplate.color }} /> {selectedTemplate.name}</strong>
+                      {templateOptions.length > 1 && <button type="button" className="link-btn" onClick={resetTemplateSelection}>Trocar</button>}
+                    </div>
+                    <div className="month-selector-content">
+                      <span className="field-label">Mês inicial da 1ª parcela</span>
+                      <div className="month-chip-row" role="list" aria-label={`Faturas do template ${selectedTemplate.name}`}>
+                        {templateInvoices.map((invoice) => (
+                          <button
+                            key={invoice.id}
+                            className={`month-chip ${String(invoice.id) === String(form.first_invoice_id) ? "active" : ""}`}
+                            type="button"
+                            style={{ "--template-color": selectedTemplate.color }}
+                            onClick={() => updateForm({ first_invoice_id: String(invoice.id) })}
+                          >
+                            <strong>{formatMonthShortCompact(invoice.due_date)}</strong>
+                            <span>{formatDateShort(invoice.due_date)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+              <p className="duplicate-summary">{firstInvoice ? `Parcelas distribuídas de ${formatMonthSlash(firstInvoice.due_date)} até ${formatMonthSlash(endDate)}` : "Selecione a fatura inicial para ver a distribuição."}</p>
             </div>
             <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary">Próximo →</button></div>
           </>
@@ -1366,6 +1488,19 @@ function formatMonthShort(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
   const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "");
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatMonthShortCompact(dateString) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "").replace(" de ", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatMonthSlash(dateString) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const month = date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+  const normalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+  return `${normalizedMonth}/${date.getFullYear()}`;
 }
 
 function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) {
