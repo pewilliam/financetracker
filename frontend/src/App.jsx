@@ -255,7 +255,7 @@ function AppShell() {
           await createTransaction(payload.data);
         }
       }
-      toast.success("Lançamento salvo");
+      toast.success(editing ? "Lançamento salvo" : "Lançamento adicionado!");
       setDrawerOpen(false);
       await refresh();
     } catch {
@@ -419,7 +419,7 @@ function AppShell() {
         </div>
       </main>
 
-      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} invoices={invoices} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
+      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} invoices={invoices} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} onCreateInvoice={openNewInvoiceModal} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}

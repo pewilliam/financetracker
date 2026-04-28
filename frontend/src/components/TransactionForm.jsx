@@ -1,7 +1,54 @@
 import { useEffect, useState } from "react";
-import IMask from "imask";
-import { ArrowDownCircle, ArrowUpCircle, CalendarDays, ReceiptText, X } from "lucide-react";
-import { parseMoneyInput } from "../utils/format.js";
+import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
+import { formatDateShort, parseMoneyInput } from "../utils/format.js";
+
+const CREATE_INVOICE_VALUE = "__create_invoice__";
+
+function getDayFromDate(dateString) {
+  const day = Number(dateString?.split("-")?.[2]);
+  return day ? String(day) : "";
+}
+
+function addMonths(dateString, months) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, month - 1 + months, day || 1);
+  return date;
+}
+
+function formatMonthShort(date) {
+  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+  return label.replace(".", "").replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function parseTypedAmount(value) {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+  if (text.includes(",")) return parseMoneyInput(text);
+  return Number(text.replace(/\D/g, "") || 0);
+}
+
+function formatAmountForEditing(value) {
+  const text = String(value || "").replace(/[^\d,]/g, "");
+  const [integerPart, decimalPart] = text.split(",");
+  const digits = integerPart.replace(/\D/g, "");
+  const number = Number(digits || 0);
+  const integer = number ? number.toLocaleString("pt-BR") : "";
+  if (decimalPart === undefined) return integer;
+  return `${integer},${decimalPart.replace(/\D/g, "").slice(0, 2)}`;
+}
+
+function formatAmountAsCurrency(value) {
+  const amount = parseTypedAmount(value);
+  return amount
+    ? amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "";
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(number, min), max);
+}
 
 export default function TransactionForm({
   open,
@@ -9,7 +56,8 @@ export default function TransactionForm({
   date,
   invoices = [],
   onClose,
-  onSave
+  onSave,
+  onCreateInvoice
 }) {
   const [form, setForm] = useState({
     date: date || "",
@@ -22,6 +70,10 @@ export default function TransactionForm({
     day_of_month: "",
     recurrence_months: "12"
   });
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [exclusiveHint, setExclusiveHint] = useState("");
 
   useEffect(() => {
     if (initial) {
@@ -52,50 +104,149 @@ export default function TransactionForm({
         recurrence_months: "12"
       });
     }
+    setErrors({});
+    setTouched({});
+    setSaving(false);
+    setExclusiveHint("");
   }, [initial, date, open]);
 
   const handleAmount = (value) => {
-    const number = parseMoneyInput(value);
-    const mask = IMask.createMask({
-      mask: "R$ num",
-      blocks: {
-        num: {
-          mask: Number,
-          scale: 2,
-          thousandsSeparator: ".",
-          radix: ",",
-          padFractionalZeros: true,
-          normalizeZeros: true
-        }
-      }
-    });
-    mask.resolve(number ? number.toFixed(2).replace(".", ",") : "");
-    setForm({ ...form, amount: number ? mask.value : "" });
+    const formatted = formatAmountForEditing(value);
+    setForm({ ...form, amount: formatted });
+    if (touched.amount) validateField("amount", formatted);
   };
 
-  const handleSubmit = (event) => {
+  const setField = (field, value) => {
+    const nextForm = { ...form, [field]: value };
+    if (field === "date" && form.recurrence && !touched.day_of_month) {
+      nextForm.day_of_month = getDayFromDate(value);
+    }
+    setForm(nextForm);
+    if (touched[field]) validateField(field, value, nextForm);
+  };
+
+  const validateField = (field, value = form[field], source = form) => {
+    const nextErrors = { ...errors };
+    const data = { ...source, [field]: value };
+    if (field === "amount") {
+      const amount = parseTypedAmount(value);
+      if (!amount || amount <= 0) nextErrors.amount = "Informe um valor maior que zero";
+      else delete nextErrors.amount;
+    }
+    if (field === "date") {
+      if (!value || Number.isNaN(new Date(`${value}T00:00:00`).getTime())) nextErrors.date = "Selecione uma data válida";
+      else delete nextErrors.date;
+    }
+    if (field === "day_of_month" || field === "recurrence") {
+      const day = Number(data.day_of_month);
+      if (data.recurrence && (!data.day_of_month || day < 1 || day > 31)) nextErrors.day_of_month = "Informe o dia do mês";
+      else delete nextErrors.day_of_month;
+    }
+    if (field === "invoice_id" || field === "is_future") {
+      if (data.is_future && !data.invoice_id) nextErrors.invoice_id = "Selecione ou crie uma fatura";
+      else delete nextErrors.invoice_id;
+    }
+    setErrors(nextErrors);
+    return nextErrors;
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+    const amount = parseTypedAmount(form.amount);
+    if (!amount || amount <= 0) nextErrors.amount = "Informe um valor maior que zero";
+    if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) nextErrors.date = "Selecione uma data válida";
+    if (form.recurrence) {
+      const day = Number(form.day_of_month);
+      if (!form.day_of_month || day < 1 || day > 31) nextErrors.day_of_month = "Informe o dia do mês";
+    }
+    if (form.is_future && !form.invoice_id) nextErrors.invoice_id = "Selecione ou crie uma fatura";
+    setTouched({ amount: true, date: true, day_of_month: true, invoice_id: true });
+    setErrors(nextErrors);
+    return nextErrors;
+  };
+
+  const handleBlur = (field) => {
+    setTouched({ ...touched, [field]: true });
+    if (field === "amount") {
+      const formatted = formatAmountAsCurrency(form.amount);
+      setForm({ ...form, amount: formatted });
+      validateField(field, formatted);
+      return;
+    }
+    validateField(field);
+  };
+
+  const toggleFuture = () => {
+    const enabled = !form.is_future;
+    if (enabled && form.recurrence) setExclusiveHint("Fatura futura e recorrência são alternativas. Ativei fatura futura e desliguei recorrência.");
+    else setExclusiveHint("");
+    const nextForm = {
+      ...form,
+      is_future: enabled,
+      recurrence: enabled ? false : form.recurrence,
+      invoice_id: enabled ? form.invoice_id : ""
+    };
+    setForm(nextForm);
+    validateField("is_future", enabled, nextForm);
+  };
+
+  const toggleRecurrence = () => {
+    const enabled = !form.recurrence;
+    if (enabled && form.is_future) setExclusiveHint("Fatura futura e recorrência são alternativas. Ativei recorrência e desliguei fatura futura.");
+    else setExclusiveHint("");
+    const nextForm = {
+      ...form,
+      recurrence: enabled,
+      is_future: enabled ? false : form.is_future,
+      invoice_id: enabled ? "" : form.invoice_id,
+      day_of_month: enabled ? form.day_of_month || getDayFromDate(form.date) : form.day_of_month,
+      recurrence_months: enabled ? form.recurrence_months || "12" : form.recurrence_months
+    };
+    setForm(nextForm);
+    validateField("recurrence", enabled, nextForm);
+  };
+
+  const handleInvoiceChange = (value) => {
+    if (value === CREATE_INVOICE_VALUE) {
+      onCreateInvoice?.();
+      return;
+    }
+    setField("invoice_id", value);
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const amount = parseMoneyInput(form.amount);
-    if (!form.date || !amount) return;
+    const amount = parseTypedAmount(form.amount);
+    if (Object.keys(validateForm()).length) return;
 
-    onSave({
-      data: {
-        date: form.date,
-        type: form.type,
-        amount,
-        description: form.description,
-        is_future: form.is_future,
-        invoice_id: form.invoice_id ? Number(form.invoice_id) : null
-      },
-      recurrence: form.recurrence
-        ? {
-            enabled: true,
-            day_of_month: Number(form.day_of_month || 1),
-            recurrence_months: Number(form.recurrence_months || 1)
-          }
-        : null
-    });
+    setSaving(true);
+    try {
+      await onSave({
+        data: {
+          date: form.date,
+          type: form.type,
+          amount,
+          description: form.description,
+          is_future: form.is_future,
+          invoice_id: form.invoice_id ? Number(form.invoice_id) : null
+        },
+        recurrence: form.recurrence
+          ? {
+              enabled: true,
+              day_of_month: Number(form.day_of_month || 1),
+              recurrence_months: recurrenceMonths
+            }
+          : null
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const isExpense = form.type === "expense";
+  const recurrenceMonths = clampNumber(form.recurrence_months, 1, 60, 12);
+  const recurrenceDay = clampNumber(form.day_of_month || getDayFromDate(form.date), 1, 31, 1);
+  const recurrenceEnd = form.date ? formatMonthShort(addMonths(form.date, recurrenceMonths)) : "";
 
   if (!open) return null;
 
@@ -104,85 +255,101 @@ export default function TransactionForm({
       <button className="modal-backdrop" onClick={onClose} aria-label="Fechar" />
       <form className="modal-card transaction-modal" onSubmit={handleSubmit}>
         <div className="modal-titlebar">
-          <div className="modal-icon"><ReceiptText size={22} /></div>
-          <div>
-            <p className="eyebrow">Lançamento</p>
-            <h2>{initial ? "Editar lançamento" : "Novo lançamento"}</h2>
-          </div>
+          <h2>{initial ? "Editar lançamento" : "Novo lançamento"}</h2>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar">
             <X size={18} />
           </button>
         </div>
 
         <div className="transaction-modal-body">
-          <label>
-            <span><CalendarDays size={15} /> Data</span>
-            <input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
-          </label>
-
-          <div>
-            <span className="field-label">Tipo</span>
-            <div className="segmented">
-              <button type="button" className={form.type === "expense" ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}>
+          <div className="transaction-kind" aria-label="Tipo do lançamento">
+            <button type="button" className={isExpense ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}>
                 <ArrowDownCircle size={16} /> GASTO
-              </button>
-              <button type="button" className={form.type === "income" ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}>
+            </button>
+            <button type="button" className={!isExpense ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}>
                 <ArrowUpCircle size={16} /> GANHO
-              </button>
-            </div>
+            </button>
           </div>
 
-          <label>
+          <label className={`amount-field ${errors.amount ? "has-error" : ""}`}>
             <span>Valor</span>
-            <input inputMode="numeric" placeholder="R$ 0,00" value={form.amount} onChange={(event) => handleAmount(event.target.value)} />
+            <div className={`money-input ${isExpense ? "danger" : "success"}`}>
+              <span>R$</span>
+              <input
+                inputMode="numeric"
+                value={form.amount.replace(/^R\$\s?/, "")}
+                onBlur={() => handleBlur("amount")}
+                onChange={(event) => handleAmount(event.target.value)}
+                onFocus={(event) => event.target.select()}
+                aria-invalid={!!errors.amount}
+              />
+            </div>
+            {errors.amount && <small className="field-error">{errors.amount}</small>}
+          </label>
+
+          <label className={errors.date ? "has-error" : ""}>
+            <span>Data</span>
+            <input type="date" value={form.date} onBlur={() => handleBlur("date")} onChange={(event) => setField("date", event.target.value)} aria-invalid={!!errors.date} />
+            {errors.date && <small className="field-error">{errors.date}</small>}
           </label>
 
           <label>
             <span>Descrição</span>
-            <input placeholder="Ex: mercado, salário, aluguel" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+            <input placeholder="Ex: mercado, salário, aluguel" value={form.description} onChange={(event) => setField("description", event.target.value)} />
           </label>
 
-          <label className="toggle-row">
-            <input type="checkbox" checked={form.is_future} onChange={(event) => setForm({ ...form, is_future: event.target.checked })} />
-            <span>É uma fatura futura?</span>
-          </label>
+          <section className="conditional-section">
+            <button className={`switch-row ${form.is_future ? "active" : ""}`} type="button" onClick={toggleFuture}>
+              <span><ReceiptText size={16} /> Vincular a uma fatura futura?</span>
+              <i aria-hidden="true" />
+            </button>
 
-          {form.is_future && (
-            <label>
-              <span>Fatura</span>
-              <select value={form.invoice_id} onChange={(event) => setForm({ ...form, invoice_id: event.target.value })}>
-                <option value="">Sem fatura vinculada</option>
-                {invoices.map((invoice) => (
-                  <option key={invoice.id} value={invoice.id}>{invoice.name}</option>
-                ))}
-              </select>
-            </label>
-          )}
+            <div className={`conditional-content ${form.is_future ? "open" : ""}`}>
+              <label className={errors.invoice_id ? "has-error" : ""}>
+                <span>Selecionar fatura</span>
+                <select value={form.invoice_id} disabled={!form.is_future} onBlur={() => handleBlur("invoice_id")} onChange={(event) => handleInvoiceChange(event.target.value)} aria-invalid={!!errors.invoice_id}>
+                  <option value="">Selecione uma fatura</option>
+                  {invoices.map((invoice) => (
+                    <option key={invoice.id} value={invoice.id}>{invoice.name} — {formatDateShort(invoice.due_date)}</option>
+                  ))}
+                  <option value={CREATE_INVOICE_VALUE}>+ Criar nova fatura</option>
+                </select>
+                {errors.invoice_id && <small className="field-error">{errors.invoice_id}</small>}
+              </label>
+            </div>
+          </section>
 
           {!initial && (
-            <>
-              <label className="toggle-row">
-                <input type="checkbox" checked={form.recurrence} onChange={(event) => setForm({ ...form, recurrence: event.target.checked })} />
-                <span>Lançamento recorrente?</span>
-              </label>
-              {form.recurrence && (
+            <section className="conditional-section">
+              <button className={`switch-row ${form.recurrence ? "active" : ""}`} type="button" onClick={toggleRecurrence}>
+                <span><Repeat2 size={16} /> Lançamento recorrente?</span>
+                <i aria-hidden="true" />
+              </button>
+              {exclusiveHint && <p className="exclusive-hint">{exclusiveHint}</p>}
+              <div className={`conditional-content ${form.recurrence ? "open" : ""}`}>
                 <div className="recurrence-grid">
                   <label>
-                    <span>Meses</span>
-                    <input type="number" min="1" max="120" value={form.recurrence_months} onChange={(event) => setForm({ ...form, recurrence_months: event.target.value })} />
+                    <span>Repetir por</span>
+                    <input type="number" min="1" max="60" value={form.recurrence_months} disabled={!form.recurrence} onChange={(event) => setField("recurrence_months", event.target.value)} />
                   </label>
-                  <label>
+                  <label className={errors.day_of_month ? "has-error" : ""}>
                     <span>Dia do mês</span>
-                    <input type="number" min="1" max="31" value={form.day_of_month} onChange={(event) => setForm({ ...form, day_of_month: event.target.value })} />
+                    <input type="number" min="1" max="31" value={form.day_of_month} disabled={!form.recurrence} onBlur={() => handleBlur("day_of_month")} onChange={(event) => setField("day_of_month", event.target.value)} aria-invalid={!!errors.day_of_month} />
+                    {errors.day_of_month && <small className="field-error">{errors.day_of_month}</small>}
                   </label>
                 </div>
-              )}
-            </>
+                <p className="recurrence-summary">
+                  Será lançado todo dia {recurrenceDay} por {recurrenceMonths} meses{recurrenceEnd ? ` (até ${recurrenceEnd})` : ""}
+                </p>
+              </div>
+            </section>
           )}
 
           <div className="transaction-modal-actions">
             <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" type="submit">Salvar</button>
+            <button className={`btn transaction-save ${isExpense ? "danger" : "success"}`} type="submit" disabled={saving}>
+              {saving ? <><Loader2 className="spin" size={16} /> Salvando...</> : "Salvar"}
+            </button>
           </div>
         </div>
       </form>

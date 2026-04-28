@@ -442,12 +442,26 @@ select {
   margin: 7vh auto;
   padding: 0;
   overflow: hidden;
+  animation: modal-pop .2s ease both;
+}
+.transaction-modal .modal-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--card);
+}
+.transaction-modal .modal-titlebar h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }
 .transaction-modal-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  padding: 22px;
+  gap: 14px;
+  padding: 18px;
 }
 .transaction-modal-body > label,
 .transaction-modal-body > div {
@@ -471,31 +485,181 @@ select {
   padding: 0 12px;
   background: var(--card);
   color: var(--text);
+  transition: border-color .15s ease, box-shadow .15s ease, color .15s ease;
 }
-.transaction-modal-body > label:nth-of-type(3),
-.transaction-modal-body .toggle-row,
-.transaction-modal-body .recurrence-grid,
+.transaction-modal-body input:focus,
+.transaction-modal-body select:focus {
+  outline: 0;
+  border-color: rgba(59,130,246,0.55);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+.transaction-modal-body .has-error input,
+.transaction-modal-body .has-error select,
+.transaction-modal-body .has-error .money-input {
+  border-color: #DC2626;
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+}
+.field-error {
+  color: #DC2626;
+  font-size: 12px;
+  font-weight: 700;
+}
+.transaction-kind,
+.amount-field,
+.conditional-section,
 .transaction-modal-actions {
   grid-column: 1 / -1;
 }
-.transaction-modal-body .toggle-row {
+.transaction-kind {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px;
-  background: rgba(59,130,246,0.05);
+  background: var(--card);
 }
-.transaction-modal-body .toggle-row input {
+.transaction-kind button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 900;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.transaction-kind button + button { border-left: 1px solid var(--border); }
+.transaction-kind .active.danger {
+  background: #FEE2E2;
+  color: #DC2626;
+  box-shadow: inset 0 0 0 1px #DC2626;
+}
+.transaction-kind .active.success {
+  background: #DCFCE7;
+  color: #16A34A;
+  box-shadow: inset 0 0 0 1px #16A34A;
+}
+.money-input {
+  position: relative;
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  overflow: hidden;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.money-input > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  background: rgba(107,114,128,0.06);
+  font-weight: 900;
+}
+.money-input input {
+  width: 100%;
+  height: 58px;
+  border: 0;
+  box-shadow: none;
+  padding: 0 58px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+}
+.money-input input:focus { box-shadow: none; }
+.money-input.danger input { color: #DC2626; }
+.money-input.success input { color: #16A34A; }
+.conditional-section {
+  display: grid;
+  gap: 8px;
+}
+.conditional-section label,
+.recurrence-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.switch-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(59,130,246,0.04);
+  color: var(--text);
+  font-weight: 800;
+}
+.switch-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
+}
+.switch-row i {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #D1D5DB;
+  transition: background .2s ease;
+}
+.switch-row i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
   width: 18px;
   height: 18px;
-  padding: 0;
-  accent-color: var(--primary);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.22);
+  transition: transform .2s ease;
+}
+.switch-row.active {
+  border-color: rgba(59,130,246,0.45);
+  background: rgba(59,130,246,0.08);
+}
+.switch-row.active i { background: #3B82F6; }
+.switch-row.active i::after { transform: translateX(20px); }
+.conditional-content {
+  display: grid;
+  gap: 10px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-6px);
+  transition: max-height .25s ease, opacity .25s ease, transform .25s ease;
+}
+.conditional-content.open {
+  max-height: 220px;
+  opacity: 1;
+  transform: translateY(0);
 }
 .transaction-modal-body .recurrence-grid {
   margin: 0;
 }
+.recurrence-summary,
+.exclusive-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.exclusive-hint { color: var(--primary); }
 .transaction-modal-actions {
   display: grid;
   grid-template-columns: 1fr 1.4fr;
@@ -503,6 +667,28 @@ select {
   padding-top: 4px;
 }
 .transaction-modal-actions .btn { width: 100%; }
+.transaction-save {
+  color: #fff;
+  border-color: transparent;
+  transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.transaction-save.danger {
+  background: #DC2626;
+  border-color: #DC2626;
+}
+.transaction-save.success {
+  background: #16A34A;
+  border-color: #16A34A;
+}
+.spin { animation: spin .8s linear infinite; }
+
+@keyframes modal-pop {
+  from { opacity: 0; transform: scale(.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .invoice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
 .invoice-card { overflow: hidden; padding: 0; }
