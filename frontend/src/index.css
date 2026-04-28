@@ -550,17 +550,19 @@ select {
   overflow: hidden;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.money-input > span {
+.transaction-modal-body .money-input > span {
   position: absolute;
   inset: 0 auto 0 0;
   width: 58px;
   height: 58px;
   display: grid;
   place-items: center;
+  gap: 0;
   color: var(--muted);
   border-right: 1px solid var(--border);
   background: rgba(107,114,128,0.06);
   font-weight: 900;
+  line-height: 1;
 }
 .money-input input {
   width: 100%;
