@@ -43,7 +43,8 @@ export default function Dashboard({
     {
       label: "Saldo atual",
       value: formatMoney(summary.current_balance),
-      meta: `${percentChange(summary.current_balance, previous.projected_closing).toFixed(1)}% vs mês anterior`
+      meta: `${percentChange(summary.current_balance, previous.projected_closing).toFixed(1)}% vs mês anterior`,
+      tone: "balance"
     },
     {
       label: "Gastos do mês",
@@ -68,7 +69,7 @@ export default function Dashboard({
     <div className="dashboard-grid">
       <section className="summary-grid">
         {cards.map((card) => (
-          <article className="card stat-card" key={card.label}>
+          <article className={`card stat-card ${card.tone ? `stat-card-${card.tone}` : ""}`} key={card.label}>
             <p className="stat-label">{card.label}</p>
             <p className="stat-value">{card.value}</p>
             {card.progress ? (
@@ -88,15 +89,15 @@ export default function Dashboard({
           <AreaChart data={balanceSeries}>
             <defs>
               <linearGradient id="saldoFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.22} />
-                <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#14A078" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="#14A078" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="#E5E7EB" strokeDasharray="4 4" vertical={false} />
             <XAxis dataKey="date" tickFormatter={(value) => value.slice(-2)} tickLine={false} axisLine={false} />
             <YAxis tickFormatter={(value) => `R$ ${Number(value).toLocaleString("pt-BR")}`} tickLine={false} axisLine={false} width={82} />
             <Tooltip formatter={(value) => formatMoney(value)} labelFormatter={formatDateShort} />
-            <Area type="monotone" dataKey="balance" stroke="#3B82F6" strokeWidth={3} fill="url(#saldoFill)" />
+            <Area type="monotone" dataKey="balance" stroke="#14A078" strokeWidth={3} fill="url(#saldoFill)" />
           </AreaChart>
         </ResponsiveContainer>
       </section>
@@ -109,9 +110,9 @@ export default function Dashboard({
             <XAxis dataKey="label" tickLine={false} axisLine={false} />
             <YAxis tickFormatter={(value) => `R$ ${Number(value).toLocaleString("pt-BR")}`} tickLine={false} axisLine={false} width={82} />
             <Tooltip formatter={(value) => formatMoney(value)} />
-            <Bar dataKey="total_expenses" name="Gastos" fill="#EF4444" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="total_income" name="Ganhos" fill="#10B981" radius={[6, 6, 0, 0]} />
-            <Line dataKey="projected_closing" name="Saldo final" stroke="#3B82F6" strokeWidth={2} dot={false} />
+            <Bar dataKey="total_expenses" name="Gastos" fill="#FF4D6A" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="total_income" name="Ganhos" fill="#3CC88C" radius={[6, 6, 0, 0]} />
+            <Line dataKey="projected_closing" name="Saldo final" stroke="#14A078" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </section>

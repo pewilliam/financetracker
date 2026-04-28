@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatDateShort } from "../utils/format.js";
 
-const DEFAULT_INVOICE_COLOR = "#3B82F6";
+const DEFAULT_INVOICE_COLOR = "#14A078";
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
