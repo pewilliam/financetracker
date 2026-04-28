@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 function isValidDateParts(year, month, day) {
@@ -68,6 +69,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
   const [text, setText] = useState(formatDisplayDate(value));
   const [cursor, setCursor] = useState(parsedValue || new Date());
   const rootRef = useRef(null);
+  const popoverRef = useRef(null);
+  const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
     setText(formatDisplayDate(value));
@@ -76,11 +79,53 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   useEffect(() => {
     const closeOnOutside = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      if (rootRef.current?.contains(event.target) || popoverRef.current?.contains(event.target)) return;
+      setOpen(false);
     };
     document.addEventListener("pointerdown", closeOnOutside);
     return () => document.removeEventListener("pointerdown", closeOnOutside);
   }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const updatePopoverPosition = () => {
+      const root = rootRef.current;
+      const popover = popoverRef.current;
+      if (!root || !popover) return;
+
+      const rootRect = root.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const viewportPadding = 16;
+      const gap = 8;
+
+      let left = rootRect.left;
+      if (left + popoverRect.width > window.innerWidth - viewportPadding) {
+        left = window.innerWidth - popoverRect.width - viewportPadding;
+      }
+      left = Math.max(viewportPadding, left);
+
+      let top = rootRect.bottom + gap;
+      if (top + popoverRect.height > window.innerHeight - viewportPadding) {
+        top = rootRect.top - popoverRect.height - gap;
+      }
+      top = Math.max(viewportPadding, top);
+
+      setPopoverStyle({
+        top: Math.round(top),
+        left: Math.round(left)
+      });
+    };
+
+    const raf = requestAnimationFrame(updatePopoverPosition);
+    window.addEventListener("resize", updatePopoverPosition);
+    window.addEventListener("scroll", updatePopoverPosition, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", updatePopoverPosition);
+      window.removeEventListener("scroll", updatePopoverPosition, true);
+    };
+  }, [open, cursor]);
 
   const days = useMemo(() => buildMonthDays(cursor), [cursor]);
   const todayIso = toIsoDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
@@ -121,8 +166,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
         </button>
       </div>
 
-      {open && (
-        <div className="date-popover">
+      {open && createPortal(
+        <div className="date-popover date-popover-floating" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
             <button type="button" onClick={() => moveMonth(-1)} aria-label="Mês anterior"><ChevronLeft size={16} /></button>
             <strong>{monthLabel(cursor)}</strong>
@@ -143,7 +188,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -165,9 +211,11 @@ const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "
 
 export function MonthField({ value, onChange }) {
   const rootRef = useRef(null);
+  const popoverRef = useRef(null);
   const parsed = parseMonthValue(value);
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState(parsed.getFullYear());
+  const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
     setYear(parseMonthValue(value).getFullYear());
@@ -175,11 +223,54 @@ export function MonthField({ value, onChange }) {
 
   useEffect(() => {
     const closeOnOutside = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      if (rootRef.current?.contains(event.target) || popoverRef.current?.contains(event.target)) return;
+      setOpen(false);
     };
     document.addEventListener("pointerdown", closeOnOutside);
     return () => document.removeEventListener("pointerdown", closeOnOutside);
   }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const updatePopoverPosition = () => {
+      const root = rootRef.current;
+      const popover = popoverRef.current;
+      if (!root || !popover) return;
+
+      const rootRect = root.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const viewportPadding = 16;
+      const gap = 8;
+
+      let left = rootRect.right - popoverRect.width;
+      if (left < viewportPadding) left = rootRect.left;
+      if (left + popoverRect.width > window.innerWidth - viewportPadding) {
+        left = window.innerWidth - popoverRect.width - viewportPadding;
+      }
+      left = Math.max(viewportPadding, left);
+
+      let top = rootRect.bottom + gap;
+      if (top + popoverRect.height > window.innerHeight - viewportPadding) {
+        top = rootRect.top - popoverRect.height - gap;
+      }
+      top = Math.max(viewportPadding, top);
+
+      setPopoverStyle({
+        top: Math.round(top),
+        left: Math.round(left)
+      });
+    };
+
+    const raf = requestAnimationFrame(updatePopoverPosition);
+    window.addEventListener("resize", updatePopoverPosition);
+    window.addEventListener("scroll", updatePopoverPosition, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", updatePopoverPosition);
+      window.removeEventListener("scroll", updatePopoverPosition, true);
+    };
+  }, [open, year]);
 
   const selectedMonth = parsed.getMonth() + 1;
   const selectedYear = parsed.getFullYear();
@@ -196,8 +287,8 @@ export function MonthField({ value, onChange }) {
         <CalendarDays size={16} />
       </button>
 
-      {open && (
-        <div className="date-popover month-popover">
+      {open && createPortal(
+        <div className="date-popover date-popover-floating month-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
             <button type="button" onClick={() => setYear((current) => current - 1)} aria-label="Ano anterior"><ChevronLeft size={16} /></button>
             <strong>{year}</strong>
@@ -218,7 +309,8 @@ export function MonthField({ value, onChange }) {
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
