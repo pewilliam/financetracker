@@ -25,7 +25,7 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
   };
 
   return (
-    <article className={`invoice-card card ${invoice.paid ? "paid" : ""} ${Number(invoice.total_amount) > 0 ? "negative" : "positive"}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
+    <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
         <div>
           <h3><span className="invoice-color-dot" />{invoice.name}</h3>

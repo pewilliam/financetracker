@@ -127,10 +127,13 @@ button:focus-visible {
   color: #3CC88C;
 }
 .sidebar-brand-mark {
+  display: block;
+  width: 28px;
   height: 28px;
-  width: auto;
+  object-fit: contain;
   border-radius: 0;
   flex: 0 0 auto;
+  filter: drop-shadow(0 0 10px rgba(60,200,140,0.24));
 }
 .sidebar-wordmark {
   display: inline-flex;
@@ -1361,16 +1364,17 @@ select {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+  border-top: 3px solid var(--invoice-color, #14A078);
 }
 .invoice-card.paid { opacity: .84; }
 .invoice-header {
   align-items: flex-start;
   padding: 20px;
-  background: #DCFAF0;
-  color: #007864;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--invoice-color, #14A078) 86%, #007864), color-mix(in srgb, var(--invoice-color, #14A078) 58%, #0D1F18)),
+    var(--invoice-color, #14A078);
+  color: #fff;
 }
-.invoice-card.negative .invoice-header { background: #FFE8EE; color: #CC2244; }
-.invoice-card.positive .invoice-header { background: #DCFAF0; color: #007864; }
 .invoice-header h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800; }
 .invoice-header p { margin: 7px 0 0; opacity: .86; }
 .invoice-color-dot {
@@ -1380,7 +1384,7 @@ select {
   border: 2px solid rgba(255,255,255,.86);
   border-radius: 50%;
   background: var(--invoice-color, #14A078);
-  box-shadow: 0 0 0 2px rgba(20,160,120,.16);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.22);
 }
 .due-badge { border-radius: 999px; background: #DCFAF0; color: #007864; padding: 6px 10px; font-size: 12px; font-weight: 800; }
 .due-badge.compact { background: #DCFAF0; color: #007864; white-space: nowrap; }

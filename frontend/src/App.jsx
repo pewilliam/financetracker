@@ -79,6 +79,7 @@ function nextMonthDate(dateString) {
 const INVOICE_COLORS = ["#14A078", "#3CC88C", "#F59E0B", "#FF4D6A", "#8B5CF6", "#06B6D4", "#EC4899", "#64748B"];
 const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
 const CREATE_TEMPLATE_VALUE = "__create_template__";
+const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
@@ -170,7 +171,7 @@ function AuthPage({ mode }) {
     <main className="auth-page">
       <Toaster position="top-right" />
       <section className="auth-card">
-        <div className="auth-logo"><img src="/transparent-image.png" alt="" aria-hidden="true" /></div>
+        <div className="auth-logo"><img src={BRAND_MARK_SRC} alt="" aria-hidden="true" /></div>
         <h1>Kashy365</h1>
         <p>{isRegister ? "Crie sua conta para começar." : "Entre para ver seus dados financeiros."}</p>
         <form className="form-stack" onSubmit={submit}>
@@ -205,7 +206,7 @@ function Sidebar({ open, setOpen }) {
       <button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-brand">
-          <img className="sidebar-brand-mark" src="/transparent-image.png" alt="" aria-hidden="true" />
+          <img className="sidebar-brand-mark" src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
           <span className="sidebar-wordmark"><strong>Kashy</strong><em>365</em></span>
           <button className="icon-btn sidebar-close" onClick={() => setOpen(false)}><X size={18} /></button>
         </div>
