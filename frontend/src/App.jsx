@@ -592,11 +592,11 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const [drafts, setDrafts] = useState([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
-  const total = parseMoneyInput(form.total_amount);
+  const installmentAmount = parseMoneyInput(form.total_amount);
+  const total = installmentAmount * count;
   const firstInvoice = invoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
   const sortedInvoices = [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date));
   const filteredInvoices = sortedInvoices.filter((invoice) => `${invoice.name} ${invoice.due_date}`.toLowerCase().includes(invoiceSearch.toLowerCase()));
-  const perInstallment = count ? total / count : 0;
   const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
 
   const matchingInvoice = (dateString) => invoices.find((invoice) => invoice.name === firstInvoice?.name && invoice.due_date.slice(0, 7) === dateString.slice(0, 7));
@@ -607,15 +607,12 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const buildDrafts = () => Array.from({ length: count }, (_, index) => {
     const dueDate = addMonthsToDate(firstInvoice.due_date, index);
     const matched = matchingInvoice(dueDate);
-    const amount = index === count - 1
-      ? total - (Math.round(perInstallment * 100) / 100) * (count - 1)
-      : perInstallment;
     return {
       id: `${Date.now()}-${index}`,
       number: index + 1,
       month: dueDate,
       invoice_id: matched?.id || "",
-      amount: formatMoney(amount)
+      amount: formatMoney(installmentAmount)
     };
   });
 
@@ -669,9 +666,9 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
           <>
             <div className="invoice-modal-body">
               <label><span>Descrição da compra</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
-              <label><span>Valor total</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
+              <label><span>Valor por parcela</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
               <label><span>Número de parcelas</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
-              <p className="computed-value">{formatMoney(perInstallment)} por parcela</p>
+              <p className="computed-value">Total estimado: {formatMoney(total)}</p>
               <label className={`duplicate-option ${form.different_values ? "active" : ""}`}>
                 <input type="checkbox" checked={form.different_values} onChange={(event) => updateForm({ different_values: event.target.checked })} />
                 <span className="duplicate-icon"><CreditCard size={20} /></span>
