@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { CheckCircle2, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarPlus, CheckCircle2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { daysUntil, formatDateShort, formatMoney, parseMoneyInput } from "../utils/format.js";
 
-export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onTogglePaid }) {
+export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onTogglePaid, onDuplicateNext }) {
   const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -60,6 +60,10 @@ export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onToggle
         <strong>{formatMoney(invoice.total_amount)}</strong>
       </footer>
       <div className="invoice-actions">
+        <button className="btn btn-ghost" onClick={() => onDuplicateNext(invoice)}>
+          <CalendarPlus size={16} />
+          Próxima fatura
+        </button>
         <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
           {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
           {invoice.paid ? "Marcar pendente" : "Marcar paga"}

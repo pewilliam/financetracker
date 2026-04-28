@@ -436,7 +436,7 @@ button { cursor: pointer; }
 .add-inline { margin: 0 18px 16px; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--primary); font-weight: 800; }
 .invoice-footer { border-top: 1px solid var(--border); padding: 16px 18px; }
 .invoice-footer strong { font-size: 24px; color: var(--primary); }
-.invoice-actions { padding: 0 18px 18px; }
+.invoice-actions { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 0 18px 18px; }
 .invoice-actions .btn { width: 100%; }
 .fab {
   position: fixed;
@@ -454,7 +454,7 @@ button { cursor: pointer; }
 }
 .modal-card {
   position: relative;
-  width: min(440px, calc(100% - 32px));
+  width: min(520px, calc(100% - 32px));
   margin: 12vh auto;
   background: var(--card);
   border: 1px solid var(--border);
@@ -462,6 +462,104 @@ button { cursor: pointer; }
   box-shadow: var(--shadow);
   padding: 22px;
 }
+.invoice-modal { padding: 0; overflow: hidden; }
+.modal-titlebar {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 12px;
+  padding: 22px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(59,130,246,0.14), rgba(16,185,129,0.10));
+}
+.modal-titlebar h2 { margin: 0; font-size: 22px; font-weight: 800; }
+.modal-titlebar .eyebrow { margin: 0 0 3px; }
+.modal-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--primary);
+}
+.invoice-modal-body {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+.invoice-modal-body label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.invoice-modal-body input {
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--card);
+  color: var(--text);
+}
+.invoice-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.duplicate-option {
+  grid-template-columns: 18px 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(59,130,246,0.06);
+  color: var(--text);
+  cursor: pointer;
+}
+.duplicate-option.active {
+  border-color: rgba(59,130,246,0.55);
+  background: rgba(59,130,246,0.13);
+}
+.duplicate-option input { width: 18px; height: 18px; accent-color: var(--primary); }
+.duplicate-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(59,130,246,0.14);
+  color: var(--primary);
+}
+.duplicate-option strong, .duplicate-option small { display: block; }
+.duplicate-option small {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.35;
+  font-weight: 600;
+}
+.duplicate-months-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.duplicate-preview {
+  display: grid;
+  gap: 4px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: rgba(16,185,129,0.09);
+}
+.duplicate-preview strong { font-size: 13px; color: var(--text); }
+.duplicate-preview span { font-size: 12px; color: var(--muted); font-weight: 700; }
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+  padding: 0 22px 22px;
+}
+.modal-actions .btn { width: 100%; }
 
 .empty-state { text-align: center; padding: 42px 20px; color: var(--muted); }
 .empty-state h3 { color: var(--text); margin: 12px 0 4px; }
@@ -517,6 +615,7 @@ button { cursor: pointer; }
   .day-balance { text-align: left; }
   .inline-form { grid-template-columns: 1fr; }
   .recurrence-grid { grid-template-columns: 1fr; }
+  .invoice-modal-grid, .modal-actions, .duplicate-months-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {

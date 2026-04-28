@@ -4,6 +4,7 @@ import { Toaster, toast } from "react-hot-toast";
 import {
   BarChart3,
   CalendarDays,
+  CalendarPlus,
   CreditCard,
   Grid2X2,
   List,
@@ -40,11 +41,29 @@ import {
   updatePassword,
   updateTransaction
 } from "./api/api.js";
-import { formatMoney, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
   return { year: Math.floor(total / 12), month: (total % 12) + 1 };
+}
+
+function formatMoneyForInput(value) {
+  return Number(value || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function addMonthsToDate(dateString, amount) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const shifted = shiftMonth(year, month, amount);
+  const lastDay = lastDayOfMonth(shifted.year, shifted.month);
+  return `${shifted.year}-${String(shifted.month).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+}
+
+function nextMonthDate(dateString) {
+  return addMonthsToDate(dateString, 1);
 }
 
 function Protected({ children }) {
@@ -154,7 +173,7 @@ function AppShell() {
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState({ name: "", due_date: "", initial_amount: "" });
+  const [invoiceForm, setInvoiceForm] = useState({ name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 });
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -235,18 +254,44 @@ function AppShell() {
   const createNewInvoice = async (event) => {
     event.preventDefault();
     try {
-      await createInvoice({
+      const payload = {
         name: invoiceForm.name,
         due_date: invoiceForm.due_date,
         initial_amount: parseMoneyInput(invoiceForm.initial_amount)
-      });
-      setInvoiceForm({ name: "", due_date: "", initial_amount: "" });
+      };
+      await createInvoice(payload);
+      if (invoiceForm.duplicate_next_month) {
+        const months = Math.max(1, Number(invoiceForm.duplicate_months) || 1);
+        await Promise.all(Array.from({ length: months }, (_, index) => (
+          createInvoice({
+            ...payload,
+            due_date: addMonthsToDate(payload.due_date, index + 1)
+          })
+        )));
+      }
+      setInvoiceForm({ name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 });
       setInvoiceModal(false);
-      toast.success("Fatura criada");
+      toast.success(invoiceForm.duplicate_next_month ? "Faturas criadas" : "Fatura criada");
       await refresh();
     } catch {
       toast.error("Erro ao criar fatura");
     }
+  };
+
+  const openNewInvoiceModal = () => {
+    setInvoiceForm({ name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 });
+    setInvoiceModal(true);
+  };
+
+  const openDuplicateInvoiceModal = (invoice) => {
+    setInvoiceForm({
+      name: invoice.name,
+      due_date: nextMonthDate(invoice.due_date),
+      initial_amount: formatMoneyForInput(invoice.total_amount),
+      duplicate_next_month: false,
+      duplicate_months: 1
+    });
+    setInvoiceModal(true);
   };
 
   const addItem = async (invoiceId, payload) => {
@@ -308,7 +353,7 @@ function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} applyMonthRecurrences={applyMonthRecurrences} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} deleteItem={deleteItem} togglePaid={toggleInvoicePaid} openModal={() => setInvoiceModal(true)} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} deleteItem={deleteItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openDuplicateInvoiceModal={openDuplicateInvoiceModal} />} />
               <Route path="/recorrencias" element={<SimplePage title="Recorrências" text="As recorrências agora são criadas automaticamente pelo período informado no lançamento. Este botão permanece para recorrências antigas." action={applyMonthRecurrences} />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
             </Routes>
@@ -437,26 +482,89 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
   );
 }
 
-function InvoicesPage({ invoices, addItem, deleteItem, togglePaid, openModal }) {
+function InvoicesPage({ invoices, addItem, deleteItem, togglePaid, openModal, openDuplicateInvoiceModal }) {
   return (
     <section>
-      <div className="section-head"><div><p className="eyebrow">Faturas futuras</p><h2>Faturas</h2></div></div>
-      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onDeleteItem={deleteItem} onTogglePaid={togglePaid} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em + para criar.</p></div>}
+      <div className="section-head">
+        <div><p className="eyebrow">Faturas futuras</p><h2>Faturas</h2></div>
+        <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> Nova fatura</button>
+      </div>
+      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onDeleteItem={deleteItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
     </section>
   );
 }
 
 function InvoiceModal({ form, setForm, onSubmit, onClose }) {
+  const nextDueDate = form.due_date ? nextMonthDate(form.due_date) : "";
+  const duplicateMonths = Math.max(1, Number(form.duplicate_months) || 1);
+  const lastDuplicateDate = form.due_date ? addMonthsToDate(form.due_date, duplicateMonths) : "";
+
   return (
     <div className="modal-layer">
       <button className="modal-backdrop" onClick={onClose} />
-      <form className="modal-card form-stack" onSubmit={onSubmit}>
-        <div className="drawer-head"><h2>Nova fatura</h2><button className="icon-btn" type="button" onClick={onClose}><X size={18} /></button></div>
-        <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-        <label><span>Data de vencimento</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} required /></label>
-        <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => setForm({ ...form, initial_amount: event.target.value })} /></label>
-        <button className="btn btn-primary">Criar fatura</button>
+      <form className="modal-card invoice-modal" onSubmit={onSubmit}>
+        <div className="modal-titlebar">
+          <div className="modal-icon"><CreditCard size={22} /></div>
+          <div>
+            <p className="eyebrow">Cadastro de fatura</p>
+            <h2>Nova fatura</h2>
+          </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+
+        <div className="invoice-modal-body">
+          <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+          <div className="invoice-modal-grid">
+            <label><span>Data de vencimento</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} required /></label>
+            <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => setForm({ ...form, initial_amount: event.target.value })} /></label>
+          </div>
+
+          <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
+            <input
+              type="checkbox"
+              checked={form.duplicate_next_month}
+              onChange={(event) => setForm({ ...form, duplicate_next_month: event.target.checked })}
+            />
+            <span className="duplicate-icon"><CalendarPlus size={20} /></span>
+            <span>
+              <strong>Duplicar para o próximo mês</strong>
+              <small>
+                {nextDueDate
+                  ? `Também cria faturas futuras a partir de ${formatDateShort(nextDueDate)}.`
+                  : "Ao informar o vencimento, a próxima data será calculada automaticamente."}
+              </small>
+            </span>
+          </label>
+
+          {form.duplicate_next_month && (
+            <div className="duplicate-months-row">
+              <label>
+                <span>Meses seguintes</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={form.duplicate_months}
+                  onChange={(event) => setForm({ ...form, duplicate_months: event.target.value })}
+                />
+              </label>
+              <div className="duplicate-preview">
+                <strong>{duplicateMonths + 1} faturas no total</strong>
+                <span>
+                  {lastDuplicateDate
+                    ? `Última em ${formatDateShort(lastDuplicateDate)}`
+                    : "Informe a data de vencimento"}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary">{form.duplicate_next_month ? "Criar faturas" : "Criar fatura"}</button>
+        </div>
       </form>
     </div>
   );
