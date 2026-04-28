@@ -2,7 +2,7 @@ import calendar
 from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import MonthlyBalance, Recurrence, Transaction, User
@@ -43,7 +43,7 @@ def _month_bounds(year: int, month: int):
 
 
 def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
-    configured = (
+    configured_for_month = (
         db.query(MonthlyBalance)
         .filter(
             MonthlyBalance.user_id == user_id,
@@ -52,8 +52,48 @@ def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
         )
         .first()
     )
-    if configured:
-        return _to_decimal(configured.opening_balance)
+    if configured_for_month:
+        return _to_decimal(configured_for_month.opening_balance)
+
+    anchor = (
+        db.query(MonthlyBalance)
+        .filter(
+            MonthlyBalance.user_id == user_id,
+            or_(
+                MonthlyBalance.year < start.year,
+                (MonthlyBalance.year == start.year) & (MonthlyBalance.month < start.month),
+            ),
+        )
+        .order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
+        .first()
+    )
+    if anchor:
+        anchor_start = date(anchor.year, anchor.month, 1)
+        income_since_anchor = (
+            db.query(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(
+                Transaction.user_id == user_id,
+                Transaction.type == "income",
+                Transaction.date >= anchor_start,
+                Transaction.date < start,
+            )
+            .scalar()
+        )
+        expenses_since_anchor = (
+            db.query(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(
+                Transaction.user_id == user_id,
+                Transaction.type == "expense",
+                Transaction.date >= anchor_start,
+                Transaction.date < start,
+            )
+            .scalar()
+        )
+        return (
+            _to_decimal(anchor.opening_balance)
+            + _to_decimal(income_since_anchor)
+            - _to_decimal(expenses_since_anchor)
+        )
 
     income_before = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
