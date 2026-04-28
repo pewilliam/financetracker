@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Recurrence, Transaction, User
-from app.schemas.months import MonthDayOut, MonthResponse, MonthSummaryOut
+from app.models import MonthlyBalance, Recurrence, Transaction, User
+from app.schemas.months import MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api/months", tags=["months"])
@@ -28,6 +28,18 @@ def _month_bounds(year: int, month: int):
 
 
 def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
+    configured = (
+        db.query(MonthlyBalance)
+        .filter(
+            MonthlyBalance.user_id == user_id,
+            MonthlyBalance.year == start.year,
+            MonthlyBalance.month == start.month,
+        )
+        .first()
+    )
+    if configured:
+        return _to_decimal(configured.opening_balance)
+
     income_before = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
         .filter(
@@ -212,3 +224,29 @@ def apply_recurrences(
 
     db.commit()
     return {"created": created}
+
+
+@router.put("/{year}/{month}/opening-balance", response_model=OpeningBalancePayload)
+def set_opening_balance(
+    year: int,
+    month: int,
+    payload: OpeningBalancePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _month_bounds(year, month)
+    row = (
+        db.query(MonthlyBalance)
+        .filter(
+            MonthlyBalance.user_id == current_user.id,
+            MonthlyBalance.year == year,
+            MonthlyBalance.month == month,
+        )
+        .first()
+    )
+    if not row:
+        row = MonthlyBalance(user_id=current_user.id, year=year, month=month)
+        db.add(row)
+    row.opening_balance = payload.opening_balance
+    db.commit()
+    return {"opening_balance": row.opening_balance}

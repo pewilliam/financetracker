@@ -10,6 +10,16 @@ class UserCreate(APIModel):
     password: str
 
 
+class UserUpdate(APIModel):
+    name: str
+    email: EmailStr
+
+
+class PasswordUpdate(APIModel):
+    current_password: str
+    new_password: str
+
+
 class LoginPayload(APIModel):
     email: EmailStr
     password: str

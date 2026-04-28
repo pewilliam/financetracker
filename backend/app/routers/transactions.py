@@ -2,7 +2,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Invoice, Transaction, User
+from app.models import Invoice, Recurrence, Transaction, User
 from app.schemas.transactions import TransactionCreate, TransactionOut, TransactionUpdate
 from app.security import get_current_user
 
@@ -27,6 +27,18 @@ def create_transaction(
         )
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if payload.recurrence_id:
+        recurrence = (
+            db.query(Recurrence)
+            .filter(
+                Recurrence.id == payload.recurrence_id,
+                Recurrence.user_id == current_user.id,
+            )
+            .first()
+        )
+        if not recurrence:
+            raise HTTPException(status_code=404, detail="Recurrence not found")
 
     transaction = Transaction(
         user_id=current_user.id,
@@ -70,6 +82,18 @@ def update_transaction(
         )
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if payload.recurrence_id:
+        recurrence = (
+            db.query(Recurrence)
+            .filter(
+                Recurrence.id == payload.recurrence_id,
+                Recurrence.user_id == current_user.id,
+            )
+            .first()
+        )
+        if not recurrence:
+            raise HTTPException(status_code=404, detail="Recurrence not found")
 
     if payload.date and transaction.is_future is False and payload.date > date.today():
         transaction.is_future = True

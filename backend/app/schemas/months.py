@@ -34,3 +34,7 @@ class MonthSummaryOut(APIModel):
     current_balance: Decimal
     projected_closing: Decimal
     future_net: Decimal
+
+
+class OpeningBalancePayload(APIModel):
+    opening_balance: Decimal

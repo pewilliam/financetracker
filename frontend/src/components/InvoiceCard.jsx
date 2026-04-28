@@ -1,75 +1,62 @@
 import { useState } from "react";
-import { formatMoney } from "../utils/format.js";
+import { Plus, Trash2 } from "lucide-react";
+import { daysUntil, formatMoney, parseMoneyInput } from "../utils/format.js";
 
 export default function InvoiceCard({ invoice, onAddItem, onDeleteItem }) {
+  const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const status = daysUntil(invoice.due_date);
+  const overdue = status === "Vencida" || status === "Vence hoje";
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (!description || !amount) {
-      return;
-    }
-    onAddItem(invoice.id, { description, amount: Number(amount) });
+    const parsed = parseMoneyInput(amount);
+    if (!description || !parsed) return;
+    onAddItem(invoice.id, { description, amount: parsed });
     setDescription("");
     setAmount("");
+    setAdding(false);
   };
 
   return (
-    <div className="glass-card rounded-3xl p-5">
-      <div className="flex items-center justify-between">
+    <article className="invoice-card card">
+      <header className="invoice-header">
         <div>
-          <p className="text-sm text-slate-400">{invoice.name}</p>
-          <p className="text-xs text-slate-500">Vence em {invoice.due_date}</p>
+          <h3>{invoice.name}</h3>
+          <p>Vencimento {invoice.due_date}</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Total
-          </p>
-          <p className="text-lg font-semibold">{formatMoney(invoice.total_amount)}</p>
-        </div>
+        <span className={`due-badge ${overdue ? "danger" : ""}`}>{status}</span>
+      </header>
+
+      <div className="invoice-items">
+        {invoice.items.length ? invoice.items.map((item) => (
+          <div className="invoice-item" key={item.id}>
+            <span>{item.description}</span>
+            <strong>{formatMoney(item.amount)}</strong>
+            <button className="icon-btn small danger" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label="Remover item">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        )) : <p className="muted">Sem itens ainda.</p>}
       </div>
 
-      <ul className="mt-4 space-y-2 text-xs text-slate-600">
-        {invoice.items.length ? (
-          invoice.items.map((item) => (
-            <li key={item.id} className="flex items-center justify-between">
-              <span>{item.description}</span>
-              <span className="flex items-center gap-2">
-                {formatMoney(item.amount)}
-                <button
-                  className="btn btn-xs chip-expense"
-                  onClick={() => onDeleteItem(invoice.id, item.id)}
-                >
-                  Remover
-                </button>
-              </span>
-            </li>
-          ))
-        ) : (
-          <li className="text-slate-400">Sem itens ainda</li>
-        )}
-      </ul>
-
-      <form className="mt-4 grid gap-2" onSubmit={handleSubmit}>
-        <input
-          className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/50"
-          placeholder="Descricao do item"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-        <input
-          className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/50"
-          type="number"
-          step="0.01"
-          placeholder="Valor"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-        />
-        <button className="btn btn-xs" type="submit">
-          Adicionar item
+      {adding ? (
+        <form className="inline-form" onSubmit={handleSubmit}>
+          <input placeholder="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} />
+          <input inputMode="numeric" placeholder="R$ 0,00" value={amount} onChange={(event) => setAmount(event.target.value)} />
+          <button className="btn btn-primary" type="submit">Adicionar</button>
+        </form>
+      ) : (
+        <button className="add-inline" onClick={() => setAdding(true)}>
+          <Plus size={16} /> item
         </button>
-      </form>
-    </div>
+      )}
+
+      <footer className="invoice-footer">
+        <span>Total</span>
+        <strong>{formatMoney(invoice.total_amount)}</strong>
+      </footer>
+    </article>
   );
 }

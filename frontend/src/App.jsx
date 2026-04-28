@@ -1,9 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { Toaster, toast } from "react-hot-toast";
+import {
+  BarChart3,
+  CalendarDays,
+  CreditCard,
+  LogOut,
+  Menu,
+  Moon,
+  Plus,
+  Repeat,
+  Settings,
+  Sun,
+  Wallet,
+  X
+} from "lucide-react";
 import Dashboard from "./components/Dashboard.jsx";
 import MonthlyTable from "./components/MonthlyTable.jsx";
 import InvoiceCard from "./components/InvoiceCard.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
 import { useTheme } from "./hooks/useTheme.js";
+import { useAuth } from "./hooks/useAuth.jsx";
 import {
   addInvoiceItem,
   applyRecurrences,
@@ -15,19 +32,110 @@ import {
   getMonth,
   getMonthSummary,
   listInvoices,
+  setOpeningBalance,
+  updatePassword,
   updateTransaction
 } from "./api/api.js";
-import { formatMoney, formatMonthLabel } from "./utils/format.js";
+import { formatMoney, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
-  return {
-    year: Math.floor(total / 12),
-    month: (total % 12) + 1
-  };
+  return { year: Math.floor(total / 12), month: (total % 12) + 1 };
 }
 
-export default function App() {
+function Protected({ children }) {
+  const auth = useAuth();
+  if (auth.loading) return <div className="center-screen">Carregando sessão...</div>;
+  if (!auth.authenticated) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function AuthPage({ mode }) {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const isRegister = mode === "register";
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [busy, setBusy] = useState(false);
+
+  if (auth.authenticated) return <Navigate to="/" replace />;
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      if (isRegister) await auth.signUp(form);
+      else await auth.signIn({ email: form.email, password: form.password });
+      toast.success(isRegister ? "Conta criada com sucesso" : "Login realizado");
+      navigate("/");
+    } catch {
+      toast.error(isRegister ? "Erro ao criar conta" : "E-mail ou senha inválidos");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="auth-page">
+      <Toaster position="top-right" />
+      <section className="auth-card">
+        <div className="auth-logo"><Wallet size={28} /></div>
+        <h1>Finance Tracker</h1>
+        <p>{isRegister ? "Crie sua conta para começar." : "Entre para ver seus dados financeiros."}</p>
+        <form className="form-stack" onSubmit={submit}>
+          {isRegister && (
+            <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+          )}
+          <label><span>E-mail</span><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
+          <label><span>Senha</span><input type="password" minLength="6" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required /></label>
+          <button className="btn btn-primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : isRegister ? "Criar conta" : "Entrar"}</button>
+        </form>
+        <Link className="auth-link" to={isRegister ? "/login" : "/register"}>
+          {isRegister ? "Já tenho conta" : "Criar cadastro"}
+        </Link>
+      </section>
+    </main>
+  );
+}
+
+function Sidebar({ open, setOpen }) {
+  const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const links = [
+    ["Dashboard", "/", BarChart3],
+    ["Meses", "/meses", CalendarDays],
+    ["Faturas", "/faturas", CreditCard],
+    ["Recorrências", "/recorrencias", Repeat],
+    ["Configurações", "/configuracoes", Settings]
+  ];
+  return (
+    <>
+      <button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>
+      <aside className={`sidebar ${open ? "open" : ""}`}>
+        <div className="sidebar-brand"><Wallet /><span>Finance Tracker</span><button className="icon-btn sidebar-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
+        <nav>
+          {links.map(([label, path, Icon]) => (
+            <NavLink key={path} to={path} end={path === "/"} onClick={() => setOpen(false)}>
+              <Icon size={18} /> {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <button className="theme-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />} Tema
+          </button>
+          <div className="user-card">
+            <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
+            <div><strong>{user?.name}</strong><span>{user?.email}</span></div>
+          </div>
+          <button className="logout" onClick={logout}><LogOut size={16} /> Sair</button>
+        </div>
+      </aside>
+      {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" />}
+    </>
+  );
+}
+
+function AppShell() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -36,400 +144,268 @@ export default function App() {
   const [comparisons, setComparisons] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const [formOpen, setFormOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
-
-  const [invoiceForm, setInvoiceForm] = useState({
-    name: "",
-    due_date: "",
-    initial_amount: ""
-  });
-
-  const { theme, setTheme } = useTheme();
-
-  const invoiceMap = useMemo(() => {
-    const map = new Map();
-    invoices.forEach((invoice) => map.set(invoice.id, invoice));
-    return map;
-  }, [invoices]);
+  const [invoiceModal, setInvoiceModal] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({ name: "", due_date: "", initial_amount: "" });
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
 
-  useEffect(() => {
-    async function loadMonth() {
-      setLoading(true);
-      try {
-        const [monthPayload, summaryPayload, invoicesPayload] = await Promise.all([
-          getMonth(year, month),
-          getMonthSummary(year, month),
-          listInvoices()
-        ]);
-        setMonthData(monthPayload);
-        setSummary(summaryPayload);
-        setInvoices(invoicesPayload);
-        setError(null);
-
-        const comparisonOffsets = [-3, -2, -1];
-        const summaryList = await Promise.all(
-          comparisonOffsets.map(async (offset) => {
-            const target = shiftMonth(year, month, offset);
-            const data = await getMonthSummary(target.year, target.month);
-            return {
-              label: formatMonthLabel(target.year, target.month),
-              total_expenses: data.total_expenses,
-              total_income: data.total_income
-            };
-          })
-        );
-        setComparisons(summaryList);
-      } catch (err) {
-        setError(err.message || "Erro ao carregar dados");
-      } finally {
-        setLoading(false);
-      }
+  async function refresh() {
+    setLoading(true);
+    try {
+      const offsets = [-5, -4, -3, -2, -1, 0];
+      const [monthPayload, summaryPayload, invoicesPayload, comparisonPayload] = await Promise.all([
+        getMonth(year, month),
+        getMonthSummary(year, month),
+        listInvoices(),
+        Promise.all(offsets.map(async (offset) => {
+          const target = shiftMonth(year, month, offset);
+          const data = await getMonthSummary(target.year, target.month);
+          return { label: formatMonthLabel(target.year, target.month).slice(0, 3), ...data };
+        }))
+      ]);
+      setMonthData(monthPayload);
+      setSummary(summaryPayload);
+      setInvoices(invoicesPayload);
+      setComparisons(comparisonPayload);
+    } catch (error) {
+      toast.error("Erro ao carregar dados");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    loadMonth();
-  }, [year, month]);
+  useEffect(() => { refresh(); }, [year, month]);
 
-  const handlePrevMonth = () => {
-    const target = shiftMonth(year, month, -1);
-    setYear(target.year);
-    setMonth(target.month);
-  };
-
-  const handleNextMonth = () => {
-    const target = shiftMonth(year, month, 1);
-    setYear(target.year);
-    setMonth(target.month);
-  };
-
-  const handleToday = () => {
-    setYear(today.getFullYear());
-    setMonth(today.getMonth() + 1);
-  };
+  const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
 
   const openAddForm = (dateString) => {
     setSelectedDate(dateString);
     setEditing(null);
-    setFormOpen(true);
+    setDrawerOpen(true);
   };
 
-  const openEditForm = (transaction) => {
-    setEditing(transaction);
-    setSelectedDate(transaction.date);
-    setFormOpen(true);
-  };
-
-  const handleSaveTransaction = async (payload) => {
-    if (editing) {
-      await updateTransaction(editing.id, payload.data);
-    } else {
-      let recurrenceId = payload.data.recurrence_id;
-      if (payload.recurrence && payload.recurrence.enabled) {
-        const recurrence = await createRecurrence({
-          description: payload.data.description || "Recorrencia",
-          type: payload.data.type,
-          amount: payload.data.amount,
-          day_of_month: payload.recurrence.day_of_month,
-          active: true
-        });
-        recurrenceId = recurrence.id;
+  const saveTransaction = async (payload) => {
+    try {
+      if (editing) {
+        await updateTransaction(editing.id, payload.data);
+      } else {
+        let recurrenceId = payload.data.recurrence_id;
+        if (payload.recurrence?.enabled) {
+          const recurrence = await createRecurrence({
+            description: payload.data.description || "Recorrência",
+            type: payload.data.type,
+            amount: payload.data.amount,
+            day_of_month: payload.recurrence.day_of_month,
+            active: true
+          });
+          recurrenceId = recurrence.id;
+        }
+        await createTransaction({ ...payload.data, recurrence_id: recurrenceId });
       }
-
-      await createTransaction({
-        ...payload.data,
-        recurrence_id: recurrenceId
-      });
+      toast.success("Lançamento salvo");
+      setDrawerOpen(false);
+      await refresh();
+    } catch {
+      toast.error("Erro ao salvar lançamento");
     }
-
-    const monthPayload = await getMonth(year, month);
-    const summaryPayload = await getMonthSummary(year, month);
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
-    setFormOpen(false);
   };
 
-  const handleDeleteTransaction = async (transactionId) => {
-    await deleteTransaction(transactionId);
-    const monthPayload = await getMonth(year, month);
-    const summaryPayload = await getMonthSummary(year, month);
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
+  const removeTransaction = async (id) => {
+    try {
+      await deleteTransaction(id);
+      toast.success("Item removido");
+      await refresh();
+    } catch {
+      toast.error("Erro ao remover item");
+    }
   };
 
-  const handleCreateInvoice = async (event) => {
+  const createNewInvoice = async (event) => {
     event.preventDefault();
-    if (!invoiceForm.name || !invoiceForm.due_date) {
-      return;
+    try {
+      await createInvoice({
+        name: invoiceForm.name,
+        due_date: invoiceForm.due_date,
+        initial_amount: parseMoneyInput(invoiceForm.initial_amount)
+      });
+      setInvoiceForm({ name: "", due_date: "", initial_amount: "" });
+      setInvoiceModal(false);
+      toast.success("Fatura criada");
+      await refresh();
+    } catch {
+      toast.error("Erro ao criar fatura");
     }
-    await createInvoice({
-      name: invoiceForm.name,
-      due_date: invoiceForm.due_date,
-      initial_amount: invoiceForm.initial_amount || 0
-    });
-    setInvoiceForm({ name: "", due_date: "", initial_amount: "" });
-    const [invoicesPayload, monthPayload, summaryPayload] = await Promise.all([
-      listInvoices(),
-      getMonth(year, month),
-      getMonthSummary(year, month)
-    ]);
-    setInvoices(invoicesPayload);
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
   };
 
-  const handleAddInvoiceItem = async (invoiceId, payload) => {
+  const addItem = async (invoiceId, payload) => {
     await addInvoiceItem(invoiceId, payload);
-    const invoicesPayload = await listInvoices();
-    setInvoices(invoicesPayload);
-    const monthPayload = await getMonth(year, month);
-    const summaryPayload = await getMonthSummary(year, month);
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
+    toast.success("Item adicionado");
+    await refresh();
   };
 
-  const handleDeleteInvoiceItem = async (invoiceId, itemId) => {
+  const deleteItem = async (invoiceId, itemId) => {
     await deleteInvoiceItem(invoiceId, itemId);
-    const [invoicesPayload, monthPayload, summaryPayload] = await Promise.all([
-      listInvoices(),
-      getMonth(year, month),
-      getMonthSummary(year, month)
-    ]);
-    setInvoices(invoicesPayload);
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
+    toast.success("Item removido");
+    await refresh();
   };
 
-  const handleApplyRecurrences = async () => {
+  const applyMonthRecurrences = async () => {
     await applyRecurrences(year, month);
-    const monthPayload = await getMonth(year, month);
-    const summaryPayload = await getMonthSummary(year, month);
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
+    toast.success("Recorrências aplicadas");
+    await refresh();
   };
-
-  const balanceSeries = monthData?.days?.map((day) => ({
-    date: day.date,
-    balance: day.balance
-  })) || [];
 
   return (
-    <div className="min-h-screen px-6 py-10 lg:px-12 app-shell">
-      <header className="top-bar">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="brand">
-            <span className="brand-dot" />
+    <div className="app-layout">
+      <Toaster position="top-right" />
+      <Sidebar open={menuOpen} setOpen={setMenuOpen} />
+      <main className="content">
+        <div className="content-inner">
+          <header className="page-header">
             <div>
-              <p className="brand-title">Finance Tracker</p>
-              <p className="brand-sub">Controle financeiro pessoal</p>
+              <p className="eyebrow">{formatMonthLabel(year, month)}</p>
+              <h1>Controle financeiro</h1>
             </div>
-          </div>
-          <div className="toolbar">
-            <button className="btn" onClick={handlePrevMonth}>
-              Mes anterior
-            </button>
-            <button className="btn" onClick={handleToday}>
-              Hoje
-            </button>
-            <button className="btn" onClick={handleNextMonth}>
-              Proximo mes
-            </button>
-            <input
-              className="input-month"
-              type="month"
-              value={monthInputValue}
-              onChange={(event) => {
-                const [nextYear, nextMonth] = event.target.value
-                  .split("-")
-                  .map(Number);
-                if (nextYear && nextMonth) {
-                  setYear(nextYear);
-                  setMonth(nextMonth);
-                }
-              }}
-            />
-            <button
-              className="btn btn-ghost"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              Tema {theme === "dark" ? "claro" : "escuro"}
-            </button>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <span className="chip">{formatMonthLabel(year, month)}</span>
-          {summary && (
-            <>
-              <span className="chip chip-balance">
-                Saldo atual {formatMoney(summary.current_balance)}
-              </span>
-              <span className="chip chip-expense">
-                Gastos {formatMoney(summary.total_expenses)}
-              </span>
-              <span className="chip chip-income">
-                Ganhos {formatMoney(summary.total_income)}
-              </span>
-            </>
+            <div className="toolbar">
+              <button className="btn" onClick={() => { const t = shiftMonth(year, month, -1); setYear(t.year); setMonth(t.month); }}>Anterior</button>
+              <input type="month" value={monthInputValue} onChange={(event) => { const [y, m] = event.target.value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
+              <button className="btn" onClick={() => { const t = shiftMonth(year, month, 1); setYear(t.year); setMonth(t.month); }}>Próximo</button>
+              <button className="btn btn-primary" onClick={() => openAddForm(`${year}-${String(month).padStart(2, "0")}-01`)}><Plus size={16} /> Novo</button>
+            </div>
+          </header>
+
+          {loading ? <Skeleton /> : (
+            <Routes>
+              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} applyMonthRecurrences={applyMonthRecurrences} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} deleteItem={deleteItem} openModal={() => setInvoiceModal(true)} />} />
+              <Route path="/recorrencias" element={<SimplePage title="Recorrências" text="Use o drawer de lançamento para marcar itens recorrentes e aplique-os ao mês atual quando precisar." action={applyMonthRecurrences} />} />
+              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
+            </Routes>
           )}
         </div>
-      </header>
+      </main>
 
-      {error && (
-        <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="mt-10 text-slate-500">Carregando...</div>
-      ) : (
-        <>
-          <section className="mt-8 fade-up" key={`${year}-${month}-dashboard`}>
-            {summary && (
-              <Dashboard
-                summary={summary}
-                balanceSeries={balanceSeries}
-                comparisons={comparisons}
-              />
-            )}
-          </section>
-
-          <section className="mt-10 grid gap-6 lg:grid-cols-[2fr,1fr]">
-            <div className="glass-card rounded-3xl p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold">Tabela mensal</h2>
-                  {monthData && (
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Saldo inicial {formatMoney(monthData.opening_balance)}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="chip chip-expense">Gastos</span>
-                  <span className="chip chip-income">Ganhos</span>
-                  <span className="chip chip-balance">Saldo</span>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() =>
-                      openAddForm(
-                        new Date(year, month - 1, 1)
-                          .toISOString()
-                          .slice(0, 10)
-                      )
-                    }
-                  >
-                    Novo lancamento
-                  </button>
-                </div>
-              </div>
-              {monthData?.days?.length ? (
-                <MonthlyTable
-                  days={monthData.days}
-                  summary={summary}
-                  onAdd={openAddForm}
-                  onEdit={openEditForm}
-                  onDelete={handleDeleteTransaction}
-                  invoicesById={invoiceMap}
-                />
-              ) : (
-                <div className="mt-6 rounded-2xl border border-slate-200 bg-white/60 px-4 py-3 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40">
-                  Mes vazio. Deseja aplicar recorrencias?
-                  <button
-                    className="ml-3 btn btn-xs"
-                    onClick={handleApplyRecurrences}
-                  >
-                    Aplicar agora
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-6">
-              <div className="glass-card rounded-3xl p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">Faturas futuras</h2>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                      Atualize suas faturas
-                    </p>
-                  </div>
-                  <button
-                    className="btn btn-xs"
-                    onClick={handleApplyRecurrences}
-                  >
-                    Aplicar recorrencias
-                  </button>
-                </div>
-
-                <form className="mt-4 grid gap-3" onSubmit={handleCreateInvoice}>
-                  <input
-                    className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/50"
-                    placeholder="Descricao"
-                    value={invoiceForm.name}
-                    onChange={(event) =>
-                      setInvoiceForm({ ...invoiceForm, name: event.target.value })
-                    }
-                  />
-                  <input
-                    className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/50"
-                    type="date"
-                    value={invoiceForm.due_date}
-                    onChange={(event) =>
-                      setInvoiceForm({ ...invoiceForm, due_date: event.target.value })
-                    }
-                  />
-                  <input
-                    className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/50"
-                    type="number"
-                    step="0.01"
-                    placeholder="Valor inicial"
-                    value={invoiceForm.initial_amount}
-                    onChange={(event) =>
-                      setInvoiceForm({
-                        ...invoiceForm,
-                        initial_amount: event.target.value
-                      })
-                    }
-                  />
-                  <button className="btn btn-primary" type="submit">
-                    Criar fatura
-                  </button>
-                </form>
-              </div>
-
-              <div className="space-y-4">
-                {invoices.length ? (
-                  invoices.map((invoice) => (
-                    <InvoiceCard
-                      key={invoice.id}
-                      invoice={invoice}
-                      onAddItem={handleAddInvoiceItem}
-                      onDeleteItem={handleDeleteInvoiceItem}
-                    />
-                  ))
-                ) : (
-                  <div className="glass-card rounded-3xl p-6 text-sm text-slate-500">
-                    Nenhuma fatura futura cadastrada.
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        </>
-      )}
-
-      <TransactionForm
-        open={formOpen}
-        initial={editing}
-        date={selectedDate}
-        onClose={() => setFormOpen(false)}
-        onSave={handleSaveTransaction}
-      />
+      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} invoices={invoices} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
+      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
     </div>
+  );
+}
+
+function MonthsPage({ monthData, summary, openAddForm, setEditing, setDrawerOpen, removeTransaction, applyMonthRecurrences }) {
+  return (
+    <section className="card">
+      <div className="section-head">
+        <div><p className="eyebrow">Saldo inicial {formatMoney(monthData.opening_balance)}</p><h2>Tabela mensal</h2></div>
+        <button className="btn" onClick={applyMonthRecurrences}>Aplicar recorrências</button>
+      </div>
+      <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+    </section>
+  );
+}
+
+function InvoicesPage({ invoices, addItem, deleteItem, openModal }) {
+  return (
+    <section>
+      <div className="section-head"><div><p className="eyebrow">Faturas futuras</p><h2>Faturas</h2></div></div>
+      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onDeleteItem={deleteItem} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em + para criar.</p></div>}
+      <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
+    </section>
+  );
+}
+
+function InvoiceModal({ form, setForm, onSubmit, onClose }) {
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <form className="modal-card form-stack" onSubmit={onSubmit}>
+        <div className="drawer-head"><h2>Nova fatura</h2><button className="icon-btn" type="button" onClick={onClose}><X size={18} /></button></div>
+        <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+        <label><span>Data de vencimento</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} required /></label>
+        <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => setForm({ ...form, initial_amount: event.target.value })} /></label>
+        <button className="btn btn-primary">Criar fatura</button>
+      </form>
+    </div>
+  );
+}
+
+function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) {
+  const { user, updateProfile } = useAuth();
+  const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "" });
+  const [password, setPassword] = useState({ current_password: "", new_password: "" });
+  const [openingBalance, setOpeningBalanceInput] = useState("");
+
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    try {
+      await updateProfile(profile);
+      toast.success("Perfil atualizado");
+    } catch {
+      toast.error("Erro ao atualizar perfil");
+    }
+  };
+
+  const savePassword = async (event) => {
+    event.preventDefault();
+    try {
+      await updatePassword(password);
+      setPassword({ current_password: "", new_password: "" });
+      toast.success("Senha atualizada");
+    } catch {
+      toast.error("Erro ao trocar senha");
+    }
+  };
+
+  const saveOpeningBalance = async (event) => {
+    event.preventDefault();
+    try {
+      await setOpeningBalance(year, month, parseMoneyInput(openingBalance));
+      toast.success("Saldo inicial atualizado");
+      await refresh();
+    } catch {
+      toast.error("Erro ao salvar saldo inicial");
+    }
+  };
+
+  const exportCsv = () => {
+    const rows = [["data", "tipo", "valor", "descricao"], ...monthData.days.flatMap((day) => day.transactions.map((tx) => [tx.date, tx.type, tx.amount, tx.description || ""]))];
+    const csv = rows.map((row) => row.join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `finance-${monthLabel}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <section className="settings-grid">
+      <form className="card" onSubmit={saveProfile}><h2>Perfil</h2><div className="form-stack"><label><span>Nome</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>E-mail</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">Salvar perfil</button></div></form>
+      <form className="card" onSubmit={savePassword}><h2>Senha</h2><div className="form-stack"><label><span>Senha atual</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>Nova senha</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">Trocar senha</button></div></form>
+      <form className="card" onSubmit={saveOpeningBalance}><h2>Saldo inicial</h2><p className="muted">Saldo atual: {formatMoney(summary.current_balance)}</p><div className="form-stack"><label><span>Saldo do mês</span><input placeholder="R$ 0,00" value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">Salvar saldo</button></div></form>
+      <div className="card"><h2>Exportação</h2><p className="muted">Baixe os lançamentos do mês selecionado.</p><button className="btn btn-primary" onClick={exportCsv}>Exportar CSV</button></div>
+    </section>
+  );
+}
+
+function SimplePage({ title, text, action }) {
+  return <section className="card"><h2>{title}</h2><p className="muted">{text}</p><button className="btn btn-primary" onClick={action}>Aplicar agora</button></section>;
+}
+
+function Skeleton() {
+  return <div className="summary-grid">{Array.from({ length: 4 }).map((_, i) => <div className="card skeleton" key={i} />)}</div>;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<AuthPage mode="login" />} />
+      <Route path="/register" element={<AuthPage mode="register" />} />
+      <Route path="/*" element={<Protected><AppShell /></Protected>} />
+    </Routes>
   );
 }
