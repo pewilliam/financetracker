@@ -143,6 +143,29 @@ export function setInvoicePaid(invoiceId, paid) {
   });
 }
 
+export function listInstallments() {
+  return request("/installments");
+}
+
+export function getInstallment(id) {
+  return request(`/installments/${id}`);
+}
+
+export function createInstallment(payload) {
+  return request("/installments", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteInstallment(id) {
+  return request(`/installments/${id}`, { method: "DELETE" });
+}
+
+export function deleteInstallmentItem(itemId) {
+  return request(`/installments/items/${itemId}`, { method: "DELETE" });
+}
+
 export function listRecurrences() {
   return request("/recurrences");
 }

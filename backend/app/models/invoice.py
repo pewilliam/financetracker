@@ -17,6 +17,7 @@ class Invoice(Base):
 
     user = relationship("User", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+    installment_items = relationship("InstallmentItem", back_populates="invoice", passive_deletes=True)
     transactions = relationship(
         "Transaction",
         foreign_keys="Transaction.invoice_id",

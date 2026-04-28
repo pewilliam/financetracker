@@ -1,11 +1,11 @@
 from datetime import date
-from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import Invoice, InvoiceItem, Transaction, User
+from app.models import InstallmentItem, Invoice, InvoiceItem, Transaction, User
 from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceOut, InvoicePaidUpdate
 from app.security import get_current_user
+from app.services.invoices import create_invoice_with_transaction, recalculate_invoice_total
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -17,7 +17,10 @@ def list_invoices(
 ):
     invoices = (
         db.query(Invoice)
-        .options(selectinload(Invoice.items))
+        .options(
+            selectinload(Invoice.items),
+            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
+        )
         .filter(Invoice.user_id == current_user.id)
         .order_by(Invoice.due_date)
         .all()
@@ -31,15 +34,7 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    invoice = Invoice(
-        user_id=current_user.id,
-        name=payload.name,
-        due_date=payload.due_date,
-        total_amount=Decimal("0.00"),
-        paid=False,
-    )
-    db.add(invoice)
-    db.flush()
+    invoice = create_invoice_with_transaction(db, current_user.id, payload.name, payload.due_date)
 
     if payload.initial_amount and payload.initial_amount > 0:
         item = InvoiceItem(
@@ -48,20 +43,8 @@ def create_invoice(
             amount=payload.initial_amount,
         )
         db.add(item)
-        invoice.total_amount = payload.initial_amount
-
-    transaction = Transaction(
-        user_id=current_user.id,
-        date=invoice.due_date,
-        type="expense",
-        amount=invoice.total_amount,
-        description=f"Invoice: {invoice.name}",
-        is_future=invoice.due_date > date.today(),
-        invoice_id=invoice.id,
-    )
-    db.add(transaction)
-    db.flush()
-    invoice.linked_transaction_id = transaction.id
+        db.flush()
+        recalculate_invoice_total(db, invoice)
 
     db.commit()
     db.refresh(invoice)
@@ -77,7 +60,10 @@ def set_invoice_paid(
 ):
     invoice = (
         db.query(Invoice)
-        .options(selectinload(Invoice.items))
+        .options(
+            selectinload(Invoice.items),
+            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
+        )
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -111,7 +97,10 @@ def add_invoice_item(
 ):
     invoice = (
         db.query(Invoice)
-        .options(selectinload(Invoice.items))
+        .options(
+            selectinload(Invoice.items),
+            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
+        )
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -125,19 +114,8 @@ def add_invoice_item(
     )
     db.add(item)
 
-    invoice.total_amount = (invoice.total_amount or Decimal("0.00")) + payload.amount
-    if invoice.linked_transaction_id:
-        linked = (
-            db.query(Transaction)
-            .filter(
-                Transaction.id == invoice.linked_transaction_id,
-                Transaction.user_id == current_user.id,
-            )
-            .first()
-        )
-        if linked:
-            linked.amount = invoice.total_amount
-            linked.is_future = False if invoice.paid else invoice.due_date > date.today()
+    db.flush()
+    recalculate_invoice_total(db, invoice)
 
     db.commit()
     db.refresh(invoice)
@@ -153,7 +131,10 @@ def delete_invoice_item(
 ):
     invoice = (
         db.query(Invoice)
-        .options(selectinload(Invoice.items))
+        .options(
+            selectinload(Invoice.items),
+            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
+        )
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -164,21 +145,9 @@ def delete_invoice_item(
     if not item or item.invoice_id != invoice.id:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    invoice.total_amount = (invoice.total_amount or Decimal("0.00")) - item.amount
     db.delete(item)
-
-    if invoice.linked_transaction_id:
-        linked = (
-            db.query(Transaction)
-            .filter(
-                Transaction.id == invoice.linked_transaction_id,
-                Transaction.user_id == current_user.id,
-            )
-            .first()
-        )
-        if linked:
-            linked.amount = invoice.total_amount
-            linked.is_future = False if invoice.paid else invoice.due_date > date.today()
+    db.flush()
+    recalculate_invoice_total(db, invoice)
 
     db.commit()
     db.refresh(invoice)

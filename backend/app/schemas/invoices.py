@@ -14,6 +14,19 @@ class InvoiceItemOut(InvoiceItemCreate):
     created_at: Optional[datetime] = None
 
 
+class InvoiceInstallmentItemOut(APIModel):
+    id: int
+    purchase_id: int
+    installment_number: int
+    installment_count: int = 0
+    amount: Decimal
+    description: str
+    purchase_description: str = ""
+    purchase_total_amount: Decimal = Decimal("0.00")
+    remaining_installments: int = 0
+    created_at: Optional[datetime] = None
+
+
 class InvoiceCreate(APIModel):
     name: str
     due_date: date
@@ -33,3 +46,4 @@ class InvoiceOut(APIModel):
     linked_transaction_id: Optional[int] = None
     created_at: Optional[datetime] = None
     items: List[InvoiceItemOut] = []
+    installment_items: List[InvoiceInstallmentItemOut] = []

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { CalendarPlus, CheckCircle2, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarPlus, CheckCircle2, CreditCard, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { daysUntil, formatDateShort, formatMoney, parseMoneyInput } from "../utils/format.js";
 
-export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onTogglePaid, onDuplicateNext }) {
+export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -32,15 +32,33 @@ export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onToggle
       </header>
 
       <div className="invoice-items">
-        {invoice.items.length ? invoice.items.map((item) => (
-          <div className="invoice-item" key={item.id}>
-            <span>{item.description}</span>
-            <strong>{formatMoney(item.amount)}</strong>
-            <button className="icon-btn small danger" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label="Remover item">
-              <Trash2 size={15} />
-            </button>
-          </div>
-        )) : <p className="muted">Sem itens ainda.</p>}
+        {invoice.items.length || invoice.installment_items?.length ? (
+          <>
+            {invoice.items.map((item) => (
+              <div className="invoice-item" key={`item-${item.id}`}>
+                <span>{item.description}</span>
+                <strong>{formatMoney(item.amount)}</strong>
+                <button className="icon-btn small danger" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label="Remover item">
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+            {(invoice.installment_items || []).map((item) => (
+              <div
+                className="invoice-item installment-line"
+                key={`installment-${item.id}`}
+                title={`Compra: ${formatMoney(item.purchase_total_amount)} em ${item.installment_count}x - parcelas restantes: ${item.remaining_installments}`}
+              >
+                <span><CreditCard size={15} /> {item.purchase_description || item.description}<em>PARCELA</em></span>
+                <strong>{formatMoney(item.amount)} <small>({item.installment_number}/{item.installment_count})</small></strong>
+                <button className="icon-btn small danger" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
+                  <Trash2 size={15} />
+                </button>
+                <button className="installment-link" onClick={() => onViewInstallment(item.purchase_id)}>Ver todas as parcelas →</button>
+              </div>
+            ))}
+          </>
+        ) : <p className="muted">Sem itens ainda.</p>}
       </div>
 
       {adding ? (
@@ -63,6 +81,10 @@ export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onToggle
         <button className="btn btn-ghost" onClick={() => onDuplicateNext(invoice)}>
           <CalendarPlus size={16} />
           Próxima fatura
+        </button>
+        <button className="btn btn-ghost" onClick={() => onAddInstallment(invoice)}>
+          <CreditCard size={16} />
+          + Parcela
         </button>
         <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
           {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}

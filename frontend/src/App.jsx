@@ -5,7 +5,9 @@ import {
   BarChart3,
   CalendarDays,
   CalendarPlus,
+  Check,
   CreditCard,
+  Eye,
   Grid2X2,
   List,
   LogOut,
@@ -15,6 +17,7 @@ import {
   Repeat,
   Settings,
   Sun,
+  Trash2,
   Wallet,
   X
 } from "lucide-react";
@@ -27,32 +30,30 @@ import { useAuth } from "./hooks/useAuth.jsx";
 import {
   addInvoiceItem,
   applyRecurrences,
+  createInstallment,
   createInvoice,
   createRecurrence,
   createTransaction,
+  deleteInstallment,
+  deleteInstallmentItem,
   deleteInvoiceItem,
   deleteTransaction,
+  getInstallment,
   getMonth,
   getMonthSummary,
   getMonthsSummary,
+  listInstallments,
   listInvoices,
   setInvoicePaid,
   setOpeningBalance,
   updatePassword,
   updateTransaction
 } from "./api/api.js";
-import { formatDateShort, formatMoney, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
   return { year: Math.floor(total / 12), month: (total % 12) + 1 };
-}
-
-function formatMoneyForInput(value) {
-  return Number(value || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
 }
 
 function addMonthsToDate(dateString, amount) {
@@ -64,6 +65,20 @@ function addMonthsToDate(dateString, amount) {
 
 function nextMonthDate(dateString) {
   return addMonthsToDate(dateString, 1);
+}
+
+function defaultInvoiceForm() {
+  return { name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 };
+}
+
+function defaultInstallmentForm(firstInvoiceId = "") {
+  return {
+    description: "",
+    total_amount: "",
+    installment_count: 1,
+    first_invoice_id: firstInvoiceId,
+    different_values: false
+  };
 }
 
 function Protected({ children }) {
@@ -127,6 +142,7 @@ function Sidebar({ open, setOpen }) {
     ["Dashboard", "/", BarChart3],
     ["Meses", "/meses", CalendarDays],
     ["Faturas", "/faturas", CreditCard],
+    ["Parcelamentos", "/parcelamentos", CreditCard],
     ["Recorrências", "/recorrencias", Repeat],
     ["Configurações", "/configuracoes", Settings]
   ];
@@ -167,13 +183,17 @@ function AppShell() {
   const [comparisons, setComparisons] = useState([]);
   const [monthCards, setMonthCards] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [installments, setInstallments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState({ name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 });
+  const [invoiceForm, setInvoiceForm] = useState(defaultInvoiceForm);
+  const [installmentModal, setInstallmentModal] = useState(false);
+  const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
+  const [installmentDetails, setInstallmentDetails] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -181,10 +201,11 @@ function AppShell() {
     setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, installmentsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
+        listInstallments(),
         getMonthsSummary(),
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
@@ -195,6 +216,7 @@ function AppShell() {
       setMonthData(monthPayload);
       setSummary(summaryPayload);
       setInvoices(invoicesPayload);
+      setInstallments(installmentsPayload);
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
@@ -251,27 +273,16 @@ function AppShell() {
     }
   };
 
-  const createNewInvoice = async (event) => {
-    event.preventDefault();
+  const createNewInvoice = async (drafts) => {
     try {
-      const payload = {
-        name: invoiceForm.name,
-        due_date: invoiceForm.due_date,
-        initial_amount: parseMoneyInput(invoiceForm.initial_amount)
-      };
-      await createInvoice(payload);
-      if (invoiceForm.duplicate_next_month) {
-        const months = Math.max(1, Number(invoiceForm.duplicate_months) || 1);
-        await Promise.all(Array.from({ length: months }, (_, index) => (
-          createInvoice({
-            ...payload,
-            due_date: addMonthsToDate(payload.due_date, index + 1)
-          })
-        )));
-      }
-      setInvoiceForm({ name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 });
+      await Promise.all(drafts.map((draft) => createInvoice({
+        name: draft.name,
+        due_date: draft.due_date,
+        initial_amount: parseMoneyInput(draft.initial_amount)
+      })));
+      setInvoiceForm(defaultInvoiceForm());
       setInvoiceModal(false);
-      toast.success(invoiceForm.duplicate_next_month ? "Faturas criadas" : "Fatura criada");
+      toast.success(`${drafts.length} ${drafts.length === 1 ? "fatura criada" : "faturas criadas"} com sucesso!`);
       await refresh();
     } catch {
       toast.error("Erro ao criar fatura");
@@ -279,7 +290,7 @@ function AppShell() {
   };
 
   const openNewInvoiceModal = () => {
-    setInvoiceForm({ name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 });
+    setInvoiceForm(defaultInvoiceForm());
     setInvoiceModal(true);
   };
 
@@ -287,11 +298,57 @@ function AppShell() {
     setInvoiceForm({
       name: invoice.name,
       due_date: nextMonthDate(invoice.due_date),
-      initial_amount: formatMoneyForInput(invoice.total_amount),
+      initial_amount: formatMoney(invoice.total_amount),
       duplicate_next_month: false,
       duplicate_months: 1
     });
     setInvoiceModal(true);
+  };
+
+  const openInstallmentModal = (invoice = null) => {
+    setInstallmentForm(defaultInstallmentForm(invoice?.id || invoices[0]?.id || ""));
+    setInstallmentModal(true);
+  };
+
+  const createNewInstallment = async (payload) => {
+    try {
+      await createInstallment(payload);
+      setInstallmentForm(defaultInstallmentForm());
+      setInstallmentModal(false);
+      toast.success("Compra parcelada criada");
+      await refresh();
+    } catch {
+      toast.error("Erro ao criar compra parcelada");
+    }
+  };
+
+  const removeInstallment = async (id) => {
+    try {
+      await deleteInstallment(id);
+      setInstallmentDetails(null);
+      toast.success("Compra parcelada removida");
+      await refresh();
+    } catch {
+      toast.error("Erro ao remover compra parcelada");
+    }
+  };
+
+  const removeInstallmentItem = async (id) => {
+    try {
+      await deleteInstallmentItem(id);
+      toast.success("Parcela removida");
+      await refresh();
+    } catch {
+      toast.error("Erro ao remover parcela");
+    }
+  };
+
+  const showInstallmentDetails = async (id) => {
+    try {
+      setInstallmentDetails(await getInstallment(id));
+    } catch {
+      toast.error("Erro ao carregar parcelamento");
+    }
   };
 
   const addItem = async (invoiceId, payload) => {
@@ -353,7 +410,8 @@ function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} applyMonthRecurrences={applyMonthRecurrences} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} deleteItem={deleteItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openDuplicateInvoiceModal={openDuplicateInvoiceModal} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
               <Route path="/recorrencias" element={<SimplePage title="Recorrências" text="As recorrências agora são criadas automaticamente pelo período informado no lançamento. Este botão permanece para recorrências antigas." action={applyMonthRecurrences} />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
             </Routes>
@@ -363,6 +421,8 @@ function AppShell() {
 
       <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} invoices={invoices} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
+      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
+      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}
     </div>
   );
 }
@@ -482,28 +542,291 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
   );
 }
 
-function InvoicesPage({ invoices, addItem, deleteItem, togglePaid, openModal, openDuplicateInvoiceModal }) {
+function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
   return (
     <section>
       <div className="section-head">
         <div><p className="eyebrow">Faturas futuras</p><h2>Faturas</h2></div>
-        <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> Nova fatura</button>
+        <div className="view-actions">
+          <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> Compra parcelada</button>
+          <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> Nova fatura</button>
+        </div>
       </div>
-      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onDeleteItem={deleteItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
+      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
     </section>
   );
 }
 
-function InvoiceModal({ form, setForm, onSubmit, onClose }) {
-  const nextDueDate = form.due_date ? nextMonthDate(form.due_date) : "";
-  const duplicateMonths = Math.max(1, Number(form.duplicate_months) || 1);
-  const lastDuplicateDate = form.due_date ? addMonthsToDate(form.due_date, duplicateMonths) : "";
+function InstallmentsPage({ installments, onNew, onDetails }) {
+  return (
+    <section>
+      <div className="section-head">
+        <div><p className="eyebrow">Compras parceladas</p><h2>Parcelamentos</h2></div>
+        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Compra parcelada</button>
+      </div>
+      {installments.length ? (
+        <div className="installment-grid">
+          {installments.map((purchase) => {
+            const pct = purchase.installment_count ? (purchase.paid_installments / purchase.installment_count) * 100 : 0;
+            const next = purchase.next_installment?.invoice;
+            return (
+              <article className="installment-card" key={purchase.id}>
+                <header>
+                  <h3><CreditCard size={18} /> {purchase.description}</h3>
+                  {purchase.paid_installments === purchase.installment_count && <span className="paid-pill">QUITADA</span>}
+                </header>
+                <p>{formatMoney(purchase.total_amount)} • {purchase.installment_count}x {formatMoney(purchase.installment_value)}</p>
+                <div className="installment-progress"><span style={{ width: `${pct}%` }} /></div>
+                <strong>Progresso: {purchase.paid_installments} / {purchase.installment_count}</strong>
+                <p>Pago: {formatMoney(purchase.paid_amount)} • Restante: {formatMoney(purchase.remaining_amount)}</p>
+                <p>Próxima parcela: {next ? `${next.name} — vence ${formatDateShort(next.due_date)}` : "Fatura removida — realocar"}</p>
+                <button className="btn btn-ghost" onClick={() => onDetails(purchase.id)}><Eye size={16} /> Detalhes</button>
+              </article>
+            );
+          })}
+        </div>
+      ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma compra parcelada.</h3><p>Use Compra parcelada para distribuir valores nas faturas.</p></div>}
+    </section>
+  );
+}
+
+function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
+  const [step, setStep] = useState(1);
+  const [drafts, setDrafts] = useState([]);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
+  const total = parseMoneyInput(form.total_amount);
+  const firstInvoice = invoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
+  const sortedInvoices = [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const filteredInvoices = sortedInvoices.filter((invoice) => `${invoice.name} ${invoice.due_date}`.toLowerCase().includes(invoiceSearch.toLowerCase()));
+  const perInstallment = count ? total / count : 0;
+  const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
+
+  const matchingInvoice = (dateString) => invoices.find((invoice) => invoice.name === firstInvoice?.name && invoice.due_date.slice(0, 7) === dateString.slice(0, 7));
+
+  const updateForm = (patch) => setForm({ ...form, ...patch });
+  const handleMoneyChange = (value) => updateForm({ total_amount: formatMoneyInput(value) });
+
+  const buildDrafts = () => Array.from({ length: count }, (_, index) => {
+    const dueDate = addMonthsToDate(firstInvoice.due_date, index);
+    const matched = matchingInvoice(dueDate);
+    const amount = index === count - 1
+      ? total - (Math.round(perInstallment * 100) / 100) * (count - 1)
+      : perInstallment;
+    return {
+      id: `${Date.now()}-${index}`,
+      number: index + 1,
+      month: dueDate,
+      invoice_id: matched?.id || "",
+      amount: formatMoney(amount)
+    };
+  });
+
+  const goToReview = (event) => {
+    event.preventDefault();
+    if (!form.description || !total || !firstInvoice) return;
+    setDrafts(buildDrafts());
+    setStep(2);
+  };
+
+  const updateDraft = (id, patch) => {
+    setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
+  };
+
+  const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
+  const confirmedTotal = drafts.reduce((sum, draft) => sum + parseMoneyInput(draft.amount), 0);
+  const invoiceCount = new Set(drafts.map((draft) => draft.invoice_id || `auto-${draft.month}`)).size;
+  const canCreate = drafts.length && drafts.every((draft) => parseMoneyInput(draft.amount) > 0);
+
+  const submitDrafts = (event) => {
+    event.preventDefault();
+    if (!canCreate) return;
+    onSubmit({
+      description: form.description,
+      total_amount: confirmedTotal,
+      installment_count: drafts.length,
+      first_invoice_id: Number(form.first_invoice_id),
+      items: drafts.map((draft) => ({
+        invoice_id: draft.invoice_id ? Number(draft.invoice_id) : null,
+        amount: parseMoneyInput(draft.amount),
+        target_due_date: draft.month
+      }))
+    });
+  };
 
   return (
     <div className="modal-layer">
       <button className="modal-backdrop" onClick={onClose} />
-      <form className="modal-card invoice-modal" onSubmit={onSubmit}>
+      <form className={`modal-card invoice-modal installment-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts}>
+        <div className="modal-titlebar">
+          <div className="modal-icon"><CreditCard size={22} /></div>
+          <div><p className="eyebrow">Compra parcelada</p><h2>Adicionar compra parcelada</h2></div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="invoice-stepper">
+          <div className={`stepper-item ${step > 1 ? "done" : "active"}`}><span>{step > 1 ? <Check size={15} /> : "1"}</span><strong>Configurar</strong></div>
+          <i />
+          <div className={`stepper-item ${step === 2 ? "active" : ""}`}><span>2</span><strong>Revisar parcelas</strong></div>
+        </div>
+        {step === 1 ? (
+          <>
+            <div className="invoice-modal-body">
+              <label><span>Descrição da compra</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
+              <label><span>Valor total</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
+              <label><span>Número de parcelas</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
+              <p className="computed-value">{formatMoney(perInstallment)} por parcela</p>
+              <label className={`duplicate-option ${form.different_values ? "active" : ""}`}>
+                <input type="checkbox" checked={form.different_values} onChange={(event) => updateForm({ different_values: event.target.checked })} />
+                <span className="duplicate-icon"><CreditCard size={20} /></span>
+                <span><strong>Parcelas com valores diferentes</strong><small>Edite cada valor na revisão.</small></span>
+              </label>
+              <label><span>Buscar fatura inicial</span><input value={invoiceSearch} onChange={(event) => setInvoiceSearch(event.target.value)} placeholder="Nome ou data" /></label>
+              <label><span>Fatura inicial</span><select value={form.first_invoice_id} onChange={(event) => updateForm({ first_invoice_id: event.target.value })} required>
+                <option value="">Selecione uma fatura</option>
+                {filteredInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} — vence {formatDateShort(invoice.due_date)}</option>)}
+              </select></label>
+              <p className="duplicate-summary">{firstInvoice ? `Parcelas distribuídas de ${formatMonthShort(firstInvoice.due_date)} até ${formatMonthShort(endDate)}` : "Selecione a fatura inicial para ver a distribuição."}</p>
+            </div>
+            <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary">Próximo →</button></div>
+          </>
+        ) : (
+          <>
+            <div className="invoice-review">
+              <div className="review-table">
+                <div className="review-row installment-review-head"><span>#</span><span>Parcela</span><span>Fatura destino</span><span>Valor</span><span /></div>
+                <div className="review-list">
+                  {drafts.map((draft, index) => (
+                    <div className="review-row installment-review-row" key={draft.id}>
+                      <span>{draft.number}/{count}</span>
+                      <strong>{formatMonthShort(draft.month)}</strong>
+                      <label>
+                        <select value={draft.invoice_id} onChange={(event) => updateDraft(draft.id, { invoice_id: event.target.value })}>
+                          <option value="">Criar automaticamente</option>
+                          {sortedInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} — {formatDateShort(invoice.due_date)}</option>)}
+                        </select>
+                        {!draft.invoice_id && <small className="auto-badge">Fatura será criada automaticamente</small>}
+                      </label>
+                      <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
+                      <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="review-footer">
+              <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button><button className="btn btn-primary" disabled={!canCreate}>Confirmar {drafts.length} parcelas</button></div>
+              <p>Valor total confirmado: <strong>{formatMoney(confirmedTotal)}</strong>{invoiceCount > 1 ? ` • Parcelas em ${invoiceCount} faturas diferentes` : ""}</p>
+            </div>
+          </>
+        )}
+      </form>
+    </div>
+  );
+}
+
+function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <div className="modal-card invoice-modal installment-modal step-2">
+        <div className="modal-titlebar">
+          <div className="modal-icon"><CreditCard size={22} /></div>
+          <div><p className="eyebrow">{purchase.progress_label}</p><h2>{purchase.description}</h2></div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="invoice-review">
+          <div className="review-table">
+            <div className="review-row installment-review-head"><span>#</span><span>Parcela</span><span>Fatura</span><span>Status</span><span /></div>
+            <div className="review-list">
+              {purchase.items.map((item) => (
+                <div className="review-row installment-review-row" key={item.id}>
+                  <span>{item.installment_number}/{purchase.installment_count}</span>
+                  <strong>{formatMoney(item.amount)}</strong>
+                  <span>{item.invoice ? `${item.invoice.name} — ${formatDateShort(item.invoice.due_date)}` : "Fatura removida — realocar"}</span>
+                  <span className={`due-badge compact ${item.invoice?.paid ? "paid" : item.invoice ? "" : "danger"}`}>{item.invoice?.paid ? "Paga" : item.invoice ? "Pendente" : "Órfã"}</span>
+                  <span />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="modal-actions details-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>Fechar</button>
+          <button className="btn btn-ghost danger-text" type="button" onClick={() => onDelete(purchase.id)}><Trash2 size={16} /> Remover compra</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvoiceModal({ form, setForm, onSubmit, onClose }) {
+  const [step, setStep] = useState(1);
+  const [drafts, setDrafts] = useState([]);
+  const duplicateMonths = Math.min(23, Math.max(1, Number(form.duplicate_months) || 1));
+  const totalCount = form.duplicate_next_month ? duplicateMonths + 1 : 1;
+  const startLabel = form.due_date ? formatMonthShort(form.due_date) : "";
+  const endLabel = form.due_date ? formatMonthShort(addMonthsToDate(form.due_date, totalCount - 1)) : "";
+
+  const updateForm = (patch) => setForm({ ...form, ...patch });
+
+  const buildDrafts = () => Array.from({ length: totalCount }, (_, index) => ({
+    id: `${Date.now()}-${index}`,
+    name: form.name,
+    due_date: addMonthsToDate(form.due_date, index),
+    initial_amount: form.initial_amount
+  }));
+
+  const goToReview = (event) => {
+    event.preventDefault();
+    if (!form.name || !form.due_date || !parseMoneyInput(form.initial_amount)) return;
+    setDrafts(buildDrafts());
+    setStep(2);
+  };
+
+  const updateDraft = (id, patch) => {
+    setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
+  };
+
+  const removeDraft = (id) => {
+    setDrafts((current) => current.filter((draft) => draft.id !== id));
+  };
+
+  const matchFirstValue = () => {
+    const first = drafts[0]?.initial_amount || "";
+    setDrafts((current) => current.map((draft) => ({ ...draft, initial_amount: first })));
+  };
+
+  const resetAutomaticDates = () => {
+    const firstDate = drafts[0]?.due_date;
+    if (!firstDate) return;
+    setDrafts((current) => current.map((draft, index) => ({ ...draft, due_date: addMonthsToDate(firstDate, index) })));
+  };
+
+  const rowError = (draft) => {
+    if (!draft.due_date) return "Informe uma data válida.";
+    if (!parseMoneyInput(draft.initial_amount)) return "Informe um valor maior que zero.";
+    return "";
+  };
+
+  const validDrafts = drafts.filter((draft) => !rowError(draft));
+  const canCreate = drafts.length > 0 && validDrafts.length === drafts.length;
+  const totalCommitted = drafts.reduce((sum, draft) => sum + parseMoneyInput(draft.initial_amount), 0);
+
+  const submitDrafts = (event) => {
+    event.preventDefault();
+    if (!canCreate) return;
+    onSubmit(drafts);
+  };
+
+  const handleMoneyChange = (value, setter) => {
+    setter(formatMoneyInput(value));
+  };
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <form className={`modal-card invoice-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts}>
         <div className="modal-titlebar">
           <div className="modal-icon"><CreditCard size={22} /></div>
           <div>
@@ -513,61 +836,123 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
 
-        <div className="invoice-modal-body">
-          <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-          <div className="invoice-modal-grid">
-            <label><span>Data de vencimento</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} required /></label>
-            <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => setForm({ ...form, initial_amount: event.target.value })} /></label>
+        <div className="invoice-stepper" aria-label="Etapas da criação de fatura">
+          <div className={`stepper-item ${step > 1 ? "done" : "active"}`}>
+            <span>{step > 1 ? <Check size={15} /> : "1"}</span>
+            <strong>Configurar</strong>
           </div>
+          <i />
+          <div className={`stepper-item ${step === 2 ? "active" : ""}`}>
+            <span>2</span>
+            <strong>Revisar e ajustar</strong>
+          </div>
+        </div>
 
-          <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
-            <input
-              type="checkbox"
-              checked={form.duplicate_next_month}
-              onChange={(event) => setForm({ ...form, duplicate_next_month: event.target.checked })}
-            />
-            <span className="duplicate-icon"><CalendarPlus size={20} /></span>
-            <span>
-              <strong>Duplicar para o próximo mês</strong>
-              <small>
-                {nextDueDate
-                  ? `Também cria faturas futuras a partir de ${formatDateShort(nextDueDate)}.`
-                  : "Ao informar o vencimento, a próxima data será calculada automaticamente."}
-              </small>
-            </span>
-          </label>
+        {step === 1 ? (
+          <>
+            <div className="invoice-modal-body">
+              <label><span>Nome da fatura</span><input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} required /></label>
+              <label><span>Data de vencimento da primeira fatura</span><input type="date" value={form.due_date} onChange={(event) => updateForm({ due_date: event.target.value })} required /></label>
+              <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
 
-          {form.duplicate_next_month && (
-            <div className="duplicate-months-row">
-              <label>
-                <span>Meses seguintes</span>
+              <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={form.duplicate_months}
-                  onChange={(event) => setForm({ ...form, duplicate_months: event.target.value })}
+                  type="checkbox"
+                  checked={form.duplicate_next_month}
+                  onChange={(event) => updateForm({ duplicate_next_month: event.target.checked })}
                 />
-              </label>
-              <div className="duplicate-preview">
-                <strong>{duplicateMonths + 1} faturas no total</strong>
+                <span className="duplicate-icon"><CalendarPlus size={20} /></span>
                 <span>
-                  {lastDuplicateDate
-                    ? `Última em ${formatDateShort(lastDuplicateDate)}`
-                    : "Informe a data de vencimento"}
+                  <strong>Duplicar para os próximos meses</strong>
+                  <small>Gere faturas futuras e revise cada mês antes de confirmar.</small>
                 </span>
+              </label>
+
+              {form.duplicate_next_month && (
+                <div className="duplicate-range">
+                  <div className="range-head">
+                    <span>Quantidade de meses adicionais</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="23"
+                      value={duplicateMonths}
+                      onChange={(event) => updateForm({ duplicate_months: Math.min(23, Math.max(1, Number(event.target.value) || 1)) })}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="23"
+                    value={duplicateMonths}
+                    onChange={(event) => updateForm({ duplicate_months: Number(event.target.value) })}
+                  />
+                  <div className="range-scale"><span>1 mês</span><span>23 meses</span></div>
+                  <p className="duplicate-summary">
+                    {form.due_date
+                      ? `Serão criadas ${totalCount} faturas no total (${startLabel} até ${endLabel})`
+                      : `Serão criadas ${totalCount} faturas no total`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
+              <button className="btn btn-primary">Próximo →</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="invoice-review">
+              <div className="review-toolbar">
+                <button className="btn btn-ghost compact" type="button" onClick={matchFirstValue}>Igualar todos os valores ao primeiro</button>
+                <button className="btn btn-ghost compact" type="button" onClick={resetAutomaticDates}>Resetar datas automáticas</button>
+              </div>
+
+              <div className="review-table">
+                <div className="review-row review-head">
+                  <span>#</span>
+                  <span>Mês</span>
+                  <span>Data de venc.</span>
+                  <span>Valor</span>
+                  <span />
+                </div>
+                <div className="review-list">
+                  {drafts.map((draft, index) => {
+                    const error = rowError(draft);
+                    return (
+                      <div className={`review-row ${error ? "has-error" : ""}`} key={draft.id} title={error}>
+                        <span>{index + 1}</span>
+                        <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
+                        <input type="date" value={draft.due_date} onChange={(event) => updateDraft(draft.id, { due_date: event.target.value })} />
+                        <input inputMode="numeric" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} />
+                        <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          )}
-        </div>
 
-        <div className="modal-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary">{form.duplicate_next_month ? "Criar faturas" : "Criar fatura"}</button>
-        </div>
+            <div className="review-footer">
+              <div className="modal-actions">
+                <button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button>
+                <button className="btn btn-primary" disabled={!canCreate}>Criar {drafts.length} {drafts.length === 1 ? "fatura" : "faturas"}</button>
+              </div>
+              <p>Total comprometido: <strong>{formatMoney(totalCommitted)}</strong></p>
+            </div>
+          </>
+        )}
       </form>
     </div>
   );
+}
+
+function formatMonthShort(dateString) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) {
