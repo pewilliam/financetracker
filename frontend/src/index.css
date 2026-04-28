@@ -89,6 +89,12 @@ button { cursor: pointer; }
   font-weight: 800;
   color: var(--primary);
 }
+.sidebar-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
 .sidebar nav { display: grid; gap: 4px; }
 .sidebar nav a, .theme-toggle, .logout {
   display: flex;

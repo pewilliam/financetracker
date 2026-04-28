@@ -204,7 +204,7 @@ function Sidebar({ open, setOpen }) {
     <>
       <button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="sidebar-brand"><Wallet /><span>Finance Tracker</span><button className="icon-btn sidebar-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
+        <div className="sidebar-brand"><img className="sidebar-brand-mark" src="/favicon.svg" alt="" aria-hidden="true" /><span>Finance Tracker</span><button className="icon-btn sidebar-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
         <nav>
           {links.map(([label, path, Icon]) => (
             <NavLink key={path} to={path} end={path === "/"} onClick={() => setOpen(false)}>
