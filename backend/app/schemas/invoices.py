@@ -29,6 +29,7 @@ class InvoiceInstallmentItemOut(APIModel):
 
 class InvoiceCreate(APIModel):
     name: str
+    color: str = "#3B82F6"
     due_date: date
     initial_amount: Decimal = Decimal("0.00")
 
@@ -40,6 +41,7 @@ class InvoicePaidUpdate(APIModel):
 class InvoiceOut(APIModel):
     id: int
     name: str
+    color: str = "#3B82F6"
     due_date: date
     total_amount: Decimal
     paid: bool = False

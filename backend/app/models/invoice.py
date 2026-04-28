@@ -9,6 +9,7 @@ class Invoice(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
+    color = Column(String(20), nullable=False, default="#3B82F6")
     due_date = Column(Date, nullable=False, index=True)
     total_amount = Column(Numeric(10, 2), nullable=False, default=0)
     paid = Column(Boolean, nullable=False, default=False)

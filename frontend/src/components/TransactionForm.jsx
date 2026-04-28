@@ -5,6 +5,10 @@ import { formatDateShort, parseMoneyInput } from "../utils/format.js";
 
 const CREATE_INVOICE_VALUE = "__create_invoice__";
 
+function invoiceColor(color) {
+  return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#3B82F6";
+}
+
 function getDayFromDate(dateString) {
   const day = Number(dateString?.split("-")?.[2]);
   return day ? String(day) : "";
@@ -316,7 +320,7 @@ export default function TransactionForm({
                 <select value={form.invoice_id} disabled={!form.is_future} onBlur={() => handleBlur("invoice_id")} onChange={(event) => handleInvoiceChange(event.target.value)} aria-invalid={!!errors.invoice_id}>
                   <option value="">Selecione uma fatura</option>
                   {invoices.map((invoice) => (
-                    <option key={invoice.id} value={invoice.id}>{invoice.name} — {formatDateShort(invoice.due_date)}</option>
+                    <option key={invoice.id} value={invoice.id}>{invoice.name} ({invoiceColor(invoice.color)}) — {formatDateShort(invoice.due_date)}</option>
                   ))}
                   <option value={CREATE_INVOICE_VALUE}>+ Criar nova fatura</option>
                 </select>

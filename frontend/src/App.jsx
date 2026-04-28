@@ -8,6 +8,7 @@ import {
   Check,
   CreditCard,
   Eye,
+  Filter,
   Grid2X2,
   List,
   LogOut,
@@ -66,8 +67,15 @@ function nextMonthDate(dateString) {
   return addMonthsToDate(dateString, 1);
 }
 
+const INVOICE_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899", "#64748B"];
+const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
+
+function normalizeInvoiceColor(color) {
+  return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
+}
+
 function defaultInvoiceForm() {
-  return { name: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 };
+  return { name: "", color: DEFAULT_INVOICE_COLOR, due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 };
 }
 
 function defaultInstallmentForm(firstInvoiceId = "") {
@@ -280,6 +288,7 @@ function AppShell() {
     try {
       await Promise.all(drafts.map((draft) => createInvoice({
         name: draft.name,
+        color: normalizeInvoiceColor(draft.color),
         due_date: draft.due_date,
         initial_amount: parseMoneyInput(draft.initial_amount)
       })));
@@ -300,6 +309,7 @@ function AppShell() {
   const openDuplicateInvoiceModal = (invoice) => {
     setInvoiceForm({
       name: invoice.name,
+      color: normalizeInvoiceColor(invoice.color),
       due_date: nextMonthDate(invoice.due_date),
       initial_amount: formatMoney(invoice.total_amount),
       duplicate_next_month: false,
@@ -539,6 +549,16 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
 }
 
 function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
+  const [filters, setFilters] = useState({ search: "", status: "all", color: "all" });
+  const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
+  const filteredInvoices = invoices.filter((invoice) => {
+    const search = filters.search.trim().toLowerCase();
+    const matchesSearch = !search || `${invoice.name} ${invoice.due_date}`.toLowerCase().includes(search);
+    const matchesStatus = filters.status === "all" || (filters.status === "paid" ? invoice.paid : !invoice.paid);
+    const matchesColor = filters.color === "all" || normalizeInvoiceColor(invoice.color) === filters.color;
+    return matchesSearch && matchesStatus && matchesColor;
+  });
+
   return (
     <section>
       <div className="section-head">
@@ -548,7 +568,43 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
           <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> Nova fatura</button>
         </div>
       </div>
-      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
+      {invoices.length ? (
+        <>
+          <div className="invoice-filter">
+            <label>
+              <span><Filter size={15} /> Filtrar faturas</span>
+              <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Nome ou vencimento" />
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+                <option value="all">Todas</option>
+                <option value="open">Pendentes</option>
+                <option value="paid">Pagas</option>
+              </select>
+            </label>
+            <label>
+              <span>Cor</span>
+              <div className="color-filter" aria-label="Filtrar por cor">
+                <button className={filters.color === "all" ? "active" : ""} type="button" onClick={() => setFilters({ ...filters, color: "all" })}>Todas</button>
+                {invoiceColors.map((color) => (
+                  <button
+                    className={filters.color === color ? "active" : ""}
+                    key={color}
+                    type="button"
+                    style={{ "--invoice-color": color }}
+                    onClick={() => setFilters({ ...filters, color })}
+                    aria-label={`Filtrar cor ${color}`}
+                  />
+                ))}
+              </div>
+            </label>
+          </div>
+          {filteredInvoices.length ? (
+            <div className="invoice-grid">{filteredInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+          ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura encontrada.</h3><p>Ajuste os filtros para ver outras faturas.</p></div>}
+        </>
+      ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
     </section>
   );
@@ -599,7 +655,11 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const filteredInvoices = sortedInvoices.filter((invoice) => `${invoice.name} ${invoice.due_date}`.toLowerCase().includes(invoiceSearch.toLowerCase()));
   const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
 
-  const matchingInvoice = (dateString) => invoices.find((invoice) => invoice.name === firstInvoice?.name && invoice.due_date.slice(0, 7) === dateString.slice(0, 7));
+  const matchingInvoice = (dateString) => invoices.find((invoice) => (
+    invoice.name === firstInvoice?.name &&
+    normalizeInvoiceColor(invoice.color) === normalizeInvoiceColor(firstInvoice?.color) &&
+    invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
+  ));
 
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const handleMoneyChange = (value) => updateForm({ total_amount: formatMoneyInput(value) });
@@ -677,7 +737,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
               <label><span>Buscar fatura inicial</span><input value={invoiceSearch} onChange={(event) => setInvoiceSearch(event.target.value)} placeholder="Nome ou data" /></label>
               <label><span>Fatura inicial</span><select value={form.first_invoice_id} onChange={(event) => updateForm({ first_invoice_id: event.target.value })} required>
                 <option value="">Selecione uma fatura</option>
-                {filteredInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} — vence {formatDateShort(invoice.due_date)}</option>)}
+                {filteredInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} ({normalizeInvoiceColor(invoice.color)}) — vence {formatDateShort(invoice.due_date)}</option>)}
               </select></label>
               <p className="duplicate-summary">{firstInvoice ? `Parcelas distribuídas de ${formatMonthShort(firstInvoice.due_date)} até ${formatMonthShort(endDate)}` : "Selecione a fatura inicial para ver a distribuição."}</p>
             </div>
@@ -696,7 +756,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
                       <label>
                         <select value={draft.invoice_id} onChange={(event) => updateDraft(draft.id, { invoice_id: event.target.value })}>
                           <option value="">Criar automaticamente</option>
-                          {sortedInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} — {formatDateShort(invoice.due_date)}</option>)}
+                          {sortedInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} ({normalizeInvoiceColor(invoice.color)}) — {formatDateShort(invoice.due_date)}</option>)}
                         </select>
                         {!draft.invoice_id && <small className="auto-badge">Fatura será criada automaticamente</small>}
                       </label>
@@ -766,6 +826,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
   const buildDrafts = () => Array.from({ length: totalCount }, (_, index) => ({
     id: `${Date.now()}-${index}`,
     name: form.name,
+    color: normalizeInvoiceColor(form.color),
     due_date: addMonthsToDate(form.due_date, index),
     initial_amount: form.initial_amount
   }));
@@ -845,6 +906,22 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
           <>
             <div className="invoice-modal-body">
               <label><span>Nome da fatura</span><input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} required /></label>
+              <div className="invoice-color-field">
+                <span>Cor da fatura</span>
+                <div className="color-picker">
+                  {INVOICE_COLORS.map((color) => (
+                    <button
+                      className={normalizeInvoiceColor(form.color) === color ? "active" : ""}
+                      key={color}
+                      type="button"
+                      style={{ "--invoice-color": color }}
+                      onClick={() => updateForm({ color })}
+                      aria-label={`Selecionar cor ${color}`}
+                    />
+                  ))}
+                  <input type="color" value={normalizeInvoiceColor(form.color)} onChange={(event) => updateForm({ color: event.target.value })} aria-label="Cor personalizada" />
+                </div>
+              </div>
               <label><span>Data de vencimento da primeira fatura</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
 
@@ -909,6 +986,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
                   <span>Mês</span>
                   <span>Data de venc.</span>
                   <span>Valor</span>
+                  <span>Cor</span>
                   <span />
                 </div>
                 <div className="review-list">
@@ -920,6 +998,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
                         <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
                         <DateField className="compact" value={draft.due_date} onChange={(value) => updateDraft(draft.id, { due_date: value })} />
                         <input inputMode="numeric" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} />
+                        <input className="review-color-input" type="color" value={normalizeInvoiceColor(draft.color)} onChange={(event) => updateDraft(draft.id, { color: event.target.value })} aria-label="Cor da fatura" />
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
                       </div>
                     );

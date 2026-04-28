@@ -34,7 +34,7 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    invoice = create_invoice_with_transaction(db, current_user.id, payload.name, payload.due_date)
+    invoice = create_invoice_with_transaction(db, current_user.id, payload.name, payload.due_date, payload.color)
 
     if payload.initial_amount and payload.initial_amount > 0:
         item = InvoiceItem(

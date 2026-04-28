@@ -2,6 +2,10 @@ import { useState } from "react";
 import { CalendarPlus, CheckCircle2, CreditCard, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { daysUntil, formatDateShort, formatMoney, parseMoneyInput } from "../utils/format.js";
 
+function invoiceColor(color) {
+  return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#3B82F6";
+}
+
 export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState("");
@@ -20,10 +24,10 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
   };
 
   return (
-    <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`}>
+    <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
         <div>
-          <h3>{invoice.name}</h3>
+          <h3><span className="invoice-color-dot" />{invoice.name}</h3>
           <p>Vencimento em {formatDateShort(invoice.due_date)}</p>
         </div>
         <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>

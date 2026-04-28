@@ -1,8 +1,15 @@
 from datetime import date
 from decimal import Decimal
+import re
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models import InstallmentItem, Invoice, InvoiceItem, Transaction
+
+DEFAULT_INVOICE_COLOR = "#3B82F6"
+
+
+def normalize_invoice_color(color: str | None) -> str:
+    return color if color and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) else DEFAULT_INVOICE_COLOR
 
 
 def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
@@ -29,10 +36,11 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     return invoice
 
 
-def create_invoice_with_transaction(db: Session, user_id: int, name: str, due_date: date) -> Invoice:
+def create_invoice_with_transaction(db: Session, user_id: int, name: str, due_date: date, color: str = "#3B82F6") -> Invoice:
     invoice = Invoice(
         user_id=user_id,
         name=name,
+        color=normalize_invoice_color(color),
         due_date=due_date,
         total_amount=Decimal("0.00"),
         paid=False,

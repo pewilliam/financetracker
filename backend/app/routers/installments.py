@@ -39,6 +39,7 @@ def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset
         .filter(
             Invoice.user_id == user_id,
             Invoice.name == first_invoice.name,
+            Invoice.color == first_invoice.color,
             Invoice.due_date >= date(target_date.year, target_date.month, 1),
             Invoice.due_date <= date(target_date.year, target_date.month, calendar.monthrange(target_date.year, target_date.month)[1]),
         )
@@ -47,7 +48,7 @@ def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset
     )
     if invoice:
         return invoice
-    return create_invoice_with_transaction(db, user_id, first_invoice.name, target_date)
+    return create_invoice_with_transaction(db, user_id, first_invoice.name, target_date, first_invoice.color)
 
 
 def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
