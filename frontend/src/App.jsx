@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import {
@@ -7,6 +7,7 @@ import {
   CalendarPlus,
   Check,
   CreditCard,
+  ChevronDown,
   Eye,
   Filter,
   Grid2X2,
@@ -105,6 +106,21 @@ function todayIsoDate() {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
+function normalizeTransactionPayload(data) {
+  const parsedAmount = Number(data?.amount);
+  const parsedInvoiceId = Number(data?.invoice_id);
+  const normalized = {
+    date: String(data?.date || "").slice(0, 10),
+    type: String(data?.type || ""),
+    amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
+    description: data?.description ? String(data.description).trim() : "",
+    is_future: Boolean(data?.is_future),
+    invoice_id: Number.isFinite(parsedInvoiceId) && parsedInvoiceId > 0 ? parsedInvoiceId : null
+  };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized.date)) normalized.date = "";
+  return normalized;
+}
+
 function nextDueDateFromDay(day) {
   const now = new Date();
   const year = now.getFullYear();
@@ -112,6 +128,10 @@ function nextDueDateFromDay(day) {
   const target = new Date(year, month - 1, 1);
   const lastDay = lastDayOfMonth(target.getFullYear(), target.getMonth() + 1);
   return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(Math.min(Number(day) || 1, lastDay)).padStart(2, "0")}`;
+}
+
+function yearMonthKey(dateString) {
+  return String(dateString || "").slice(0, 7);
 }
 
 function Protected({ children }) {
@@ -274,28 +294,35 @@ function AppShell() {
 
   const saveTransaction = async (payload) => {
     try {
+      const normalizedData = normalizeTransactionPayload(payload.data);
       if (editing) {
-        await updateTransaction(editing.id, payload.data);
+        if (!normalizedData.date) delete normalizedData.date;
+        await updateTransaction(editing.id, normalizedData);
       } else {
+        if (!normalizedData.date) {
+          toast.error("Data inválida para criar lançamento");
+          return;
+        }
         if (payload.recurrence?.enabled) {
           await createRecurrence({
-            description: payload.data.description || "Recorrência",
-            type: payload.data.type,
-            amount: payload.data.amount,
+            description: normalizedData.description || "Recorrência",
+            type: normalizedData.type,
+            amount: normalizedData.amount,
             day_of_month: payload.recurrence.day_of_month,
             recurrence_months: payload.recurrence.recurrence_months,
-            start_date: payload.data.date,
+            start_date: normalizedData.date,
             active: true
           });
         } else {
-          await createTransaction(payload.data);
+          await createTransaction(normalizedData);
         }
       }
       toast.success(editing ? "Lançamento salvo" : "Lançamento adicionado!");
       setDrawerOpen(false);
       await refresh();
-    } catch {
-      toast.error("Erro ao salvar lançamento");
+    } catch (error) {
+      const details = String(error?.message || "");
+      toast.error(details.includes("422") ? "Dados inválidos ao salvar. Revise data, valor e fatura." : "Erro ao salvar lançamento");
     }
   };
 
@@ -711,14 +738,70 @@ function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
 }
 
 function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
-  const [filters, setFilters] = useState({ search: "", status: "all", color: "all" });
+  const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
+  const statusLabelByValue = { open: "Pendentes", paid: "Pagas" };
+  const statusOrder = ["open", "paid"];
+  const selectedStatusCount = filters.statuses.length;
+  const statusSummary = selectedStatusCount === statusOrder.length
+    ? "Todas"
+    : selectedStatusCount === 1
+      ? statusLabelByValue[filters.statuses[0]]
+      : `${selectedStatusCount} selecionados`;
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!statusMenuRef.current?.contains(event.target)) setStatusMenuOpen(false);
+    };
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setStatusMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  const toggleStatus = (status) => {
+    setFilters((current) => {
+      const nextStatuses = current.statuses.includes(status)
+        ? current.statuses.filter((item) => item !== status)
+        : [...current.statuses, status];
+      return { ...current, statuses: nextStatuses };
+    });
+  };
+
+  const selectAllStatuses = () => {
+    setFilters((current) => ({ ...current, statuses: statusOrder }));
+  };
+
+  const clearStatuses = () => {
+    setFilters((current) => ({ ...current, statuses: [] }));
+  };
+
   const filteredInvoices = invoices.filter((invoice) => {
     const search = filters.search.trim().toLowerCase();
     const matchesSearch = !search || `${invoice.name} ${invoice.due_date}`.toLowerCase().includes(search);
-    const matchesStatus = filters.status === "all" || (filters.status === "paid" ? invoice.paid : !invoice.paid);
+    const invoiceStatus = invoice.paid ? "paid" : "open";
+    const matchesStatus = filters.statuses.length === 0 || filters.statuses.includes(invoiceStatus);
     const matchesColor = filters.color === "all" || normalizeInvoiceColor(invoice.color) === filters.color;
     return matchesSearch && matchesStatus && matchesColor;
+  });
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const nextMonthDateValue = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonthKey = `${nextMonthDateValue.getFullYear()}-${String(nextMonthDateValue.getMonth() + 1).padStart(2, "0")}`;
+
+  const currentMonthInvoices = filteredInvoices.filter((invoice) => yearMonthKey(invoice.due_date) === currentMonthKey);
+  const nextMonthInvoices = filteredInvoices.filter((invoice) => yearMonthKey(invoice.due_date) === nextMonthKey);
+  const otherInvoices = filteredInvoices.filter((invoice) => {
+    const key = yearMonthKey(invoice.due_date);
+    return key !== currentMonthKey && key !== nextMonthKey;
   });
 
   return (
@@ -733,37 +816,102 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
       {invoices.length ? (
         <>
           <div className="invoice-filter">
-            <label>
+            <div className="invoice-filter-head">
               <span><Filter size={15} /> Filtrar faturas</span>
-              <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Nome ou vencimento" />
-            </label>
-            <label>
-              <span>Status</span>
-              <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
-                <option value="all">Todas</option>
-                <option value="open">Pendentes</option>
-                <option value="paid">Pagas</option>
-              </select>
-            </label>
-            <label>
-              <span>Cor</span>
-              <div className="color-filter" aria-label="Filtrar por cor">
-                <button className={filters.color === "all" ? "active" : ""} type="button" onClick={() => setFilters({ ...filters, color: "all" })}>Todas</button>
-                {invoiceColors.map((color) => (
-                  <button
-                    className={filters.color === color ? "active" : ""}
-                    key={color}
-                    type="button"
-                    style={{ "--invoice-color": color }}
-                    onClick={() => setFilters({ ...filters, color })}
-                    aria-label={`Filtrar cor ${color}`}
-                  />
-                ))}
+              <small>{filteredInvoices.length} de {invoices.length}</small>
+            </div>
+            <div className="invoice-filter-grid">
+              <label className="invoice-filter-search">
+                <span>Nome ou vencimento</span>
+                <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Procure por nome, mês ou data" />
+                <small>Busca por nome, mês ou vencimento da fatura.</small>
+              </label>
+              <div className="invoice-filter-status" ref={statusMenuRef}>
+                <span>Status</span>
+                <button
+                  className={`invoice-status-trigger ${statusMenuOpen ? "open" : ""}`}
+                  type="button"
+                  onClick={() => setStatusMenuOpen((current) => !current)}
+                  aria-haspopup="menu"
+                  aria-expanded={statusMenuOpen}
+                >
+                  <span>{statusSummary}</span>
+                  <ChevronDown size={16} />
+                </button>
+                {statusMenuOpen && (
+                  <div className="invoice-status-menu" role="menu" aria-label="Selecionar status">
+                    <button type="button" className="invoice-status-menu-action" onClick={selectAllStatuses}>Selecionar todas</button>
+                    {statusOrder.map((status) => (
+                      <label key={status} className={`invoice-status-option ${filters.statuses.includes(status) ? "active" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={filters.statuses.includes(status)}
+                          onChange={() => toggleStatus(status)}
+                        />
+                        <div>
+                          <strong>{statusLabelByValue[status]}</strong>
+                          <small>{status === "open" ? "Ainda em aberto" : "Já quitadas"}</small>
+                        </div>
+                      </label>
+                    ))}
+                    <button type="button" className="invoice-status-menu-action subtle" onClick={clearStatuses}>Limpar seleção</button>
+                  </div>
+                )}
               </div>
-            </label>
+              <div className="invoice-filter-color">
+                <span>Cor</span>
+                <div className="color-filter" aria-label="Filtrar por cor">
+                  <button className={filters.color === "all" ? "active" : ""} type="button" onClick={() => setFilters({ ...filters, color: "all" })}>Todas</button>
+                  {invoiceColors.map((color) => (
+                    <button
+                      className={filters.color === color ? "active" : ""}
+                      key={color}
+                      type="button"
+                      style={{ "--invoice-color": color }}
+                      onClick={() => setFilters({ ...filters, color })}
+                      aria-label={`Filtrar cor ${color}`}
+                      title={`Filtrar cor ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            {(filters.search || filters.statuses.length !== statusOrder.length || filters.color !== "all") && (
+              <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "", statuses: ["open", "paid"], color: "all" })}>
+                Limpar filtros
+              </button>
+            )}
           </div>
           {filteredInvoices.length ? (
-            <div className="invoice-grid">{filteredInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+            <div className="invoice-groups">
+              <section className="invoice-group">
+                <div className="invoice-group-head">
+                  <h3>Mês atual</h3>
+                  <small>{currentMonthInvoices.length}</small>
+                </div>
+                {currentMonthInvoices.length ? (
+                  <div className="invoice-grid">{currentMonthInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                ) : <div className="invoice-group-empty">Sem faturas para o mês atual.</div>}
+              </section>
+              <section className="invoice-group">
+                <div className="invoice-group-head">
+                  <h3>Próximo mês</h3>
+                  <small>{nextMonthInvoices.length}</small>
+                </div>
+                {nextMonthInvoices.length ? (
+                  <div className="invoice-grid">{nextMonthInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                ) : <div className="invoice-group-empty">Sem faturas para o próximo mês.</div>}
+              </section>
+              {otherInvoices.length > 0 && (
+                <section className="invoice-group">
+                  <div className="invoice-group-head">
+                    <h3>Demais faturas</h3>
+                    <small>{otherInvoices.length}</small>
+                  </div>
+                  <div className="invoice-grid">{otherInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                </section>
+              )}
+            </div>
           ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura encontrada.</h3><p>Ajuste os filtros para ver outras faturas.</p></div>}
         </>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
