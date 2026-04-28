@@ -396,7 +396,9 @@ select {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(17,24,39,0.28);
+  background: rgba(17,24,39,0.36);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   opacity: 0;
   transition: opacity .2s ease;
 }
@@ -421,9 +423,86 @@ select {
 .toggle-row input { width: 18px; height: 18px; }
 .recurrence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.segmented button { height: 42px; border: 0; background: transparent; color: var(--muted); font-weight: 800; }
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
 .segmented .active.danger { background: rgba(239,68,68,.12); color: var(--expense); }
 .segmented .active.success { background: rgba(16,185,129,.12); color: var(--income); }
+
+.transaction-modal {
+  width: min(620px, calc(100% - 32px));
+  margin: 7vh auto;
+  padding: 0;
+  overflow: hidden;
+}
+.transaction-modal-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 22px;
+}
+.transaction-modal-body > label,
+.transaction-modal-body > div {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.transaction-modal-body label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.transaction-modal-body input,
+.transaction-modal-body select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--card);
+  color: var(--text);
+}
+.transaction-modal-body > label:nth-of-type(3),
+.transaction-modal-body .toggle-row,
+.transaction-modal-body .recurrence-grid,
+.transaction-modal-actions {
+  grid-column: 1 / -1;
+}
+.transaction-modal-body .toggle-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(59,130,246,0.05);
+}
+.transaction-modal-body .toggle-row input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--primary);
+}
+.transaction-modal-body .recurrence-grid {
+  margin: 0;
+}
+.transaction-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+  padding-top: 4px;
+}
+.transaction-modal-actions .btn { width: 100%; }
 
 .invoice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
 .invoice-card { overflow: hidden; padding: 0; }
@@ -890,6 +969,12 @@ select {
   .invoice-stepper i { display: none; }
   .stepper-item:last-child { justify-content: flex-start; }
   .modal-actions, .review-toolbar { grid-template-columns: 1fr; }
+  .transaction-modal-body {
+    grid-template-columns: 1fr;
+  }
+  .transaction-modal-actions {
+    grid-template-columns: 1fr;
+  }
   .review-row {
     grid-template-columns: 28px 72px minmax(118px, 1fr) minmax(100px, 1fr) 32px;
     gap: 6px;

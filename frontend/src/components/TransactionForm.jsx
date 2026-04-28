@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import IMask from "imask";
-import { X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, CalendarDays, ReceiptText, X } from "lucide-react";
 import { parseMoneyInput } from "../utils/format.js";
 
 export default function TransactionForm({
@@ -97,23 +97,26 @@ export default function TransactionForm({
     });
   };
 
+  if (!open) return null;
+
   return (
-    <div className={`drawer-layer ${open ? "is-open" : ""}`} aria-hidden={!open}>
-      <button className="drawer-backdrop" onClick={onClose} aria-label="Fechar" />
-      <aside className="drawer-panel">
-        <div className="drawer-head">
+    <div className="modal-layer transaction-modal-layer">
+      <button className="modal-backdrop" onClick={onClose} aria-label="Fechar" />
+      <form className="modal-card transaction-modal" onSubmit={handleSubmit}>
+        <div className="modal-titlebar">
+          <div className="modal-icon"><ReceiptText size={22} /></div>
           <div>
             <p className="eyebrow">Lançamento</p>
             <h2>{initial ? "Editar lançamento" : "Novo lançamento"}</h2>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Fechar">
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar">
             <X size={18} />
           </button>
         </div>
 
-        <form className="form-stack" onSubmit={handleSubmit}>
+        <div className="transaction-modal-body">
           <label>
-            <span>Data</span>
+            <span><CalendarDays size={15} /> Data</span>
             <input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
           </label>
 
@@ -121,10 +124,10 @@ export default function TransactionForm({
             <span className="field-label">Tipo</span>
             <div className="segmented">
               <button type="button" className={form.type === "expense" ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}>
-                GASTO
+                <ArrowDownCircle size={16} /> GASTO
               </button>
               <button type="button" className={form.type === "income" ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}>
-                GANHO
+                <ArrowUpCircle size={16} /> GANHO
               </button>
             </div>
           </div>
@@ -177,12 +180,12 @@ export default function TransactionForm({
             </>
           )}
 
-          <div className="drawer-actions">
+          <div className="transaction-modal-actions">
             <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
             <button className="btn btn-primary" type="submit">Salvar</button>
           </div>
-        </form>
-      </aside>
+        </div>
+      </form>
     </div>
   );
 }
