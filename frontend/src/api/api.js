@@ -77,6 +77,10 @@ export function getMonthSummary(year, month) {
   return request(`/months/${year}/${month}/summary`);
 }
 
+export function getMonthsSummary() {
+  return request("/months/summary");
+}
+
 export function applyRecurrences(year, month) {
   return request(`/months/${year}/${month}/apply-recurrences`, {
     method: "POST"
@@ -130,6 +134,13 @@ export function deleteInvoiceItem(invoiceId, itemId) {
   return request(`/invoices/${invoiceId}/items/${itemId}`, {
     method: "DELETE" }
   );
+}
+
+export function setInvoicePaid(invoiceId, paid) {
+  return request(`/invoices/${invoiceId}/paid`, {
+    method: "PATCH",
+    body: JSON.stringify({ paid })
+  });
 }
 
 export function listRecurrences() {

@@ -20,11 +20,16 @@ class InvoiceCreate(APIModel):
     initial_amount: Decimal = Decimal("0.00")
 
 
+class InvoicePaidUpdate(APIModel):
+    paid: bool
+
+
 class InvoiceOut(APIModel):
     id: int
     name: str
     due_date: date
     total_amount: Decimal
+    paid: bool = False
     linked_transaction_id: Optional[int] = None
     created_at: Optional[datetime] = None
     items: List[InvoiceItemOut] = []

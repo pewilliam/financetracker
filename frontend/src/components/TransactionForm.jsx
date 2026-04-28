@@ -19,7 +19,8 @@ export default function TransactionForm({
     is_future: false,
     invoice_id: "",
     recurrence: false,
-    day_of_month: ""
+    day_of_month: "",
+    recurrence_months: "12"
   });
 
   useEffect(() => {
@@ -35,7 +36,8 @@ export default function TransactionForm({
         is_future: initial.is_future,
         invoice_id: initial.invoice_id || "",
         recurrence: false,
-        day_of_month: ""
+        day_of_month: "",
+        recurrence_months: "12"
       });
     } else {
       setForm({
@@ -46,7 +48,8 @@ export default function TransactionForm({
         is_future: false,
         invoice_id: "",
         recurrence: false,
-        day_of_month: ""
+        day_of_month: "",
+        recurrence_months: "12"
       });
     }
   }, [initial, date, open]);
@@ -85,7 +88,11 @@ export default function TransactionForm({
         invoice_id: form.invoice_id ? Number(form.invoice_id) : null
       },
       recurrence: form.recurrence
-        ? { enabled: true, day_of_month: Number(form.day_of_month || 1) }
+        ? {
+            enabled: true,
+            day_of_month: Number(form.day_of_month || 1),
+            recurrence_months: Number(form.recurrence_months || 1)
+          }
         : null
     });
   };
@@ -156,10 +163,16 @@ export default function TransactionForm({
                 <span>Lançamento recorrente?</span>
               </label>
               {form.recurrence && (
-                <label>
-                  <span>Dia do mês</span>
-                  <input type="number" min="1" max="31" value={form.day_of_month} onChange={(event) => setForm({ ...form, day_of_month: event.target.value })} />
-                </label>
+                <div className="recurrence-grid">
+                  <label>
+                    <span>Meses</span>
+                    <input type="number" min="1" max="120" value={form.recurrence_months} onChange={(event) => setForm({ ...form, recurrence_months: event.target.value })} />
+                  </label>
+                  <label>
+                    <span>Dia do mês</span>
+                    <input type="number" min="1" max="31" value={form.day_of_month} onChange={(event) => setForm({ ...form, day_of_month: event.target.value })} />
+                  </label>
+                </div>
               )}
             </>
           )}

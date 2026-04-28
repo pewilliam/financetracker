@@ -36,5 +36,16 @@ class MonthSummaryOut(APIModel):
     future_net: Decimal
 
 
+class MonthCardSummaryOut(APIModel):
+    year: int
+    month: int
+    label: str
+    opening_balance: Decimal
+    total_expenses: Decimal
+    total_income: Decimal
+    closing_balance: Decimal
+    difference_pct: Decimal
+
+
 class OpeningBalancePayload(APIModel):
     opening_balance: Decimal

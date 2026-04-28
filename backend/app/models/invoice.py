@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -11,6 +11,7 @@ class Invoice(Base):
     name = Column(String(255), nullable=False)
     due_date = Column(Date, nullable=False, index=True)
     total_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    paid = Column(Boolean, nullable=False, default=False)
     linked_transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 

@@ -1,11 +1,24 @@
+import calendar
+from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Recurrence, User
+from app.models import Recurrence, Transaction, User
 from app.schemas.recurrences import RecurrenceCreate, RecurrenceOut
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api/recurrences", tags=["recurrences"])
+
+
+def _add_months(source: date, offset: int) -> tuple[int, int]:
+    total = source.year * 12 + source.month - 1 + offset
+    return total // 12, total % 12 + 1
+
+
+def _recurrence_date(start: date, offset: int, day_of_month: int) -> date:
+    year, month = _add_months(start, offset)
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, max(1, min(day_of_month, last_day)))
 
 
 @router.get("", response_model=list[RecurrenceOut])
@@ -32,10 +45,41 @@ def create_recurrence(
         description=payload.description,
         type=payload.type,
         amount=payload.amount,
-        day_of_month=payload.day_of_month,
+        day_of_month=max(1, min(payload.day_of_month, 31)),
+        recurrence_months=max(1, payload.recurrence_months),
         active=payload.active,
     )
     db.add(recurrence)
+    db.flush()
+
+    start = payload.start_date or date.today()
+    today = date.today()
+    for offset in range(recurrence.recurrence_months):
+        target_date = _recurrence_date(start, offset, recurrence.day_of_month)
+        exists = (
+            db.query(Transaction)
+            .filter(
+                Transaction.recurrence_id == recurrence.id,
+                Transaction.user_id == current_user.id,
+                Transaction.date == target_date,
+            )
+            .first()
+        )
+        if exists:
+            continue
+
+        db.add(
+            Transaction(
+                user_id=current_user.id,
+                date=target_date,
+                type=recurrence.type,
+                amount=recurrence.amount,
+                description=recurrence.description,
+                is_future=target_date > today,
+                recurrence_id=recurrence.id,
+            )
+        )
+
     db.commit()
     db.refresh(recurrence)
     return recurrence

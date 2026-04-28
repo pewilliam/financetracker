@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { daysUntil, formatMoney, parseMoneyInput } from "../utils/format.js";
 
-export default function InvoiceCard({ invoice, onAddItem, onDeleteItem }) {
+export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onTogglePaid }) {
   const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const status = daysUntil(invoice.due_date);
-  const overdue = status === "Vencida" || status === "Vence hoje";
+  const overdue = !invoice.paid && (status === "Vencida" || status === "Vence hoje");
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -20,13 +20,15 @@ export default function InvoiceCard({ invoice, onAddItem, onDeleteItem }) {
   };
 
   return (
-    <article className="invoice-card card">
+    <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`}>
       <header className="invoice-header">
         <div>
           <h3>{invoice.name}</h3>
-          <p>Vencimento {invoice.due_date}</p>
+          <p>Vencimento em {new Date(invoice.due_date).toLocaleDateString()}</p>
         </div>
-        <span className={`due-badge ${overdue ? "danger" : ""}`}>{status}</span>
+        <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
+          {invoice.paid ? "Paga" : status}
+        </span>
       </header>
 
       <div className="invoice-items">
@@ -57,6 +59,12 @@ export default function InvoiceCard({ invoice, onAddItem, onDeleteItem }) {
         <span>Total</span>
         <strong>{formatMoney(invoice.total_amount)}</strong>
       </footer>
+      <div className="invoice-actions">
+        <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
+          {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
+          {invoice.paid ? "Marcar pendente" : "Marcar paga"}
+        </button>
+      </div>
     </article>
   );
 }

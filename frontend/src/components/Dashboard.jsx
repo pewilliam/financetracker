@@ -37,6 +37,7 @@ export default function Dashboard({
     .sort((a, b) => Number(b.amount) - Number(a.amount))
     .slice(0, 5);
   const maxExpense = Math.max(...topExpenses.map((tx) => Number(tx.amount)), 1);
+  const openInvoices = invoices.filter((invoice) => !invoice.paid);
 
   const cards = [
     {
@@ -118,7 +119,7 @@ export default function Dashboard({
       <section className="card">
         <h2>Próximos vencimentos</h2>
         <div className="stack-list">
-          {invoices.length ? invoices.slice(0, 5).map((invoice) => (
+          {openInvoices.length ? openInvoices.slice(0, 5).map((invoice) => (
             <button className="due-item" key={invoice.id} onClick={() => onOpenInvoice?.(invoice)}>
               <span>
                 <strong>{invoice.name}</strong>

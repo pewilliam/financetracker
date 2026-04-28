@@ -5,6 +5,8 @@ import {
   BarChart3,
   CalendarDays,
   CreditCard,
+  Grid2X2,
+  List,
   LogOut,
   Menu,
   Moon,
@@ -31,7 +33,9 @@ import {
   deleteTransaction,
   getMonth,
   getMonthSummary,
+  getMonthsSummary,
   listInvoices,
+  setInvoicePaid,
   setOpeningBalance,
   updatePassword,
   updateTransaction
@@ -142,6 +146,7 @@ function AppShell() {
   const [monthData, setMonthData] = useState(null);
   const [summary, setSummary] = useState(null);
   const [comparisons, setComparisons] = useState([]);
+  const [monthCards, setMonthCards] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -157,10 +162,11 @@ function AppShell() {
     setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
+        getMonthsSummary(),
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
           const data = await getMonthSummary(target.year, target.month);
@@ -170,6 +176,7 @@ function AppShell() {
       setMonthData(monthPayload);
       setSummary(summaryPayload);
       setInvoices(invoicesPayload);
+      setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
       toast.error("Erro ao carregar dados");
@@ -193,18 +200,19 @@ function AppShell() {
       if (editing) {
         await updateTransaction(editing.id, payload.data);
       } else {
-        let recurrenceId = payload.data.recurrence_id;
         if (payload.recurrence?.enabled) {
-          const recurrence = await createRecurrence({
+          await createRecurrence({
             description: payload.data.description || "Recorrência",
             type: payload.data.type,
             amount: payload.data.amount,
             day_of_month: payload.recurrence.day_of_month,
+            recurrence_months: payload.recurrence.recurrence_months,
+            start_date: payload.data.date,
             active: true
           });
-          recurrenceId = recurrence.id;
+        } else {
+          await createTransaction(payload.data);
         }
-        await createTransaction({ ...payload.data, recurrence_id: recurrenceId });
       }
       toast.success("Lançamento salvo");
       setDrawerOpen(false);
@@ -242,15 +250,33 @@ function AppShell() {
   };
 
   const addItem = async (invoiceId, payload) => {
-    await addInvoiceItem(invoiceId, payload);
-    toast.success("Item adicionado");
-    await refresh();
+    try {
+      await addInvoiceItem(invoiceId, payload);
+      toast.success("Item adicionado");
+      await refresh();
+    } catch {
+      toast.error("Erro ao adicionar item");
+    }
   };
 
   const deleteItem = async (invoiceId, itemId) => {
-    await deleteInvoiceItem(invoiceId, itemId);
-    toast.success("Item removido");
-    await refresh();
+    try {
+      await deleteInvoiceItem(invoiceId, itemId);
+      toast.success("Item removido");
+      await refresh();
+    } catch {
+      toast.error("Erro ao remover item");
+    }
+  };
+
+  const toggleInvoicePaid = async (invoiceId, paid) => {
+    try {
+      await setInvoicePaid(invoiceId, paid);
+      toast.success(paid ? "Fatura marcada como paga" : "Fatura marcada como pendente");
+      await refresh();
+    } catch {
+      toast.error("Erro ao atualizar fatura");
+    }
   };
 
   const applyMonthRecurrences = async () => {
@@ -281,9 +307,9 @@ function AppShell() {
           {loading ? <Skeleton /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} applyMonthRecurrences={applyMonthRecurrences} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} deleteItem={deleteItem} openModal={() => setInvoiceModal(true)} />} />
-              <Route path="/recorrencias" element={<SimplePage title="Recorrências" text="Use o drawer de lançamento para marcar itens recorrentes e aplique-os ao mês atual quando precisar." action={applyMonthRecurrences} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} applyMonthRecurrences={applyMonthRecurrences} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} deleteItem={deleteItem} togglePaid={toggleInvoicePaid} openModal={() => setInvoiceModal(true)} />} />
+              <Route path="/recorrencias" element={<SimplePage title="Recorrências" text="As recorrências agora são criadas automaticamente pelo período informado no lançamento. Este botão permanece para recorrências antigas." action={applyMonthRecurrences} />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
             </Routes>
           )}
@@ -296,23 +322,126 @@ function AppShell() {
   );
 }
 
-function MonthsPage({ monthData, summary, openAddForm, setEditing, setDrawerOpen, removeTransaction, applyMonthRecurrences }) {
+function AnimatedMoney({ value, className = "" }) {
+  const [display, setDisplay] = useState(Number(value || 0));
+
+  useEffect(() => {
+    const start = display;
+    const end = Number(value || 0);
+    const startedAt = performance.now();
+    let frame;
+
+    const tick = (now) => {
+      const progress = Math.min((now - startedAt) / 400, 1);
+      setDisplay(start + (end - start) * progress);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <span className={className}>{formatMoney(display)}</span>;
+}
+
+function lastDayOfMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+function quickAddDate(year, month) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const day = year === currentYear && month === currentMonth ? now.getDate() : lastDayOfMonth(year, month);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function MonthCard({ item, onView, onQuickAdd }) {
+  const net = Number(item.total_income || 0) - Number(item.total_expenses || 0);
+  const closingDelta = Number(item.closing_balance || 0) - Number(item.opening_balance || 0);
+  const tone = net > 0 ? "positive" : net < 0 ? "negative" : "neutral";
+  const pct = Number(item.difference_pct || 0);
+  const barWidth = Math.min(Math.abs(pct), 100);
+
   return (
-    <section className="card">
-      <div className="section-head">
-        <div><p className="eyebrow">Saldo inicial {formatMoney(monthData.opening_balance)}</p><h2>Tabela mensal</h2></div>
-        <button className="btn" onClick={applyMonthRecurrences}>Aplicar recorrências</button>
+    <article className={`month-card ${tone}`}>
+      <header className="month-card-head">
+        <h3>{item.label}</h3>
+        <button className="btn btn-ghost compact" onClick={onView}>Ver</button>
+      </header>
+      <div className="month-card-body">
+        <div className="metric-row"><span>Saldo inicial</span><AnimatedMoney value={item.opening_balance} /></div>
+        <div className="metric-separator" />
+        <div className="metric-row"><span><i className="metric-dot expense" />Gastos</span><AnimatedMoney value={item.total_expenses} /></div>
+        <div className="metric-row"><span><i className="metric-dot income" />Ganhos</span><AnimatedMoney value={item.total_income} /></div>
+        <div className="metric-separator" />
+        <div className="metric-row closing">
+          <span>Fechamento</span>
+          <AnimatedMoney value={item.closing_balance} className={closingDelta >= 0 ? "money-income" : "money-expense"} />
+        </div>
+        <div className="difference-row">
+          <div className={`difference-track ${pct >= 0 ? "positive" : "negative"}`}>
+            <span style={{ width: `${barWidth}%` }} />
+          </div>
+          <strong className={pct >= 0 ? "money-income" : "money-expense"}>{pct >= 0 ? "+" : ""}{pct.toFixed(1)}%</strong>
+        </div>
       </div>
-      <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+      <footer className="month-card-footer">
+        <button className="btn btn-ghost" onClick={onQuickAdd}><Plus size={16} /> Adicionar lançamento rápido</button>
+      </footer>
+    </article>
+  );
+}
+
+function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction, applyMonthRecurrences }) {
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem("months-view-mode") || "table");
+
+  const changeView = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem("months-view-mode", mode);
+  };
+
+  const openMonthTable = (target) => {
+    setYear(target.year);
+    setMonth(target.month);
+    changeView("table");
+  };
+
+  return (
+    <section className={viewMode === "table" ? "card" : undefined}>
+      <div className="section-head">
+        <div><p className="eyebrow">Saldo inicial {formatMoney(monthData.opening_balance)}</p><h2>{viewMode === "table" ? "Tabela mensal" : "Meses"}</h2></div>
+        <div className="view-actions">
+          <div className="view-toggle" aria-label="Alternar visualização">
+            <button className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
+            <button className={viewMode === "table" ? "active" : ""} onClick={() => changeView("table")}><List size={16} /> Tabela</button>
+          </div>
+          {viewMode === "table" && <button className="btn" onClick={applyMonthRecurrences}>Aplicar recorrências</button>}
+        </div>
+      </div>
+      {viewMode === "table" ? (
+        <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+      ) : (
+        <div className="month-card-grid">
+          {monthCards.length ? monthCards.map((item) => (
+            <MonthCard
+              key={`${item.year}-${item.month}`}
+              item={item}
+              onView={() => openMonthTable(item)}
+              onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
+            />
+          )) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
+        </div>
+      )}
     </section>
   );
 }
 
-function InvoicesPage({ invoices, addItem, deleteItem, openModal }) {
+function InvoicesPage({ invoices, addItem, deleteItem, togglePaid, openModal }) {
   return (
     <section>
       <div className="section-head"><div><p className="eyebrow">Faturas futuras</p><h2>Faturas</h2></div></div>
-      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onDeleteItem={deleteItem} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em + para criar.</p></div>}
+      {invoices.length ? <div className="invoice-grid">{invoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onDeleteItem={deleteItem} onTogglePaid={togglePaid} />)}</div> : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em + para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
     </section>
   );

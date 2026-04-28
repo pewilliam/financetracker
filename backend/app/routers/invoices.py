@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import Invoice, InvoiceItem, Transaction, User
-from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceOut
+from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceOut, InvoicePaidUpdate
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
@@ -36,6 +36,7 @@ def create_invoice(
         name=payload.name,
         due_date=payload.due_date,
         total_amount=Decimal("0.00"),
+        paid=False,
     )
     db.add(invoice)
     db.flush()
@@ -61,6 +62,40 @@ def create_invoice(
     db.add(transaction)
     db.flush()
     invoice.linked_transaction_id = transaction.id
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+@router.patch("/{invoice_id}/paid", response_model=InvoiceOut)
+def set_invoice_paid(
+    invoice_id: int,
+    payload: InvoicePaidUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    invoice = (
+        db.query(Invoice)
+        .options(selectinload(Invoice.items))
+        .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice.paid = payload.paid
+    if invoice.linked_transaction_id:
+        linked = (
+            db.query(Transaction)
+            .filter(
+                Transaction.id == invoice.linked_transaction_id,
+                Transaction.user_id == current_user.id,
+            )
+            .first()
+        )
+        if linked:
+            linked.is_future = False if payload.paid else invoice.due_date > date.today()
 
     db.commit()
     db.refresh(invoice)
@@ -102,7 +137,7 @@ def add_invoice_item(
         )
         if linked:
             linked.amount = invoice.total_amount
-            linked.is_future = invoice.due_date > date.today()
+            linked.is_future = False if invoice.paid else invoice.due_date > date.today()
 
     db.commit()
     db.refresh(invoice)
@@ -143,7 +178,7 @@ def delete_invoice_item(
         )
         if linked:
             linked.amount = invoice.total_amount
-            linked.is_future = invoice.due_date > date.today()
+            linked.is_future = False if invoice.paid else invoice.due_date > date.today()
 
     db.commit()
     db.refresh(invoice)

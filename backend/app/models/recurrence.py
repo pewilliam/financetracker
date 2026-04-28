@@ -12,6 +12,7 @@ class Recurrence(Base):
     type = Column(Enum("expense", "income", name="transaction_type"), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
     day_of_month = Column(Integer, nullable=False)
+    recurrence_months = Column(Integer, nullable=False, default=1)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 

@@ -2,14 +2,29 @@ import calendar
 from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import MonthlyBalance, Recurrence, Transaction, User
-from app.schemas.months import MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
+from app.schemas.months import MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api/months", tags=["months"])
+
+MONTH_NAMES = {
+    1: "Janeiro",
+    2: "Fevereiro",
+    3: "Março",
+    4: "Abril",
+    5: "Maio",
+    6: "Junho",
+    7: "Julho",
+    8: "Agosto",
+    9: "Setembro",
+    10: "Outubro",
+    11: "Novembro",
+    12: "Dezembro",
+}
 
 
 def _to_decimal(value) -> Decimal:
@@ -178,6 +193,50 @@ def get_month_summary(
     )
 
 
+@router.get("/summary", response_model=list[MonthCardSummaryOut])
+def list_month_summaries(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    year_expr = extract("year", Transaction.date)
+    month_expr = extract("month", Transaction.date)
+    month_rows = (
+        db.query(
+            year_expr.label("year"),
+            month_expr.label("month"),
+        )
+        .filter(Transaction.user_id == current_user.id)
+        .group_by(year_expr, month_expr)
+        .order_by(year_expr.desc(), month_expr.desc())
+        .all()
+    )
+
+    summaries: list[MonthCardSummaryOut] = []
+    for row in month_rows:
+        row_year = int(row.year)
+        row_month = int(row.month)
+        data = _build_month_data(db, row_year, row_month, current_user.id)
+        opening = data.opening_balance
+        difference_pct = Decimal("0.00")
+        if opening:
+            difference_pct = ((data.closing_balance - opening) / abs(opening)) * Decimal("100")
+
+        summaries.append(
+            MonthCardSummaryOut(
+                year=row_year,
+                month=row_month,
+                label=f"{MONTH_NAMES[row_month]} de {row_year}",
+                opening_balance=opening,
+                total_expenses=data.total_expenses,
+                total_income=data.total_income,
+                closing_balance=data.closing_balance,
+                difference_pct=difference_pct,
+            )
+        )
+
+    return summaries
+
+
 @router.post("/{year}/{month}/apply-recurrences")
 def apply_recurrences(
     year: int,
@@ -195,6 +254,19 @@ def apply_recurrences(
     today = date.today()
 
     for recurrence in recurrences:
+        if recurrence.recurrence_months:
+            generated = (
+                db.query(func.count(Transaction.id))
+                .filter(
+                    Transaction.recurrence_id == recurrence.id,
+                    Transaction.user_id == current_user.id,
+                )
+                .scalar()
+            )
+            if generated >= recurrence.recurrence_months:
+                recurrence.active = False
+                continue
+
         day = max(1, min(recurrence.day_of_month, last_day))
         target_date = date(year, month, day)
         exists = (
