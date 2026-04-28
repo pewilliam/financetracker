@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { CalendarPlus, CheckCircle2, CreditCard, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { daysUntil, formatDateShort, formatMoney, parseMoneyInput } from "../utils/format.js";
 
@@ -81,6 +82,9 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
         <span>Total</span>
         <strong>{formatMoney(invoice.total_amount)}</strong>
       </footer>
+      <div className="invoice-template-footer">
+        <Link to={`/modelos-de-fatura#template-${invoice.template_id}`}>Modelo: {invoice.name} →</Link>
+      </div>
       <div className="invoice-actions">
         <button className="btn btn-ghost" onClick={() => onDuplicateNext(invoice)}>
           <CalendarPlus size={16} />

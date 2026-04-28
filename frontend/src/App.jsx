@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import {
   BarChart3,
@@ -15,6 +15,8 @@ import {
   Menu,
   Moon,
   Plus,
+  Power,
+  RotateCcw,
   Settings,
   Sun,
   Trash2,
@@ -32,8 +34,10 @@ import {
   addInvoiceItem,
   createInstallment,
   createInvoice,
+  createInvoiceTemplate,
   createRecurrence,
   createTransaction,
+  deleteInvoiceTemplate,
   deleteInstallment,
   deleteInstallmentItem,
   deleteInvoiceItem,
@@ -44,9 +48,12 @@ import {
   getMonthsSummary,
   listInstallments,
   listInvoices,
+  listInvoiceTemplates,
   setInvoicePaid,
   setOpeningBalance,
+  toggleInvoiceTemplate,
   updatePassword,
+  updateInvoiceTemplate,
   updateTransaction
 } from "./api/api.js";
 import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
@@ -69,13 +76,18 @@ function nextMonthDate(dateString) {
 
 const INVOICE_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899", "#64748B"];
 const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
+const CREATE_TEMPLATE_VALUE = "__create_template__";
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
 }
 
 function defaultInvoiceForm() {
-  return { name: "", color: DEFAULT_INVOICE_COLOR, due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 };
+  return { template_id: "", due_date: "", initial_amount: "", duplicate_next_month: false, duplicate_months: 1 };
+}
+
+function defaultTemplateForm() {
+  return { name: "", color: DEFAULT_INVOICE_COLOR, default_due_day: 30 };
 }
 
 function defaultInstallmentForm(firstInvoiceId = "") {
@@ -91,6 +103,15 @@ function defaultInstallmentForm(firstInvoiceId = "") {
 function todayIsoDate() {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
+function nextDueDateFromDay(day) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 2;
+  const target = new Date(year, month - 1, 1);
+  const lastDay = lastDayOfMonth(target.getFullYear(), target.getMonth() + 1);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(Math.min(Number(day) || 1, lastDay)).padStart(2, "0")}`;
 }
 
 function Protected({ children }) {
@@ -154,6 +175,7 @@ function Sidebar({ open, setOpen }) {
     ["Dashboard", "/", BarChart3],
     ["Meses", "/meses", CalendarDays],
     ["Faturas", "/faturas", CreditCard],
+    ["Modelos de fatura", "/modelos-de-fatura", List],
     ["Parcelamentos", "/parcelamentos", CreditCard],
     ["Configurações", "/configuracoes", Settings]
   ];
@@ -194,6 +216,7 @@ function AppShell() {
   const [comparisons, setComparisons] = useState([]);
   const [monthCards, setMonthCards] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -212,10 +235,11 @@ function AppShell() {
     setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, installmentsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
+        listInvoiceTemplates(),
         listInstallments(),
         getMonthsSummary(),
         Promise.all(offsets.map(async (offset) => {
@@ -227,6 +251,7 @@ function AppShell() {
       setMonthData(monthPayload);
       setSummary(summaryPayload);
       setInvoices(invoicesPayload);
+      setInvoiceTemplates(templatesPayload);
       setInstallments(installmentsPayload);
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
@@ -287,8 +312,7 @@ function AppShell() {
   const createNewInvoice = async (drafts) => {
     try {
       await Promise.all(drafts.map((draft) => createInvoice({
-        name: draft.name,
-        color: normalizeInvoiceColor(draft.color),
+        template_id: Number(draft.template_id),
         due_date: draft.due_date,
         initial_amount: parseMoneyInput(draft.initial_amount)
       })));
@@ -302,20 +326,48 @@ function AppShell() {
   };
 
   const openNewInvoiceModal = () => {
-    setInvoiceForm(defaultInvoiceForm());
+    const activeTemplate = invoiceTemplates.find((template) => template.active);
+    setInvoiceForm(activeTemplate ? { ...defaultInvoiceForm(), template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : defaultInvoiceForm());
     setInvoiceModal(true);
   };
 
   const openDuplicateInvoiceModal = (invoice) => {
     setInvoiceForm({
-      name: invoice.name,
-      color: normalizeInvoiceColor(invoice.color),
+      template_id: String(invoice.template_id),
       due_date: nextMonthDate(invoice.due_date),
       initial_amount: formatMoney(invoice.total_amount),
       duplicate_next_month: false,
       duplicate_months: 1
     });
     setInvoiceModal(true);
+  };
+
+  const saveInvoiceTemplate = async (payload, id = null) => {
+    const saved = id ? await updateInvoiceTemplate(id, payload) : await createInvoiceTemplate(payload);
+    const templatesPayload = await listInvoiceTemplates();
+    setInvoiceTemplates(templatesPayload);
+    return saved;
+  };
+
+  const toggleTemplate = async (template) => {
+    if (template.active && !window.confirm(`Desativar ${template.name}? As faturas existentes continuam, mas não será possível criar novas.`)) return;
+    try {
+      await toggleInvoiceTemplate(template.id);
+      toast.success(template.active ? "Modelo desativado" : "Modelo reativado");
+      await refresh();
+    } catch {
+      toast.error("Erro ao atualizar modelo");
+    }
+  };
+
+  const removeTemplate = async (template) => {
+    try {
+      await deleteInvoiceTemplate(template.id);
+      toast.success("Modelo excluído");
+      await refresh();
+    } catch (error) {
+      toast.error(error.message?.includes("Existem") ? "Existem faturas pendentes vinculadas a este modelo" : "Erro ao excluir modelo");
+    }
   };
 
   const openInstallmentModal = (invoice = null) => {
@@ -418,6 +470,7 @@ function AppShell() {
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -427,7 +480,7 @@ function AppShell() {
       </main>
 
       <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} invoices={invoices} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} onCreateInvoice={openNewInvoiceModal} />
-      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
+      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}
     </div>
@@ -548,6 +601,115 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
   );
 }
 
+function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete }) {
+  const location = useLocation();
+  const [editingTemplate, setEditingTemplate] = useState(null);
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = location.hash.replace("#template-", "");
+    const target = document.getElementById(`template-${id}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [location.hash, templates]);
+
+  const saveTemplate = async (payload) => {
+    try {
+      await onSave(payload, editingTemplate?.id || null);
+      toast.success(editingTemplate ? "Modelo atualizado" : "Modelo criado");
+      setEditingTemplate(null);
+    } catch {
+      toast.error("Erro ao salvar modelo");
+    }
+  };
+
+  return (
+    <section>
+      <div className="section-head">
+        <div><p className="eyebrow">Modelos de fatura</p><h2>Gerenciar modelos</h2></div>
+        <button className="btn btn-primary" onClick={() => setEditingTemplate(defaultTemplateForm())}><Plus size={16} /> Novo modelo</button>
+      </div>
+      <div className="template-list card">
+        {templates.length ? templates.map((template) => (
+          <div className={`template-row ${template.active ? "" : "inactive"}`} id={`template-${template.id}`} key={template.id}>
+            <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(template.color) }} />
+            <strong>{template.name}</strong>
+            {!template.active && <span className="inactive-badge">INATIVO</span>}
+            <span>Vence dia {template.default_due_day}</span>
+            <span>{template.total_invoices} {template.total_invoices === 1 ? "fatura" : "faturas"}</span>
+            <span>{template.pending_invoices} pend.</span>
+            <div className="template-actions">
+              <button className="btn btn-ghost compact" onClick={() => setEditingTemplate(template)}>Editar</button>
+              <button className="btn btn-ghost compact" onClick={() => onToggle(template)}>
+                {template.active ? <Power size={15} /> : <RotateCcw size={15} />}
+                {template.active ? "Desativar" : "Reativar"}
+              </button>
+              {!template.active && template.pending_invoices === 0 && template.total_invoices === 0 && (
+                <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(template)}><Trash2 size={15} /> Excluir</button>
+              )}
+            </div>
+          </div>
+        )) : (
+          <div className="empty-state"><div className="empty-illustration">+</div><h3>Nenhum modelo cadastrado.</h3><p>Crie um modelo para usar nas próximas faturas.</p></div>
+        )}
+      </div>
+      {editingTemplate && (
+        <InvoiceTemplateModal
+          initial={editingTemplate.id ? editingTemplate : null}
+          onClose={() => setEditingTemplate(null)}
+          onSubmit={saveTemplate}
+        />
+      )}
+    </section>
+  );
+}
+
+function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
+  const [form, setForm] = useState(initial ? {
+    name: initial.name,
+    color: normalizeInvoiceColor(initial.color),
+    default_due_day: initial.default_due_day
+  } : defaultTemplateForm());
+  const dueDay = Math.min(31, Math.max(1, Number(form.default_due_day) || 1));
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    onSubmit({
+      name: form.name.trim(),
+      color: normalizeInvoiceColor(form.color),
+      default_due_day: dueDay
+    });
+  };
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <form className="modal-card template-modal" onSubmit={submit}>
+        <div className="modal-titlebar">
+          <div className="modal-icon"><CreditCard size={22} /></div>
+          <div><p className="eyebrow">Modelo de fatura</p><h2>{initial ? "Editar modelo" : "Novo modelo"}</h2></div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="invoice-modal-body">
+          <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+          <label>
+            <span>Cor</span>
+            <div className="template-color-input">
+              <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(form.color) }} />
+              <input type="color" value={normalizeInvoiceColor(form.color)} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+            </div>
+          </label>
+          <label><span>Dia de vencimento padrão</span><input type="number" min="1" max="31" value={dueDay} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} required /></label>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
   const [filters, setFilters] = useState({ search: "", status: "all", color: "all" });
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
@@ -656,8 +818,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
 
   const matchingInvoice = (dateString) => invoices.find((invoice) => (
-    invoice.name === firstInvoice?.name &&
-    normalizeInvoiceColor(invoice.color) === normalizeInvoiceColor(firstInvoice?.color) &&
+    invoice.template_id === firstInvoice?.template_id &&
     invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
   ));
 
@@ -813,27 +974,57 @@ function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
   );
 }
 
-function InvoiceModal({ form, setForm, onSubmit, onClose }) {
+function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, onClose }) {
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const duplicateMonths = Math.min(23, Math.max(1, Number(form.duplicate_months) || 1));
   const totalCount = form.duplicate_next_month ? duplicateMonths + 1 : 1;
   const startLabel = form.due_date ? formatMonthShort(form.due_date) : "";
   const endLabel = form.due_date ? formatMonthShort(addMonthsToDate(form.due_date, totalCount - 1)) : "";
+  const selectedTemplate = templates.find((template) => String(template.id) === String(form.template_id));
 
   const updateForm = (patch) => setForm({ ...form, ...patch });
 
+  const selectTemplate = (value) => {
+    if (value === CREATE_TEMPLATE_VALUE) {
+      setTemplateModalOpen(true);
+      return;
+    }
+    const template = templates.find((item) => String(item.id) === String(value));
+    updateForm({
+      template_id: value,
+      due_date: template ? nextDueDateFromDay(template.default_due_day) : form.due_date
+    });
+  };
+
+  const createTemplateInline = async (payload) => {
+    try {
+      const template = await onCreateTemplate(payload);
+      setForm({
+        ...form,
+        template_id: String(template.id),
+        due_date: nextDueDateFromDay(template.default_due_day)
+      });
+      setTemplateModalOpen(false);
+      toast.success("Modelo criado");
+    } catch {
+      toast.error("Erro ao salvar modelo");
+    }
+  };
+
   const buildDrafts = () => Array.from({ length: totalCount }, (_, index) => ({
     id: `${Date.now()}-${index}`,
-    name: form.name,
-    color: normalizeInvoiceColor(form.color),
+    template_id: form.template_id,
+    template_name: selectedTemplate?.name || "",
+    template_color: normalizeInvoiceColor(selectedTemplate?.color),
     due_date: addMonthsToDate(form.due_date, index),
     initial_amount: form.initial_amount
   }));
 
   const goToReview = (event) => {
     event.preventDefault();
-    if (!form.name || !form.due_date || !parseMoneyInput(form.initial_amount)) return;
+    if (!form.template_id || !form.due_date || !parseMoneyInput(form.initial_amount)) return;
     setDrafts(buildDrafts());
     setStep(2);
   };
@@ -905,23 +1096,19 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
         {step === 1 ? (
           <>
             <div className="invoice-modal-body">
-              <label><span>Nome da fatura</span><input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} required /></label>
-              <div className="invoice-color-field">
-                <span>Cor da fatura</span>
-                <div className="color-picker">
-                  {INVOICE_COLORS.map((color) => (
-                    <button
-                      className={normalizeInvoiceColor(form.color) === color ? "active" : ""}
-                      key={color}
-                      type="button"
-                      style={{ "--invoice-color": color }}
-                      onClick={() => updateForm({ color })}
-                      aria-label={`Selecionar cor ${color}`}
-                    />
-                  ))}
-                  <input type="color" value={normalizeInvoiceColor(form.color)} onChange={(event) => updateForm({ color: event.target.value })} aria-label="Cor personalizada" />
+              <label>
+                <span>Modelo de fatura</span>
+                <div className="template-select-shell">
+                  {selectedTemplate && <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(selectedTemplate.color) }} />}
+                  <select value={form.template_id} onChange={(event) => selectTemplate(event.target.value)} required>
+                    <option value="">Selecione um modelo</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>● {template.name} — {template.default_due_day}/mês</option>
+                    ))}
+                    <option value={CREATE_TEMPLATE_VALUE}>+ Criar novo modelo</option>
+                  </select>
                 </div>
-              </div>
+              </label>
               <label><span>Data de vencimento da primeira fatura</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
 
@@ -986,7 +1173,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
                   <span>Mês</span>
                   <span>Data de venc.</span>
                   <span>Valor</span>
-                  <span>Cor</span>
+                  <span>Modelo</span>
                   <span />
                 </div>
                 <div className="review-list">
@@ -998,7 +1185,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
                         <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
                         <DateField className="compact" value={draft.due_date} onChange={(value) => updateDraft(draft.id, { due_date: value })} />
                         <input inputMode="numeric" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} />
-                        <input className="review-color-input" type="color" value={normalizeInvoiceColor(draft.color)} onChange={(event) => updateDraft(draft.id, { color: event.target.value })} aria-label="Cor da fatura" />
+                        <span className="review-template-name"><i style={{ "--invoice-color": draft.template_color }} />{draft.template_name}</span>
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
                       </div>
                     );
@@ -1017,6 +1204,12 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
           </>
         )}
       </form>
+      {templateModalOpen && (
+        <InvoiceTemplateModal
+          onClose={() => setTemplateModalOpen(false)}
+          onSubmit={createTemplateInline}
+        />
+      )}
     </div>
   );
 }

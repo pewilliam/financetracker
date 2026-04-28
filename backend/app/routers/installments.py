@@ -38,8 +38,7 @@ def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset
         db.query(Invoice)
         .filter(
             Invoice.user_id == user_id,
-            Invoice.name == first_invoice.name,
-            Invoice.color == first_invoice.color,
+            Invoice.template_id == first_invoice.template_id,
             Invoice.due_date >= date(target_date.year, target_date.month, 1),
             Invoice.due_date <= date(target_date.year, target_date.month, calendar.monthrange(target_date.year, target_date.month)[1]),
         )
@@ -48,7 +47,7 @@ def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset
     )
     if invoice:
         return invoice
-    return create_invoice_with_transaction(db, user_id, first_invoice.name, target_date, first_invoice.color)
+    return create_invoice_with_transaction(db, user_id, first_invoice.template, target_date)
 
 
 def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
@@ -85,7 +84,8 @@ def list_installments(
         db.query(InstallmentPurchase)
         .options(
             selectinload(InstallmentPurchase.items)
-            .selectinload(InstallmentItem.invoice),
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.template),
         )
         .filter(InstallmentPurchase.user_id == current_user.id)
         .order_by(InstallmentPurchase.created_at.desc(), InstallmentPurchase.id.desc())
@@ -104,7 +104,8 @@ def get_installment(
         db.query(InstallmentPurchase)
         .options(
             selectinload(InstallmentPurchase.items)
-            .selectinload(InstallmentItem.invoice),
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.template),
         )
         .filter(InstallmentPurchase.id == purchase_id, InstallmentPurchase.user_id == current_user.id)
         .first()
@@ -122,6 +123,7 @@ def create_installment(
 ):
     first_invoice = (
         db.query(Invoice)
+        .options(selectinload(Invoice.template))
         .filter(Invoice.id == payload.first_invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -153,6 +155,7 @@ def create_installment(
     if provided_ids:
         rows = (
             db.query(Invoice)
+            .options(selectinload(Invoice.template))
             .filter(Invoice.user_id == current_user.id, Invoice.id.in_(provided_ids))
             .all()
         )
@@ -198,7 +201,8 @@ def create_installment(
         db.query(InstallmentPurchase)
         .options(
             selectinload(InstallmentPurchase.items)
-            .selectinload(InstallmentItem.invoice),
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.template),
         )
         .filter(InstallmentPurchase.id == purchase.id)
         .first()

@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, installments, invoices, months, recurrences, transactions
+from app.routers import auth, installments, invoice_templates, invoices, months, recurrences, transactions
 
 load_dotenv()
 
@@ -23,6 +23,7 @@ app.add_middleware(
 
 app.include_router(auth)
 app.include_router(transactions)
+app.include_router(invoice_templates)
 app.include_router(invoices)
 app.include_router(installments)
 app.include_router(recurrences)

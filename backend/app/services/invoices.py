@@ -3,7 +3,7 @@ from decimal import Decimal
 import re
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.models import InstallmentItem, Invoice, InvoiceItem, Transaction
+from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction
 
 DEFAULT_INVOICE_COLOR = "#3B82F6"
 
@@ -36,11 +36,10 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     return invoice
 
 
-def create_invoice_with_transaction(db: Session, user_id: int, name: str, due_date: date, color: str = "#3B82F6") -> Invoice:
+def create_invoice_with_transaction(db: Session, user_id: int, template: InvoiceTemplate, due_date: date) -> Invoice:
     invoice = Invoice(
         user_id=user_id,
-        name=name,
-        color=normalize_invoice_color(color),
+        template_id=template.id,
         due_date=due_date,
         total_amount=Decimal("0.00"),
         paid=False,
@@ -53,7 +52,7 @@ def create_invoice_with_transaction(db: Session, user_id: int, name: str, due_da
         date=invoice.due_date,
         type="expense",
         amount=invoice.total_amount,
-        description=f"Invoice: {invoice.name}",
+        description=f"Invoice: {template.name}",
         is_future=invoice.due_date > date.today(),
         invoice_id=invoice.id,
     )

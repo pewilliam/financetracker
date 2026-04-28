@@ -110,6 +110,33 @@ export function listInvoices() {
   return request("/invoices");
 }
 
+export function listInvoiceTemplates(active) {
+  const query = active === undefined ? "" : `?active=${active ? "true" : "false"}`;
+  return request(`/invoice-templates${query}`);
+}
+
+export function createInvoiceTemplate(payload) {
+  return request("/invoice-templates", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateInvoiceTemplate(id, payload) {
+  return request(`/invoice-templates/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function toggleInvoiceTemplate(id) {
+  return request(`/invoice-templates/${id}/toggle`, { method: "PATCH" });
+}
+
+export function deleteInvoiceTemplate(id) {
+  return request(`/invoice-templates/${id}`, { method: "DELETE" });
+}
+
 export function createInvoice(payload) {
   return request("/invoices", {
     method: "POST",

@@ -2,7 +2,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import InstallmentItem, Invoice, InvoiceItem, Transaction, User
+from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
 from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceOut, InvoicePaidUpdate
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, recalculate_invoice_total
@@ -19,6 +19,7 @@ def list_invoices(
         db.query(Invoice)
         .options(
             selectinload(Invoice.items),
+            selectinload(Invoice.template),
             selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
         )
         .filter(Invoice.user_id == current_user.id)
@@ -34,12 +35,20 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    invoice = create_invoice_with_transaction(db, current_user.id, payload.name, payload.due_date, payload.color)
+    template = (
+        db.query(InvoiceTemplate)
+        .filter(InvoiceTemplate.id == payload.template_id, InvoiceTemplate.user_id == current_user.id, InvoiceTemplate.active.is_(True))
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Invoice template not found")
+
+    invoice = create_invoice_with_transaction(db, current_user.id, template, payload.due_date)
 
     if payload.initial_amount and payload.initial_amount > 0:
         item = InvoiceItem(
             invoice_id=invoice.id,
-            description=payload.name,
+            description=template.name,
             amount=payload.initial_amount,
         )
         db.add(item)
@@ -48,6 +57,7 @@ def create_invoice(
 
     db.commit()
     db.refresh(invoice)
+    invoice.template = template
     return invoice
 
 
@@ -62,6 +72,7 @@ def set_invoice_paid(
         db.query(Invoice)
         .options(
             selectinload(Invoice.items),
+            selectinload(Invoice.template),
             selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
         )
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
@@ -99,6 +110,7 @@ def add_invoice_item(
         db.query(Invoice)
         .options(
             selectinload(Invoice.items),
+            selectinload(Invoice.template),
             selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
         )
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
@@ -133,6 +145,7 @@ def delete_invoice_item(
         db.query(Invoice)
         .options(
             selectinload(Invoice.items),
+            selectinload(Invoice.template),
             selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
         )
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)

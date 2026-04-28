@@ -28,8 +28,7 @@ class InvoiceInstallmentItemOut(APIModel):
 
 
 class InvoiceCreate(APIModel):
-    name: str
-    color: str = "#3B82F6"
+    template_id: int
     due_date: date
     initial_amount: Decimal = Decimal("0.00")
 
@@ -40,6 +39,7 @@ class InvoicePaidUpdate(APIModel):
 
 class InvoiceOut(APIModel):
     id: int
+    template_id: int
     name: str
     color: str = "#3B82F6"
     due_date: date
