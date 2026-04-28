@@ -21,6 +21,19 @@ def _recurrence_date(start: date, offset: int, day_of_month: int) -> date:
     return date(year, month, max(1, min(day_of_month, last_day)))
 
 
+def _transaction_exists(db: Session, recurrence_id: int, user_id: int, target_date: date) -> bool:
+    return (
+        db.query(Transaction)
+        .filter(
+            Transaction.recurrence_id == recurrence_id,
+            Transaction.user_id == user_id,
+            Transaction.date == target_date,
+        )
+        .first()
+        is not None
+    )
+
+
 @router.get("", response_model=list[RecurrenceOut])
 def list_recurrences(
     db: Session = Depends(get_db),
@@ -54,18 +67,14 @@ def create_recurrence(
 
     start = payload.start_date or date.today()
     today = date.today()
-    for offset in range(recurrence.recurrence_months):
-        target_date = _recurrence_date(start, offset, recurrence.day_of_month)
-        exists = (
-            db.query(Transaction)
-            .filter(
-                Transaction.recurrence_id == recurrence.id,
-                Transaction.user_id == current_user.id,
-                Transaction.date == target_date,
-            )
-            .first()
-        )
-        if exists:
+    recurrence_dates = [start]
+    recurrence_dates.extend(
+        _recurrence_date(start, offset, recurrence.day_of_month)
+        for offset in range(1, recurrence.recurrence_months + 1)
+    )
+
+    for target_date in recurrence_dates:
+        if _transaction_exists(db, recurrence.id, current_user.id, target_date):
             continue
 
         db.add(
