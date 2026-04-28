@@ -21,6 +21,7 @@ import {
   X
 } from "lucide-react";
 import Dashboard from "./components/Dashboard.jsx";
+import DateField, { MonthField } from "./components/DateField.jsx";
 import MonthlyTable from "./components/MonthlyTable.jsx";
 import InvoiceCard from "./components/InvoiceCard.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
@@ -77,6 +78,11 @@ function defaultInstallmentForm(firstInvoiceId = "") {
     first_invoice_id: firstInvoiceId,
     different_values: false
   };
+}
+
+function todayIsoDate() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
 function Protected({ children }) {
@@ -227,7 +233,7 @@ function AppShell() {
 
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
 
-  const openAddForm = (dateString) => {
+  const openAddForm = (dateString = todayIsoDate()) => {
     setSelectedDate(dateString);
     setEditing(null);
     setDrawerOpen(true);
@@ -391,9 +397,9 @@ function AppShell() {
             </div>
             <div className="toolbar">
               <button className="btn" onClick={() => { const t = shiftMonth(year, month, -1); setYear(t.year); setMonth(t.month); }}>Anterior</button>
-              <input type="month" value={monthInputValue} onChange={(event) => { const [y, m] = event.target.value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
+              <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
               <button className="btn" onClick={() => { const t = shiftMonth(year, month, 1); setYear(t.year); setMonth(t.month); }}>Próximo</button>
-              <button className="btn btn-primary" onClick={() => openAddForm(`${year}-${String(month).padStart(2, "0")}-01`)}><Plus size={16} /> Novo</button>
+              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> Novo</button>
             </div>
           </header>
 
@@ -842,7 +848,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
           <>
             <div className="invoice-modal-body">
               <label><span>Nome da fatura</span><input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} required /></label>
-              <label><span>Data de vencimento da primeira fatura</span><input type="date" value={form.due_date} onChange={(event) => updateForm({ due_date: event.target.value })} required /></label>
+              <label><span>Data de vencimento da primeira fatura</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
@@ -915,7 +921,7 @@ function InvoiceModal({ form, setForm, onSubmit, onClose }) {
                       <div className={`review-row ${error ? "has-error" : ""}`} key={draft.id} title={error}>
                         <span>{index + 1}</span>
                         <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
-                        <input type="date" value={draft.due_date} onChange={(event) => updateDraft(draft.id, { due_date: event.target.value })} />
+                        <DateField className="compact" value={draft.due_date} onChange={(value) => updateDraft(draft.id, { due_date: value })} />
                         <input inputMode="numeric" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} />
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
                       </div>

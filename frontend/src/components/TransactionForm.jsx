@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
+import DateField from "./DateField.jsx";
 import { formatDateShort, parseMoneyInput } from "../utils/format.js";
 
 const CREATE_INVOICE_VALUE = "__create_invoice__";
@@ -50,6 +51,11 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(Math.max(number, min), max);
 }
 
+function todayIsoDate() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
 export default function TransactionForm({
   open,
   initial,
@@ -60,7 +66,7 @@ export default function TransactionForm({
   onCreateInvoice
 }) {
   const [form, setForm] = useState({
-    date: date || "",
+    date: date || todayIsoDate(),
     type: "expense",
     amount: "",
     description: "",
@@ -93,7 +99,7 @@ export default function TransactionForm({
       });
     } else {
       setForm({
-        date: date || "",
+        date: date || todayIsoDate(),
         type: "expense",
         amount: "",
         description: "",
@@ -289,7 +295,7 @@ export default function TransactionForm({
 
           <label className={errors.date ? "has-error" : ""}>
             <span>Data</span>
-            <input type="date" value={form.date} onBlur={() => handleBlur("date")} onChange={(event) => setField("date", event.target.value)} aria-invalid={!!errors.date} />
+            <DateField value={form.date} onBlur={() => handleBlur("date")} onChange={(value) => setField("date", value)} ariaInvalid={!!errors.date} />
             {errors.date && <small className="field-error">{errors.date}</small>}
           </label>
 
