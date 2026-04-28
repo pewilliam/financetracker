@@ -8,12 +8,13 @@ import {
   Check,
   CreditCard,
   ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   Filter,
   Grid2X2,
   List,
   LogOut,
-  Menu,
   Moon,
   Plus,
   Power,
@@ -198,34 +199,59 @@ function Sidebar({ open, setOpen }) {
     ["Meses", "/meses", CalendarDays],
     ["Faturas", "/faturas", CreditCard],
     ["Modelos de fatura", "/modelos-de-fatura", List],
-    ["Parcelamentos", "/parcelamentos", CreditCard],
-    ["Configurações", "/configuracoes", Settings]
+    ["Parcelamentos", "/parcelamentos", CreditCard]
   ];
+  const closeOnMobile = () => {
+    if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
+  };
+
   return (
     <>
-      <button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="sidebar-brand">
-          <img className="sidebar-brand-mark" src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
-          <span className="sidebar-wordmark"><strong>Kashy</strong><em>365</em></span>
-          <button className="icon-btn sidebar-close" onClick={() => setOpen(false)}><X size={18} /></button>
-        </div>
-        <nav>
-          {links.map(([label, path, Icon]) => (
-            <NavLink key={path} to={path} end={path === "/"} onClick={() => setOpen(false)}>
-              <Icon size={18} /> {label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <button className="theme-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />} Tema
-          </button>
-          <div className="user-card">
-            <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
-            <div><strong>{user?.name}</strong><span>{user?.email}</span></div>
+        <div className="sidebar-shell">
+          <div className="sidebar-top">
+            <div className="sidebar-brand">
+              <Link className="sidebar-logo sidebar-action" to="/" onClick={closeOnMobile} aria-label="Kashy365" data-tooltip="Kashy365">
+                <span className="sidebar-logo-mark">
+                  <img className="sidebar-brand-mark" src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
+                </span>
+                <span className="sidebar-wordmark"><strong>Kashy</strong><em>365</em></span>
+              </Link>
+              <button
+                type="button"
+                className="sidebar-toggle sidebar-action"
+                onClick={() => setOpen((current) => !current)}
+                aria-label={open ? "Recolher sidebar" : "Expandir sidebar"}
+                aria-expanded={open}
+                data-tooltip={open ? "Recolher" : "Expandir"}
+              >
+                {open ? <ChevronsLeft className="sidebar-icon" /> : <ChevronsRight className="sidebar-icon" />}
+              </button>
+            </div>
+            <nav className="sidebar-nav" aria-label="Navegação principal">
+              {links.map(([label, path, Icon]) => (
+                <NavLink key={path} to={path} end={path === "/"} onClick={closeOnMobile} data-tooltip={label} className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}>
+                  <Icon className="sidebar-icon" />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </nav>
           </div>
-          <button className="logout" onClick={logout}><LogOut size={16} /> Sair</button>
+          <div className="sidebar-bottom">
+            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip="Configurações">
+              <Settings className="sidebar-icon" />
+              <span>Configurações</span>
+            </NavLink>
+            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip="Tema">
+              {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
+              <span>Tema</span>
+            </button>
+            <div className="user-card sidebar-action" data-tooltip={user?.name || "Usuário"}>
+              <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
+              <div className="user-meta"><strong>{user?.name}</strong><span>{user?.email}</span></div>
+            </div>
+            <button className="logout sidebar-action" onClick={logout} data-tooltip="Sair"><LogOut className="sidebar-icon" /><span>Sair</span></button>
+          </div>
         </div>
       </aside>
       {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" />}
@@ -245,7 +271,23 @@ function AppShell() {
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem("menuOpen");
+      if (v === null) return true;
+      return v === "1";
+    } catch (e) {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("menuOpen", menuOpen ? "1" : "0");
+    } catch (e) {
+      // ignore
+    }
+  }, [menuOpen]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -480,7 +522,7 @@ function AppShell() {
   };
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
       <main className="content">
