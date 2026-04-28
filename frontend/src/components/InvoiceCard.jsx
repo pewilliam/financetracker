@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CheckCircle2, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { daysUntil, formatMoney, parseMoneyInput } from "../utils/format.js";
+import { daysUntil, formatDateShort, formatMoney, parseMoneyInput } from "../utils/format.js";
 
 export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onTogglePaid }) {
   const [adding, setAdding] = useState(false);
@@ -24,7 +24,7 @@ export default function InvoiceCard({ invoice, onAddItem, onDeleteItem, onToggle
       <header className="invoice-header">
         <div>
           <h3>{invoice.name}</h3>
-          <p>Vencimento em {new Date(invoice.due_date).toLocaleDateString()}</p>
+          <p>Vencimento em {formatDateShort(invoice.due_date)}</p>
         </div>
         <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
           {invoice.paid ? "Paga" : status}

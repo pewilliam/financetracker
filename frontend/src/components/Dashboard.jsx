@@ -123,7 +123,7 @@ export default function Dashboard({
             <button className="due-item" key={invoice.id} onClick={() => onOpenInvoice?.(invoice)}>
               <span>
                 <strong>{invoice.name}</strong>
-                <small>{invoice.due_date}</small>
+                <small>{formatDateShort(invoice.due_date)}</small>
               </span>
               <span className={`due-badge compact ${daysUntil(invoice.due_date).includes("hoje") || daysUntil(invoice.due_date) === "Vencida" ? "danger" : ""}`}>
                 {daysUntil(invoice.due_date)}
