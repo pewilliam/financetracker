@@ -824,9 +824,22 @@ select {
   transition: max-height .25s ease, opacity .25s ease, transform .25s ease;
 }
 .conditional-content.open {
-  max-height: 220px;
+  max-height: 460px;
   opacity: 1;
   transform: translateY(0);
+}
+.future-invoice-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.future-invoice-field.has-error .template-picker-card,
+.future-invoice-field.has-error .month-chip {
+  border-color: rgba(220,38,38,0.7);
+}
+.future-invoice-field.has-error .invoice-selector {
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
 }
 .transaction-modal-body .recurrence-grid {
   margin: 0;
@@ -1798,18 +1811,18 @@ select {
   font-size: 14px;
   font-weight: 800;
 }
-.installment-modal .month-chip-row::-webkit-scrollbar {
+.invoice-selector .month-chip-row::-webkit-scrollbar {
   height: 7px;
 }
-.installment-modal .month-chip-row::-webkit-scrollbar-track {
+.invoice-selector .month-chip-row::-webkit-scrollbar-track {
   border-radius: 999px;
   background: rgba(148,163,184,0.18);
 }
-.installment-modal .month-chip-row::-webkit-scrollbar-thumb {
+.invoice-selector .month-chip-row::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(59,130,246,0.85), rgba(139,92,246,0.85));
 }
-.installment-modal .month-chip-row::-webkit-scrollbar-thumb:hover {
+.invoice-selector .month-chip-row::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, rgba(59,130,246,1), rgba(139,92,246,1));
 }
 @keyframes selector-slide-down {

@@ -28,6 +28,7 @@ import Dashboard from "./components/Dashboard.jsx";
 import DateField, { MonthField } from "./components/DateField.jsx";
 import MonthlyTable from "./components/MonthlyTable.jsx";
 import InvoiceCard from "./components/InvoiceCard.jsx";
+import InvoiceSelector from "./components/InvoiceSelector.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
 import { useTheme } from "./hooks/useTheme.js";
 import { useAuth } from "./hooks/useAuth.jsx";
@@ -965,35 +966,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const hasRoundingAdjustment = count > 1 && totalCents % count !== 0;
   const installmentAmount = baseInstallmentCents / 100;
   const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
-  const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date)), [invoices]);
-  const firstInvoice = sortedInvoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
-  const templateOptions = useMemo(() => {
-    const grouped = new Map();
-    sortedInvoices.forEach((invoice) => {
-      const templateId = String(invoice.template_id ?? invoice.id);
-      const current = grouped.get(templateId);
-      if (current) {
-        current.invoices.push(invoice);
-        current.count += 1;
-        return;
-      }
-      grouped.set(templateId, {
-        id: templateId,
-        name: invoice.name,
-        color: normalizeInvoiceColor(invoice.color),
-        invoices: [invoice],
-        count: 1
-      });
-    });
-    return [...grouped.values()].sort((a, b) => (
-      a.name.localeCompare(b.name, "pt-BR") ||
-      a.invoices[0].due_date.localeCompare(b.invoices[0].due_date)
-    ));
-  }, [sortedInvoices]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState(() => String(firstInvoice?.template_id ?? ""));
-  const [showTemplatePicker, setShowTemplatePicker] = useState(() => !firstInvoice);
-  const selectedTemplate = templateOptions.find((template) => template.id === selectedTemplateId) || null;
-  const templateInvoices = selectedTemplate?.invoices || [];
+  const firstInvoice = invoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
   const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
 
   const matchingInvoice = (dateString) => invoices.find((invoice) => (
@@ -1002,43 +975,6 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   ));
 
   const handleMoneyChange = (value) => updateForm({ total_amount: formatMoneyInput(value) });
-
-  useEffect(() => {
-    if (!templateOptions.length) {
-      setSelectedTemplateId("");
-      setShowTemplatePicker(false);
-      return;
-    }
-    if (firstInvoice?.template_id) {
-      setSelectedTemplateId(String(firstInvoice.template_id));
-      setShowTemplatePicker(false);
-      return;
-    }
-    if (templateOptions.length === 1) {
-      const [onlyTemplate] = templateOptions;
-      setSelectedTemplateId(onlyTemplate.id);
-      setShowTemplatePicker(false);
-      if (!form.first_invoice_id && onlyTemplate.invoices[0]) {
-        updateForm({ first_invoice_id: String(onlyTemplate.invoices[0].id) });
-      }
-      return;
-    }
-    setShowTemplatePicker(true);
-  }, [firstInvoice, form.first_invoice_id, templateOptions]);
-
-  const selectTemplate = (template) => {
-    setSelectedTemplateId(template.id);
-    setShowTemplatePicker(false);
-    if (!template.invoices.some((invoice) => String(invoice.id) === String(form.first_invoice_id))) {
-      updateForm({ first_invoice_id: String(template.invoices[0]?.id || "") });
-    }
-  };
-
-  const resetTemplateSelection = () => {
-    setSelectedTemplateId("");
-    setShowTemplatePicker(true);
-    updateForm({ first_invoice_id: "" });
-  };
 
   const buildDrafts = () => Array.from({ length: count }, (_, index) => {
     const dueDate = addMonthsToDate(firstInvoice.due_date, index);
@@ -1115,61 +1051,11 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
                 <span className="duplicate-icon"><CreditCard size={20} /></span>
                 <span><strong>Parcelas com valores diferentes</strong><small>Edite cada valor na revisão.</small></span>
               </label>
-              <section className="installment-selector">
-                <div className="installment-selector-head">
-                  <div>
-                    <span className="field-label">Fatura inicial</span>
-                    <strong>Escolha o template e o mês da 1ª parcela</strong>
-                  </div>
-                </div>
-
-                {(showTemplatePicker || !selectedTemplate) && (
-                  <div className="template-picker-grid">
-                    {templateOptions.map((template) => (
-                      <button
-                        key={template.id}
-                        className={`template-picker-card ${template.id === selectedTemplateId ? "active" : ""}`}
-                        type="button"
-                        style={{ "--template-color": template.color }}
-                        onClick={() => selectTemplate(template)}
-                      >
-                        <span className="template-picker-title">
-                          <i aria-hidden="true" />
-                          <strong>{template.name}</strong>
-                        </span>
-                        <small>{template.count} {template.count === 1 ? "fatura disponível" : "faturas disponíveis"}</small>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedTemplate && !showTemplatePicker && (
-                  <div className="month-selector-panel">
-                    <div className="month-selector-summary">
-                      <span>Template selecionado:</span>
-                      <strong><i aria-hidden="true" style={{ "--template-color": selectedTemplate.color }} /> {selectedTemplate.name}</strong>
-                      {templateOptions.length > 1 && <button type="button" className="link-btn" onClick={resetTemplateSelection}>Trocar</button>}
-                    </div>
-                    <div className="month-selector-content">
-                      <span className="field-label">Mês inicial da 1ª parcela</span>
-                      <div className="month-chip-row" role="list" aria-label={`Faturas do template ${selectedTemplate.name}`}>
-                        {templateInvoices.map((invoice) => (
-                          <button
-                            key={invoice.id}
-                            className={`month-chip ${String(invoice.id) === String(form.first_invoice_id) ? "active" : ""}`}
-                            type="button"
-                            style={{ "--template-color": selectedTemplate.color }}
-                            onClick={() => updateForm({ first_invoice_id: String(invoice.id) })}
-                          >
-                            <strong>{formatMonthShortCompact(invoice.due_date)}</strong>
-                            <span>{formatDateShort(invoice.due_date)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </section>
+              <InvoiceSelector
+                invoices={invoices}
+                value={firstInvoice ? { templateId: String(firstInvoice.template_id ?? firstInvoice.id), invoiceId: String(firstInvoice.id) } : null}
+                onChange={(selection) => updateForm({ first_invoice_id: selection?.invoiceId || "" })}
+              />
               <p className="duplicate-summary">{firstInvoice ? `Parcelas distribuídas de ${formatMonthSlash(firstInvoice.due_date)} até ${formatMonthSlash(endDate)}` : "Selecione a fatura inicial para ver a distribuição."}</p>
             </div>
             <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary">Próximo →</button></div>
@@ -1487,12 +1373,6 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 function formatMonthShort(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
   const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "");
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function formatMonthShortCompact(dateString) {
-  const date = new Date(`${dateString}T00:00:00`);
-  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "").replace(" de ", " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 

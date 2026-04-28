@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
-import { formatDateShort, parseMoneyInput } from "../utils/format.js";
-
-const CREATE_INVOICE_VALUE = "__create_invoice__";
-
-function invoiceColor(color) {
-  return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#3B82F6";
-}
+import InvoiceSelector from "./InvoiceSelector.jsx";
+import { parseMoneyInput } from "../utils/format.js";
 
 function getDayFromDate(dateString) {
   const day = Number(dateString?.split("-")?.[2]);
@@ -153,7 +148,7 @@ export default function TransactionForm({
       else delete nextErrors.day_of_month;
     }
     if (field === "invoice_id" || field === "is_future") {
-      if (data.is_future && !data.invoice_id) nextErrors.invoice_id = "Selecione ou crie uma fatura";
+      if (data.is_future && !data.invoice_id) nextErrors.invoice_id = "Selecione uma fatura";
       else delete nextErrors.invoice_id;
     }
     setErrors(nextErrors);
@@ -169,7 +164,7 @@ export default function TransactionForm({
       const day = Number(form.day_of_month);
       if (!form.day_of_month || day < 1 || day > 31) nextErrors.day_of_month = "Informe o dia do mês";
     }
-    if (form.is_future && !form.invoice_id) nextErrors.invoice_id = "Selecione ou crie uma fatura";
+    if (form.is_future && !form.invoice_id) nextErrors.invoice_id = "Selecione uma fatura";
     setTouched({ amount: true, date: true, day_of_month: true, invoice_id: true });
     setErrors(nextErrors);
     return nextErrors;
@@ -197,7 +192,11 @@ export default function TransactionForm({
       invoice_id: enabled ? form.invoice_id : ""
     };
     setForm(nextForm);
-    validateField("is_future", enabled, nextForm);
+    if (!enabled) {
+      const { invoice_id, ...nextErrors } = errors;
+      setErrors(nextErrors);
+      setTouched({ ...touched, invoice_id: false });
+    }
   };
 
   const toggleRecurrence = () => {
@@ -214,14 +213,6 @@ export default function TransactionForm({
     };
     setForm(nextForm);
     validateField("recurrence", enabled, nextForm);
-  };
-
-  const handleInvoiceChange = (value) => {
-    if (value === CREATE_INVOICE_VALUE) {
-      onCreateInvoice?.();
-      return;
-    }
-    setField("invoice_id", value);
   };
 
   const handleSubmit = async (event) => {
@@ -315,17 +306,14 @@ export default function TransactionForm({
             </button>
 
             <div className={`conditional-content ${form.is_future ? "open" : ""}`}>
-              <label className={errors.invoice_id ? "has-error" : ""}>
-                <span>Selecionar fatura</span>
-                <select value={form.invoice_id} disabled={!form.is_future} onBlur={() => handleBlur("invoice_id")} onChange={(event) => handleInvoiceChange(event.target.value)} aria-invalid={!!errors.invoice_id}>
-                  <option value="">Selecione uma fatura</option>
-                  {invoices.map((invoice) => (
-                    <option key={invoice.id} value={invoice.id}>{invoice.name} ({invoiceColor(invoice.color)}) — {formatDateShort(invoice.due_date)}</option>
-                  ))}
-                  <option value={CREATE_INVOICE_VALUE}>+ Criar nova fatura</option>
-                </select>
-                {errors.invoice_id && <small className="field-error">{errors.invoice_id}</small>}
-              </label>
+              <div className={`future-invoice-field ${touched.invoice_id && errors.invoice_id ? "has-error" : ""}`}>
+                <InvoiceSelector
+                  invoices={invoices}
+                  value={form.invoice_id ? { templateId: String(invoices.find((invoice) => String(invoice.id) === String(form.invoice_id))?.template_id ?? ""), invoiceId: String(form.invoice_id) } : null}
+                  onChange={(selection) => setField("invoice_id", selection?.invoiceId || "")}
+                />
+                {touched.invoice_id && errors.invoice_id && <small className="field-error">{errors.invoice_id}</small>}
+              </div>
             </div>
           </section>
 
