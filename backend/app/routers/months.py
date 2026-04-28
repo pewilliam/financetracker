@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import MonthlyBalance, Recurrence, Transaction, User
+from app.models import MonthlyBalance, Transaction, User
 from app.schemas.months import MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
 from app.security import get_current_user
 
@@ -275,67 +275,6 @@ def list_month_summaries(
         )
 
     return summaries
-
-
-@router.post("/{year}/{month}/apply-recurrences")
-def apply_recurrences(
-    year: int,
-    month: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _, _, last_day = _month_bounds(year, month)
-    recurrences = (
-        db.query(Recurrence)
-        .filter(Recurrence.user_id == current_user.id, Recurrence.active.is_(True))
-        .all()
-    )
-    created = 0
-    today = date.today()
-
-    for recurrence in recurrences:
-        if recurrence.recurrence_months:
-            generated = (
-                db.query(func.count(Transaction.id))
-                .filter(
-                    Transaction.recurrence_id == recurrence.id,
-                    Transaction.user_id == current_user.id,
-                )
-                .scalar()
-            )
-            if generated >= recurrence.recurrence_months:
-                recurrence.active = False
-                continue
-
-        day = max(1, min(recurrence.day_of_month, last_day))
-        target_date = date(year, month, day)
-        exists = (
-            db.query(Transaction)
-            .filter(
-                Transaction.recurrence_id == recurrence.id,
-                Transaction.user_id == current_user.id,
-                Transaction.date == target_date,
-            )
-            .first()
-        )
-        if exists:
-            continue
-
-        db.add(
-            Transaction(
-                user_id=current_user.id,
-                date=target_date,
-                type=recurrence.type,
-                amount=recurrence.amount,
-                description=recurrence.description,
-                is_future=target_date > today,
-                recurrence_id=recurrence.id,
-            )
-        )
-        created += 1
-
-    db.commit()
-    return {"created": created}
 
 
 @router.put("/{year}/{month}/opening-balance", response_model=OpeningBalancePayload)

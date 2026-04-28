@@ -81,12 +81,6 @@ export function getMonthsSummary() {
   return request("/months/summary");
 }
 
-export function applyRecurrences(year, month) {
-  return request(`/months/${year}/${month}/apply-recurrences`, {
-    method: "POST"
-  });
-}
-
 export function setOpeningBalance(year, month, opening_balance) {
   return request(`/months/${year}/${month}/opening-balance`, {
     method: "PUT",

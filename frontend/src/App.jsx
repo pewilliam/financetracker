@@ -14,7 +14,6 @@ import {
   Menu,
   Moon,
   Plus,
-  Repeat,
   Settings,
   Sun,
   Trash2,
@@ -29,7 +28,6 @@ import { useTheme } from "./hooks/useTheme.js";
 import { useAuth } from "./hooks/useAuth.jsx";
 import {
   addInvoiceItem,
-  applyRecurrences,
   createInstallment,
   createInvoice,
   createRecurrence,
@@ -143,7 +141,6 @@ function Sidebar({ open, setOpen }) {
     ["Meses", "/meses", CalendarDays],
     ["Faturas", "/faturas", CreditCard],
     ["Parcelamentos", "/parcelamentos", CreditCard],
-    ["Recorrências", "/recorrencias", Repeat],
     ["Configurações", "/configuracoes", Settings]
   ];
   return (
@@ -381,12 +378,6 @@ function AppShell() {
     }
   };
 
-  const applyMonthRecurrences = async () => {
-    await applyRecurrences(year, month);
-    toast.success("Recorrências aplicadas");
-    await refresh();
-  };
-
   return (
     <div className="app-layout">
       <Toaster position="top-right" />
@@ -409,11 +400,11 @@ function AppShell() {
           {loading ? <Skeleton /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} applyMonthRecurrences={applyMonthRecurrences} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
-              <Route path="/recorrencias" element={<SimplePage title="Recorrências" text="As recorrências agora são criadas automaticamente pelo período informado no lançamento. Este botão permanece para recorrências antigas." action={applyMonthRecurrences} />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
         </div>
@@ -498,7 +489,7 @@ function MonthCard({ item, onView, onQuickAdd }) {
   );
 }
 
-function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction, applyMonthRecurrences }) {
+function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction }) {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem("months-view-mode") || "table");
 
   const changeView = (mode) => {
@@ -521,7 +512,6 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
             <button className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
             <button className={viewMode === "table" ? "active" : ""} onClick={() => changeView("table")}><List size={16} /> Tabela</button>
           </div>
-          {viewMode === "table" && <button className="btn" onClick={applyMonthRecurrences}>Aplicar recorrências</button>}
         </div>
       </div>
       {viewMode === "table" ? (
@@ -1012,10 +1002,6 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
       <div className="card"><h2>Exportação</h2><p className="muted">Baixe os lançamentos do mês selecionado.</p><button className="btn btn-primary" onClick={exportCsv}>Exportar CSV</button></div>
     </section>
   );
-}
-
-function SimplePage({ title, text, action }) {
-  return <section className="card"><h2>{title}</h2><p className="muted">{text}</p><button className="btn btn-primary" onClick={action}>Aplicar agora</button></section>;
 }
 
 function Skeleton() {
