@@ -962,6 +962,7 @@ function InstallmentsPage({ installments, onNew, onDetails }) {
 function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
+  const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
   const total = parseMoneyInput(form.total_amount);
@@ -1003,6 +1004,16 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
 
   const updateDraft = (id, patch) => {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
+  };
+
+  const destinationForDraft = (draft) => {
+    const invoice = draft.invoice_id ? invoicesById.get(String(draft.invoice_id)) : null;
+    return {
+      automatic: !invoice,
+      color: normalizeInvoiceColor(invoice?.color || firstInvoice?.color),
+      dueDate: invoice?.due_date || draft.month,
+      name: invoice?.name || firstInvoice?.name || "Fatura automática"
+    };
   };
 
   const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
@@ -1071,21 +1082,24 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
               <div className="review-table">
                 <div className="review-row installment-review-head"><span>#</span><span>Parcela</span><span>Fatura destino</span><span>Valor</span><span /></div>
                 <div className="review-list">
-                  {drafts.map((draft, index) => (
-                    <div className="review-row installment-review-row" key={draft.id}>
-                      <span>{draft.number}/{count}</span>
-                      <strong>{formatMonthShort(draft.month)}</strong>
-                      <label>
-                        <select value={draft.invoice_id} onChange={(event) => updateDraft(draft.id, { invoice_id: event.target.value })}>
-                          <option value="">Criar automaticamente</option>
-                          {sortedInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} ({normalizeInvoiceColor(invoice.color)}) — {formatDateShort(invoice.due_date)}</option>)}
-                        </select>
-                        {!draft.invoice_id && <small className="auto-badge">Fatura será criada automaticamente</small>}
-                      </label>
-                      <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
-                      <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
-                    </div>
-                  ))}
+                  {drafts.map((draft, index) => {
+                    const destination = destinationForDraft(draft);
+                    return (
+                      <div className="review-row installment-review-row" key={draft.id}>
+                        <span>{draft.number}/{count}</span>
+                        <strong>{formatMonthShort(draft.month)}</strong>
+                        <div className="installment-destination">
+                          <i aria-hidden="true" style={{ "--invoice-color": destination.color }} />
+                          <span>
+                            <strong>{destination.name}</strong>
+                            <small>{destination.automatic ? "Será criada automaticamente" : "Fatura existente"} • vence {formatDateShort(destination.dueDate)}</small>
+                          </span>
+                        </div>
+                        <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
+                        <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

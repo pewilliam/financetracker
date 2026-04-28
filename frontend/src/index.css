@@ -1760,39 +1760,16 @@ select {
   position: relative;
   overflow: hidden;
 }
-.month-selector-content::before,
-.month-selector-content::after {
-  content: "";
-  position: absolute;
-  top: 28px;
-  bottom: 0;
-  width: 36px;
-  z-index: 1;
-  pointer-events: none;
-}
-.month-selector-content::before {
-  left: 0;
-  width: 10px;
-  background: linear-gradient(to right, var(--month-scroll-fade-bg), transparent);
-}
-.month-selector-content::after {
-  right: 0;
-  background: linear-gradient(to left, var(--month-scroll-fade-bg) 36%, transparent);
-}
 .month-chip-row {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
-  padding: 8px 36px 12px 0;
+  padding: 8px 0 12px;
   scrollbar-color: rgba(20,160,120,0.72) rgba(148,163,184,0.18);
   scrollbar-width: thin;
   -ms-overflow-style: auto;
-}
-.month-chip-row::after {
-  content: "";
-  flex: 0 0 12px;
 }
 .month-chip {
   min-width: 88px;
@@ -2017,11 +1994,46 @@ select {
 }
 .installment-review-head,
 .installment-review-row {
-  grid-template-columns: 58px 82px minmax(210px, 1fr) minmax(112px, 150px) 34px;
+  grid-template-columns: 58px 92px minmax(260px, 1fr) minmax(112px, 150px) 34px;
 }
-.installment-review-row label {
+.installment-destination {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--invoice-color, #14A078) 8%, var(--card));
+}
+.installment-destination > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--invoice-color, #14A078);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--invoice-color, #14A078) 18%, transparent);
+}
+.installment-destination > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.installment-destination strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.installment-destination small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .auto-badge {
   width: max-content;
