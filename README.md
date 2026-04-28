@@ -4,7 +4,7 @@ Sistema de controle financeiro pessoal com React, FastAPI e MySQL.
 
 ## Tecnologias utilizadas
 
-O sistema e dividido em uma arquitetura full stack conteinerizada, com frontend,
+O sistema é dividido em uma arquitetura full stack conteinerizada, com frontend,
 backend e banco de dados rodando em servicos separados pelo Docker Compose.
 
 ### Frontend
