@@ -249,10 +249,6 @@ function Sidebar({ open, setOpen }) {
               {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
               <span>{t("sidebar.theme")}</span>
             </button>
-            <button className="language-toggle sidebar-action" onClick={() => setLanguage(language === "pt-BR" ? "en-US" : "pt-BR")} data-tooltip={t("settings.language")}>
-              <span className="language-pill">{language === "pt-BR" ? "PT" : "EN"}</span>
-              <span>{language === "pt-BR" ? "PT-BR" : "EN-US"}</span>
-            </button>
             <div className="user-card sidebar-action" data-tooltip={user?.name || t("sidebar.user")}>
               <div className="avatar">{user?.name?.[0]?.toUpperCase() || t("sidebar.user")[0]}</div>
               <div className="user-meta"><strong>{user?.name}</strong><span>{user?.email}</span></div>
