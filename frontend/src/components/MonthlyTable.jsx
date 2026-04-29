@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Clock3, Edit3, Plus, Trash2 } from "lucide-react";
+import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 
 function isFutureDate(dateString) {
@@ -9,6 +10,8 @@ function isFutureDate(dateString) {
 }
 
 export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [expanded, setExpanded] = useState(false);
   const visibleDays = useMemo(() => {
     if (expanded) return days;
@@ -52,12 +55,12 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                   day.transactions.map((tx) => (
                     <div className="transaction-line" key={tx.id}>
                       <span className={`type-chip ${tx.type === "income" ? "income" : "expense"}`}>
-                        {tx.type === "income" ? "GANHO" : "GASTO"}
+                        {tx.type === "income" ? tt("monthlyTable.incomeChip", "GANHO") : tt("monthlyTable.expenseChip", "GASTO")}
                       </span>
                       <strong className={tx.type === "income" ? "money-income" : "money-expense"}>
                         {formatMoney(tx.amount)}
                       </strong>
-                      <span className="tx-description">{tx.description || "Sem descrição"}</span>
+                      <span className="tx-description">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
                       <div className="row-actions">
                         <button className="icon-btn small" onClick={() => onEdit(tx)} aria-label="Editar">
                           <Edit3 size={15} />
@@ -69,12 +72,12 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                     </div>
                   ))
                 ) : (
-                  <span className="tx-description">Próximo dia sem lançamentos</span>
+                  <span className="tx-description">{tt("monthlyTable.nextDayWithoutEntries", "Próximo dia sem lançamentos")}</span>
                 )}
               </div>
 
               <div className="day-balance">
-                <span>Saldo</span>
+                <span>{tt("monthlyTable.balanceChip", "Saldo")}</span>
                 <strong>{formatMoney(day.balance)}</strong>
               </div>
               <button className="icon-btn add-day" onClick={() => onAdd(day.date)} aria-label="Adicionar">
@@ -87,13 +90,13 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
 
       <div className="month-footer">
         <button className="btn btn-ghost" onClick={() => setExpanded(!expanded)}>
-          {expanded ? "Ver resumo do mês" : "Ver todos os dias do mês"}
+          {expanded ? tt("monthlyTable.viewSummary", "Ver resumo do mês") : tt("monthlyTable.viewAllDays", "Ver todos os dias do mês")}
         </button>
         {summary && (
           <div className="month-totals">
-            <span>Gastos {formatMoney(summary.total_expenses)}</span>
-            <span>Ganhos {formatMoney(summary.total_income)}</span>
-            <strong>Fechamento {formatMoney(summary.projected_closing)}</strong>
+            <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
+            <span>{tt("monthlyTable.income", "Ganhos")} {formatMoney(summary.total_income)}</span>
+            <strong>{tt("monthlyTable.closing", "Fechamento")} {formatMoney(summary.projected_closing)}</strong>
           </div>
         )}
       </div>

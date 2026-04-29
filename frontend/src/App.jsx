@@ -33,6 +33,7 @@ import InvoiceSelector from "./components/InvoiceSelector.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
 import { useTheme } from "./hooks/useTheme.js";
 import { useAuth } from "./hooks/useAuth.jsx";
+import { useI18n } from "./i18n/index.ts";
 import {
   addInvoiceItem,
   createInstallment,
@@ -59,7 +60,7 @@ import {
   updateInvoiceTemplate,
   updateTransaction
 } from "./api/api.js";
-import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
@@ -81,6 +82,7 @@ const INVOICE_COLORS = ["#14A078", "#3CC88C", "#F59E0B", "#FF4D6A", "#8B5CF6", "
 const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
 const CREATE_TEMPLATE_VALUE = "__create_template__";
 const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
+const MONTHS_VIEW_MODE_KEY = "months-view-mode";
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
@@ -139,7 +141,8 @@ function yearMonthKey(dateString) {
 
 function Protected({ children }) {
   const auth = useAuth();
-  if (auth.loading) return <div className="center-screen">Carregando sessão...</div>;
+  const { t } = useI18n();
+  if (auth.loading) return <div className="center-screen">{t("app.loadingSession")}</div>;
   if (!auth.authenticated) return <Navigate to="/login" replace />;
   return children;
 }
@@ -194,12 +197,13 @@ function AuthPage({ mode }) {
 function Sidebar({ open, setOpen }) {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { t, language, setLanguage } = useI18n();
   const links = [
-    ["Dashboard", "/", BarChart3],
-    ["Meses", "/meses", CalendarDays],
-    ["Faturas", "/faturas", CreditCard],
-    ["Modelos de fatura", "/modelos-de-fatura", List],
-    ["Parcelamentos", "/parcelamentos", CreditCard]
+    [t("sidebar.dashboard"), "/", BarChart3],
+    [t("sidebar.months"), "/meses", CalendarDays],
+    [t("sidebar.invoices"), "/faturas", CreditCard],
+    [t("sidebar.invoiceModels"), "/modelos-de-fatura", List],
+    [t("sidebar.installments"), "/parcelamentos", CreditCard]
   ];
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
@@ -221,14 +225,14 @@ function Sidebar({ open, setOpen }) {
                 type="button"
                 className="sidebar-toggle sidebar-action"
                 onClick={() => setOpen((current) => !current)}
-                aria-label={open ? "Recolher sidebar" : "Expandir sidebar"}
+                aria-label={open ? t("sidebar.collapse") : t("sidebar.expand")}
                 aria-expanded={open}
-                data-tooltip={open ? "Recolher" : "Expandir"}
+                data-tooltip={open ? t("sidebar.collapseShort") : t("sidebar.expandShort")}
               >
                 {open ? <ChevronsLeft className="sidebar-icon" /> : <ChevronsRight className="sidebar-icon" />}
               </button>
             </div>
-            <nav className="sidebar-nav" aria-label="Navegação principal">
+            <nav className="sidebar-nav" aria-label={t("sidebar.navigation")}>
               {links.map(([label, path, Icon]) => (
                 <NavLink key={path} to={path} end={path === "/"} onClick={closeOnMobile} data-tooltip={label} className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}>
                   <Icon className="sidebar-icon" />
@@ -238,28 +242,29 @@ function Sidebar({ open, setOpen }) {
             </nav>
           </div>
           <div className="sidebar-bottom">
-            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip="Configurações">
+            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip={t("sidebar.settings")}>
               <Settings className="sidebar-icon" />
-              <span>Configurações</span>
+              <span>{t("sidebar.settings")}</span>
             </NavLink>
-            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip="Tema">
+            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip={t("sidebar.theme")}>
               {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
-              <span>Tema</span>
+              <span>{t("sidebar.theme")}</span>
             </button>
-            <div className="user-card sidebar-action" data-tooltip={user?.name || "Usuário"}>
-              <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
+            <div className="user-card sidebar-action" data-tooltip={user?.name || t("sidebar.user")}>
+              <div className="avatar">{user?.name?.[0]?.toUpperCase() || t("sidebar.user")[0]}</div>
               <div className="user-meta"><strong>{user?.name}</strong><span>{user?.email}</span></div>
             </div>
-            <button className="logout sidebar-action" onClick={logout} data-tooltip="Sair"><LogOut className="sidebar-icon" /><span>Sair</span></button>
+            <button className="logout sidebar-action" onClick={logout} data-tooltip={t("sidebar.logout")}><LogOut className="sidebar-icon" /><span>{t("sidebar.logout")}</span></button>
           </div>
         </div>
       </aside>
-      {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" />}
+      {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label={t("sidebar.closeMenu")} />}
     </>
   );
 }
 
 function AppShell() {
+  const { t, language } = useI18n();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -313,7 +318,7 @@ function AppShell() {
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
           const data = await getMonthSummary(target.year, target.month);
-          return { label: formatMonthLabel(target.year, target.month).slice(0, 3), ...data };
+          return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
         }))
       ]);
       setMonthData(monthPayload);
@@ -324,13 +329,13 @@ function AppShell() {
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
-      toast.error("Erro ao carregar dados");
+      toast.error(t("toasts.loadDataError"));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { refresh(); }, [year, month]);
+  useEffect(() => { refresh(); }, [year, month, language]);
 
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
 
@@ -410,7 +415,7 @@ function AppShell() {
     setInvoiceForm({
       template_id: String(invoice.template_id),
       due_date: nextMonthDate(invoice.due_date),
-      initial_amount: formatMoney(invoice.total_amount),
+      initial_amount: formatMoney(invoice.total_amount, language),
       duplicate_next_month: false,
       duplicate_months: 1
     });
@@ -446,7 +451,7 @@ function AppShell() {
   };
 
   const openInstallmentModal = (invoice = null) => {
-    setInstallmentForm(defaultInstallmentForm(invoice?.id || invoices[0]?.id || ""));
+    setInstallmentForm(defaultInstallmentForm(invoice?.id || ""));
     setInstallmentModal(true);
   };
 
@@ -529,14 +534,14 @@ function AppShell() {
         <div className="content-inner">
           <header className="page-header">
             <div>
-              <p className="eyebrow">{formatMonthLabel(year, month)}</p>
-              <h1>Controle financeiro</h1>
+              <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
+              <h1>{t("app.title")}</h1>
             </div>
             <div className="toolbar">
-              <button className="btn" onClick={() => { const t = shiftMonth(year, month, -1); setYear(t.year); setMonth(t.month); }}>Anterior</button>
+              <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
               <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-              <button className="btn" onClick={() => { const t = shiftMonth(year, month, 1); setYear(t.year); setMonth(t.month); }}>Próximo</button>
-              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> Novo</button>
+              <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
+              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
             </div>
           </header>
 
@@ -547,7 +552,7 @@ function AppShell() {
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
-              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
+              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
@@ -563,6 +568,7 @@ function AppShell() {
 }
 
 function AnimatedMoney({ value, className = "" }) {
+  const { language } = useI18n();
   const [display, setDisplay] = useState(Number(value || 0));
 
   useEffect(() => {
@@ -581,7 +587,7 @@ function AnimatedMoney({ value, className = "" }) {
     return () => cancelAnimationFrame(frame);
   }, [value]);
 
-  return <span className={className}>{formatMoney(display)}</span>;
+  return <span className={className}>{formatMoney(display, language)}</span>;
 }
 
 function lastDayOfMonth(year, month) {
@@ -596,61 +602,181 @@ function quickAddDate(year, month) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function getMonthPeriod(item) {
+  const today = new Date();
+  const currentIndex = today.getFullYear() * 12 + today.getMonth();
+  const itemIndex = Number(item.year) * 12 + Number(item.month) - 1;
+  if (itemIndex === currentIndex) return "current";
+  return itemIndex > currentIndex ? "future" : "past";
+}
+
+function formatTransactionCount(count, future) {
+  const total = Number(count || 0);
+  const suffix = total === 1 ? "lançamento" : "lançamentos";
+  return `${total} ${suffix}${future ? " previstos" : ""}`;
+}
+
 function MonthCard({ item, onView, onQuickAdd }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const period = getMonthPeriod(item);
+  const isCurrent = period === "current";
+  const isFuture = period === "future";
   const net = Number(item.total_income || 0) - Number(item.total_expenses || 0);
   const closingDelta = Number(item.closing_balance || 0) - Number(item.opening_balance || 0);
-  const tone = net > 0 ? "positive" : net < 0 ? "negative" : "neutral";
-  const pct = Number(item.difference_pct || 0);
-  const barWidth = Math.min(Math.abs(pct), 100);
+  const settledTone = period === "past" ? (closingDelta > 0 ? "settled-positive" : closingDelta < 0 ? "settled-negative" : "settled-neutral") : "";
+  const maxMovement = Math.max(Number(item.total_expenses || 0), Number(item.total_income || 0), 1);
+  const expenseWidth = Math.min((Number(item.total_expenses || 0) / maxMovement) * 100, 100);
+  const incomeWidth = Math.min((Number(item.total_income || 0) / maxMovement) * 100, 100);
+  const movementLabel = net > 0 ? "+" : net < 0 ? "-" : "";
+  const movementClass = net > 0 ? "money-income" : net < 0 ? "money-expense" : "money-neutral";
+  const labelText = language === "en-US" ? {
+    expenses: isFuture ? "Projected expenses" : "Expenses",
+    income: isFuture ? "Projected income" : "Income",
+    closing: isFuture ? "Projection" : isCurrent ? "Projected closing" : "Closing",
+    currentBadge: "CURRENT MONTH",
+    futureBadge: "FUTURE",
+    count: `${Number(item.transaction_count || 0)} ${Number(item.transaction_count || 0) === 1 ? "entry" : "entries"}${isFuture ? " expected" : ""}`,
+    quickAdd: "Quick add entry"
+  } : {
+    expenses: isFuture ? "Gastos previstos" : "Gastos",
+    income: isFuture ? "Ganhos previstos" : "Ganhos",
+    closing: isFuture ? "Projeção" : isCurrent ? "Fechamento projetado" : "Fechamento",
+    currentBadge: "MÊS ATUAL",
+    futureBadge: "FUTURO",
+    count: formatTransactionCount(item.transaction_count, isFuture),
+    quickAdd: "Adicionar lançamento rápido"
+  };
 
   return (
-    <article className={`month-card ${tone}`}>
+    <article className={`month-card ${period} ${settledTone}`}>
       <header className="month-card-head">
-        <h3>{item.label}</h3>
-        <button className="btn btn-ghost compact" onClick={onView}>Ver</button>
+        <div className="month-card-title">
+          <h3>{item.label}</h3>
+          {isCurrent && <span className="month-badge current">{labelText.currentBadge}</span>}
+          {isFuture && <span className="month-badge future">{labelText.futureBadge}</span>}
+        </div>
+        <button className="month-card-link" onClick={onView}>{tt("actions.details", "Ver")} →</button>
       </header>
       <div className="month-card-body">
-        <div className="metric-row"><span>Saldo inicial</span><AnimatedMoney value={item.opening_balance} /></div>
-        <div className="metric-separator" />
-        <div className="metric-row"><span><i className="metric-dot expense" />Gastos</span><AnimatedMoney value={item.total_expenses} /></div>
-        <div className="metric-row"><span><i className="metric-dot income" />Ganhos</span><AnimatedMoney value={item.total_income} /></div>
-        <div className="metric-separator" />
-        <div className="metric-row closing">
-          <span>Fechamento</span>
-          <AnimatedMoney value={item.closing_balance} className={closingDelta >= 0 ? "money-income" : "money-expense"} />
-        </div>
-        <div className="difference-row">
-          <div className={`difference-track ${pct >= 0 ? "positive" : "negative"}`}>
-            <span style={{ width: `${barWidth}%` }} />
+        <div className="month-balance-grid">
+          <div className="metric-block">
+            <span>{tt("monthlyTable.openingBalance", "Saldo inicial")}</span>
+            <AnimatedMoney value={item.opening_balance} />
           </div>
-          <strong className={pct >= 0 ? "money-income" : "money-expense"}>{pct >= 0 ? "+" : ""}{pct.toFixed(1)}%</strong>
+          <div className="metric-block closing">
+            <span>{labelText.closing}</span>
+            <AnimatedMoney value={item.closing_balance} className={closingDelta >= 0 ? "money-income" : "money-expense"} />
+          </div>
         </div>
+        <div className="metric-separator" />
+        <div className="metric-row"><span><i className="metric-dot expense" />{labelText.expenses}</span><AnimatedMoney value={item.total_expenses} /></div>
+        <div className="metric-row"><span><i className="metric-dot income" />{labelText.income}</span><AnimatedMoney value={item.total_income} /></div>
+        <p className="month-card-count">{labelText.count}</p>
+        {!isFuture && (
+          <div className="month-bars" aria-label="Comparação de gastos e ganhos">
+            <div className="movement-row">
+              <span>{labelText.expenses}</span>
+              <div className="movement-track"><i className="expense" style={{ width: `${expenseWidth}%` }} /></div>
+              <AnimatedMoney value={item.total_expenses} />
+            </div>
+            <div className="movement-row">
+              <span>{labelText.income}</span>
+              <div className="movement-track"><i className="income" style={{ width: `${incomeWidth}%` }} /></div>
+              <AnimatedMoney value={item.total_income} />
+            </div>
+            <strong className={`movement-net ${movementClass}`}>{movementLabel}{formatMoney(Math.abs(net), language)}</strong>
+          </div>
+        )}
       </div>
       <footer className="month-card-footer">
-        <button className="btn btn-ghost" onClick={onQuickAdd}><Plus size={16} /> Adicionar lançamento rápido</button>
+        <button className="btn btn-ghost" onClick={onQuickAdd}><Plus size={16} /> {labelText.quickAdd}</button>
       </footer>
     </article>
   );
 }
 
 function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction }) {
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem("months-view-mode") || "table");
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const tableRef = useRef(null);
+  const [pendingTableScroll, setPendingTableScroll] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = localStorage.getItem(MONTHS_VIEW_MODE_KEY);
+    return saved === "cards" || saved === "table" ? saved : "table";
+  });
+  const orderedMonthCards = useMemo(() => {
+    return [...monthCards].sort((left, right) => {
+      const leftIndex = Number(left.year) * 12 + Number(left.month);
+      const rightIndex = Number(right.year) * 12 + Number(right.month);
+      return leftIndex - rightIndex;
+    });
+  }, [monthCards]);
+  const yearGroups = useMemo(() => {
+    return orderedMonthCards.reduce((groups, item) => {
+      const key = String(item.year);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+      return groups;
+    }, {});
+  }, [orderedMonthCards]);
+  const sortedYears = useMemo(() => Object.keys(yearGroups).sort((left, right) => Number(left) - Number(right)), [yearGroups]);
+  const monthCounters = useMemo(() => {
+    return orderedMonthCards.reduce((acc, item) => {
+      acc[getMonthPeriod(item)] += 1;
+      return acc;
+    }, { past: 0, current: 0, future: 0 });
+  }, [orderedMonthCards]);
+  const [expandedYears, setExpandedYears] = useState({});
 
   const changeView = (mode) => {
     setViewMode(mode);
-    localStorage.setItem("months-view-mode", mode);
+    localStorage.setItem(MONTHS_VIEW_MODE_KEY, mode);
   };
 
   const openMonthTable = (target) => {
+    setPendingTableScroll(true);
     setYear(target.year);
     setMonth(target.month);
     changeView("table");
   };
 
+  useEffect(() => {
+    if (viewMode !== "table" || !pendingTableScroll) return undefined;
+    const frame = requestAnimationFrame(() => {
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setPendingTableScroll(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingTableScroll, viewMode, year, month]);
+
+  useEffect(() => {
+    const currentYear = String(new Date().getFullYear());
+    setExpandedYears((previous) => {
+      const next = {};
+      sortedYears.forEach((groupYear, index) => {
+        next[groupYear] = previous[groupYear] ?? (groupYear === currentYear || (sortedYears.length === 1 && index === 0));
+      });
+      return next;
+    });
+  }, [sortedYears]);
+
+  const toggleYear = (groupYear) => {
+    setExpandedYears((previous) => ({ ...previous, [groupYear]: !previous[groupYear] }));
+  };
+
   return (
     <section className={viewMode === "table" ? "card" : undefined}>
       <div className="section-head">
-        <div><p className="eyebrow">Saldo inicial {formatMoney(monthData.opening_balance)}</p><h2>{viewMode === "table" ? "Tabela mensal" : "Meses"}</h2></div>
+        <div>
+          <p className="eyebrow">{tt("monthlyTable.openingBalance", "Saldo inicial")} {formatMoney(monthData.opening_balance)}</p>
+          <h2>{viewMode === "table" ? tt("monthlyTable.monthlyTable", "Tabela mensal") : tt("monthlyTable.months", "Meses")}</h2>
+          {viewMode === "cards" && (
+            <p className="month-card-counters">
+              {monthCounters.past} meses passados&nbsp; • &nbsp;Mês atual&nbsp; • &nbsp;{monthCounters.future} meses futuros
+            </p>
+          )}
+        </div>
         <div className="view-actions">
           <div className="view-toggle" aria-label="Alternar visualização">
             <button className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
@@ -659,17 +785,39 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
         </div>
       </div>
       {viewMode === "table" ? (
-        <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+        <div ref={tableRef}>
+          <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+        </div>
       ) : (
-        <div className="month-card-grid">
-          {monthCards.length ? monthCards.map((item) => (
-            <MonthCard
-              key={`${item.year}-${item.month}`}
-              item={item}
-              onView={() => openMonthTable(item)}
-              onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
-            />
-          )) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
+        <div className="month-year-list">
+          {orderedMonthCards.length ? sortedYears.map((groupYear) => {
+            const items = yearGroups[groupYear];
+            const isExpanded = expandedYears[groupYear];
+
+            return (
+              <section key={groupYear} className={`month-year-group ${isExpanded ? "expanded" : "collapsed"}`}>
+                <button className="month-year-toggle" onClick={() => toggleYear(groupYear)} aria-expanded={isExpanded}>
+                  <div className="month-year-heading">
+                    <strong>{groupYear}</strong>
+                    <span>{items.length} {items.length === 1 ? "mês" : "meses"}</span>
+                  </div>
+                  <ChevronDown size={18} />
+                </button>
+                {isExpanded && (
+                  <div className="month-card-grid">
+                    {items.map((item) => (
+                      <MonthCard
+                        key={`${item.year}-${item.month}`}
+                        item={item}
+                        onView={() => openMonthTable(item)}
+                        onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          }) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
         </div>
       )}
     </section>
@@ -678,6 +826,8 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
 
 function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete }) {
   const location = useLocation();
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [editingTemplate, setEditingTemplate] = useState(null);
 
   useEffect(() => {
@@ -700,8 +850,8 @@ function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete }) {
   return (
     <section>
       <div className="section-head">
-        <div><p className="eyebrow">Modelos de fatura</p><h2>Gerenciar modelos</h2></div>
-        <button className="btn btn-primary" onClick={() => setEditingTemplate(defaultTemplateForm())}><Plus size={16} /> Novo modelo</button>
+        <div><p className="eyebrow">{tt("invoiceModels.title", "Modelos de fatura")}</p><h2>{tt("invoiceModels.manage", "Gerenciar modelos")}</h2></div>
+        <button className="btn btn-primary" onClick={() => setEditingTemplate(defaultTemplateForm())}><Plus size={16} /> {tt("invoiceModels.newModel", "Novo modelo")}</button>
       </div>
       <div className="template-list card">
         {templates.length ? templates.map((template) => (
@@ -709,17 +859,17 @@ function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete }) {
             <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(template.color) }} />
             <strong>{template.name}</strong>
             {!template.active && <span className="inactive-badge">INATIVO</span>}
-            <span>Vence dia {template.default_due_day}</span>
-            <span>{template.total_invoices} {template.total_invoices === 1 ? "fatura" : "faturas"}</span>
-            <span>{template.pending_invoices} pend.</span>
+            <span>{tt("invoiceModels.dueOnDay", "Vence dia")} {template.default_due_day}</span>
+            <span>{template.total_invoices} {template.total_invoices === 1 ? tt("invoiceModels.invoice", "fatura") : tt("invoiceModels.invoices", "faturas")}</span>
+            <span>{template.pending_invoices} {tt("invoiceModels.pendingAbbr", "pend.")}</span>
             <div className="template-actions">
-              <button className="btn btn-ghost compact" onClick={() => setEditingTemplate(template)}>Editar</button>
+              <button className="btn btn-ghost compact" onClick={() => setEditingTemplate(template)}>{tt("invoiceModels.edit", "Editar")}</button>
               <button className="btn btn-ghost compact" onClick={() => onToggle(template)}>
                 {template.active ? <Power size={15} /> : <RotateCcw size={15} />}
-                {template.active ? "Desativar" : "Reativar"}
+                {template.active ? tt("invoiceModels.disable", "Desativar") : tt("invoiceModels.reactivate", "Reativar")}
               </button>
               {!template.active && template.pending_invoices === 0 && template.total_invoices === 0 && (
-                <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(template)}><Trash2 size={15} /> Excluir</button>
+                <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(template)}><Trash2 size={15} /> {tt("invoiceModels.delete", "Excluir")}</button>
               )}
             </div>
           </div>
@@ -739,6 +889,8 @@ function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete }) {
 }
 
 function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [form, setForm] = useState(initial ? {
     name: initial.name,
     color: normalizeInvoiceColor(initial.color),
@@ -762,23 +914,23 @@ function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
       <form className="modal-card template-modal" onSubmit={submit}>
         <div className="modal-titlebar">
           <div className="modal-icon"><CreditCard size={22} /></div>
-          <div><p className="eyebrow">Modelo de fatura</p><h2>{initial ? "Editar modelo" : "Novo modelo"}</h2></div>
+          <div><p className="eyebrow">{tt("invoiceModels.invoiceModel", "Modelo de fatura")}</p><h2>{initial ? tt("invoiceModels.editModel", "Editar modelo") : tt("invoiceModels.newModel", "Novo modelo")}</h2></div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-modal-body">
-          <label><span>Nome</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+          <label><span>{tt("invoiceModels.name", "Nome")}</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
           <label>
-            <span>Cor</span>
+            <span>{tt("invoiceModels.color", "Cor")}</span>
             <div className="template-color-input">
               <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(form.color) }} />
               <input type="color" value={normalizeInvoiceColor(form.color)} onChange={(event) => setForm({ ...form, color: event.target.value })} />
             </div>
           </label>
-          <label><span>Dia de vencimento padrão</span><input type="number" min="1" max="31" value={dueDay} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} required /></label>
+          <label><span>{tt("invoiceModels.defaultDueDay", "Dia de vencimento padrão")}</span><input type="number" min="1" max="31" value={dueDay} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} required /></label>
         </div>
         <div className="modal-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary">Salvar</button>
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+          <button className="btn btn-primary">{tt("actions.save", "Salvar")}</button>
         </div>
       </form>
     </div>
@@ -786,15 +938,17 @@ function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
 }
 
 function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
-  const statusLabelByValue = { open: "Pendentes", paid: "Pagas" };
+  const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
   const selectedStatusCount = filters.statuses.length;
   const statusSummary = selectedStatusCount === statusOrder.length
-    ? "Todas"
+    ? tt("invoices.all", "Todas")
     : selectedStatusCount === 1
       ? statusLabelByValue[filters.statuses[0]]
       : `${selectedStatusCount} selecionados`;
@@ -855,27 +1009,27 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
   return (
     <section>
       <div className="section-head">
-        <div><p className="eyebrow">Faturas futuras</p><h2>Faturas</h2></div>
+        <div><p className="eyebrow">{tt("invoices.futureInvoices", "Faturas futuras")}</p><h2>{tt("invoices.invoices", "Faturas")}</h2></div>
         <div className="view-actions">
-          <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> Compra parcelada</button>
-          <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> Nova fatura</button>
+          <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> {tt("invoices.installmentPurchase", "Compra parcelada")}</button>
+          <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> {tt("invoices.newInvoice", "Nova fatura")}</button>
         </div>
       </div>
       {invoices.length ? (
         <>
           <div className="invoice-filter">
             <div className="invoice-filter-head">
-              <span><Filter size={15} /> Filtrar faturas</span>
+              <span><Filter size={15} /> {tt("invoices.filterInvoices", "Filtrar faturas")}</span>
               <small>{filteredInvoices.length} de {invoices.length}</small>
             </div>
             <div className="invoice-filter-grid">
               <label className="invoice-filter-search">
-                <span>Nome ou vencimento</span>
-                <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Procure por nome, mês ou data" />
-                <small>Busca por nome, mês ou vencimento da fatura.</small>
+                <span>{tt("invoices.nameOrDueDate", "Nome ou vencimento")}</span>
+                <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder={tt("invoices.searchPlaceholder", "Procure por nome, mês ou data")} />
+                <small>{tt("invoices.searchHint", "Busca por nome, mês ou vencimento da fatura.")}</small>
               </label>
               <div className="invoice-filter-status" ref={statusMenuRef}>
-                <span>Status</span>
+                <span>{tt("invoices.status", "Status")}</span>
                 <button
                   className={`invoice-status-trigger ${statusMenuOpen ? "open" : ""}`}
                   type="button"
@@ -907,9 +1061,9 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
                 )}
               </div>
               <div className="invoice-filter-color">
-                <span>Cor</span>
+                <span>{tt("invoices.color", "Cor")}</span>
                 <div className="color-filter" aria-label="Filtrar por cor">
-                  <button className={filters.color === "all" ? "active" : ""} type="button" onClick={() => setFilters({ ...filters, color: "all" })}>Todas</button>
+                  <button className={filters.color === "all" ? "active" : ""} type="button" onClick={() => setFilters({ ...filters, color: "all" })}>{tt("invoices.all", "Todas")}</button>
                   {invoiceColors.map((color) => (
                     <button
                       className={filters.color === color ? "active" : ""}
@@ -934,7 +1088,7 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
             <div className="invoice-groups">
               <section className="invoice-group">
                 <div className="invoice-group-head">
-                  <h3>Mês atual</h3>
+                  <h3>{tt("invoices.currentMonth", "Mês atual")}</h3>
                   <small>{currentMonthInvoices.length}</small>
                 </div>
                 {currentMonthInvoices.length ? (
@@ -943,7 +1097,7 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
               </section>
               <section className="invoice-group">
                 <div className="invoice-group-head">
-                  <h3>Próximo mês</h3>
+                  <h3>{tt("invoices.nextMonth", "Próximo mês")}</h3>
                   <small>{nextMonthInvoices.length}</small>
                 </div>
                 {nextMonthInvoices.length ? (
@@ -969,11 +1123,13 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
 }
 
 function InstallmentsPage({ installments, onNew, onDetails }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   return (
     <section>
       <div className="section-head">
-        <div><p className="eyebrow">Compras parceladas</p><h2>Parcelamentos</h2></div>
-        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Compra parcelada</button>
+        <div><p className="eyebrow">{tt("installments.title", "Compras parceladas")}</p><h2>{tt("installments.installments", "Parcelamentos")}</h2></div>
+        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("installments.installmentPurchase", "Compra parcelada")}</button>
       </div>
       {installments.length ? (
         <div className="installment-grid">
@@ -988,10 +1144,10 @@ function InstallmentsPage({ installments, onNew, onDetails }) {
                 </header>
                 <p>{formatMoney(purchase.total_amount)} • {purchase.installment_count}x {formatMoney(purchase.installment_value)}</p>
                 <div className="installment-progress"><span style={{ width: `${pct}%` }} /></div>
-                <strong>Progresso: {purchase.paid_installments} / {purchase.installment_count}</strong>
-                <p>Pago: {formatMoney(purchase.paid_amount)} • Restante: {formatMoney(purchase.remaining_amount)}</p>
-                <p>Próxima parcela: {next ? `${next.name} — vence ${formatDateShort(next.due_date)}` : "Fatura removida — realocar"}</p>
-                <button className="btn btn-ghost" onClick={() => onDetails(purchase.id)}><Eye size={16} /> Detalhes</button>
+                <strong>{tt("installments.progress", "Progresso:")} {purchase.paid_installments} / {purchase.installment_count}</strong>
+                <p>{tt("installments.paid", "Pago:")} {formatMoney(purchase.paid_amount)} • {tt("installments.remaining", "Restante:")} {formatMoney(purchase.remaining_amount)}</p>
+                <p>{tt("installments.nextInstallment", "Próxima parcela:")} {next ? `${next.name} — ${tt("installments.due", "vence")} ${formatDateShort(next.due_date)}` : "Fatura removida — realocar"}</p>
+                <button className="btn btn-ghost" onClick={() => onDetails(purchase.id)}><Eye size={16} /> {tt("installments.details", "Detalhes")}</button>
               </article>
             );
           })}
@@ -1002,6 +1158,8 @@ function InstallmentsPage({ installments, onNew, onDetails }) {
 }
 
 function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
@@ -1084,45 +1242,45 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
       <button className="modal-backdrop" onClick={onClose} />
       <form className={`modal-card invoice-modal installment-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts}>
         <div className="modal-titlebar installment-modal-titlebar">
-          <h2>Adicionar compra parcelada</h2>
+          <h2>{tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-stepper">
-          <div className={`stepper-item ${step > 1 ? "done" : "active"}`}><span>{step > 1 ? <Check size={15} /> : "1"}</span><strong>Configurar</strong></div>
+          <div className={`stepper-item ${step > 1 ? "done" : "active"}`}><span>{step > 1 ? <Check size={15} /> : "1"}</span><strong>{tt("installmentModal.configure", "Configurar")}</strong></div>
           <i />
-          <div className={`stepper-item ${step === 2 ? "active" : ""}`}><span>2</span><strong>Revisar parcelas</strong></div>
+          <div className={`stepper-item ${step === 2 ? "active" : ""}`}><span>2</span><strong>{tt("installmentModal.reviewInstallments", "Revisar parcelas")}</strong></div>
         </div>
         {step === 1 ? (
           <>
             <div className="invoice-modal-body">
-              <label><span>Descrição da compra</span><input placeholder="Ex: PlayStation 5, iPhone, Notebook..." value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
+              <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
               <div className="installment-form-row">
-                <label><span>Valor total da compra</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
-                <label><span>Número de parcelas</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
+                <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
+                <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
               </div>
               <div className="installment-per-value" aria-live="polite">
-                <strong>{`= ${formatMoney(installmentAmount)} por parcela`}</strong>
+                <strong>{tt("installmentModal.perInstallment", `= ${formatMoney(installmentAmount)} por parcela`, { value: formatMoney(installmentAmount) })}</strong>
                 {hasRoundingAdjustment && <small>{`Última parcela será ${formatMoney(adjustedLastInstallmentAmount)} (ajuste de centavos)`}</small>}
               </div>
               <label className={`duplicate-option ${form.different_values ? "active" : ""}`}>
                 <input type="checkbox" checked={form.different_values} onChange={(event) => updateForm({ different_values: event.target.checked })} />
                 <span className="duplicate-icon"><CreditCard size={20} /></span>
-                <span><strong>Parcelas com valores diferentes</strong><small>Edite cada valor na revisão.</small></span>
+                <span><strong>{tt("installmentModal.differentValues", "Parcelas com valores diferentes")}</strong><small>{tt("installmentModal.editEachValue", "Edite cada valor na revisão.")}</small></span>
               </label>
               <InvoiceSelector
                 invoices={invoices}
                 value={firstInvoice ? { templateId: String(firstInvoice.template_id ?? firstInvoice.id), invoiceId: String(firstInvoice.id) } : null}
                 onChange={(selection) => updateForm({ first_invoice_id: selection?.invoiceId || "" })}
               />
-              <p className="duplicate-summary">{firstInvoice ? `Parcelas distribuídas de ${formatMonthSlash(firstInvoice.due_date)} até ${formatMonthSlash(endDate)}` : "Selecione a fatura inicial para ver a distribuição."}</p>
+              <p className="duplicate-summary">{firstInvoice ? tt("installmentModal.installmentsFromTo", `Parcelas distribuídas de ${formatMonthSlash(firstInvoice.due_date)} até ${formatMonthSlash(endDate)}`, { start: formatMonthSlash(firstInvoice.due_date), end: formatMonthSlash(endDate) }) : tt("installmentModal.selectFirstInvoiceDistribution", "Selecione a fatura inicial para ver a distribuição.")}</p>
             </div>
-            <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary">Próximo →</button></div>
+            <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button><button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button></div>
           </>
         ) : (
           <>
             <div className="invoice-review">
               <div className="review-table">
-                <div className="review-row installment-review-head"><span>#</span><span>Parcela</span><span>Fatura destino</span><span>Valor</span><span /></div>
+                <div className="review-row installment-review-head"><span>#</span><span>{tt("installmentModal.installment", "Parcela")}</span><span>{tt("installmentModal.destinationInvoice", "Fatura destino")}</span><span>{tt("installmentModal.value", "Valor")}</span><span /></div>
                 <div className="review-list">
                   {drafts.map((draft, index) => {
                     const destination = destinationForDraft(draft);
@@ -1134,7 +1292,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
                           <i aria-hidden="true" style={{ "--invoice-color": destination.color }} />
                           <span>
                             <strong>{destination.name}</strong>
-                            <small>{destination.automatic ? "Será criada automaticamente" : "Fatura existente"} • vence {formatDateShort(destination.dueDate)}</small>
+                            <small>{destination.automatic ? tt("installmentModal.createdAutomatically", "Será criada automaticamente") : tt("installmentModal.existingInvoice", "Fatura existente")} • {tt("installments.due", "vence")} {formatDateShort(destination.dueDate)}</small>
                           </span>
                         </div>
                         <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
@@ -1147,7 +1305,10 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
             </div>
             <div className="review-footer">
               <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button><button className="btn btn-primary" disabled={!canCreate}>Confirmar {drafts.length} parcelas</button></div>
-              <p>Valor total confirmado: <strong>{formatMoney(confirmedTotal)}</strong>{invoiceCount > 1 ? ` • Parcelas em ${invoiceCount} faturas diferentes` : ""}</p>
+              <p>
+                {tt("installmentModal.totalConfirmed", "Valor total confirmado:")} <strong>{formatMoney(confirmedTotal)}</strong>
+                {invoiceCount > 1 ? ` • ${tt("installmentModal.installmentsDifferentInvoices", `Parcelas em ${invoiceCount} faturas diferentes`, { count: invoiceCount })}` : ""}
+              </p>
             </div>
           </>
         )}
@@ -1157,6 +1318,8 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
 }
 
 function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   return (
     <div className="modal-layer">
       <button className="modal-backdrop" onClick={onClose} />
@@ -1168,14 +1331,14 @@ function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
         </div>
         <div className="invoice-review">
           <div className="review-table">
-            <div className="review-row installment-review-head"><span>#</span><span>Parcela</span><span>Fatura</span><span>Status</span><span /></div>
+            <div className="review-row installment-review-head"><span>#</span><span>{tt("installmentModal.installment", "Parcela")}</span><span>{tt("installmentModal.invoice", "Fatura")}</span><span>{tt("installmentModal.status", "Status")}</span><span /></div>
             <div className="review-list">
               {purchase.items.map((item) => (
                 <div className="review-row installment-review-row" key={item.id}>
                   <span>{item.installment_number}/{purchase.installment_count}</span>
                   <strong>{formatMoney(item.amount)}</strong>
                   <span>{item.invoice ? `${item.invoice.name} — ${formatDateShort(item.invoice.due_date)}` : "Fatura removida — realocar"}</span>
-                  <span className={`due-badge compact ${item.invoice?.paid ? "paid" : item.invoice ? "" : "danger"}`}>{item.invoice?.paid ? "Paga" : item.invoice ? "Pendente" : "Órfã"}</span>
+                  <span className={`due-badge compact ${item.invoice?.paid ? "paid" : item.invoice ? "" : "danger"}`}>{item.invoice?.paid ? tt("installmentModal.paid", "Paga") : item.invoice ? tt("installmentModal.pending", "Pendente") : tt("installmentModal.orphan", "Órfã")}</span>
                   <span />
                 </div>
               ))}
@@ -1183,8 +1346,8 @@ function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
           </div>
         </div>
         <div className="modal-actions details-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose}>Fechar</button>
-          <button className="btn btn-ghost danger-text" type="button" onClick={() => onDelete(purchase.id)}><Trash2 size={16} /> Remover compra</button>
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("installmentModal.close", "Fechar")}</button>
+          <button className="btn btn-ghost danger-text" type="button" onClick={() => onDelete(purchase.id)}><Trash2 size={16} /> {tt("installmentModal.removePurchase", "Remover compra")}</button>
         </div>
       </div>
     </div>
@@ -1192,6 +1355,8 @@ function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
 }
 
 function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, onClose }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -1292,8 +1457,8 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
         <div className="modal-titlebar">
           <div className="modal-icon"><CreditCard size={22} /></div>
           <div>
-            <p className="eyebrow">Cadastro de fatura</p>
-            <h2>Nova fatura</h2>
+            <p className="eyebrow">{tt("invoiceModal.invoiceRegistration", "Cadastro de fatura")}</p>
+            <h2>{tt("invoiceModal.newInvoice", "Nova fatura")}</h2>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
@@ -1301,12 +1466,12 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
         <div className="invoice-stepper" aria-label="Etapas da criação de fatura">
           <div className={`stepper-item ${step > 1 ? "done" : "active"}`}>
             <span>{step > 1 ? <Check size={15} /> : "1"}</span>
-            <strong>Configurar</strong>
+            <strong>{tt("invoiceModal.configure", "Configurar")}</strong>
           </div>
           <i />
           <div className={`stepper-item ${step === 2 ? "active" : ""}`}>
             <span>2</span>
-            <strong>Revisar e ajustar</strong>
+            <strong>{tt("invoiceModal.reviewAndAdjust", "Revisar e ajustar")}</strong>
           </div>
         </div>
 
@@ -1314,20 +1479,20 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
           <>
             <div className="invoice-modal-body">
               <label>
-                <span>Modelo de fatura</span>
+                <span>{tt("invoiceModal.invoiceModel", "Modelo de fatura")}</span>
                 <div className="template-select-shell">
                   {selectedTemplate && <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(selectedTemplate.color) }} />}
                   <select value={form.template_id} onChange={(event) => selectTemplate(event.target.value)} required>
-                    <option value="">Selecione um modelo</option>
+                    <option value="">{tt("invoiceModal.selectModel", "Selecione um modelo")}</option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>● {template.name} — {template.default_due_day}/mês</option>
                     ))}
-                    <option value={CREATE_TEMPLATE_VALUE}>+ Criar novo modelo</option>
+                    <option value={CREATE_TEMPLATE_VALUE}>{tt("invoiceModal.createNewModel", "+ Criar novo modelo")}</option>
                   </select>
                 </div>
               </label>
-              <label><span>Data de vencimento da primeira fatura</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
-              <label><span>Valor inicial</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
+              <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
+              <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input
@@ -1337,15 +1502,15 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                 />
                 <span className="duplicate-icon"><CalendarPlus size={20} /></span>
                 <span>
-                  <strong>Duplicar para os próximos meses</strong>
-                  <small>Gere faturas futuras e revise cada mês antes de confirmar.</small>
+                  <strong>{tt("invoiceModal.duplicateNextMonths", "Duplicar para os próximos meses")}</strong>
+                  <small>{tt("invoiceModal.duplicateDescription", "Gere faturas futuras e revise cada mês antes de confirmar.")}</small>
                 </span>
               </label>
 
               {form.duplicate_next_month && (
                 <div className="duplicate-range">
                   <div className="range-head">
-                    <span>Quantidade de meses adicionais</span>
+                    <span>{tt("invoiceModal.additionalMonths", "Quantidade de meses adicionais")}</span>
                     <input
                       type="number"
                       min="1"
@@ -1361,19 +1526,19 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                     value={duplicateMonths}
                     onChange={(event) => updateForm({ duplicate_months: Number(event.target.value) })}
                   />
-                  <div className="range-scale"><span>1 mês</span><span>23 meses</span></div>
+                  <div className="range-scale"><span>{tt("invoiceModal.oneMonth", "1 mês")}</span><span>{tt("invoiceModal.months23", "23 meses")}</span></div>
                   <p className="duplicate-summary">
                     {form.due_date
-                      ? `Serão criadas ${totalCount} faturas no total (${startLabel} até ${endLabel})`
-                      : `Serão criadas ${totalCount} faturas no total`}
+                      ? tt("invoiceModal.totalInvoicesWithRange", `Serão criadas ${totalCount} faturas no total (${startLabel} até ${endLabel})`, { count: totalCount, start: startLabel, end: endLabel })
+                      : tt("invoiceModal.totalInvoices", `Serão criadas ${totalCount} faturas no total`, { count: totalCount })}
                   </p>
                 </div>
               )}
             </div>
 
             <div className="modal-actions">
-              <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
-              <button className="btn btn-primary">Próximo →</button>
+              <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+              <button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button>
             </div>
           </>
         ) : (
@@ -1387,10 +1552,10 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
               <div className="review-table">
                 <div className="review-row review-head">
                   <span>#</span>
-                  <span>Mês</span>
-                  <span>Data de venc.</span>
-                  <span>Valor</span>
-                  <span>Modelo</span>
+                  <span>{tt("invoiceModal.month", "Mês")}</span>
+                  <span>{tt("invoiceModal.dueDate", "Data de venc.")}</span>
+                  <span>{tt("invoiceModal.amount", "Valor")}</span>
+                  <span>{tt("invoiceModal.model", "Modelo")}</span>
                   <span />
                 </div>
                 <div className="review-list">
@@ -1414,7 +1579,9 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
             <div className="review-footer">
               <div className="modal-actions">
                 <button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button>
-                <button className="btn btn-primary" disabled={!canCreate}>Criar {drafts.length} {drafts.length === 1 ? "fatura" : "faturas"}</button>
+                <button className="btn btn-primary" disabled={!canCreate}>
+                  {tt("invoiceModal.createInvoices", `Criar ${drafts.length} ${drafts.length === 1 ? "fatura" : "faturas"}`, { count: drafts.length, label: drafts.length === 1 ? t("invoiceModal.invoice") : t("invoiceModal.invoices") })}
+                </button>
               </div>
               <p>Total comprometido: <strong>{formatMoney(totalCommitted)}</strong></p>
             </div>
@@ -1433,19 +1600,20 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 
 function formatMonthShort(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
-  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "");
+  const label = date.toLocaleDateString(getFormatLocale(), { month: "short", year: "numeric" }).replace(".", "");
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function formatMonthSlash(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
-  const month = date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+  const month = date.toLocaleDateString(getFormatLocale(), { month: "short" }).replace(".", "");
   const normalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
   return `${normalizedMonth}/${date.getFullYear()}`;
 }
 
 function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) {
   const { user, updateProfile } = useAuth();
+  const { t, language, setLanguage } = useI18n();
   const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "" });
   const [password, setPassword] = useState({ current_password: "", new_password: "" });
   const [openingBalance, setOpeningBalanceInput] = useState("");
@@ -1454,9 +1622,9 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
     event.preventDefault();
     try {
       await updateProfile(profile);
-      toast.success("Perfil atualizado");
+      toast.success(t("toasts.profileUpdated"));
     } catch {
-      toast.error("Erro ao atualizar perfil");
+      toast.error(t("toasts.profileUpdateError"));
     }
   };
 
@@ -1465,9 +1633,9 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
     try {
       await updatePassword(password);
       setPassword({ current_password: "", new_password: "" });
-      toast.success("Senha atualizada");
+      toast.success(t("toasts.passwordUpdated"));
     } catch {
-      toast.error("Erro ao trocar senha");
+      toast.error(t("toasts.passwordUpdateError"));
     }
   };
 
@@ -1475,10 +1643,10 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
     event.preventDefault();
     try {
       await setOpeningBalance(year, month, parseMoneyInput(openingBalance));
-      toast.success("Saldo inicial atualizado");
+      toast.success(t("toasts.openingBalanceUpdated"));
       await refresh();
     } catch {
-      toast.error("Erro ao salvar saldo inicial");
+      toast.error(t("toasts.openingBalanceError"));
     }
   };
 
@@ -1495,10 +1663,18 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
   };
   return (
     <section className="settings-grid">
-      <form className="card" onSubmit={saveProfile}><h2>Perfil</h2><div className="form-stack"><label><span>Nome</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>E-mail</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">Salvar perfil</button></div></form>
-      <form className="card" onSubmit={savePassword}><h2>Senha</h2><div className="form-stack"><label><span>Senha atual</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>Nova senha</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">Trocar senha</button></div></form>
-      <form className="card" onSubmit={saveOpeningBalance}><h2>Saldo inicial</h2><p className="muted">Saldo atual: {formatMoney(summary.current_balance)}</p><div className="form-stack"><label><span>Saldo do mês</span><input placeholder="R$ 0,00" value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">Salvar saldo</button></div></form>
-      <div className="card"><h2>Exportação</h2><p className="muted">Baixe os lançamentos do mês selecionado.</p><button className="btn btn-primary" onClick={exportCsv}>Exportar CSV</button></div>
+      <div className="card settings-language-card">
+        <h2>{t("settings.language")}</h2>
+        <p className="muted">{t("settings.languageDescription")}</p>
+        <div className="language-options" role="group" aria-label={t("settings.language")}>
+          <button className={`btn ${language === "pt-BR" ? "btn-primary" : "btn-ghost"}`} type="button" onClick={() => setLanguage("pt-BR")}>{t("settings.portuguese")}</button>
+          <button className={`btn ${language === "en-US" ? "btn-primary" : "btn-ghost"}`} type="button" onClick={() => setLanguage("en-US")}>{t("settings.english")}</button>
+        </div>
+      </div>
+      <form className="card" onSubmit={saveProfile}><h2>{t("settings.profile")}</h2><div className="form-stack"><label><span>{t("settings.name")}</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>{t("settings.email")}</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">{t("settings.saveProfile")}</button></div></form>
+      <form className="card" onSubmit={savePassword}><h2>{t("settings.password")}</h2><div className="form-stack"><label><span>{t("settings.currentPassword")}</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>{t("settings.newPassword")}</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">{t("settings.changePassword")}</button></div></form>
+      <form className="card" onSubmit={saveOpeningBalance}><h2>{t("settings.openingBalance")}</h2><p className="muted">{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p><div className="form-stack"><label><span>{t("settings.monthBalance")}</span><input placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">{t("settings.saveBalance")}</button></div></form>
+      <div className="card"><h2>{t("settings.export")}</h2><p className="muted">{t("settings.exportDescription")}</p><button className="btn btn-primary" onClick={exportCsv}>{t("settings.exportCsv")}</button></div>
     </section>
   );
 }

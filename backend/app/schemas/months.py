@@ -45,6 +45,7 @@ class MonthCardSummaryOut(APIModel):
     total_income: Decimal
     closing_balance: Decimal
     difference_pct: Decimal
+    transaction_count: int = 0
 
 
 class OpeningBalancePayload(APIModel):

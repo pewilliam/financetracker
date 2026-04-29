@@ -30,7 +30,7 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
         if linked:
             linked.amount = invoice.total_amount
             linked.date = invoice.due_date
-            linked.description = f"Invoice: {invoice.name}"
+            linked.description = f"Fatura: {invoice.name}"
             linked.is_future = False if invoice.paid else invoice.due_date > date.today()
 
     return invoice
@@ -52,7 +52,7 @@ def create_invoice_with_transaction(db: Session, user_id: int, template: Invoice
         date=invoice.due_date,
         type="expense",
         amount=invoice.total_amount,
-        description=f"Invoice: {template.name}",
+        description=f"Fatura: {template.name}",
         is_future=invoice.due_date > date.today(),
         invoice_id=invoice.id,
     )
