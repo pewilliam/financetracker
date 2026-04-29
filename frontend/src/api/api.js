@@ -172,6 +172,17 @@ export function listReceivables() {
   return request("/receivables");
 }
 
+export function listReceivablePeople() {
+  return request("/receivables/people");
+}
+
+export function createReceivablePerson(payload) {
+  return request("/receivables/people", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function createReceivable(payload) {
   return request("/receivables", {
     method: "POST",
@@ -188,6 +199,13 @@ export function updateReceivable(id, payload) {
 
 export function markReceivablePaid(id, payload) {
   return request(`/receivables/${id}/paid`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateReceivableStatus(id, payload) {
+  return request(`/receivables/${id}/status`, {
     method: "PATCH",
     body: JSON.stringify(payload)
   });

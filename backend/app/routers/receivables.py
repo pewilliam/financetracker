@@ -3,12 +3,15 @@ from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import Receivable, ReceivablePayment, Transaction, User
+from app.models import Receivable, ReceivablePayment, ReceivablePerson, Transaction, User
 from app.schemas.receivables import (
     ReceivableCreate,
     ReceivableOut,
     ReceivablePaidPayload,
     ReceivablePaymentCreate,
+    ReceivablePersonCreate,
+    ReceivablePersonOut,
+    ReceivableStatusUpdate,
     ReceivableUpdate,
 )
 from app.security import get_current_user
@@ -25,10 +28,12 @@ def _status_for(receivable: Receivable) -> str:
     received = _money(receivable.received_amount)
     if received >= total:
         return "paid"
-    if receivable.due_date < date.today():
-        return "overdue"
     if received > 0:
         return "partial"
+    if receivable.due_date < date.today():
+        return "overdue"
+    if receivable.status in {"pending", "overdue"}:
+        return receivable.status
     return "pending"
 
 
@@ -41,13 +46,62 @@ def _sync_status(receivable: Receivable) -> None:
 def _load_receivable(db: Session, receivable_id: int, user_id: int) -> Receivable:
     receivable = (
         db.query(Receivable)
-        .options(selectinload(Receivable.payments))
+        .options(selectinload(Receivable.person), selectinload(Receivable.payments))
         .filter(Receivable.id == receivable_id, Receivable.user_id == user_id)
         .first()
     )
     if not receivable:
         raise HTTPException(status_code=404, detail="Receivable not found")
     return receivable
+
+
+def _load_person(db: Session, person_id: int, user_id: int) -> ReceivablePerson:
+    person = (
+        db.query(ReceivablePerson)
+        .filter(ReceivablePerson.id == person_id, ReceivablePerson.user_id == user_id)
+        .first()
+    )
+    if not person:
+        raise HTTPException(status_code=404, detail="Receivable person not found")
+    return person
+
+
+def _person_by_name(db: Session, user_id: int, name: str) -> ReceivablePerson | None:
+    return (
+        db.query(ReceivablePerson)
+        .filter(ReceivablePerson.user_id == user_id, ReceivablePerson.name == name)
+        .first()
+    )
+
+
+def _person_for_payload(db: Session, user_id: int, person_id: int | None, person_name: str | None) -> ReceivablePerson:
+    if person_id:
+        return _load_person(db, person_id, user_id)
+
+    name = (person_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Person is required")
+
+    person = _person_by_name(db, user_id, name)
+    if person:
+        return person
+
+    person = ReceivablePerson(user_id=user_id, name=name)
+    db.add(person)
+    db.flush()
+    return person
+
+
+def _apply_manual_status(receivable: Receivable, status: str | None) -> None:
+    if status is None:
+        _sync_status(receivable)
+        return
+    if status not in {"pending", "overdue", "partial"}:
+        raise HTTPException(status_code=400, detail="Invalid receivable status")
+    if status == "partial" and _money(receivable.received_amount) <= 0:
+        raise HTTPException(status_code=400, detail="Partial status requires at least one payment")
+    receivable.status = status
+    _sync_status(receivable)
 
 
 def _create_income_transaction(db: Session, user_id: int, receivable: Receivable, amount: Decimal, paid_at: date) -> Transaction:
@@ -114,7 +168,7 @@ def list_receivables(
 ):
     receivables = (
         db.query(Receivable)
-        .options(selectinload(Receivable.payments))
+        .options(selectinload(Receivable.person), selectinload(Receivable.payments))
         .filter(Receivable.user_id == current_user.id)
         .order_by(Receivable.due_date, Receivable.id)
         .all()
@@ -132,25 +186,60 @@ def list_receivables(
     return receivables
 
 
+@router.get("/people", response_model=list[ReceivablePersonOut])
+def list_receivable_people(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(ReceivablePerson)
+        .filter(ReceivablePerson.user_id == current_user.id)
+        .order_by(ReceivablePerson.name)
+        .all()
+    )
+
+
+@router.post("/people", response_model=ReceivablePersonOut)
+def create_receivable_person(
+    payload: ReceivablePersonCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Person name is required")
+
+    person = _person_by_name(db, current_user.id, name)
+    if person:
+        return person
+
+    person = ReceivablePerson(user_id=current_user.id, name=name)
+    db.add(person)
+    db.commit()
+    db.refresh(person)
+    return person
+
+
 @router.post("", response_model=ReceivableOut)
 def create_receivable(
     payload: ReceivableCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    person = _person_for_payload(db, current_user.id, payload.person_id, payload.person_name)
     receivable = Receivable(
         user_id=current_user.id,
-        person_name=payload.person_name.strip(),
+        person_id=person.id,
         description=payload.description.strip(),
         total_amount=_money(payload.total_amount),
         received_amount=Decimal("0.00"),
         due_date=payload.due_date,
         notes=payload.notes.strip() if payload.notes else None,
     )
-    if not receivable.person_name or not receivable.description:
-        raise HTTPException(status_code=400, detail="Person name and description are required")
+    if not receivable.description:
+        raise HTTPException(status_code=400, detail="Description is required")
 
-    _sync_status(receivable)
+    _apply_manual_status(receivable, payload.status)
     db.add(receivable)
     db.commit()
     return _load_receivable(db, receivable.id, current_user.id)
@@ -166,8 +255,9 @@ def update_receivable(
     receivable = _load_receivable(db, receivable_id, current_user.id)
     data = payload.model_dump(exclude_unset=True)
 
-    if "person_name" in data:
-        receivable.person_name = data["person_name"].strip()
+    if "person_id" in data or "person_name" in data:
+        person = _person_for_payload(db, current_user.id, data.get("person_id"), data.get("person_name"))
+        receivable.person_id = person.id
     if "description" in data:
         receivable.description = data["description"].strip()
     if "total_amount" in data:
@@ -180,10 +270,23 @@ def update_receivable(
     if "notes" in data:
         receivable.notes = data["notes"].strip() if data["notes"] else None
 
-    if not receivable.person_name or not receivable.description:
-        raise HTTPException(status_code=400, detail="Person name and description are required")
+    if not receivable.description:
+        raise HTTPException(status_code=400, detail="Description is required")
 
-    _sync_status(receivable)
+    _apply_manual_status(receivable, data.get("status"))
+    db.commit()
+    return _load_receivable(db, receivable.id, current_user.id)
+
+
+@router.patch("/{receivable_id}/status", response_model=ReceivableOut)
+def update_receivable_status(
+    receivable_id: int,
+    payload: ReceivableStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    receivable = _load_receivable(db, receivable_id, current_user.id)
+    _apply_manual_status(receivable, payload.status)
     db.commit()
     return _load_receivable(db, receivable.id, current_user.id)
 

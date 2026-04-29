@@ -2512,6 +2512,13 @@ select {
   justify-content: flex-end;
   padding-top: 4px;
 }
+.receivable-status-select {
+  min-height: 34px;
+  max-width: 150px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
 .receivable-card h3 {
   margin: 0;
   font-size: 18px;

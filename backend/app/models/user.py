@@ -16,5 +16,6 @@ class User(Base):
     invoices = relationship("Invoice", back_populates="user", cascade="all, delete-orphan")
     invoice_templates = relationship("InvoiceTemplate", back_populates="user", cascade="all, delete-orphan")
     installment_purchases = relationship("InstallmentPurchase", back_populates="user", cascade="all, delete-orphan")
+    receivable_people = relationship("ReceivablePerson", back_populates="user", cascade="all, delete-orphan")
     receivables = relationship("Receivable", back_populates="user", cascade="all, delete-orphan")
     recurrences = relationship("Recurrence", back_populates="user", cascade="all, delete-orphan")

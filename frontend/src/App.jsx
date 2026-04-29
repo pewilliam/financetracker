@@ -41,6 +41,7 @@ import {
   createInvoiceTemplate,
   createReceivable,
   createReceivablePayment,
+  createReceivablePerson,
   createRecurrence,
   createTransaction,
   deleteInvoiceTemplate,
@@ -55,6 +56,7 @@ import {
   listInstallments,
   listInvoices,
   listInvoiceTemplates,
+  listReceivablePeople,
   listReceivables,
   markReceivablePaid,
   setInvoicePaid,
@@ -63,6 +65,7 @@ import {
   updatePassword,
   updateInvoiceTemplate,
   updateReceivable,
+  updateReceivableStatus,
   updateTransaction
 } from "./api/api.js";
 import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput, parseTypedMoneyInput } from "./utils/format.js";
@@ -86,6 +89,7 @@ function nextMonthDate(dateString) {
 const INVOICE_COLORS = ["#14A078", "#3CC88C", "#F59E0B", "#FF4D6A", "#8B5CF6", "#06B6D4", "#EC4899", "#64748B"];
 const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
 const CREATE_TEMPLATE_VALUE = "__create_template__";
+const CREATE_RECEIVABLE_PERSON_VALUE = "__create_receivable_person__";
 const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
 const MONTHS_VIEW_MODE_KEY = "months-view-mode";
 
@@ -112,7 +116,7 @@ function defaultInstallmentForm(firstInvoiceId = "") {
 }
 
 function defaultReceivableForm() {
-  return { person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), notes: "" };
+  return { person_id: "", person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), status: "pending", notes: "" };
 }
 
 function todayIsoDate() {
@@ -213,7 +217,7 @@ function Sidebar({ open, setOpen }) {
     [t("sidebar.invoices"), "/faturas", CreditCard],
     [t("sidebar.invoiceModels"), "/modelos-de-fatura", List],
     [t("sidebar.installments"), "/parcelamentos", CreditCard],
-    [t("sidebar.receivables"), "/contas-a-receber", Wallet]
+    [t("sidebar.receivables"), "/recebiveis", Wallet]
   ];
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
@@ -286,6 +290,7 @@ function AppShell() {
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [receivables, setReceivables] = useState([]);
+  const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(() => {
     try {
@@ -323,13 +328,14 @@ function AppShell() {
     setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, receivablesPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
         listInvoiceTemplates(),
         listInstallments(),
         listReceivables(),
+        listReceivablePeople(),
         getMonthsSummary(),
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
@@ -343,6 +349,7 @@ function AppShell() {
       setInvoiceTemplates(templatesPayload);
       setInstallments(installmentsPayload);
       setReceivables(receivablesPayload);
+      setReceivablePeople(peoplePayload);
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
@@ -547,10 +554,12 @@ function AppShell() {
     if (receivable) {
       setEditingReceivable(receivable);
       setReceivableForm({
-        person_name: receivable.person_name,
+        person_id: String(receivable.person_id || ""),
+        person_name: receivable.person_name || "",
         description: receivable.description,
         total_amount: formatMoney(receivable.total_amount, language),
         due_date: receivable.due_date,
+        status: receivable.status,
         notes: receivable.notes || ""
       });
     } else {
@@ -562,11 +571,17 @@ function AppShell() {
 
   const saveReceivable = async (payload) => {
     try {
+      let personId = payload.person_id;
+      if (personId === CREATE_RECEIVABLE_PERSON_VALUE) {
+        const person = await createReceivablePerson({ name: payload.person_name.trim() });
+        personId = String(person.id);
+      }
       const data = {
-        person_name: payload.person_name.trim(),
+        person_id: Number(personId),
         description: payload.description.trim(),
         total_amount: parseTypedMoneyInput(payload.total_amount, language),
         due_date: payload.due_date,
+        status: payload.status,
         notes: payload.notes?.trim() || null
       };
       if (editingReceivable) await updateReceivable(editingReceivable.id, data);
@@ -581,18 +596,18 @@ function AppShell() {
     }
   };
 
-  const payReceivable = async (receivable) => {
-    try {
-      await markReceivablePaid(receivable.id, { paid_at: todayIsoDate() });
-      toast.success("Conta marcada como paga");
-      await refresh();
-    } catch {
-      toast.error("Erro ao marcar como paga");
-    }
+  const openReceivablePaidModal = (receivable) => {
+    setReceivablePayment({
+      mode: "paid",
+      receivable,
+      amount: formatMoney(receivable.remaining_amount, language),
+      paid_at: todayIsoDate()
+    });
   };
 
   const openReceivablePaymentModal = (receivable) => {
     setReceivablePayment({
+      mode: "partial",
       receivable,
       amount: "",
       paid_at: todayIsoDate()
@@ -601,15 +616,29 @@ function AppShell() {
 
   const saveReceivablePayment = async (payload) => {
     try {
-      await createReceivablePayment(payload.receivable.id, {
-        amount: parseTypedMoneyInput(payload.amount, language),
-        paid_at: payload.paid_at
-      });
+      if (payload.mode === "paid") {
+        await markReceivablePaid(payload.receivable.id, { paid_at: payload.paid_at });
+      } else {
+        await createReceivablePayment(payload.receivable.id, {
+          amount: parseTypedMoneyInput(payload.amount, language),
+          paid_at: payload.paid_at
+        });
+      }
       setReceivablePayment(null);
-      toast.success("Pagamento parcial registrado");
+      toast.success(payload.mode === "paid" ? "Conta marcada como paga" : "Pagamento parcial registrado");
       await refresh();
     } catch {
-      toast.error("Erro ao registrar pagamento parcial");
+      toast.error("Erro ao registrar pagamento");
+    }
+  };
+
+  const changeReceivableStatus = async (receivable, status) => {
+    try {
+      await updateReceivableStatus(receivable.id, { status });
+      toast.success("Status atualizado");
+      await refresh();
+    } catch {
+      toast.error("Erro ao atualizar status");
     }
   };
 
@@ -639,7 +668,8 @@ function AppShell() {
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
-              <Route path="/contas-a-receber" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={payReceivable} onPayment={openReceivablePaymentModal} />} />
+              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onStatusChange={changeReceivableStatus} />} />
+              <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -651,7 +681,7 @@ function AppShell() {
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}
-      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
+      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
     </div>
   );
@@ -1451,7 +1481,7 @@ function receivableStatusText(status, language = "pt-BR") {
   return labels[status] || labels.pending;
 }
 
-function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment }) {
+function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onStatusChange }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", status: "all" });
@@ -1489,7 +1519,7 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment }) {
   return (
     <section>
       <div className="section-head">
-        <div><p className="eyebrow">{tt("receivables.title", "Contas a receber")}</p><h2>{tt("receivables.heading", "Recebíveis")}</h2></div>
+        <div><p className="eyebrow">{tt("receivables.title", "Recebíveis")}</p><h2>{tt("receivables.heading", "Recebíveis")}</h2></div>
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("receivables.new", "Nova conta")}</button>
       </div>
 
@@ -1567,6 +1597,11 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment }) {
                   <button className="btn btn-ghost compact" onClick={() => onEdit(item)}>{tt("actions.edit", "Editar")}</button>
                   {item.status !== "paid" && (
                     <>
+                      <select className="receivable-status-select" value={item.status} onChange={(event) => onStatusChange(item, event.target.value)}>
+                        <option value="pending">{tt("receivables.pendingOne", "Pendente")}</option>
+                        <option value="overdue">{tt("receivables.overdueOne", "Atrasada")}</option>
+                        {Number(item.received_amount || 0) > 0 && <option value="partial">{tt("receivables.partialOne", "Parcial")}</option>}
+                      </select>
                       <button className="btn btn-ghost compact" onClick={() => onPayment(item)}>{tt("receivables.partialPayment", "Pagamento parcial")}</button>
                       <button className="btn btn-primary compact" onClick={() => onPaid(item)}><Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}</button>
                     </>
@@ -1577,12 +1612,12 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment }) {
           })}
         </div>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>{tt("receivables.empty", "Nenhuma conta a receber encontrada.")}</h3><p>{tt("receivables.emptyHint", "Cadastre uma nova conta ou ajuste os filtros.")}</p></div>}
-      <button className="fab" onClick={onNew} aria-label="Criar conta a receber"><Plus /></button>
+      <button className="fab" onClick={onNew} aria-label="Criar recebível"><Plus /></button>
     </section>
   );
 }
 
-function ReceivableModal({ form, setForm, editing, onSubmit, onClose }) {
+function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const updateForm = (patch) => setForm({ ...form, ...patch });
@@ -1593,7 +1628,8 @@ function ReceivableModal({ form, setForm, editing, onSubmit, onClose }) {
 
   const submit = (event) => {
     event.preventDefault();
-    if (!form.person_name.trim() || !form.description.trim() || !parseTypedMoneyInput(form.total_amount, language) || !form.due_date) return;
+    const hasPerson = form.person_id && (form.person_id !== CREATE_RECEIVABLE_PERSON_VALUE || form.person_name.trim());
+    if (!hasPerson || !form.description.trim() || !parseTypedMoneyInput(form.total_amount, language) || !form.due_date) return;
     onSubmit(form);
   };
 
@@ -1603,16 +1639,40 @@ function ReceivableModal({ form, setForm, editing, onSubmit, onClose }) {
       <form className="modal-card invoice-modal receivable-modal" onSubmit={submit}>
         <div className="modal-titlebar">
           <div className="modal-icon"><Wallet size={22} /></div>
-          <div><p className="eyebrow">{tt("receivables.title", "Contas a receber")}</p><h2>{editing ? tt("receivables.edit", "Editar conta") : tt("receivables.new", "Nova conta")}</h2></div>
+          <div><p className="eyebrow">{tt("receivables.title", "Recebíveis")}</p><h2>{editing ? tt("receivables.edit", "Editar conta") : tt("receivables.new", "Nova conta")}</h2></div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-modal-body">
-          <label><span>{tt("receivables.person", "Pessoa")}</span><input value={form.person_name} onChange={(event) => updateForm({ person_name: event.target.value })} required /></label>
+          <label>
+            <span>{tt("receivables.person", "Pessoa")}</span>
+            <select
+              value={form.person_id || ""}
+              onChange={(event) => updateForm({ person_id: event.target.value, person_name: event.target.value === CREATE_RECEIVABLE_PERSON_VALUE ? "" : form.person_name })}
+              required
+            >
+              <option value="">{tt("receivables.selectPerson", "Selecione uma pessoa")}</option>
+              {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+              <option value={CREATE_RECEIVABLE_PERSON_VALUE}>{tt("receivables.createPerson", "+ Cadastrar nova pessoa")}</option>
+            </select>
+          </label>
+          {form.person_id === CREATE_RECEIVABLE_PERSON_VALUE && (
+            <label><span>{tt("receivables.newPersonName", "Nome da pessoa")}</span><input value={form.person_name} onChange={(event) => updateForm({ person_name: event.target.value })} required /></label>
+          )}
           <label><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
           <div className="receivable-form-row">
             <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: event.target.value })} onBlur={normalizeAmount} required /></label>
             <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
           </div>
+          {editing && (
+            <label>
+              <span>{tt("receivables.status", "Status")}</span>
+              <select value={form.status} onChange={(event) => updateForm({ status: event.target.value })}>
+                <option value="pending">{tt("receivables.pendingOne", "Pendente")}</option>
+                <option value="overdue">{tt("receivables.overdueOne", "Atrasada")}</option>
+                {Number(editing.received_amount || 0) > 0 && <option value="partial">{tt("receivables.partialOne", "Parcial")}</option>}
+              </select>
+            </label>
+          )}
           <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
         </div>
         <div className="modal-actions">
@@ -1628,6 +1688,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const updateData = (patch) => setData({ ...data, ...patch });
+  const isFullPayment = data.mode === "paid";
   const remaining = Number(data.receivable.remaining_amount || 0);
   const paidAmount = parseTypedMoneyInput(data.amount, language);
   const normalizeAmount = () => {
@@ -1636,7 +1697,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
   };
   const submit = (event) => {
     event.preventDefault();
-    if (!paidAmount || paidAmount > remaining || !data.paid_at) return;
+    if ((!isFullPayment && (!paidAmount || paidAmount > remaining)) || !data.paid_at) return;
     onSubmit(data);
   };
 
@@ -1646,7 +1707,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
       <form className="modal-card template-modal receivable-payment-modal" onSubmit={submit}>
         <div className="modal-titlebar">
           <div className="modal-icon"><Wallet size={22} /></div>
-          <div><p className="eyebrow">{data.receivable.person_name}</p><h2>{tt("receivables.partialPayment", "Pagamento parcial")}</h2></div>
+          <div><p className="eyebrow">{data.receivable.person_name}</p><h2>{isFullPayment ? tt("receivables.markPaid", "Marcar como pago") : tt("receivables.partialPayment", "Pagamento parcial")}</h2></div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-modal-body">
@@ -1654,12 +1715,12 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
             <span>{tt("receivables.remaining", "Restante")}</span>
             <strong>{formatMoney(remaining, language)}</strong>
           </div>
-          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={data.amount} onChange={(event) => updateData({ amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: event.target.value })} onBlur={normalizeAmount} required /></label>
           <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
-          <button className="btn btn-primary" disabled={!paidAmount || paidAmount > remaining}>{tt("receivables.registerPayment", "Registrar pagamento")}</button>
+          <button className="btn btn-primary" disabled={!isFullPayment && (!paidAmount || paidAmount > remaining)}>{isFullPayment ? tt("receivables.confirmPayment", "Confirmar pagamento") : tt("receivables.registerPayment", "Registrar pagamento")}</button>
         </div>
       </form>
     </div>
