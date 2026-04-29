@@ -4,7 +4,7 @@ import { CalendarPlus, CheckCircle2, CreditCard, Plus, RotateCcw, Trash2 } from 
 import { daysUntil, formatDateShort, formatMoney, parseMoneyInput } from "../utils/format.js";
 
 function invoiceColor(color) {
-  return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#3B82F6";
+  return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#14A078";
 }
 
 export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {

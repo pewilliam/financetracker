@@ -8,12 +8,13 @@ import {
   Check,
   CreditCard,
   ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   Filter,
   Grid2X2,
   List,
   LogOut,
-  Menu,
   Moon,
   Plus,
   Power,
@@ -76,9 +77,10 @@ function nextMonthDate(dateString) {
   return addMonthsToDate(dateString, 1);
 }
 
-const INVOICE_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899", "#64748B"];
+const INVOICE_COLORS = ["#14A078", "#3CC88C", "#F59E0B", "#FF4D6A", "#8B5CF6", "#06B6D4", "#EC4899", "#64748B"];
 const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
 const CREATE_TEMPLATE_VALUE = "__create_template__";
+const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
@@ -170,8 +172,8 @@ function AuthPage({ mode }) {
     <main className="auth-page">
       <Toaster position="top-right" />
       <section className="auth-card">
-        <div className="auth-logo"><Wallet size={28} /></div>
-        <h1>Finance Tracker</h1>
+        <div className="auth-logo"><img src={BRAND_MARK_SRC} alt="" aria-hidden="true" /></div>
+        <h1>Kashy365</h1>
         <p>{isRegister ? "Crie sua conta para começar." : "Entre para ver seus dados financeiros."}</p>
         <form className="form-stack" onSubmit={submit}>
           {isRegister && (
@@ -197,30 +199,59 @@ function Sidebar({ open, setOpen }) {
     ["Meses", "/meses", CalendarDays],
     ["Faturas", "/faturas", CreditCard],
     ["Modelos de fatura", "/modelos-de-fatura", List],
-    ["Parcelamentos", "/parcelamentos", CreditCard],
-    ["Configurações", "/configuracoes", Settings]
+    ["Parcelamentos", "/parcelamentos", CreditCard]
   ];
+  const closeOnMobile = () => {
+    if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
+  };
+
   return (
     <>
-      <button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Abrir menu"><Menu /></button>
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="sidebar-brand"><Wallet /><span>Finance Tracker</span><button className="icon-btn sidebar-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
-        <nav>
-          {links.map(([label, path, Icon]) => (
-            <NavLink key={path} to={path} end={path === "/"} onClick={() => setOpen(false)}>
-              <Icon size={18} /> {label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <button className="theme-toggle" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />} Tema
-          </button>
-          <div className="user-card">
-            <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
-            <div><strong>{user?.name}</strong><span>{user?.email}</span></div>
+        <div className="sidebar-shell">
+          <div className="sidebar-top">
+            <div className="sidebar-brand">
+              <Link className="sidebar-logo sidebar-action" to="/" onClick={closeOnMobile} aria-label="Kashy365" data-tooltip="Kashy365">
+                <span className="sidebar-logo-mark">
+                  <img className="sidebar-brand-mark" src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
+                </span>
+                <span className="sidebar-wordmark"><strong>Kashy</strong><em>365</em></span>
+              </Link>
+              <button
+                type="button"
+                className="sidebar-toggle sidebar-action"
+                onClick={() => setOpen((current) => !current)}
+                aria-label={open ? "Recolher sidebar" : "Expandir sidebar"}
+                aria-expanded={open}
+                data-tooltip={open ? "Recolher" : "Expandir"}
+              >
+                {open ? <ChevronsLeft className="sidebar-icon" /> : <ChevronsRight className="sidebar-icon" />}
+              </button>
+            </div>
+            <nav className="sidebar-nav" aria-label="Navegação principal">
+              {links.map(([label, path, Icon]) => (
+                <NavLink key={path} to={path} end={path === "/"} onClick={closeOnMobile} data-tooltip={label} className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}>
+                  <Icon className="sidebar-icon" />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </nav>
           </div>
-          <button className="logout" onClick={logout}><LogOut size={16} /> Sair</button>
+          <div className="sidebar-bottom">
+            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip="Configurações">
+              <Settings className="sidebar-icon" />
+              <span>Configurações</span>
+            </NavLink>
+            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip="Tema">
+              {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
+              <span>Tema</span>
+            </button>
+            <div className="user-card sidebar-action" data-tooltip={user?.name || "Usuário"}>
+              <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
+              <div className="user-meta"><strong>{user?.name}</strong><span>{user?.email}</span></div>
+            </div>
+            <button className="logout sidebar-action" onClick={logout} data-tooltip="Sair"><LogOut className="sidebar-icon" /><span>Sair</span></button>
+          </div>
         </div>
       </aside>
       {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" />}
@@ -240,7 +271,23 @@ function AppShell() {
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem("menuOpen");
+      if (v === null) return true;
+      return v === "1";
+    } catch (e) {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("menuOpen", menuOpen ? "1" : "0");
+    } catch (e) {
+      // ignore
+    }
+  }, [menuOpen]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -475,7 +522,7 @@ function AppShell() {
   };
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
       <main className="content">
@@ -957,6 +1004,7 @@ function InstallmentsPage({ installments, onNew, onDetails }) {
 function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
+  const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
   const total = parseMoneyInput(form.total_amount);
@@ -998,6 +1046,16 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
 
   const updateDraft = (id, patch) => {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
+  };
+
+  const destinationForDraft = (draft) => {
+    const invoice = draft.invoice_id ? invoicesById.get(String(draft.invoice_id)) : null;
+    return {
+      automatic: !invoice,
+      color: normalizeInvoiceColor(invoice?.color || firstInvoice?.color),
+      dueDate: invoice?.due_date || draft.month,
+      name: invoice?.name || firstInvoice?.name || "Fatura automática"
+    };
   };
 
   const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
@@ -1066,21 +1124,24 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
               <div className="review-table">
                 <div className="review-row installment-review-head"><span>#</span><span>Parcela</span><span>Fatura destino</span><span>Valor</span><span /></div>
                 <div className="review-list">
-                  {drafts.map((draft, index) => (
-                    <div className="review-row installment-review-row" key={draft.id}>
-                      <span>{draft.number}/{count}</span>
-                      <strong>{formatMonthShort(draft.month)}</strong>
-                      <label>
-                        <select value={draft.invoice_id} onChange={(event) => updateDraft(draft.id, { invoice_id: event.target.value })}>
-                          <option value="">Criar automaticamente</option>
-                          {sortedInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.name} ({normalizeInvoiceColor(invoice.color)}) — {formatDateShort(invoice.due_date)}</option>)}
-                        </select>
-                        {!draft.invoice_id && <small className="auto-badge">Fatura será criada automaticamente</small>}
-                      </label>
-                      <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
-                      <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
-                    </div>
-                  ))}
+                  {drafts.map((draft, index) => {
+                    const destination = destinationForDraft(draft);
+                    return (
+                      <div className="review-row installment-review-row" key={draft.id}>
+                        <span>{draft.number}/{count}</span>
+                        <strong>{formatMonthShort(draft.month)}</strong>
+                        <div className="installment-destination">
+                          <i aria-hidden="true" style={{ "--invoice-color": destination.color }} />
+                          <span>
+                            <strong>{destination.name}</strong>
+                            <small>{destination.automatic ? "Será criada automaticamente" : "Fatura existente"} • vence {formatDateShort(destination.dueDate)}</small>
+                          </span>
+                        </div>
+                        <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
+                        <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

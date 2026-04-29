@@ -13,6 +13,7 @@ export function useTheme() {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("dark", theme === "dark");
+    root.dataset.theme = theme;
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
