@@ -59,6 +59,22 @@ export function parseMoneyInput(value) {
   return Number(digits || 0) / 100;
 }
 
+export function parseTypedMoneyInput(value, locale = activeLocale) {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+
+  const decimalSeparator = locale === "en-US" ? "." : ",";
+  if (text.includes(decimalSeparator)) {
+    const [integerPart, decimalPart = ""] = text.split(decimalSeparator);
+    const integer = integerPart.replace(/\D/g, "") || "0";
+    const decimal = decimalPart.replace(/\D/g, "").slice(0, 2).padEnd(2, "0");
+    return Number(`${integer}.${decimal}`);
+  }
+
+  if (text.includes(",")) return parseMoneyInput(text);
+  return Number(text.replace(/\D/g, "") || 0);
+}
+
 export function formatMoneyInput(value, locale = activeLocale) {
   return formatMoney(parseMoneyInput(value), locale);
 }

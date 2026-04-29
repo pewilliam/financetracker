@@ -168,6 +168,38 @@ export function listInstallments() {
   return request("/installments");
 }
 
+export function listReceivables() {
+  return request("/receivables");
+}
+
+export function createReceivable(payload) {
+  return request("/receivables", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateReceivable(id, payload) {
+  return request(`/receivables/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function markReceivablePaid(id, payload) {
+  return request(`/receivables/${id}/paid`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function createReceivablePayment(id, payload) {
+  return request(`/receivables/${id}/payments`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getInstallment(id) {
   return request(`/installments/${id}`);
 }

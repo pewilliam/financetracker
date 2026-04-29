@@ -39,6 +39,8 @@ import {
   createInstallment,
   createInvoice,
   createInvoiceTemplate,
+  createReceivable,
+  createReceivablePayment,
   createRecurrence,
   createTransaction,
   deleteInvoiceTemplate,
@@ -53,14 +55,17 @@ import {
   listInstallments,
   listInvoices,
   listInvoiceTemplates,
+  listReceivables,
+  markReceivablePaid,
   setInvoicePaid,
   setOpeningBalance,
   toggleInvoiceTemplate,
   updatePassword,
   updateInvoiceTemplate,
+  updateReceivable,
   updateTransaction
 } from "./api/api.js";
-import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput, parseTypedMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
@@ -104,6 +109,10 @@ function defaultInstallmentForm(firstInvoiceId = "") {
     first_invoice_id: firstInvoiceId,
     different_values: false
   };
+}
+
+function defaultReceivableForm() {
+  return { person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), notes: "" };
 }
 
 function todayIsoDate() {
@@ -203,7 +212,8 @@ function Sidebar({ open, setOpen }) {
     [t("sidebar.months"), "/meses", CalendarDays],
     [t("sidebar.invoices"), "/faturas", CreditCard],
     [t("sidebar.invoiceModels"), "/modelos-de-fatura", List],
-    [t("sidebar.installments"), "/parcelamentos", CreditCard]
+    [t("sidebar.installments"), "/parcelamentos", CreditCard],
+    [t("sidebar.receivables"), "/contas-a-receber", Wallet]
   ];
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
@@ -275,6 +285,7 @@ function AppShell() {
   const [invoices, setInvoices] = useState([]);
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
+  const [receivables, setReceivables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(() => {
     try {
@@ -301,6 +312,10 @@ function AppShell() {
   const [installmentModal, setInstallmentModal] = useState(false);
   const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
   const [installmentDetails, setInstallmentDetails] = useState(null);
+  const [receivableModal, setReceivableModal] = useState(false);
+  const [receivableForm, setReceivableForm] = useState(defaultReceivableForm);
+  const [editingReceivable, setEditingReceivable] = useState(null);
+  const [receivablePayment, setReceivablePayment] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -308,12 +323,13 @@ function AppShell() {
     setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, receivablesPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
         listInvoiceTemplates(),
         listInstallments(),
+        listReceivables(),
         getMonthsSummary(),
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
@@ -326,6 +342,7 @@ function AppShell() {
       setInvoices(invoicesPayload);
       setInvoiceTemplates(templatesPayload);
       setInstallments(installmentsPayload);
+      setReceivables(receivablesPayload);
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
@@ -526,6 +543,76 @@ function AppShell() {
     }
   };
 
+  const openReceivableModal = (receivable = null) => {
+    if (receivable) {
+      setEditingReceivable(receivable);
+      setReceivableForm({
+        person_name: receivable.person_name,
+        description: receivable.description,
+        total_amount: formatMoney(receivable.total_amount, language),
+        due_date: receivable.due_date,
+        notes: receivable.notes || ""
+      });
+    } else {
+      setEditingReceivable(null);
+      setReceivableForm(defaultReceivableForm());
+    }
+    setReceivableModal(true);
+  };
+
+  const saveReceivable = async (payload) => {
+    try {
+      const data = {
+        person_name: payload.person_name.trim(),
+        description: payload.description.trim(),
+        total_amount: parseTypedMoneyInput(payload.total_amount, language),
+        due_date: payload.due_date,
+        notes: payload.notes?.trim() || null
+      };
+      if (editingReceivable) await updateReceivable(editingReceivable.id, data);
+      else await createReceivable(data);
+      setReceivableModal(false);
+      setEditingReceivable(null);
+      setReceivableForm(defaultReceivableForm());
+      toast.success(editingReceivable ? "Conta a receber atualizada" : "Conta a receber criada");
+      await refresh();
+    } catch {
+      toast.error("Erro ao salvar conta a receber");
+    }
+  };
+
+  const payReceivable = async (receivable) => {
+    try {
+      await markReceivablePaid(receivable.id, { paid_at: todayIsoDate() });
+      toast.success("Conta marcada como paga");
+      await refresh();
+    } catch {
+      toast.error("Erro ao marcar como paga");
+    }
+  };
+
+  const openReceivablePaymentModal = (receivable) => {
+    setReceivablePayment({
+      receivable,
+      amount: "",
+      paid_at: todayIsoDate()
+    });
+  };
+
+  const saveReceivablePayment = async (payload) => {
+    try {
+      await createReceivablePayment(payload.receivable.id, {
+        amount: parseTypedMoneyInput(payload.amount, language),
+        paid_at: payload.paid_at
+      });
+      setReceivablePayment(null);
+      toast.success("Pagamento parcial registrado");
+      await refresh();
+    } catch {
+      toast.error("Erro ao registrar pagamento parcial");
+    }
+  };
+
   return (
     <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <Toaster position="top-right" />
@@ -552,6 +639,7 @@ function AppShell() {
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
+              <Route path="/contas-a-receber" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={payReceivable} onPayment={openReceivablePaymentModal} />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -563,6 +651,8 @@ function AppShell() {
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}
+      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
+      {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
     </div>
   );
 }
@@ -1350,6 +1440,228 @@ function InstallmentDetailsModal({ purchase, onClose, onDelete }) {
           <button className="btn btn-ghost danger-text" type="button" onClick={() => onDelete(purchase.id)}><Trash2 size={16} /> {tt("installmentModal.removePurchase", "Remover compra")}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function receivableStatusText(status, language = "pt-BR") {
+  const labels = language === "en-US"
+    ? { pending: "Pending", paid: "Paid", overdue: "Overdue", partial: "Partial" }
+    : { pending: "Pendente", paid: "Pago", overdue: "Atrasada", partial: "Parcial" };
+  return labels[status] || labels.pending;
+}
+
+function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const [filters, setFilters] = useState({ search: "", status: "all" });
+  const today = todayIsoDate();
+  const currentMonth = today.slice(0, 7);
+
+  const openReceivables = receivables.filter((item) => item.status !== "paid");
+  const summaries = {
+    totalOpen: openReceivables.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
+    overdue: receivables.filter((item) => item.status === "overdue").reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
+    dueThisMonth: openReceivables
+      .filter((item) => item.due_date?.slice(0, 7) === currentMonth && item.due_date >= today)
+      .reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
+    receivedThisMonth: receivables
+      .flatMap((item) => item.payments || [])
+      .filter((payment) => payment.paid_at?.slice(0, 7) === currentMonth)
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+  };
+
+  const statusOptions = [
+    ["all", tt("receivables.all", "Todas")],
+    ["pending", tt("receivables.pending", "Pendentes")],
+    ["partial", tt("receivables.partial", "Parciais")],
+    ["overdue", tt("receivables.overdue", "Atrasadas")],
+    ["paid", tt("receivables.paid", "Pagas")]
+  ];
+
+  const filtered = receivables.filter((item) => {
+    const search = filters.search.trim().toLowerCase();
+    const matchesSearch = !search || `${item.person_name} ${item.description} ${item.due_date}`.toLowerCase().includes(search);
+    const matchesStatus = filters.status === "all" || item.status === filters.status;
+    return matchesSearch && matchesStatus;
+  });
+
+  return (
+    <section>
+      <div className="section-head">
+        <div><p className="eyebrow">{tt("receivables.title", "Contas a receber")}</p><h2>{tt("receivables.heading", "Recebíveis")}</h2></div>
+        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("receivables.new", "Nova conta")}</button>
+      </div>
+
+      <section className="summary-grid receivable-summary">
+        <article className="card stat-card stat-card-income">
+          <p className="stat-label">{tt("receivables.totalOpen", "Total a receber")}</p>
+          <p className="stat-value">{formatMoney(summaries.totalOpen, language)}</p>
+          <p className="stat-meta">{openReceivables.length} {openReceivables.length === 1 ? tt("receivables.openItem", "conta aberta") : tt("receivables.openItems", "contas abertas")}</p>
+        </article>
+        <article className="card stat-card stat-card-expense">
+          <p className="stat-label">{tt("receivables.totalOverdue", "Total vencido")}</p>
+          <p className="stat-value">{formatMoney(summaries.overdue, language)}</p>
+          <p className="stat-meta">{receivables.filter((item) => item.status === "overdue").length} {tt("receivables.overdue", "atrasadas")}</p>
+        </article>
+        <article className="card stat-card">
+          <p className="stat-label">{tt("receivables.dueThisMonth", "A vencer este mês")}</p>
+          <p className="stat-value">{formatMoney(summaries.dueThisMonth, language)}</p>
+          <p className="stat-meta">{formatMonthLabel(new Date().getFullYear(), new Date().getMonth() + 1, language)}</p>
+        </article>
+        <article className="card stat-card stat-card-balance">
+          <p className="stat-label">{tt("receivables.receivedThisMonth", "Recebido no mês")}</p>
+          <p className="stat-value">{formatMoney(summaries.receivedThisMonth, language)}</p>
+          <p className="stat-meta">{tt("receivables.realizedIncome", "Ganho realizado")}</p>
+        </article>
+      </section>
+
+      <div className="invoice-filter receivable-filter">
+        <div className="invoice-filter-head">
+          <span><Filter size={15} /> {tt("receivables.filter", "Filtrar recebíveis")}</span>
+          <small>{filtered.length} de {receivables.length}</small>
+        </div>
+        <div className="invoice-filter-grid receivable-filter-grid">
+          <label className="invoice-filter-search">
+            <span>{tt("receivables.search", "Pessoa ou descrição")}</span>
+            <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder={tt("receivables.searchPlaceholder", "Buscar por pessoa, descrição ou data")} />
+          </label>
+          <label className="invoice-filter-status">
+            <span>{tt("receivables.status", "Status")}</span>
+            <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+              {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {filtered.length ? (
+        <div className="receivable-list">
+          {filtered.map((item) => {
+            const progress = Math.min((Number(item.received_amount || 0) / Math.max(Number(item.total_amount || 1), 1)) * 100, 100);
+            return (
+              <article className={`receivable-card card ${item.status}`} key={item.id}>
+                <header>
+                  <div>
+                    <h3>{item.person_name}</h3>
+                    <p>{item.description}</p>
+                  </div>
+                  <span className={`due-badge compact ${item.status === "overdue" ? "danger" : item.status === "paid" ? "paid" : ""}`}>{receivableStatusText(item.status, language)}</span>
+                </header>
+                <div className="receivable-money-grid">
+                  <div className="metric-block"><span>{tt("receivables.total", "Total")}</span><strong>{formatMoney(item.total_amount, language)}</strong></div>
+                  <div className="metric-block"><span>{tt("receivables.received", "Recebido")}</span><strong className="money-income">{formatMoney(item.received_amount, language)}</strong></div>
+                  <div className="metric-block"><span>{tt("receivables.remaining", "Restante")}</span><strong>{formatMoney(item.remaining_amount, language)}</strong></div>
+                  <div className="metric-block"><span>{tt("receivables.dueDate", "Vencimento")}</span><strong>{formatDateShort(item.due_date, language)}</strong></div>
+                </div>
+                <div className="installment-progress receivable-progress"><span style={{ width: `${progress}%` }} /></div>
+                {item.notes && <p className="receivable-notes">{item.notes}</p>}
+                {item.payments?.length > 0 && (
+                  <div className="receivable-payments">
+                    {item.payments.slice(-3).map((payment) => (
+                      <span key={payment.id}>{formatDateShort(payment.paid_at, language)} · {formatMoney(payment.amount, language)}</span>
+                    ))}
+                  </div>
+                )}
+                <footer>
+                  <button className="btn btn-ghost compact" onClick={() => onEdit(item)}>{tt("actions.edit", "Editar")}</button>
+                  {item.status !== "paid" && (
+                    <>
+                      <button className="btn btn-ghost compact" onClick={() => onPayment(item)}>{tt("receivables.partialPayment", "Pagamento parcial")}</button>
+                      <button className="btn btn-primary compact" onClick={() => onPaid(item)}><Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}</button>
+                    </>
+                  )}
+                </footer>
+              </article>
+            );
+          })}
+        </div>
+      ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>{tt("receivables.empty", "Nenhuma conta a receber encontrada.")}</h3><p>{tt("receivables.emptyHint", "Cadastre uma nova conta ou ajuste os filtros.")}</p></div>}
+      <button className="fab" onClick={onNew} aria-label="Criar conta a receber"><Plus /></button>
+    </section>
+  );
+}
+
+function ReceivableModal({ form, setForm, editing, onSubmit, onClose }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const updateForm = (patch) => setForm({ ...form, ...patch });
+  const normalizeAmount = () => {
+    if (!form.total_amount) return;
+    updateForm({ total_amount: formatMoney(parseTypedMoneyInput(form.total_amount, language), language) });
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.person_name.trim() || !form.description.trim() || !parseTypedMoneyInput(form.total_amount, language) || !form.due_date) return;
+    onSubmit(form);
+  };
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <form className="modal-card invoice-modal receivable-modal" onSubmit={submit}>
+        <div className="modal-titlebar">
+          <div className="modal-icon"><Wallet size={22} /></div>
+          <div><p className="eyebrow">{tt("receivables.title", "Contas a receber")}</p><h2>{editing ? tt("receivables.edit", "Editar conta") : tt("receivables.new", "Nova conta")}</h2></div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="invoice-modal-body">
+          <label><span>{tt("receivables.person", "Pessoa")}</span><input value={form.person_name} onChange={(event) => updateForm({ person_name: event.target.value })} required /></label>
+          <label><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
+          <div className="receivable-form-row">
+            <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+            <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
+          </div>
+          <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+          <button className="btn btn-primary">{tt("actions.save", "Salvar")}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const updateData = (patch) => setData({ ...data, ...patch });
+  const remaining = Number(data.receivable.remaining_amount || 0);
+  const paidAmount = parseTypedMoneyInput(data.amount, language);
+  const normalizeAmount = () => {
+    if (!data.amount) return;
+    updateData({ amount: formatMoney(paidAmount, language) });
+  };
+  const submit = (event) => {
+    event.preventDefault();
+    if (!paidAmount || paidAmount > remaining || !data.paid_at) return;
+    onSubmit(data);
+  };
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <form className="modal-card template-modal receivable-payment-modal" onSubmit={submit}>
+        <div className="modal-titlebar">
+          <div className="modal-icon"><Wallet size={22} /></div>
+          <div><p className="eyebrow">{data.receivable.person_name}</p><h2>{tt("receivables.partialPayment", "Pagamento parcial")}</h2></div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="invoice-modal-body">
+          <div className="receivable-payment-context">
+            <span>{tt("receivables.remaining", "Restante")}</span>
+            <strong>{formatMoney(remaining, language)}</strong>
+          </div>
+          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={data.amount} onChange={(event) => updateData({ amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+          <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+          <button className="btn btn-primary" disabled={!paidAmount || paidAmount > remaining}>{tt("receivables.registerPayment", "Registrar pagamento")}</button>
+        </div>
+      </form>
     </div>
   );
 }
