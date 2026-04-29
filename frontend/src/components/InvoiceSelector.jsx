@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, getFormatLocale } from "../utils/format.js";
 
 const DEFAULT_INVOICE_COLOR = "#14A078";
@@ -14,6 +15,8 @@ function formatMonthShortCompact(dateString) {
 }
 
 export default function InvoiceSelector({ invoices = [], value = null, onChange }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date)), [invoices]);
   const selectedInvoice = sortedInvoices.find((invoice) => String(invoice.id) === String(value?.invoiceId));
   const selectedTemplateId = String(value?.templateId || selectedInvoice?.template_id || selectedInvoice?.id || "");
@@ -88,8 +91,8 @@ export default function InvoiceSelector({ invoices = [], value = null, onChange 
     <section className="installment-selector invoice-selector">
       <div className="installment-selector-head">
         <div>
-          <span className="field-label">Fatura inicial</span>
-          <strong>Escolha o template e o mês da 1ª parcela</strong>
+          <span className="field-label">{tt("installmentModal.firstInvoice", "Fatura inicial")}</span>
+          <strong>{tt("installmentModal.chooseTemplateAndMonth", "Escolha o template e o mês da 1ª parcela")}</strong>
         </div>
       </div>
 
@@ -107,7 +110,7 @@ export default function InvoiceSelector({ invoices = [], value = null, onChange 
                 <i aria-hidden="true" />
                 <strong>{template.name}</strong>
               </span>
-              <small>{template.count} {template.count === 1 ? "fatura disponível" : "faturas disponíveis"}</small>
+              <small>{template.count} {template.count === 1 ? tt("invoiceSelector.availableInvoice", "fatura disponível") : tt("invoiceSelector.availableInvoices", "faturas disponíveis")}</small>
             </button>
           ))}
         </div>
@@ -116,13 +119,13 @@ export default function InvoiceSelector({ invoices = [], value = null, onChange 
       {selectedTemplate && !showTemplatePicker && (
         <div className="month-selector-panel">
           <div className="month-selector-summary">
-            <span>Template selecionado:</span>
+            <span>{tt("installmentModal.selectedTemplate", "Template selecionado:")}</span>
             <strong><i aria-hidden="true" style={{ "--template-color": selectedTemplate.color }} /> {selectedTemplate.name}</strong>
-            {templateOptions.length > 1 && <button type="button" className="link-btn" onClick={resetTemplateSelection}>Trocar</button>}
+            {templateOptions.length > 1 && <button type="button" className="link-btn" onClick={resetTemplateSelection}>{tt("installmentModal.change", "Trocar")}</button>}
           </div>
           <div className="month-selector-content">
-            <span className="field-label">Mês inicial da 1ª parcela</span>
-            <div className="month-chip-row" role="list" aria-label={`Faturas do template ${selectedTemplate.name}`}>
+            <span className="field-label">{tt("installmentModal.firstInstallmentMonth", "Mês inicial da 1ª parcela")}</span>
+            <div className="month-chip-row" role="list" aria-label={`${tt("sidebar.invoices", "Faturas")} ${selectedTemplate.name}`}>
               {templateInvoices.map((invoice) => (
                 <button
                   key={invoice.id}

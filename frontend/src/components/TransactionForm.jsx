@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import InvoiceSelector from "./InvoiceSelector.jsx";
+import { useI18n } from "../i18n/index.ts";
 import { formatMoney, getFormatLocale, parseMoneyInput } from "../utils/format.js";
 
 function getDayFromDate(dateString) {
@@ -71,6 +72,8 @@ export default function TransactionForm({
   onSave,
   onCreateInvoice
 }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [form, setForm] = useState({
     date: date || todayIsoDate(),
     type: "expense",
@@ -260,7 +263,7 @@ export default function TransactionForm({
       <button className="modal-backdrop" onClick={onClose} aria-label="Fechar" />
       <form className="modal-card transaction-modal" onSubmit={handleSubmit}>
         <div className="modal-titlebar">
-          <h2>{initial ? "Editar lançamento" : "Novo lançamento"}</h2>
+          <h2>{initial ? tt("transactionModal.editEntry", "Editar lançamento") : tt("transactionModal.newEntry", "Novo lançamento")}</h2>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar">
             <X size={18} />
           </button>
@@ -269,15 +272,15 @@ export default function TransactionForm({
         <div className="transaction-modal-body">
           <div className="transaction-kind" aria-label="Tipo do lançamento">
             <button type="button" className={isExpense ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}>
-                <ArrowDownCircle size={16} /> GASTO
+                <ArrowDownCircle size={16} /> {tt("transactionModal.expense", "GASTO")}
             </button>
             <button type="button" className={!isExpense ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}>
-                <ArrowUpCircle size={16} /> GANHO
+                <ArrowUpCircle size={16} /> {tt("transactionModal.income", "GANHO")}
             </button>
           </div>
 
           <label className={`amount-field ${errors.amount ? "has-error" : ""}`}>
-            <span>Valor</span>
+            <span>{tt("transactionModal.amount", "Valor")}</span>
             <div className={`money-input ${isExpense ? "danger" : "success"}`}>
               <span>R$</span>
               <input
@@ -293,19 +296,19 @@ export default function TransactionForm({
           </label>
 
           <label className={errors.date ? "has-error" : ""}>
-            <span>Data</span>
+            <span>{tt("transactionModal.date", "Data")}</span>
             <DateField value={form.date} onBlur={() => handleBlur("date")} onChange={(value) => setField("date", value)} ariaInvalid={!!errors.date} />
             {errors.date && <small className="field-error">{errors.date}</small>}
           </label>
 
           <label>
-            <span>Descrição</span>
-            <input placeholder="Ex: mercado, salário, aluguel" value={form.description} onChange={(event) => setField("description", event.target.value)} />
+            <span>{tt("transactionModal.description", "Descrição")}</span>
+            <input placeholder={tt("transactionModal.descriptionPlaceholder", "Ex: mercado, salário, aluguel")} value={form.description} onChange={(event) => setField("description", event.target.value)} />
           </label>
 
           <section className="conditional-section">
             <button className={`switch-row ${form.is_future ? "active" : ""}`} type="button" onClick={toggleFuture}>
-              <span><ReceiptText size={16} /> Vincular a uma fatura futura?</span>
+              <span><ReceiptText size={16} /> {tt("transactionModal.linkFutureInvoice", "Vincular a uma fatura futura?")}</span>
               <i aria-hidden="true" />
             </button>
 
@@ -324,33 +327,41 @@ export default function TransactionForm({
           {!initial && (
             <section className="conditional-section">
               <button className={`switch-row ${form.recurrence ? "active" : ""}`} type="button" onClick={toggleRecurrence}>
-                <span><Repeat2 size={16} /> Lançamento recorrente?</span>
+                <span><Repeat2 size={16} /> {tt("transactionModal.recurringEntry", "Lançamento recorrente?")}</span>
                 <i aria-hidden="true" />
               </button>
               {exclusiveHint && <p className="exclusive-hint">{exclusiveHint}</p>}
               <div className={`conditional-content ${form.recurrence ? "open" : ""}`}>
                 <div className="recurrence-grid">
                   <label>
-                    <span>Repetir por</span>
+                    <span>{tt("transactionModal.repeatFor", "Repetir por")}</span>
                     <input type="number" min="1" max="60" value={form.recurrence_months} disabled={!form.recurrence} onChange={(event) => setField("recurrence_months", event.target.value)} />
                   </label>
                   <label className={errors.day_of_month ? "has-error" : ""}>
-                    <span>Dia do mês</span>
+                    <span>{tt("transactionModal.dayOfMonth", "Dia do mês")}</span>
                     <input type="number" min="1" max="31" value={form.day_of_month} disabled={!form.recurrence} onBlur={() => handleBlur("day_of_month")} onChange={(event) => setField("day_of_month", event.target.value)} aria-invalid={!!errors.day_of_month} />
                     {errors.day_of_month && <small className="field-error">{errors.day_of_month}</small>}
                   </label>
                 </div>
                 <p className="recurrence-summary">
-                  Será lançado todo dia {recurrenceDay} por {recurrenceMonths} meses{recurrenceEnd ? ` (até ${recurrenceEnd})` : ""}
+                  {tt(
+                    "transactionModal.recurrenceSummary",
+                    `Será lançado todo dia ${recurrenceDay} por ${recurrenceMonths} meses${recurrenceEnd ? ` (até ${recurrenceEnd})` : ""}`,
+                    {
+                      day: recurrenceDay,
+                      months: recurrenceMonths,
+                      until: recurrenceEnd ? t("transactionModal.recurrenceUntil", { date: recurrenceEnd }) : ""
+                    }
+                  )}
                 </p>
               </div>
             </section>
           )}
 
           <div className="transaction-modal-actions">
-            <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
             <button className={`btn transaction-save ${isExpense ? "danger" : "success"}`} type="submit" disabled={saving}>
-              {saving ? <><Loader2 className="spin" size={16} /> Salvando...</> : "Salvar"}
+              {saving ? <><Loader2 className="spin" size={16} /> {tt("transactionModal.saving", "Salvando...")}</> : tt("actions.save", "Salvar")}
             </button>
           </div>
         </div>
