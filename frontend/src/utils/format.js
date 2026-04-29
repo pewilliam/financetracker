@@ -39,11 +39,18 @@ export function formatDateShort(dateString, locale = activeLocale) {
 
 export function formatDateWithWeekday(dateString, locale = activeLocale) {
   const date = new Date(`${dateString}T00:00:00`);
-  const text = date.toLocaleDateString(locale, {
+  const text = new Intl.DateTimeFormat(locale, {
     weekday: "short",
     day: "2-digit",
     month: "short"
-  });
+  }).format(date);
+
+  if (locale === "pt-BR") {
+    return text
+      .replace(/^\w/, (char) => char.toUpperCase())
+      .replace(/^([\wÀ-ÿ]+)\.,/u, "$1,");
+  }
+
   return text.replace(".", "");
 }
 

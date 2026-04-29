@@ -793,34 +793,94 @@ select {
   margin-top: 18px;
 }
 .month-card {
+  position: relative;
   overflow: hidden;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   color: var(--text);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
+.month-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15,23,42,0.08); }
 .dark .month-card { box-shadow: var(--shadow); }
+.month-card.current {
+  grid-column: span 2;
+  border-left: 3px solid #14A078;
+}
+.month-card.future .month-card-body { opacity: .85; }
+.month-card.settled-positive { border-top: 2px solid #14A078; }
+.month-card.settled-negative { border-top: 2px solid #FF4D6A; }
 .month-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
 }
-.month-card.positive .month-card-head { background: #DCFAF0; }
-.month-card.negative .month-card-head { background: #FFE8EE; }
-.month-card.neutral .month-card-head { background: #F4FAF7; }
-.dark .month-card.positive .month-card-head { background: rgba(60,200,140,0.16); }
-.dark .month-card.negative .month-card-head { background: rgba(255,77,106,0.14); }
-.dark .month-card.neutral .month-card-head { background: rgba(248,249,250,0.06); }
+.month-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
 .month-card-head h3 {
   margin: 0;
   font-size: 14px;
   font-weight: 800;
   text-transform: uppercase;
 }
+.month-card-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.month-card-link:hover { text-decoration: underline; }
+.month-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+.month-badge.current {
+  background: rgba(20,160,120,.12);
+  color: #087A5A;
+}
+.month-badge.future {
+  background: rgba(100,116,139,.14);
+  color: #64748B;
+}
 .month-card-body { display: grid; gap: 10px; padding: 16px; }
+.month-balance-grid {
+  display: grid;
+  gap: 10px;
+}
+.month-card.current .month-balance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.metric-block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.metric-block span:first-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.metric-block span:last-child {
+  font-size: 18px;
+  font-weight: 800;
+}
+.metric-block.closing span:last-child { font-size: 19px; }
 .metric-row {
   display: flex;
   align-items: center;
@@ -839,29 +899,50 @@ select {
 }
 .metric-dot.expense { background: #FF4D6A; }
 .metric-dot.income { background: #3CC88C; }
-.difference-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+.month-card-count {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
 }
-.difference-track {
-  height: 10px;
+.month-bars {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+.movement-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.movement-row > span:first-child { font-weight: 800; }
+.movement-row > span:last-child {
+  color: var(--text);
+  font-weight: 800;
+  text-align: right;
+}
+.movement-track {
+  height: 9px;
   overflow: hidden;
   border-radius: 999px;
   background: #EEF2F7;
 }
-.dark .difference-track { background: rgba(229,231,235,0.12); }
-.difference-track span {
+.dark .movement-track { background: rgba(229,231,235,0.12); }
+.movement-track i {
   display: block;
   height: 100%;
-  min-width: 4px;
   border-radius: inherit;
   transition: width .35s ease;
 }
-.difference-track.positive span { background: #3CC88C; }
-.difference-track.negative span { background: #FF4D6A; }
+.movement-track i.expense { background: #FF4D6A; }
+.movement-track i.income { background: #14A078; }
+.movement-net {
+  justify-self: end;
+  font-size: 13px;
+}
+.money-neutral { color: var(--muted); }
 .month-card-footer {
   padding: 0 16px 16px;
 }
@@ -2571,4 +2652,11 @@ select {
     gap: 18px;
   }
   .month-card-grid { grid-template-columns: 1fr; }
+  .month-card.current { grid-column: span 1; }
+  .month-card.current .month-balance-grid { grid-template-columns: 1fr; }
+  .movement-row { grid-template-columns: 48px minmax(0, 1fr); }
+  .movement-row > span:last-child {
+    grid-column: 2;
+    text-align: left;
+  }
 }

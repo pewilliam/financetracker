@@ -82,6 +82,7 @@ const INVOICE_COLORS = ["#14A078", "#3CC88C", "#F59E0B", "#FF4D6A", "#8B5CF6", "
 const DEFAULT_INVOICE_COLOR = INVOICE_COLORS[0];
 const CREATE_TEMPLATE_VALUE = "__create_template__";
 const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
+const MONTHS_VIEW_MODE_KEY = "months-view-mode";
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
@@ -601,40 +602,95 @@ function quickAddDate(year, month) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function getMonthPeriod(item) {
+  const today = new Date();
+  const currentIndex = today.getFullYear() * 12 + today.getMonth();
+  const itemIndex = Number(item.year) * 12 + Number(item.month) - 1;
+  if (itemIndex === currentIndex) return "current";
+  return itemIndex > currentIndex ? "future" : "past";
+}
+
+function formatTransactionCount(count, future) {
+  const total = Number(count || 0);
+  const suffix = total === 1 ? "lançamento" : "lançamentos";
+  return `${total} ${suffix}${future ? " previstos" : ""}`;
+}
+
 function MonthCard({ item, onView, onQuickAdd }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const period = getMonthPeriod(item);
+  const isCurrent = period === "current";
+  const isFuture = period === "future";
   const net = Number(item.total_income || 0) - Number(item.total_expenses || 0);
   const closingDelta = Number(item.closing_balance || 0) - Number(item.opening_balance || 0);
-  const tone = net > 0 ? "positive" : net < 0 ? "negative" : "neutral";
-  const pct = Number(item.difference_pct || 0);
-  const barWidth = Math.min(Math.abs(pct), 100);
+  const settledTone = period === "past" ? (closingDelta > 0 ? "settled-positive" : closingDelta < 0 ? "settled-negative" : "settled-neutral") : "";
+  const maxMovement = Math.max(Number(item.total_expenses || 0), Number(item.total_income || 0), 1);
+  const expenseWidth = Math.min((Number(item.total_expenses || 0) / maxMovement) * 100, 100);
+  const incomeWidth = Math.min((Number(item.total_income || 0) / maxMovement) * 100, 100);
+  const movementLabel = net > 0 ? "+" : net < 0 ? "-" : "";
+  const movementClass = net > 0 ? "money-income" : net < 0 ? "money-expense" : "money-neutral";
+  const labelText = language === "en-US" ? {
+    expenses: isFuture ? "Projected expenses" : "Expenses",
+    income: isFuture ? "Projected income" : "Income",
+    closing: isFuture ? "Projection" : isCurrent ? "Projected closing" : "Closing",
+    currentBadge: "CURRENT MONTH",
+    futureBadge: "FUTURE",
+    count: `${Number(item.transaction_count || 0)} ${Number(item.transaction_count || 0) === 1 ? "entry" : "entries"}${isFuture ? " expected" : ""}`,
+    quickAdd: "Quick add entry"
+  } : {
+    expenses: isFuture ? "Gastos previstos" : "Gastos",
+    income: isFuture ? "Ganhos previstos" : "Ganhos",
+    closing: isFuture ? "Projeção" : isCurrent ? "Fechamento projetado" : "Fechamento",
+    currentBadge: "MÊS ATUAL",
+    futureBadge: "FUTURO",
+    count: formatTransactionCount(item.transaction_count, isFuture),
+    quickAdd: "Adicionar lançamento rápido"
+  };
 
   return (
-    <article className={`month-card ${tone}`}>
+    <article className={`month-card ${period} ${settledTone}`}>
       <header className="month-card-head">
-        <h3>{item.label}</h3>
-        <button className="btn btn-ghost compact" onClick={onView}>{tt("actions.details", "Ver")}</button>
+        <div className="month-card-title">
+          <h3>{item.label}</h3>
+          {isCurrent && <span className="month-badge current">{labelText.currentBadge}</span>}
+          {isFuture && <span className="month-badge future">{labelText.futureBadge}</span>}
+        </div>
+        <button className="month-card-link" onClick={onView}>{tt("actions.details", "Ver")} →</button>
       </header>
       <div className="month-card-body">
-        <div className="metric-row"><span>{tt("monthlyTable.openingBalance", "Saldo inicial")}</span><AnimatedMoney value={item.opening_balance} /></div>
-        <div className="metric-separator" />
-        <div className="metric-row"><span><i className="metric-dot expense" />{tt("monthlyTable.expenses", "Gastos")}</span><AnimatedMoney value={item.total_expenses} /></div>
-        <div className="metric-row"><span><i className="metric-dot income" />{tt("monthlyTable.income", "Ganhos")}</span><AnimatedMoney value={item.total_income} /></div>
-        <div className="metric-separator" />
-        <div className="metric-row closing">
-          <span>{tt("monthlyTable.closing", "Fechamento")}</span>
-          <AnimatedMoney value={item.closing_balance} className={closingDelta >= 0 ? "money-income" : "money-expense"} />
-        </div>
-        <div className="difference-row">
-          <div className={`difference-track ${pct >= 0 ? "positive" : "negative"}`}>
-            <span style={{ width: `${barWidth}%` }} />
+        <div className="month-balance-grid">
+          <div className="metric-block">
+            <span>{tt("monthlyTable.openingBalance", "Saldo inicial")}</span>
+            <AnimatedMoney value={item.opening_balance} />
           </div>
-          <strong className={pct >= 0 ? "money-income" : "money-expense"}>{pct >= 0 ? "+" : ""}{pct.toFixed(1)}%</strong>
+          <div className="metric-block closing">
+            <span>{labelText.closing}</span>
+            <AnimatedMoney value={item.closing_balance} className={closingDelta >= 0 ? "money-income" : "money-expense"} />
+          </div>
         </div>
+        <div className="metric-separator" />
+        <div className="metric-row"><span><i className="metric-dot expense" />{labelText.expenses}</span><AnimatedMoney value={item.total_expenses} /></div>
+        <div className="metric-row"><span><i className="metric-dot income" />{labelText.income}</span><AnimatedMoney value={item.total_income} /></div>
+        <p className="month-card-count">{labelText.count}</p>
+        {!isFuture && (
+          <div className="month-bars" aria-label="Comparação de gastos e ganhos">
+            <div className="movement-row">
+              <span>{labelText.expenses}</span>
+              <div className="movement-track"><i className="expense" style={{ width: `${expenseWidth}%` }} /></div>
+              <AnimatedMoney value={item.total_expenses} />
+            </div>
+            <div className="movement-row">
+              <span>{labelText.income}</span>
+              <div className="movement-track"><i className="income" style={{ width: `${incomeWidth}%` }} /></div>
+              <AnimatedMoney value={item.total_income} />
+            </div>
+            <strong className={`movement-net ${movementClass}`}>{movementLabel}{formatMoney(Math.abs(net), language)}</strong>
+          </div>
+        )}
       </div>
       <footer className="month-card-footer">
-        <button className="btn btn-ghost" onClick={onQuickAdd}><Plus size={16} /> Adicionar lançamento rápido</button>
+        <button className="btn btn-ghost" onClick={onQuickAdd}><Plus size={16} /> {labelText.quickAdd}</button>
       </footer>
     </article>
   );
@@ -643,23 +699,60 @@ function MonthCard({ item, onView, onQuickAdd }) {
 function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem("months-view-mode") || "table");
+  const tableRef = useRef(null);
+  const [pendingTableScroll, setPendingTableScroll] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = localStorage.getItem(MONTHS_VIEW_MODE_KEY);
+    return saved === "cards" || saved === "table" ? saved : "table";
+  });
+  const orderedMonthCards = useMemo(() => {
+    return [...monthCards].sort((left, right) => {
+      const leftCurrent = getMonthPeriod(left) === "current";
+      const rightCurrent = getMonthPeriod(right) === "current";
+      if (leftCurrent === rightCurrent) return 0;
+      return leftCurrent ? -1 : 1;
+    });
+  }, [monthCards]);
+  const monthCounters = useMemo(() => {
+    return orderedMonthCards.reduce((acc, item) => {
+      acc[getMonthPeriod(item)] += 1;
+      return acc;
+    }, { past: 0, current: 0, future: 0 });
+  }, [orderedMonthCards]);
 
   const changeView = (mode) => {
     setViewMode(mode);
-    localStorage.setItem("months-view-mode", mode);
+    localStorage.setItem(MONTHS_VIEW_MODE_KEY, mode);
   };
 
   const openMonthTable = (target) => {
+    setPendingTableScroll(true);
     setYear(target.year);
     setMonth(target.month);
     changeView("table");
   };
 
+  useEffect(() => {
+    if (viewMode !== "table" || !pendingTableScroll) return undefined;
+    const frame = requestAnimationFrame(() => {
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setPendingTableScroll(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingTableScroll, viewMode, year, month]);
+
   return (
     <section className={viewMode === "table" ? "card" : undefined}>
       <div className="section-head">
-        <div><p className="eyebrow">{tt("monthlyTable.openingBalance", "Saldo inicial")} {formatMoney(monthData.opening_balance)}</p><h2>{viewMode === "table" ? tt("monthlyTable.monthlyTable", "Tabela mensal") : tt("monthlyTable.months", "Meses")}</h2></div>
+        <div>
+          <p className="eyebrow">{tt("monthlyTable.openingBalance", "Saldo inicial")} {formatMoney(monthData.opening_balance)}</p>
+          <h2>{viewMode === "table" ? tt("monthlyTable.monthlyTable", "Tabela mensal") : tt("monthlyTable.months", "Meses")}</h2>
+          {viewMode === "cards" && (
+            <p className="month-card-counters">
+              {monthCounters.past} meses passados&nbsp; • &nbsp;Mês atual&nbsp; • &nbsp;{monthCounters.future} meses futuros
+            </p>
+          )}
+        </div>
         <div className="view-actions">
           <div className="view-toggle" aria-label="Alternar visualização">
             <button className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
@@ -668,10 +761,12 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
         </div>
       </div>
       {viewMode === "table" ? (
-        <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+        <div ref={tableRef}>
+          <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
+        </div>
       ) : (
         <div className="month-card-grid">
-          {monthCards.length ? monthCards.map((item) => (
+          {orderedMonthCards.length ? orderedMonthCards.map((item) => (
             <MonthCard
               key={`${item.year}-${item.month}`}
               item={item}

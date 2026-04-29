@@ -271,6 +271,7 @@ def list_month_summaries(
                 total_income=data.total_income,
                 closing_balance=data.closing_balance,
                 difference_pct=difference_pct,
+                transaction_count=sum(len(day.transactions) for day in data.days),
             )
         )
 
