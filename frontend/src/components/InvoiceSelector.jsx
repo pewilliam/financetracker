@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatDateShort } from "../utils/format.js";
+import { formatDateShort, getFormatLocale } from "../utils/format.js";
 
 const DEFAULT_INVOICE_COLOR = "#14A078";
 
@@ -9,7 +9,7 @@ function normalizeInvoiceColor(color) {
 
 function formatMonthShortCompact(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
-  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "").replace(" de ", " ");
+  const label = date.toLocaleDateString(getFormatLocale(), { month: "short", year: "2-digit" }).replace(".", "").replace(" de ", " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -38,7 +38,7 @@ export default function InvoiceSelector({ invoices = [], value = null, onChange 
       });
     });
     return [...grouped.values()].sort((a, b) => (
-      a.name.localeCompare(b.name, "pt-BR") ||
+      a.name.localeCompare(b.name, getFormatLocale()) ||
       a.invoices[0].due_date.localeCompare(b.invoices[0].due_date)
     ));
   }, [sortedInvoices]);

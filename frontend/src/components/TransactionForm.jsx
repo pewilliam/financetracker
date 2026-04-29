@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import InvoiceSelector from "./InvoiceSelector.jsx";
-import { parseMoneyInput } from "../utils/format.js";
+import { formatMoney, getFormatLocale, parseMoneyInput } from "../utils/format.js";
 
 function getDayFromDate(dateString) {
   const day = Number(dateString?.split("-")?.[2]);
@@ -16,32 +16,39 @@ function addMonths(dateString, months) {
 }
 
 function formatMonthShort(date) {
-  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+  const label = date.toLocaleDateString(getFormatLocale(), { month: "short", year: "numeric" });
   return label.replace(".", "").replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
 function parseTypedAmount(value) {
   const text = String(value || "").trim();
   if (!text) return 0;
+  const decimalSeparator = getFormatLocale() === "en-US" ? "." : ",";
+  if (text.includes(decimalSeparator)) {
+    const [integerPart, decimalPart = ""] = text.split(decimalSeparator);
+    const integer = integerPart.replace(/\D/g, "") || "0";
+    const decimal = decimalPart.replace(/\D/g, "").slice(0, 2).padEnd(2, "0");
+    return Number(`${integer}.${decimal}`);
+  }
   if (text.includes(",")) return parseMoneyInput(text);
   return Number(text.replace(/\D/g, "") || 0);
 }
 
 function formatAmountForEditing(value) {
-  const text = String(value || "").replace(/[^\d,]/g, "");
-  const [integerPart, decimalPart] = text.split(",");
+  const locale = getFormatLocale();
+  const decimalSeparator = locale === "en-US" ? "." : ",";
+  const text = String(value || "").replace(decimalSeparator === "." ? /[^\d.]/g : /[^\d,]/g, "");
+  const [integerPart, decimalPart] = text.split(decimalSeparator);
   const digits = integerPart.replace(/\D/g, "");
   const number = Number(digits || 0);
-  const integer = number ? number.toLocaleString("pt-BR") : "";
+  const integer = number ? number.toLocaleString(locale) : "";
   if (decimalPart === undefined) return integer;
-  return `${integer},${decimalPart.replace(/\D/g, "").slice(0, 2)}`;
+  return `${integer}${decimalSeparator}${decimalPart.replace(/\D/g, "").slice(0, 2)}`;
 }
 
 function formatAmountAsCurrency(value) {
   const amount = parseTypedAmount(value);
-  return amount
-    ? amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-    : "";
+  return amount ? formatMoney(amount) : "";
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -85,10 +92,7 @@ export default function TransactionForm({
       setForm({
         date: initial.date,
         type: initial.type,
-        amount: Number(initial.amount).toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL"
-        }),
+        amount: formatMoney(initial.amount),
         description: initial.description || "",
         is_future: initial.is_future,
         invoice_id: initial.invoice_id || "",

@@ -33,6 +33,7 @@ import InvoiceSelector from "./components/InvoiceSelector.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
 import { useTheme } from "./hooks/useTheme.js";
 import { useAuth } from "./hooks/useAuth.jsx";
+import { useI18n } from "./i18n/index.ts";
 import {
   addInvoiceItem,
   createInstallment,
@@ -59,7 +60,7 @@ import {
   updateInvoiceTemplate,
   updateTransaction
 } from "./api/api.js";
-import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, parseMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
@@ -139,7 +140,8 @@ function yearMonthKey(dateString) {
 
 function Protected({ children }) {
   const auth = useAuth();
-  if (auth.loading) return <div className="center-screen">Carregando sessão...</div>;
+  const { t } = useI18n();
+  if (auth.loading) return <div className="center-screen">{t("app.loadingSession")}</div>;
   if (!auth.authenticated) return <Navigate to="/login" replace />;
   return children;
 }
@@ -194,12 +196,13 @@ function AuthPage({ mode }) {
 function Sidebar({ open, setOpen }) {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { t, language, setLanguage } = useI18n();
   const links = [
-    ["Dashboard", "/", BarChart3],
-    ["Meses", "/meses", CalendarDays],
-    ["Faturas", "/faturas", CreditCard],
-    ["Modelos de fatura", "/modelos-de-fatura", List],
-    ["Parcelamentos", "/parcelamentos", CreditCard]
+    [t("sidebar.dashboard"), "/", BarChart3],
+    [t("sidebar.months"), "/meses", CalendarDays],
+    [t("sidebar.invoices"), "/faturas", CreditCard],
+    [t("sidebar.invoiceModels"), "/modelos-de-fatura", List],
+    [t("sidebar.installments"), "/parcelamentos", CreditCard]
   ];
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
@@ -221,14 +224,14 @@ function Sidebar({ open, setOpen }) {
                 type="button"
                 className="sidebar-toggle sidebar-action"
                 onClick={() => setOpen((current) => !current)}
-                aria-label={open ? "Recolher sidebar" : "Expandir sidebar"}
+                aria-label={open ? t("sidebar.collapse") : t("sidebar.expand")}
                 aria-expanded={open}
-                data-tooltip={open ? "Recolher" : "Expandir"}
+                data-tooltip={open ? t("sidebar.collapseShort") : t("sidebar.expandShort")}
               >
                 {open ? <ChevronsLeft className="sidebar-icon" /> : <ChevronsRight className="sidebar-icon" />}
               </button>
             </div>
-            <nav className="sidebar-nav" aria-label="Navegação principal">
+            <nav className="sidebar-nav" aria-label={t("sidebar.navigation")}>
               {links.map(([label, path, Icon]) => (
                 <NavLink key={path} to={path} end={path === "/"} onClick={closeOnMobile} data-tooltip={label} className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}>
                   <Icon className="sidebar-icon" />
@@ -238,28 +241,33 @@ function Sidebar({ open, setOpen }) {
             </nav>
           </div>
           <div className="sidebar-bottom">
-            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip="Configurações">
+            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip={t("sidebar.settings")}>
               <Settings className="sidebar-icon" />
-              <span>Configurações</span>
+              <span>{t("sidebar.settings")}</span>
             </NavLink>
-            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip="Tema">
+            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip={t("sidebar.theme")}>
               {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
-              <span>Tema</span>
+              <span>{t("sidebar.theme")}</span>
             </button>
-            <div className="user-card sidebar-action" data-tooltip={user?.name || "Usuário"}>
-              <div className="avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
+            <button className="language-toggle sidebar-action" onClick={() => setLanguage(language === "pt-BR" ? "en-US" : "pt-BR")} data-tooltip={t("settings.language")}>
+              <span className="language-pill">{language === "pt-BR" ? "PT" : "EN"}</span>
+              <span>{language === "pt-BR" ? "PT-BR" : "EN-US"}</span>
+            </button>
+            <div className="user-card sidebar-action" data-tooltip={user?.name || t("sidebar.user")}>
+              <div className="avatar">{user?.name?.[0]?.toUpperCase() || t("sidebar.user")[0]}</div>
               <div className="user-meta"><strong>{user?.name}</strong><span>{user?.email}</span></div>
             </div>
-            <button className="logout sidebar-action" onClick={logout} data-tooltip="Sair"><LogOut className="sidebar-icon" /><span>Sair</span></button>
+            <button className="logout sidebar-action" onClick={logout} data-tooltip={t("sidebar.logout")}><LogOut className="sidebar-icon" /><span>{t("sidebar.logout")}</span></button>
           </div>
         </div>
       </aside>
-      {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" />}
+      {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label={t("sidebar.closeMenu")} />}
     </>
   );
 }
 
 function AppShell() {
+  const { t, language } = useI18n();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -313,7 +321,7 @@ function AppShell() {
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
           const data = await getMonthSummary(target.year, target.month);
-          return { label: formatMonthLabel(target.year, target.month).slice(0, 3), ...data };
+          return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
         }))
       ]);
       setMonthData(monthPayload);
@@ -324,13 +332,13 @@ function AppShell() {
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
-      toast.error("Erro ao carregar dados");
+      toast.error(t("toasts.loadDataError"));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { refresh(); }, [year, month]);
+  useEffect(() => { refresh(); }, [year, month, language]);
 
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
 
@@ -410,7 +418,7 @@ function AppShell() {
     setInvoiceForm({
       template_id: String(invoice.template_id),
       due_date: nextMonthDate(invoice.due_date),
-      initial_amount: formatMoney(invoice.total_amount),
+      initial_amount: formatMoney(invoice.total_amount, language),
       duplicate_next_month: false,
       duplicate_months: 1
     });
@@ -529,14 +537,14 @@ function AppShell() {
         <div className="content-inner">
           <header className="page-header">
             <div>
-              <p className="eyebrow">{formatMonthLabel(year, month)}</p>
-              <h1>Controle financeiro</h1>
+              <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
+              <h1>{t("app.title")}</h1>
             </div>
             <div className="toolbar">
-              <button className="btn" onClick={() => { const t = shiftMonth(year, month, -1); setYear(t.year); setMonth(t.month); }}>Anterior</button>
+              <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
               <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-              <button className="btn" onClick={() => { const t = shiftMonth(year, month, 1); setYear(t.year); setMonth(t.month); }}>Próximo</button>
-              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> Novo</button>
+              <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
+              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
             </div>
           </header>
 
@@ -547,7 +555,7 @@ function AppShell() {
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
-              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
+              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
@@ -563,6 +571,7 @@ function AppShell() {
 }
 
 function AnimatedMoney({ value, className = "" }) {
+  const { language } = useI18n();
   const [display, setDisplay] = useState(Number(value || 0));
 
   useEffect(() => {
@@ -581,7 +590,7 @@ function AnimatedMoney({ value, className = "" }) {
     return () => cancelAnimationFrame(frame);
   }, [value]);
 
-  return <span className={className}>{formatMoney(display)}</span>;
+  return <span className={className}>{formatMoney(display, language)}</span>;
 }
 
 function lastDayOfMonth(year, month) {
@@ -1433,19 +1442,20 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 
 function formatMonthShort(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
-  const label = date.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "");
+  const label = date.toLocaleDateString(getFormatLocale(), { month: "short", year: "numeric" }).replace(".", "");
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function formatMonthSlash(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
-  const month = date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+  const month = date.toLocaleDateString(getFormatLocale(), { month: "short" }).replace(".", "");
   const normalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
   return `${normalizedMonth}/${date.getFullYear()}`;
 }
 
 function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) {
   const { user, updateProfile } = useAuth();
+  const { t, language, setLanguage } = useI18n();
   const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "" });
   const [password, setPassword] = useState({ current_password: "", new_password: "" });
   const [openingBalance, setOpeningBalanceInput] = useState("");
@@ -1454,9 +1464,9 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
     event.preventDefault();
     try {
       await updateProfile(profile);
-      toast.success("Perfil atualizado");
+      toast.success(t("toasts.profileUpdated"));
     } catch {
-      toast.error("Erro ao atualizar perfil");
+      toast.error(t("toasts.profileUpdateError"));
     }
   };
 
@@ -1465,9 +1475,9 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
     try {
       await updatePassword(password);
       setPassword({ current_password: "", new_password: "" });
-      toast.success("Senha atualizada");
+      toast.success(t("toasts.passwordUpdated"));
     } catch {
-      toast.error("Erro ao trocar senha");
+      toast.error(t("toasts.passwordUpdateError"));
     }
   };
 
@@ -1475,10 +1485,10 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
     event.preventDefault();
     try {
       await setOpeningBalance(year, month, parseMoneyInput(openingBalance));
-      toast.success("Saldo inicial atualizado");
+      toast.success(t("toasts.openingBalanceUpdated"));
       await refresh();
     } catch {
-      toast.error("Erro ao salvar saldo inicial");
+      toast.error(t("toasts.openingBalanceError"));
     }
   };
 
@@ -1495,10 +1505,18 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
   };
   return (
     <section className="settings-grid">
-      <form className="card" onSubmit={saveProfile}><h2>Perfil</h2><div className="form-stack"><label><span>Nome</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>E-mail</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">Salvar perfil</button></div></form>
-      <form className="card" onSubmit={savePassword}><h2>Senha</h2><div className="form-stack"><label><span>Senha atual</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>Nova senha</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">Trocar senha</button></div></form>
-      <form className="card" onSubmit={saveOpeningBalance}><h2>Saldo inicial</h2><p className="muted">Saldo atual: {formatMoney(summary.current_balance)}</p><div className="form-stack"><label><span>Saldo do mês</span><input placeholder="R$ 0,00" value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">Salvar saldo</button></div></form>
-      <div className="card"><h2>Exportação</h2><p className="muted">Baixe os lançamentos do mês selecionado.</p><button className="btn btn-primary" onClick={exportCsv}>Exportar CSV</button></div>
+      <div className="card settings-language-card">
+        <h2>{t("settings.language")}</h2>
+        <p className="muted">{t("settings.languageDescription")}</p>
+        <div className="language-options" role="group" aria-label={t("settings.language")}>
+          <button className={`btn ${language === "pt-BR" ? "btn-primary" : "btn-ghost"}`} type="button" onClick={() => setLanguage("pt-BR")}>{t("settings.portuguese")}</button>
+          <button className={`btn ${language === "en-US" ? "btn-primary" : "btn-ghost"}`} type="button" onClick={() => setLanguage("en-US")}>{t("settings.english")}</button>
+        </div>
+      </div>
+      <form className="card" onSubmit={saveProfile}><h2>{t("settings.profile")}</h2><div className="form-stack"><label><span>{t("settings.name")}</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>{t("settings.email")}</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">{t("settings.saveProfile")}</button></div></form>
+      <form className="card" onSubmit={savePassword}><h2>{t("settings.password")}</h2><div className="form-stack"><label><span>{t("settings.currentPassword")}</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>{t("settings.newPassword")}</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">{t("settings.changePassword")}</button></div></form>
+      <form className="card" onSubmit={saveOpeningBalance}><h2>{t("settings.openingBalance")}</h2><p className="muted">{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p><div className="form-stack"><label><span>{t("settings.monthBalance")}</span><input placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">{t("settings.saveBalance")}</button></div></form>
+      <div className="card"><h2>{t("settings.export")}</h2><p className="muted">{t("settings.exportDescription")}</p><button className="btn btn-primary" onClick={exportCsv}>{t("settings.exportCsv")}</button></div>
     </section>
   );
 }

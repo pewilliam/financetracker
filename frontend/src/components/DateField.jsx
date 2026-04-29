@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { useI18n } from "../i18n/index.ts";
 
 function isValidDateParts(year, month, day) {
   const date = new Date(year, month - 1, day);
@@ -17,17 +18,18 @@ function parseIsoDate(value) {
   return new Date(year, month - 1, day);
 }
 
-function formatDisplayDate(value) {
+function formatDisplayDate(value, locale) {
   const date = parseIsoDate(value);
   if (!date) return "";
-  return date.toLocaleDateString("pt-BR");
+  return date.toLocaleDateString(locale);
 }
 
-function parseDisplayDate(value) {
+function parseDisplayDate(value, locale) {
   const digits = String(value || "").replace(/\D/g, "");
   if (digits.length !== 8) return "";
-  const day = Number(digits.slice(0, 2));
-  const month = Number(digits.slice(2, 4));
+  const monthFirst = locale === "en-US";
+  const day = Number(monthFirst ? digits.slice(2, 4) : digits.slice(0, 2));
+  const month = Number(monthFirst ? digits.slice(0, 2) : digits.slice(2, 4));
   const year = Number(digits.slice(4, 8));
   if (!isValidDateParts(year, month, day)) return "";
   return toIsoDate(year, month, day);
@@ -40,8 +42,8 @@ function formatTypedDate(value) {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
-function monthLabel(date) {
-  const label = date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+function monthLabel(date, locale) {
+  const label = date.toLocaleDateString(locale, { month: "long", year: "numeric" });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -64,18 +66,19 @@ function buildMonthDays(cursor) {
 }
 
 export default function DateField({ value, onChange, onBlur, className = "", ariaInvalid = false }) {
+  const { language } = useI18n();
   const parsedValue = parseIsoDate(value);
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState(formatDisplayDate(value));
+  const [text, setText] = useState(formatDisplayDate(value, language));
   const [cursor, setCursor] = useState(parsedValue || new Date());
   const rootRef = useRef(null);
   const popoverRef = useRef(null);
   const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
-    setText(formatDisplayDate(value));
+    setText(formatDisplayDate(value, language));
     if (parsedValue) setCursor(parsedValue);
-  }, [value]);
+  }, [value, language]);
 
   useEffect(() => {
     const closeOnOutside = (event) => {
@@ -136,16 +139,16 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   const selectDate = (nextValue) => {
     onChange(nextValue);
-    setText(formatDisplayDate(nextValue));
+    setText(formatDisplayDate(nextValue, language));
     setCursor(parseIsoDate(nextValue) || cursor);
     setOpen(false);
     onBlur?.();
   };
 
   const handleInputBlur = () => {
-    const nextValue = parseDisplayDate(text);
+    const nextValue = parseDisplayDate(text, language);
     if (nextValue) onChange(nextValue);
-    else setText(formatDisplayDate(value));
+    else setText(formatDisplayDate(value, language));
     onBlur?.();
   };
 
@@ -154,14 +157,14 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       <div className="date-input-shell">
         <input
           inputMode="numeric"
-          placeholder="dd/mm/aaaa"
+          placeholder={language === "en-US" ? "mm/dd/yyyy" : "dd/mm/aaaa"}
           value={text}
           onBlur={handleInputBlur}
           onChange={(event) => setText(formatTypedDate(event.target.value))}
           onFocus={() => setOpen(true)}
           aria-invalid={ariaInvalid}
         />
-        <button type="button" className="date-trigger" onClick={() => setOpen((current) => !current)} aria-label="Abrir calendário">
+        <button type="button" className="date-trigger" onClick={() => setOpen((current) => !current)} aria-label={language === "en-US" ? "Open calendar" : "Abrir calendario"}>
           <CalendarDays size={16} />
         </button>
       </div>
@@ -169,12 +172,15 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       {open && createPortal(
         <div className="date-popover date-popover-floating" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
-            <button type="button" onClick={() => moveMonth(-1)} aria-label="Mês anterior"><ChevronLeft size={16} /></button>
-            <strong>{monthLabel(cursor)}</strong>
-            <button type="button" onClick={() => moveMonth(1)} aria-label="Próximo mês"><ChevronRight size={16} /></button>
+            <button type="button" onClick={() => moveMonth(-1)} aria-label={language === "en-US" ? "Previous month" : "Mes anterior"}><ChevronLeft size={16} /></button>
+            <strong>{monthLabel(cursor, language)}</strong>
+            <button type="button" onClick={() => moveMonth(1)} aria-label={language === "en-US" ? "Next month" : "Proximo mes"}><ChevronRight size={16} /></button>
           </div>
           <div className="date-weekdays">
-            {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}
+            {Array.from({ length: 7 }, (_, index) => {
+              const day = new Date(2024, 0, 7 + index);
+              return <span key={day.toISOString()}>{day.toLocaleDateString(language, { weekday: "narrow" })}</span>;
+            })}
           </div>
           <div className="date-days">
             {days.map((day) => (
@@ -201,15 +207,13 @@ function parseMonthValue(value) {
   return new Date(year, month - 1, 1);
 }
 
-function formatMonthDisplay(value) {
+function formatMonthDisplay(value, locale) {
   const date = parseMonthValue(value);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${month}/${date.getFullYear()}`;
+  return date.toLocaleDateString(locale, { month: "2-digit", year: "numeric" });
 }
 
-const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
 export function MonthField({ value, onChange }) {
+  const { language } = useI18n();
   const rootRef = useRef(null);
   const popoverRef = useRef(null);
   const parsed = parseMonthValue(value);
@@ -274,6 +278,10 @@ export function MonthField({ value, onChange }) {
 
   const selectedMonth = parsed.getMonth() + 1;
   const selectedYear = parsed.getFullYear();
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const label = new Date(2024, index, 1).toLocaleDateString(language, { month: "short" }).replace(".", "");
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  });
 
   const selectMonth = (month) => {
     onChange(`${year}-${String(month).padStart(2, "0")}`);
@@ -283,19 +291,19 @@ export function MonthField({ value, onChange }) {
   return (
     <div className={`date-field month-field ${open ? "open" : ""}`} ref={rootRef}>
       <button type="button" className="date-input-shell month-trigger" onClick={() => setOpen((current) => !current)}>
-        <span>{formatMonthDisplay(value)}</span>
+        <span>{formatMonthDisplay(value, language)}</span>
         <CalendarDays size={16} />
       </button>
 
       {open && createPortal(
         <div className="date-popover date-popover-floating month-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
-            <button type="button" onClick={() => setYear((current) => current - 1)} aria-label="Ano anterior"><ChevronLeft size={16} /></button>
+            <button type="button" onClick={() => setYear((current) => current - 1)} aria-label={language === "en-US" ? "Previous year" : "Ano anterior"}><ChevronLeft size={16} /></button>
             <strong>{year}</strong>
-            <button type="button" onClick={() => setYear((current) => current + 1)} aria-label="Próximo ano"><ChevronRight size={16} /></button>
+            <button type="button" onClick={() => setYear((current) => current + 1)} aria-label={language === "en-US" ? "Next year" : "Proximo ano"}><ChevronRight size={16} /></button>
           </div>
           <div className="month-picker-grid">
-            {MONTHS.map((month, index) => {
+            {months.map((month, index) => {
               const monthNumber = index + 1;
               return (
                 <button

@@ -1,27 +1,37 @@
-export function formatMoney(value) {
+let activeLocale = "pt-BR";
+
+export function setFormatLocale(locale) {
+  activeLocale = locale || "pt-BR";
+}
+
+export function getFormatLocale() {
+  return activeLocale;
+}
+
+export function formatMoney(value, locale = activeLocale) {
   const amount = Number(value || 0);
-  return new Intl.NumberFormat("pt-BR", {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "BRL"
   }).format(amount);
 }
 
-export function formatMonthLabel(year, month) {
+export function formatMonthLabel(year, month, locale = activeLocale) {
   const date = new Date(year, month - 1, 1);
-  return date.toLocaleDateString("pt-BR", {
+  return date.toLocaleDateString(locale, {
     month: "long",
     year: "numeric"
   });
 }
 
-export function formatDateShort(dateString) {
+export function formatDateShort(dateString, locale = activeLocale) {
   const date = new Date(`${dateString}T00:00:00`);
-  return date.toLocaleDateString("pt-BR");
+  return date.toLocaleDateString(locale);
 }
 
-export function formatDateWithWeekday(dateString) {
+export function formatDateWithWeekday(dateString, locale = activeLocale) {
   const date = new Date(`${dateString}T00:00:00`);
-  const text = date.toLocaleDateString("pt-BR", {
+  const text = date.toLocaleDateString(locale, {
     weekday: "short",
     day: "2-digit",
     month: "short"
@@ -34,15 +44,24 @@ export function parseMoneyInput(value) {
   return Number(digits || 0) / 100;
 }
 
-export function formatMoneyInput(value) {
-  return formatMoney(parseMoneyInput(value));
+export function formatMoneyInput(value, locale = activeLocale) {
+  return formatMoney(parseMoneyInput(value), locale);
 }
 
-export function daysUntil(dateString) {
+export function getDaysUntil(dateString) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(`${dateString}T00:00:00`);
-  const diff = Math.round((target - today) / 86400000);
+  return Math.round((target - today) / 86400000);
+}
+
+export function daysUntil(dateString, locale = activeLocale) {
+  const diff = getDaysUntil(dateString);
+  if (locale === "en-US") {
+    if (diff < 0) return "Overdue";
+    if (diff === 0) return "Due today";
+    return `in ${diff} days`;
+  }
   if (diff < 0) return "Vencida";
   if (diff === 0) return "Vence hoje";
   return `em ${diff} dias`;
