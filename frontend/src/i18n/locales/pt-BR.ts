@@ -1,26 +1,26 @@
 export const ptBR = {
   app: {
     title: "Controle financeiro",
-    loadingSession: "Carregando sessao..."
+    loadingSession: "Carregando sessão..."
   },
   dashboard: {
     title: "Dashboard",
     currentBalance: "Saldo atual",
-    monthExpenses: "Gastos do mes",
-    monthIncome: "Ganhos do mes",
+    monthExpenses: "Gastos do mês",
+    monthIncome: "Ganhos do mês",
     closingProjection: "Projecao de fechamento",
     balanceEvolution: "Evolucao do saldo",
     monthlyHistory: "Historico mensal",
     upcomingDueDates: "Proximos vencimentos",
-    biggestExpenses: "Maiores gastos do mes",
-    previousMonthComparison: "{{value}}% vs mes anterior",
+    biggestExpenses: "Maiores gastos do mês",
+    previousMonthComparison: "{{value}}% vs mês anterior",
     futureNet: "Futuro liquido {{value}}",
     expenses: "Gastos",
     income: "Ganhos",
     finalBalance: "Saldo final",
     noFutureInvoices: "Nenhuma fatura futura.",
-    noExpenses: "Sem gastos registrados neste mes.",
-    noDescription: "Sem descricao"
+    noExpenses: "Sem gastos registrados neste mês.",
+    noDescription: "Sem descrição"
   },
   sidebar: {
     dashboard: "Dashboard",
@@ -28,19 +28,19 @@ export const ptBR = {
     invoices: "Faturas",
     invoiceModels: "Modelos de fatura",
     installments: "Parcelamentos",
-    settings: "Configuracoes",
+    settings: "Configurações",
     collapse: "Recolher sidebar",
     expand: "Expandir sidebar",
     collapseShort: "Recolher",
     expandShort: "Expandir",
-    navigation: "Navegacao principal",
+    navigation: "Navegação principal",
     theme: "Tema",
-    user: "Usuario",
+    user: "Usuário",
     logout: "Sair",
     closeMenu: "Fechar menu"
   },
   settings: {
-    title: "Configuracoes",
+    title: "Configurações",
     language: "Idioma",
     languageDescription: "Escolha o idioma da interface.",
     portuguese: "Português Brasil",
@@ -55,16 +55,16 @@ export const ptBR = {
     changePassword: "Trocar senha",
     openingBalance: "Saldo inicial",
     currentBalance: "Saldo atual: {{value}}",
-    monthBalance: "Saldo do mes",
+    monthBalance: "Saldo do mês",
     saveBalance: "Salvar saldo",
-    export: "Exportacao",
-    exportDescription: "Baixe os lancamentos do mes selecionado.",
+    export: "Exportação",
+    exportDescription: "Baixe os lançamentos do mês selecionado.",
     exportCsv: "Exportar CSV"
   },
   actions: {
     new: "Novo",
     previous: "Anterior",
-    next: "Proximo"
+    next: "Próximo"
   },
   dates: {
     overdue: "Vencida",
