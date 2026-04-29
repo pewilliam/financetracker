@@ -707,10 +707,9 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
   });
   const orderedMonthCards = useMemo(() => {
     return [...monthCards].sort((left, right) => {
-      const leftCurrent = getMonthPeriod(left) === "current";
-      const rightCurrent = getMonthPeriod(right) === "current";
-      if (leftCurrent === rightCurrent) return 0;
-      return leftCurrent ? -1 : 1;
+      const leftIndex = Number(left.year) * 12 + Number(left.month);
+      const rightIndex = Number(right.year) * 12 + Number(right.month);
+      return leftIndex - rightIndex;
     });
   }, [monthCards]);
   const monthCounters = useMemo(() => {
