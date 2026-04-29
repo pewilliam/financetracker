@@ -212,6 +212,10 @@ button:focus-visible {
   color: #E8F5EE;
   background: rgba(60,200,140,0.14);
 }
+.app-layout.sidebar-open .sidebar-toggle {
+  justify-content: center;
+  padding: 0;
+}
 .sidebar-nav {
   min-height: 0;
   display: flex;
