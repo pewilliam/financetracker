@@ -11,7 +11,6 @@ from app.schemas.receivables import (
     ReceivablePaymentCreate,
     ReceivablePersonCreate,
     ReceivablePersonOut,
-    ReceivableStatusUpdate,
     ReceivableUpdate,
 )
 from app.security import get_current_user
@@ -32,8 +31,6 @@ def _status_for(receivable: Receivable) -> str:
         return "partial"
     if receivable.due_date < date.today():
         return "overdue"
-    if receivable.status in {"pending", "overdue"}:
-        return receivable.status
     return "pending"
 
 
@@ -90,18 +87,6 @@ def _person_for_payload(db: Session, user_id: int, person_id: int | None, person
     db.add(person)
     db.flush()
     return person
-
-
-def _apply_manual_status(receivable: Receivable, status: str | None) -> None:
-    if status is None:
-        _sync_status(receivable)
-        return
-    if status not in {"pending", "overdue", "partial"}:
-        raise HTTPException(status_code=400, detail="Invalid receivable status")
-    if status == "partial" and _money(receivable.received_amount) <= 0:
-        raise HTTPException(status_code=400, detail="Partial status requires at least one payment")
-    receivable.status = status
-    _sync_status(receivable)
 
 
 def _create_income_transaction(db: Session, user_id: int, receivable: Receivable, amount: Decimal, paid_at: date) -> Transaction:
@@ -239,7 +224,7 @@ def create_receivable(
     if not receivable.description:
         raise HTTPException(status_code=400, detail="Description is required")
 
-    _apply_manual_status(receivable, payload.status)
+    _sync_status(receivable)
     db.add(receivable)
     db.commit()
     return _load_receivable(db, receivable.id, current_user.id)
@@ -273,20 +258,7 @@ def update_receivable(
     if not receivable.description:
         raise HTTPException(status_code=400, detail="Description is required")
 
-    _apply_manual_status(receivable, data.get("status"))
-    db.commit()
-    return _load_receivable(db, receivable.id, current_user.id)
-
-
-@router.patch("/{receivable_id}/status", response_model=ReceivableOut)
-def update_receivable_status(
-    receivable_id: int,
-    payload: ReceivableStatusUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    receivable = _load_receivable(db, receivable_id, current_user.id)
-    _apply_manual_status(receivable, payload.status)
+    _sync_status(receivable)
     db.commit()
     return _load_receivable(db, receivable.id, current_user.id)
 
@@ -312,3 +284,48 @@ def create_receivable_payment(
 ):
     receivable = _load_receivable(db, receivable_id, current_user.id)
     return _register_payment(db, current_user.id, receivable, payload.amount, payload.paid_at)
+
+
+@router.delete("/{receivable_id}/payments/{payment_id}", response_model=ReceivableOut)
+def delete_receivable_payment(
+    receivable_id: int,
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    receivable = _load_receivable(db, receivable_id, current_user.id)
+    payment = next((item for item in receivable.payments if item.id == payment_id), None)
+    if not payment:
+        raise HTTPException(status_code=404, detail="Receivable payment not found")
+
+    receivable.received_amount = max(_money(receivable.received_amount) - _money(payment.amount), Decimal("0.00"))
+    transaction_id = payment.transaction_id
+    db.delete(payment)
+
+    if transaction_id:
+        transaction = (
+            db.query(Transaction)
+            .filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id)
+            .first()
+        )
+        if transaction:
+            db.delete(transaction)
+
+    _sync_status(receivable)
+    db.commit()
+    return _load_receivable(db, receivable.id, current_user.id)
+
+
+@router.delete("/{receivable_id}", status_code=204)
+def delete_receivable(
+    receivable_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    receivable = _load_receivable(db, receivable_id, current_user.id)
+    if receivable.payments:
+        raise HTTPException(status_code=400, detail="Receivable has payments")
+
+    db.delete(receivable)
+    db.commit()
+    return None

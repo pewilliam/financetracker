@@ -114,6 +114,11 @@ export const enUS = {
     paidAt: "Payment date",
     registerPayment: "Register payment",
     confirmPayment: "Confirm payment",
+    cancelPayment: "Cancel payment",
+    cancelPaymentMessage: "Do you really want to cancel this payment? The linked income entry will also be removed.",
+    confirmCancelPayment: "Cancel payment",
+    deleteReceivable: "Delete receivable",
+    deleteReceivableMessage: "Do you really want to delete this receivable? This action cannot be undone.",
     empty: "No receivables found.",
     emptyHint: "Create a new receivable or adjust the filters."
   },

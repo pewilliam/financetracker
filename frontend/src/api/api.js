@@ -197,15 +197,12 @@ export function updateReceivable(id, payload) {
   });
 }
 
-export function markReceivablePaid(id, payload) {
-  return request(`/receivables/${id}/paid`, {
-    method: "PATCH",
-    body: JSON.stringify(payload)
-  });
+export function deleteReceivable(id) {
+  return request(`/receivables/${id}`, { method: "DELETE" });
 }
 
-export function updateReceivableStatus(id, payload) {
-  return request(`/receivables/${id}/status`, {
+export function markReceivablePaid(id, payload) {
+  return request(`/receivables/${id}/paid`, {
     method: "PATCH",
     body: JSON.stringify(payload)
   });
@@ -216,6 +213,10 @@ export function createReceivablePayment(id, payload) {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export function deleteReceivablePayment(receivableId, paymentId) {
+  return request(`/receivables/${receivableId}/payments/${paymentId}`, { method: "DELETE" });
 }
 
 export function getInstallment(id) {

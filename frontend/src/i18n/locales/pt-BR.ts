@@ -111,6 +111,11 @@ export const ptBR = {
     paidAt: "Data do pagamento",
     registerPayment: "Registrar pagamento",
     confirmPayment: "Confirmar pagamento",
+    cancelPayment: "Cancelar pagamento",
+    cancelPaymentMessage: "Deseja realmente cancelar este pagamento? O lançamento de ganho vinculado também será removido.",
+    confirmCancelPayment: "Cancelar pagamento",
+    deleteReceivable: "Excluir recebível",
+    deleteReceivableMessage: "Deseja realmente excluir este recebível? Esta ação não pode ser desfeita.",
     empty: "Nenhuma conta a receber encontrada.",
     emptyHint: "Cadastre uma nova conta ou ajuste os filtros."
   },

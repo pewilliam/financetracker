@@ -1915,6 +1915,9 @@ select {
   color: #fff;
   background: var(--primary);
 }
+.modal-icon.danger {
+  background: var(--expense);
+}
 .invoice-stepper {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
@@ -2509,15 +2512,8 @@ select {
 .receivable-card footer {
   align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: center;
   padding-top: 4px;
-}
-.receivable-status-select {
-  min-height: 34px;
-  max-width: 150px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 800;
 }
 .receivable-card h3 {
   margin: 0;
@@ -2555,13 +2551,22 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: center;
 }
-.receivable-payments span {
+.receivable-payments button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
   border-radius: 999px;
   padding: 5px 8px;
   background: rgba(20,160,120,0.10);
   color: var(--primary);
   font-weight: 800;
+}
+.receivable-payments button:hover {
+  background: rgba(255,77,106,0.12);
+  color: var(--expense);
 }
 .receivable-form-row {
   display: grid;
@@ -2593,6 +2598,25 @@ select {
 .receivable-payment-context strong {
   color: var(--text);
   font-size: 18px;
+}
+.confirm-modal-body {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+.confirm-modal-body p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 14px;
+}
+.danger-action {
+  background: var(--expense);
+  border-color: var(--expense);
+}
+.danger-action:hover {
+  background: #CC2244;
+  border-color: #CC2244;
 }
 .details-actions { padding-top: 18px; }
 .danger-text { color: var(--expense); }

@@ -48,6 +48,8 @@ import {
   deleteInstallment,
   deleteInstallmentItem,
   deleteInvoiceItem,
+  deleteReceivable,
+  deleteReceivablePayment,
   deleteTransaction,
   getInstallment,
   getMonth,
@@ -65,7 +67,6 @@ import {
   updatePassword,
   updateInvoiceTemplate,
   updateReceivable,
-  updateReceivableStatus,
   updateTransaction
 } from "./api/api.js";
 import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput, parseTypedMoneyInput } from "./utils/format.js";
@@ -116,7 +117,7 @@ function defaultInstallmentForm(firstInvoiceId = "") {
 }
 
 function defaultReceivableForm() {
-  return { person_id: "", person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), status: "pending", notes: "" };
+  return { person_id: "", person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), notes: "" };
 }
 
 function todayIsoDate() {
@@ -321,6 +322,8 @@ function AppShell() {
   const [receivableForm, setReceivableForm] = useState(defaultReceivableForm);
   const [editingReceivable, setEditingReceivable] = useState(null);
   const [receivablePayment, setReceivablePayment] = useState(null);
+  const [paymentToCancel, setPaymentToCancel] = useState(null);
+  const [receivableToDelete, setReceivableToDelete] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -559,7 +562,6 @@ function AppShell() {
         description: receivable.description,
         total_amount: formatMoney(receivable.total_amount, language),
         due_date: receivable.due_date,
-        status: receivable.status,
         notes: receivable.notes || ""
       });
     } else {
@@ -581,7 +583,6 @@ function AppShell() {
         description: payload.description.trim(),
         total_amount: parseTypedMoneyInput(payload.total_amount, language),
         due_date: payload.due_date,
-        status: payload.status,
         notes: payload.notes?.trim() || null
       };
       if (editingReceivable) await updateReceivable(editingReceivable.id, data);
@@ -632,13 +633,29 @@ function AppShell() {
     }
   };
 
-  const changeReceivableStatus = async (receivable, status) => {
+  const removeReceivable = async (receivable) => {
+    if (receivable.payments?.length) {
+      toast.error("Cancele ou exclua os pagamentos antes de excluir este recebível.");
+      return;
+    }
     try {
-      await updateReceivableStatus(receivable.id, { status });
-      toast.success("Status atualizado");
+      await deleteReceivable(receivable.id);
+      setReceivableToDelete(null);
+      toast.success("Recebível excluído");
       await refresh();
     } catch {
-      toast.error("Erro ao atualizar status");
+      toast.error("Erro ao excluir recebível");
+    }
+  };
+
+  const removeReceivablePayment = async (receivable, payment) => {
+    try {
+      await deleteReceivablePayment(receivable.id, payment.id);
+      setPaymentToCancel(null);
+      toast.success("Pagamento cancelado");
+      await refresh();
+    } catch {
+      toast.error("Erro ao cancelar pagamento");
     }
   };
 
@@ -668,7 +685,7 @@ function AppShell() {
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
-              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onStatusChange={changeReceivableStatus} />} />
+              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -683,6 +700,8 @@ function AppShell() {
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}
       {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
+      {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}
+      {receivableToDelete && <DeleteReceivableModal receivable={receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={() => removeReceivable(receivableToDelete)} />}
     </div>
   );
 }
@@ -1481,7 +1500,7 @@ function receivableStatusText(status, language = "pt-BR") {
   return labels[status] || labels.pending;
 }
 
-function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onStatusChange }) {
+function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDelete, onDeletePayment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", status: "all" });
@@ -1588,20 +1607,19 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onStat
                 {item.notes && <p className="receivable-notes">{item.notes}</p>}
                 {item.payments?.length > 0 && (
                   <div className="receivable-payments">
-                    {item.payments.slice(-3).map((payment) => (
-                      <span key={payment.id}>{formatDateShort(payment.paid_at, language)} · {formatMoney(payment.amount, language)}</span>
+                    {item.payments.map((payment) => (
+                      <button key={payment.id} type="button" onClick={() => onDeletePayment(item, payment)} title={tt("receivables.cancelPayment", "Cancelar pagamento")}>
+                        <span>{formatDateShort(payment.paid_at, language)} · {formatMoney(payment.amount, language)}</span>
+                        <X size={13} />
+                      </button>
                     ))}
                   </div>
                 )}
                 <footer>
                   <button className="btn btn-ghost compact" onClick={() => onEdit(item)}>{tt("actions.edit", "Editar")}</button>
+                  <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(item)}><Trash2 size={15} /> {tt("actions.delete", "Excluir")}</button>
                   {item.status !== "paid" && (
                     <>
-                      <select className="receivable-status-select" value={item.status} onChange={(event) => onStatusChange(item, event.target.value)}>
-                        <option value="pending">{tt("receivables.pendingOne", "Pendente")}</option>
-                        <option value="overdue">{tt("receivables.overdueOne", "Atrasada")}</option>
-                        {Number(item.received_amount || 0) > 0 && <option value="partial">{tt("receivables.partialOne", "Parcial")}</option>}
-                      </select>
                       <button className="btn btn-ghost compact" onClick={() => onPayment(item)}>{tt("receivables.partialPayment", "Pagamento parcial")}</button>
                       <button className="btn btn-primary compact" onClick={() => onPaid(item)}><Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}</button>
                     </>
@@ -1663,16 +1681,6 @@ function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) 
             <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: event.target.value })} onBlur={normalizeAmount} required /></label>
             <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
           </div>
-          {editing && (
-            <label>
-              <span>{tt("receivables.status", "Status")}</span>
-              <select value={form.status} onChange={(event) => updateForm({ status: event.target.value })}>
-                <option value="pending">{tt("receivables.pendingOne", "Pendente")}</option>
-                <option value="overdue">{tt("receivables.overdueOne", "Atrasada")}</option>
-                {Number(editing.received_amount || 0) > 0 && <option value="partial">{tt("receivables.partialOne", "Parcial")}</option>}
-              </select>
-            </label>
-          )}
           <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
         </div>
         <div className="modal-actions">
@@ -1723,6 +1731,72 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
           <button className="btn btn-primary" disabled={!isFullPayment && (!paidAmount || paidAmount > remaining)}>{isFullPayment ? tt("receivables.confirmPayment", "Confirmar pagamento") : tt("receivables.registerPayment", "Registrar pagamento")}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function CancelReceivablePaymentModal({ data, onClose, onConfirm }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const payment = data.payment;
+  const receivable = data.receivable;
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <div className="modal-card template-modal confirm-modal">
+        <div className="modal-titlebar">
+          <div className="modal-icon danger"><Trash2 size={22} /></div>
+          <div>
+            <p className="eyebrow">{receivable.person_name}</p>
+            <h2>{tt("receivables.cancelPayment", "Cancelar pagamento")}</h2>
+          </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="confirm-modal-body">
+          <p>{tt("receivables.cancelPaymentMessage", "Deseja realmente cancelar este pagamento? O lançamento de ganho vinculado também será removido.")}</p>
+          <div className="receivable-payment-context">
+            <span>{formatDateShort(payment.paid_at, language)}</span>
+            <strong>{formatMoney(payment.amount, language)}</strong>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+          <button className="btn btn-primary danger-action" type="button" onClick={onConfirm}><Trash2 size={16} /> {tt("receivables.confirmCancelPayment", "Cancelar pagamento")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteReceivableModal({ receivable, onClose, onConfirm }) {
+  const { t, language } = useI18n();
+  const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" onClick={onClose} />
+      <div className="modal-card template-modal confirm-modal">
+        <div className="modal-titlebar">
+          <div className="modal-icon danger"><Trash2 size={22} /></div>
+          <div>
+            <p className="eyebrow">{receivable.person_name}</p>
+            <h2>{tt("receivables.deleteReceivable", "Excluir recebível")}</h2>
+          </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="confirm-modal-body">
+          <p>{tt("receivables.deleteReceivableMessage", "Deseja realmente excluir este recebível? Esta ação não pode ser desfeita.")}</p>
+          <div className="receivable-payment-context">
+            <span>{receivable.description}</span>
+            <strong>{formatMoney(receivable.total_amount, language)}</strong>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+          <button className="btn btn-primary danger-action" type="button" onClick={onConfirm}><Trash2 size={16} /> {tt("actions.delete", "Excluir")}</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -40,7 +40,6 @@ class ReceivableCreate(APIModel):
     description: str
     total_amount: Decimal = Field(gt=0)
     due_date: date
-    status: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -50,12 +49,7 @@ class ReceivableUpdate(APIModel):
     description: Optional[str] = None
     total_amount: Optional[Decimal] = Field(default=None, gt=0)
     due_date: Optional[date] = None
-    status: Optional[str] = None
     notes: Optional[str] = None
-
-
-class ReceivableStatusUpdate(APIModel):
-    status: str
 
 
 class ReceivableOut(APIModel):
