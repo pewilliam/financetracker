@@ -10,10 +10,18 @@ export function getFormatLocale() {
 
 export function formatMoney(value, locale = activeLocale) {
   const amount = Number(value || 0);
-  return new Intl.NumberFormat(locale, {
+  const formatter = new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "BRL"
-  }).format(amount);
+  });
+
+  if (locale === "en-US") {
+    return formatter.formatToParts(amount).map((part) => (
+      part.type === "currency" ? `${part.value} ` : part.value
+    )).join("");
+  }
+
+  return formatter.format(amount);
 }
 
 export function formatMonthLabel(year, month, locale = activeLocale) {
