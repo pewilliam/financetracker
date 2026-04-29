@@ -450,7 +450,7 @@ function AppShell() {
   };
 
   const openInstallmentModal = (invoice = null) => {
-    setInstallmentForm(defaultInstallmentForm(invoice?.id || invoices[0]?.id || ""));
+    setInstallmentForm(defaultInstallmentForm(invoice?.id || ""));
     setInstallmentModal(true);
   };
 
