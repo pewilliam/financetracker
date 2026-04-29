@@ -712,12 +712,22 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
       return leftIndex - rightIndex;
     });
   }, [monthCards]);
+  const yearGroups = useMemo(() => {
+    return orderedMonthCards.reduce((groups, item) => {
+      const key = String(item.year);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+      return groups;
+    }, {});
+  }, [orderedMonthCards]);
+  const sortedYears = useMemo(() => Object.keys(yearGroups).sort((left, right) => Number(left) - Number(right)), [yearGroups]);
   const monthCounters = useMemo(() => {
     return orderedMonthCards.reduce((acc, item) => {
       acc[getMonthPeriod(item)] += 1;
       return acc;
     }, { past: 0, current: 0, future: 0 });
   }, [orderedMonthCards]);
+  const [expandedYears, setExpandedYears] = useState({});
 
   const changeView = (mode) => {
     setViewMode(mode);
@@ -739,6 +749,21 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
     });
     return () => cancelAnimationFrame(frame);
   }, [pendingTableScroll, viewMode, year, month]);
+
+  useEffect(() => {
+    const currentYear = String(new Date().getFullYear());
+    setExpandedYears((previous) => {
+      const next = {};
+      sortedYears.forEach((groupYear, index) => {
+        next[groupYear] = previous[groupYear] ?? (groupYear === currentYear || (sortedYears.length === 1 && index === 0));
+      });
+      return next;
+    });
+  }, [sortedYears]);
+
+  const toggleYear = (groupYear) => {
+    setExpandedYears((previous) => ({ ...previous, [groupYear]: !previous[groupYear] }));
+  };
 
   return (
     <section className={viewMode === "table" ? "card" : undefined}>
@@ -764,15 +789,35 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
           <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} />
         </div>
       ) : (
-        <div className="month-card-grid">
-          {orderedMonthCards.length ? orderedMonthCards.map((item) => (
-            <MonthCard
-              key={`${item.year}-${item.month}`}
-              item={item}
-              onView={() => openMonthTable(item)}
-              onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
-            />
-          )) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
+        <div className="month-year-list">
+          {orderedMonthCards.length ? sortedYears.map((groupYear) => {
+            const items = yearGroups[groupYear];
+            const isExpanded = expandedYears[groupYear];
+
+            return (
+              <section key={groupYear} className={`month-year-group ${isExpanded ? "expanded" : "collapsed"}`}>
+                <button className="month-year-toggle" onClick={() => toggleYear(groupYear)} aria-expanded={isExpanded}>
+                  <div className="month-year-heading">
+                    <strong>{groupYear}</strong>
+                    <span>{items.length} {items.length === 1 ? "mês" : "meses"}</span>
+                  </div>
+                  <ChevronDown size={18} />
+                </button>
+                {isExpanded && (
+                  <div className="month-card-grid">
+                    {items.map((item) => (
+                      <MonthCard
+                        key={`${item.year}-${item.month}`}
+                        item={item}
+                        onView={() => openMonthTable(item)}
+                        onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          }) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
         </div>
       )}
     </section>
