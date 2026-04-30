@@ -54,29 +54,36 @@ export function formatDateWithWeekday(dateString, locale = activeLocale) {
   return text.replace(".", "");
 }
 
-export function parseMoneyInput(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return Number(digits || 0) / 100;
-}
-
 export function parseTypedMoneyInput(value, locale = activeLocale) {
   const text = String(value || "").trim();
   if (!text) return 0;
 
   const decimalSeparator = locale === "en-US" ? "." : ",";
-  if (text.includes(decimalSeparator)) {
-    const [integerPart, decimalPart = ""] = text.split(decimalSeparator);
+  const normalized = text.replace(/[^\d.,]/g, "");
+  if (normalized.includes(decimalSeparator)) {
+    const [integerPart, decimalPart = ""] = normalized.split(decimalSeparator);
     const integer = integerPart.replace(/\D/g, "") || "0";
     const decimal = decimalPart.replace(/\D/g, "").slice(0, 2).padEnd(2, "0");
     return Number(`${integer}.${decimal}`);
   }
 
-  if (text.includes(",")) return parseMoneyInput(text);
-  return Number(text.replace(/\D/g, "") || 0);
+  return Number(normalized.replace(/\D/g, "") || 0);
 }
 
-export function formatMoneyInput(value, locale = activeLocale) {
-  return formatMoney(parseMoneyInput(value), locale);
+export function formatTypedMoneyForEditing(value, locale = activeLocale) {
+  const decimalSeparator = locale === "en-US" ? "." : ",";
+  const text = String(value || "").replace(decimalSeparator === "." ? /[^\d.]/g : /[^\d,]/g, "");
+  const [integerPart, decimalPart] = text.split(decimalSeparator);
+  const digits = integerPart.replace(/\D/g, "");
+  const number = Number(digits || 0);
+  const integer = number ? number.toLocaleString(locale) : "";
+  if (decimalPart === undefined) return integer;
+  return `${integer}${decimalSeparator}${decimalPart.replace(/\D/g, "").slice(0, 2)}`;
+}
+
+export function formatTypedMoneyAsCurrency(value, locale = activeLocale) {
+  const amount = parseTypedMoneyInput(value, locale);
+  return amount ? formatMoney(amount, locale) : "";
 }
 
 export function getDaysUntil(dateString) {

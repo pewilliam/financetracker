@@ -15,6 +15,7 @@ import {
   Grid2X2,
   List,
   LogOut,
+  Menu,
   Moon,
   Plus,
   Power,
@@ -69,7 +70,7 @@ import {
   updateReceivable,
   updateTransaction
 } from "./api/api.js";
-import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput, parseTypedMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMonthLabel, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
@@ -93,6 +94,11 @@ const CREATE_TEMPLATE_VALUE = "__create_template__";
 const CREATE_RECEIVABLE_PERSON_VALUE = "__create_receivable_person__";
 const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
 const MONTHS_VIEW_MODE_KEY = "months-view-mode";
+const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
+
+function isMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_MEDIA_QUERY).matches;
+}
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
@@ -221,7 +227,7 @@ function Sidebar({ open, setOpen }) {
     [t("sidebar.receivables"), "/recebiveis", Wallet]
   ];
   const closeOnMobile = () => {
-    if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
+    if (isMobileViewport()) setOpen(false);
   };
 
   return (
@@ -280,6 +286,7 @@ function Sidebar({ open, setOpen }) {
 
 function AppShell() {
   const { t, language } = useI18n();
+  const location = useLocation();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -294,6 +301,7 @@ function AppShell() {
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(() => {
+    if (isMobileViewport()) return false;
     try {
       const v = localStorage.getItem("menuOpen");
       if (v === null) return true;
@@ -304,12 +312,23 @@ function AppShell() {
   });
 
   useEffect(() => {
+    if (isMobileViewport()) return;
     try {
       localStorage.setItem("menuOpen", menuOpen ? "1" : "0");
     } catch (e) {
       // ignore
     }
   }, [menuOpen]);
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const closeMobileDrawer = () => {
+      if (media.matches) setMenuOpen(false);
+    };
+    closeMobileDrawer();
+    media.addEventListener("change", closeMobileDrawer);
+    return () => media.removeEventListener("change", closeMobileDrawer);
+  }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -326,6 +345,20 @@ function AppShell() {
   const [receivableToDelete, setReceivableToDelete] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
+  const showMonthHeader = location.pathname === "/" || location.pathname === "/meses";
+  const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete;
+  const bodyLocked = overlayOpen || (menuOpen && isMobileViewport());
+
+  useEffect(() => {
+    if (bodyLocked) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [bodyLocked]);
 
   async function refresh() {
     setLoading(true);
@@ -421,7 +454,7 @@ function AppShell() {
       await Promise.all(drafts.map((draft) => createInvoice({
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
-        initial_amount: parseMoneyInput(draft.initial_amount)
+        initial_amount: parseTypedMoneyInput(draft.initial_amount, language)
       })));
       setInvoiceForm(defaultInvoiceForm());
       setInvoiceModal(false);
@@ -663,20 +696,31 @@ function AppShell() {
     <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
+      <header className="mobile-topbar">
+        <button className="mobile-menu-btn" type="button" onClick={() => setMenuOpen(true)} aria-label={t("sidebar.expand")}>
+          <Menu size={22} />
+        </button>
+        <Link className="mobile-topbar-brand" to="/" aria-label="Kashy365">
+          <img src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
+          <span><strong>Kashy</strong>365</span>
+        </Link>
+      </header>
       <main className="content">
         <div className="content-inner">
-          <header className="page-header">
-            <div>
-              <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
-              <h1>{t("app.title")}</h1>
-            </div>
-            <div className="toolbar">
-              <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
-              <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-              <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
-              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
-            </div>
-          </header>
+          {showMonthHeader && (
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
+                <h1>{t("app.title")}</h1>
+              </div>
+              <div className="toolbar">
+                <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
+                <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
+                <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
+                <button className="btn btn-primary header-new-btn" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
+              </div>
+            </header>
+          )}
 
           {loading ? <Skeleton /> : (
             <Routes>
@@ -959,6 +1003,9 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
           }) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
         </div>
       )}
+      <button className="month-new-fab" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")}>
+        <Plus size={24} />
+      </button>
     </section>
   );
 }
@@ -1081,6 +1128,8 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
   const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
@@ -1144,19 +1193,44 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
     const key = yearMonthKey(invoice.due_date);
     return key !== currentMonthKey && key !== nextMonthKey;
   });
+  const hasActiveFilters = filters.search || filters.statuses.length !== statusOrder.length || filters.color !== "all";
+  const invoiceGroups = [
+    { id: "current", label: tt("invoices.currentMonth", "Mês atual"), items: currentMonthInvoices, empty: "Sem faturas para o mês atual." },
+    { id: "next", label: tt("invoices.nextMonth", "Próximo mês"), items: nextMonthInvoices, empty: "Sem faturas para o próximo mês." },
+    { id: "other", label: "Demais faturas", items: otherInvoices, empty: "Sem demais faturas." }
+  ].filter((group) => group.id !== "other" || group.items.length > 0);
+
+  useEffect(() => {
+    setExpandedGroups((current) => {
+      const next = {};
+      invoiceGroups.forEach((group) => {
+        next[group.id] = current[group.id] ?? (group.id !== "other" && group.items.length > 0);
+      });
+      return next;
+    });
+  }, [currentMonthInvoices.length, nextMonthInvoices.length, otherInvoices.length]);
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
+  };
 
   return (
     <section>
       <div className="section-head">
         <div><p className="eyebrow">{tt("invoices.futureInvoices", "Faturas futuras")}</p><h2>{tt("invoices.invoices", "Faturas")}</h2></div>
         <div className="view-actions">
+          {invoices.length > 0 && (
+            <button className={`btn btn-ghost filter-toggle ${filterOpen || hasActiveFilters ? "active" : ""}`} type="button" onClick={() => setFilterOpen((current) => !current)}>
+              <Filter size={16} /> {tt("invoices.filterInvoices", "Filtrar faturas")}
+            </button>
+          )}
           <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> {tt("invoices.installmentPurchase", "Compra parcelada")}</button>
           <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> {tt("invoices.newInvoice", "Nova fatura")}</button>
         </div>
       </div>
       {invoices.length ? (
         <>
-          <div className="invoice-filter">
+          {filterOpen && <div className="invoice-filter">
             <div className="invoice-filter-head">
               <span><Filter size={15} /> {tt("invoices.filterInvoices", "Filtrar faturas")}</span>
               <small>{filteredInvoices.length} de {invoices.length}</small>
@@ -1217,41 +1291,33 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
                 </div>
               </div>
             </div>
-            {(filters.search || filters.statuses.length !== statusOrder.length || filters.color !== "all") && (
+            {hasActiveFilters && (
               <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "", statuses: ["open", "paid"], color: "all" })}>
                 Limpar filtros
               </button>
             )}
-          </div>
+          </div>}
           {filteredInvoices.length ? (
             <div className="invoice-groups">
-              <section className="invoice-group">
-                <div className="invoice-group-head">
-                  <h3>{tt("invoices.currentMonth", "Mês atual")}</h3>
-                  <small>{currentMonthInvoices.length}</small>
-                </div>
-                {currentMonthInvoices.length ? (
-                  <div className="invoice-grid">{currentMonthInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
-                ) : <div className="invoice-group-empty">Sem faturas para o mês atual.</div>}
-              </section>
-              <section className="invoice-group">
-                <div className="invoice-group-head">
-                  <h3>{tt("invoices.nextMonth", "Próximo mês")}</h3>
-                  <small>{nextMonthInvoices.length}</small>
-                </div>
-                {nextMonthInvoices.length ? (
-                  <div className="invoice-grid">{nextMonthInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
-                ) : <div className="invoice-group-empty">Sem faturas para o próximo mês.</div>}
-              </section>
-              {otherInvoices.length > 0 && (
-                <section className="invoice-group">
-                  <div className="invoice-group-head">
-                    <h3>Demais faturas</h3>
-                    <small>{otherInvoices.length}</small>
-                  </div>
-                  <div className="invoice-grid">{otherInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
-                </section>
-              )}
+              {invoiceGroups.map((group) => {
+                const expanded = expandedGroups[group.id];
+                return (
+                  <section className={`invoice-group ${expanded ? "expanded" : "collapsed"}`} key={group.id}>
+                    <button className="invoice-group-toggle" type="button" onClick={() => toggleGroup(group.id)} aria-expanded={expanded}>
+                      <div className="invoice-group-head">
+                        <h3>{group.label}</h3>
+                        <small>{group.items.length}</small>
+                      </div>
+                      <ChevronDown size={18} />
+                    </button>
+                    {expanded && (
+                      group.items.length ? (
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                      ) : <div className="invoice-group-empty">{group.empty}</div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura encontrada.</h3><p>Ajuste os filtros para ver outras faturas.</p></div>}
         </>
@@ -1304,8 +1370,8 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
-  const total = parseMoneyInput(form.total_amount);
-  const totalCents = Number(String(form.total_amount || "").replace(/\D/g, "") || 0);
+  const total = parseTypedMoneyInput(form.total_amount, language);
+  const totalCents = Math.round(total * 100);
   const baseInstallmentCents = count ? Math.floor(totalCents / count) : 0;
   const lastInstallmentCents = count ? totalCents - (baseInstallmentCents * (count - 1)) : 0;
   const hasRoundingAdjustment = count > 1 && totalCents % count !== 0;
@@ -1319,7 +1385,8 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
     invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
   ));
 
-  const handleMoneyChange = (value) => updateForm({ total_amount: formatMoneyInput(value) });
+  const handleMoneyChange = (value) => updateForm({ total_amount: formatTypedMoneyForEditing(value, language) });
+  const normalizeMoneyField = (field) => updateForm({ [field]: formatTypedMoneyAsCurrency(form[field], language) });
 
   const buildDrafts = () => Array.from({ length: count }, (_, index) => {
     const dueDate = addMonthsToDate(firstInvoice.due_date, index);
@@ -1356,9 +1423,9 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   };
 
   const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
-  const confirmedTotal = drafts.reduce((sum, draft) => sum + parseMoneyInput(draft.amount), 0);
+  const confirmedTotal = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.amount, language), 0);
   const invoiceCount = new Set(drafts.map((draft) => draft.invoice_id || `auto-${draft.month}`)).size;
-  const canCreate = drafts.length && drafts.every((draft) => parseMoneyInput(draft.amount) > 0);
+  const canCreate = drafts.length && drafts.every((draft) => parseTypedMoneyInput(draft.amount, language) > 0);
 
   const submitDrafts = (event) => {
     event.preventDefault();
@@ -1370,7 +1437,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
       first_invoice_id: Number(form.first_invoice_id),
       items: drafts.map((draft) => ({
         invoice_id: draft.invoice_id ? Number(draft.invoice_id) : null,
-        amount: parseMoneyInput(draft.amount),
+        amount: parseTypedMoneyInput(draft.amount, language),
         target_due_date: draft.month
       }))
     });
@@ -1394,7 +1461,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
             <div className="invoice-modal-body">
               <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
               <div className="installment-form-row">
-                <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
+                <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></label>
                 <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
               </div>
               <div className="installment-per-value" aria-live="polite">
@@ -1434,7 +1501,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
                             <small>{destination.automatic ? tt("installmentModal.createdAutomatically", "Será criada automaticamente") : tt("installmentModal.existingInvoice", "Fatura existente")} • {tt("installments.due", "vence")} {formatDateShort(destination.dueDate)}</small>
                           </span>
                         </div>
-                        <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
+                        <input inputMode="decimal" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => updateDraft(draft.id, { amount: formatTypedMoneyAsCurrency(draft.amount, language) })} />
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
                       </div>
                     );
@@ -1504,6 +1571,7 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", status: "all" });
+  const [filterOpen, setFilterOpen] = useState(false);
   const today = todayIsoDate();
   const currentMonth = today.slice(0, 7);
 
@@ -1534,12 +1602,18 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
     const matchesStatus = filters.status === "all" || item.status === filters.status;
     return matchesSearch && matchesStatus;
   });
+  const hasActiveFilters = filters.search || filters.status !== "all";
 
   return (
     <section>
       <div className="section-head">
         <div><p className="eyebrow">{tt("receivables.title", "Recebíveis")}</p><h2>{tt("receivables.heading", "Recebíveis")}</h2></div>
-        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("receivables.new", "Nova conta")}</button>
+        <div className="view-actions">
+          <button className={`btn btn-ghost filter-toggle ${filterOpen || hasActiveFilters ? "active" : ""}`} type="button" onClick={() => setFilterOpen((current) => !current)}>
+            <Filter size={16} /> {tt("receivables.filter", "Filtrar recebíveis")}
+          </button>
+          <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("receivables.new", "Nova conta")}</button>
+        </div>
       </div>
 
       <section className="summary-grid receivable-summary">
@@ -1565,7 +1639,7 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
         </article>
       </section>
 
-      <div className="invoice-filter receivable-filter">
+      {filterOpen && <div className="invoice-filter receivable-filter">
         <div className="invoice-filter-head">
           <span><Filter size={15} /> {tt("receivables.filter", "Filtrar recebíveis")}</span>
           <small>{filtered.length} de {receivables.length}</small>
@@ -1582,7 +1656,12 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
             </select>
           </label>
         </div>
-      </div>
+        {hasActiveFilters && (
+          <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "", status: "all" })}>
+            Limpar filtros
+          </button>
+        )}
+      </div>}
 
       {filtered.length ? (
         <div className="receivable-list">
@@ -1641,7 +1720,7 @@ function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) 
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const normalizeAmount = () => {
     if (!form.total_amount) return;
-    updateForm({ total_amount: formatMoney(parseTypedMoneyInput(form.total_amount, language), language) });
+    updateForm({ total_amount: formatTypedMoneyAsCurrency(form.total_amount, language) });
   };
 
   const submit = (event) => {
@@ -1678,7 +1757,7 @@ function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) 
           )}
           <label><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
           <div className="receivable-form-row">
-            <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+            <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
             <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
           </div>
           <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
@@ -1701,7 +1780,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
   const paidAmount = parseTypedMoneyInput(data.amount, language);
   const normalizeAmount = () => {
     if (!data.amount) return;
-    updateData({ amount: formatMoney(paidAmount, language) });
+    updateData({ amount: formatTypedMoneyAsCurrency(data.amount, language) });
   };
   const submit = (event) => {
     event.preventDefault();
@@ -1723,7 +1802,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
             <span>{tt("receivables.remaining", "Restante")}</span>
             <strong>{formatMoney(remaining, language)}</strong>
           </div>
-          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
           <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
         </div>
         <div className="modal-actions">
@@ -1853,7 +1932,7 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 
   const goToReview = (event) => {
     event.preventDefault();
-    if (!form.template_id || !form.due_date || !parseMoneyInput(form.initial_amount)) return;
+    if (!form.template_id || !form.due_date || !parseTypedMoneyInput(form.initial_amount, language)) return;
     setDrafts(buildDrafts());
     setStep(2);
   };
@@ -1879,13 +1958,13 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 
   const rowError = (draft) => {
     if (!draft.due_date) return "Informe uma data válida.";
-    if (!parseMoneyInput(draft.initial_amount)) return "Informe um valor maior que zero.";
+    if (!parseTypedMoneyInput(draft.initial_amount, language)) return "Informe um valor maior que zero.";
     return "";
   };
 
   const validDrafts = drafts.filter((draft) => !rowError(draft));
   const canCreate = drafts.length > 0 && validDrafts.length === drafts.length;
-  const totalCommitted = drafts.reduce((sum, draft) => sum + parseMoneyInput(draft.initial_amount), 0);
+  const totalCommitted = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.initial_amount, language), 0);
 
   const submitDrafts = (event) => {
     event.preventDefault();
@@ -1894,8 +1973,9 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
   };
 
   const handleMoneyChange = (value, setter) => {
-    setter(formatMoneyInput(value));
+    setter(formatTypedMoneyForEditing(value, language));
   };
+  const normalizeMoneyValue = (value) => formatTypedMoneyAsCurrency(value, language);
 
   return (
     <div className="modal-layer">
@@ -1939,7 +2019,7 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                 </div>
               </label>
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
-              <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
+              <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input
@@ -2013,7 +2093,7 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                         <span>{index + 1}</span>
                         <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
                         <DateField className="compact" value={draft.due_date} onChange={(value) => updateDraft(draft.id, { due_date: value })} />
-                        <input inputMode="numeric" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} />
+                        <input inputMode="decimal" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} onBlur={() => updateDraft(draft.id, { initial_amount: normalizeMoneyValue(draft.initial_amount) })} />
                         <span className="review-template-name"><i style={{ "--invoice-color": draft.template_color }} />{draft.template_name}</span>
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
                       </div>
@@ -2089,7 +2169,7 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
   const saveOpeningBalance = async (event) => {
     event.preventDefault();
     try {
-      await setOpeningBalance(year, month, parseMoneyInput(openingBalance));
+      await setOpeningBalance(year, month, parseTypedMoneyInput(openingBalance, language));
       toast.success(t("toasts.openingBalanceUpdated"));
       await refresh();
     } catch {
@@ -2120,7 +2200,7 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
       </div>
       <form className="card" onSubmit={saveProfile}><h2>{t("settings.profile")}</h2><div className="form-stack"><label><span>{t("settings.name")}</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>{t("settings.email")}</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">{t("settings.saveProfile")}</button></div></form>
       <form className="card" onSubmit={savePassword}><h2>{t("settings.password")}</h2><div className="form-stack"><label><span>{t("settings.currentPassword")}</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>{t("settings.newPassword")}</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">{t("settings.changePassword")}</button></div></form>
-      <form className="card" onSubmit={saveOpeningBalance}><h2>{t("settings.openingBalance")}</h2><p className="muted">{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p><div className="form-stack"><label><span>{t("settings.monthBalance")}</span><input placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">{t("settings.saveBalance")}</button></div></form>
+      <form className="card" onSubmit={saveOpeningBalance}><h2>{t("settings.openingBalance")}</h2><p className="muted">{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p><div className="form-stack"><label><span>{t("settings.monthBalance")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setOpeningBalanceInput(formatTypedMoneyAsCurrency(openingBalance, language))} /></label><button className="btn">{t("settings.saveBalance")}</button></div></form>
       <div className="card"><h2>{t("settings.export")}</h2><p className="muted">{t("settings.exportDescription")}</p><button className="btn btn-primary" onClick={exportCsv}>{t("settings.exportCsv")}</button></div>
     </section>
   );
