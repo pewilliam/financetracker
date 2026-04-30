@@ -2980,6 +2980,13 @@ select {
   .transaction-modal {
     overflow: hidden;
   }
+  .transaction-modal {
+    display: flex;
+    flex-direction: column;
+  }
+  .transaction-modal .modal-titlebar {
+    flex: 0 0 auto;
+  }
   .transaction-modal-body,
   .invoice-modal-body,
   .invoice-review,
@@ -2995,8 +3002,17 @@ select {
   .stepper-item:last-child { justify-content: flex-start; }
   .modal-actions, .review-toolbar { grid-template-columns: 1fr; }
   .transaction-modal-body {
+    flex: 1 1 auto;
     grid-template-columns: 1fr;
+    min-height: 0;
     padding: 14px;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  .transaction-modal .conditional-content.open {
+    max-height: none;
+    overflow: visible;
+    transform: none;
+    transition: opacity .2s ease;
   }
   .switch-row {
     padding-inline: 12px;

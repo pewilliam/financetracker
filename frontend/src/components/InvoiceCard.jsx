@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarPlus, CheckCircle2, CreditCard, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
-import { daysUntil, formatDateShort, formatMoney, getDaysUntil, parseMoneyInput } from "../utils/format.js";
+import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
 
 function invoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#14A078";
@@ -19,7 +19,7 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    const parsed = parseMoneyInput(amount);
+    const parsed = parseTypedMoneyInput(amount, language);
     if (!description || !parsed) return;
     onAddItem(invoice.id, { description, amount: parsed });
     setDescription("");
@@ -72,7 +72,7 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
       {adding ? (
         <form className="inline-form" onSubmit={handleSubmit}>
           <input placeholder={tt("invoices.description", "Descrição")} value={description} onChange={(event) => setDescription(event.target.value)} />
-          <input inputMode="numeric" placeholder="R$ 0,00" value={amount} onChange={(event) => setAmount(event.target.value)} />
+          <input inputMode="decimal" placeholder="R$ 0,00" value={amount} onChange={(event) => setAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setAmount(formatTypedMoneyAsCurrency(amount, language))} />
           <button className="btn btn-primary" type="submit">{tt("invoices.add", "Adicionar")}</button>
         </form>
       ) : (

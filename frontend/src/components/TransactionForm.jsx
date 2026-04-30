@@ -3,7 +3,7 @@ import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from
 import DateField from "./DateField.jsx";
 import InvoiceSelector from "./InvoiceSelector.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { formatMoney, getFormatLocale, parseMoneyInput } from "../utils/format.js";
+import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "../utils/format.js";
 
 function getDayFromDate(dateString) {
   const day = Number(dateString?.split("-")?.[2]);
@@ -22,34 +22,15 @@ function formatMonthShort(date) {
 }
 
 function parseTypedAmount(value) {
-  const text = String(value || "").trim();
-  if (!text) return 0;
-  const decimalSeparator = getFormatLocale() === "en-US" ? "." : ",";
-  if (text.includes(decimalSeparator)) {
-    const [integerPart, decimalPart = ""] = text.split(decimalSeparator);
-    const integer = integerPart.replace(/\D/g, "") || "0";
-    const decimal = decimalPart.replace(/\D/g, "").slice(0, 2).padEnd(2, "0");
-    return Number(`${integer}.${decimal}`);
-  }
-  if (text.includes(",")) return parseMoneyInput(text);
-  return Number(text.replace(/\D/g, "") || 0);
+  return parseTypedMoneyInput(value);
 }
 
 function formatAmountForEditing(value) {
-  const locale = getFormatLocale();
-  const decimalSeparator = locale === "en-US" ? "." : ",";
-  const text = String(value || "").replace(decimalSeparator === "." ? /[^\d.]/g : /[^\d,]/g, "");
-  const [integerPart, decimalPart] = text.split(decimalSeparator);
-  const digits = integerPart.replace(/\D/g, "");
-  const number = Number(digits || 0);
-  const integer = number ? number.toLocaleString(locale) : "";
-  if (decimalPart === undefined) return integer;
-  return `${integer}${decimalSeparator}${decimalPart.replace(/\D/g, "").slice(0, 2)}`;
+  return formatTypedMoneyForEditing(value);
 }
 
 function formatAmountAsCurrency(value) {
-  const amount = parseTypedAmount(value);
-  return amount ? formatMoney(amount) : "";
+  return formatTypedMoneyAsCurrency(value);
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -284,7 +265,7 @@ export default function TransactionForm({
             <div className={`money-input ${isExpense ? "danger" : "success"}`}>
               <span>R$</span>
               <input
-                inputMode="numeric"
+                inputMode="decimal"
                 value={form.amount.replace(/^R\$\s?/, "")}
                 onBlur={() => handleBlur("amount")}
                 onChange={(event) => handleAmount(event.target.value)}

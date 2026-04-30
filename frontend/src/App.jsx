@@ -70,7 +70,7 @@ import {
   updateReceivable,
   updateTransaction
 } from "./api/api.js";
-import { formatDateShort, formatMoney, formatMoneyInput, formatMonthLabel, getFormatLocale, parseMoneyInput, parseTypedMoneyInput } from "./utils/format.js";
+import { formatDateShort, formatMoney, formatMonthLabel, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "./utils/format.js";
 
 function shiftMonth(year, month, delta) {
   const total = year * 12 + month - 1 + delta;
@@ -452,7 +452,7 @@ function AppShell() {
       await Promise.all(drafts.map((draft) => createInvoice({
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
-        initial_amount: parseMoneyInput(draft.initial_amount)
+        initial_amount: parseTypedMoneyInput(draft.initial_amount, language)
       })));
       setInvoiceForm(defaultInvoiceForm());
       setInvoiceModal(false);
@@ -1347,8 +1347,8 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
-  const total = parseMoneyInput(form.total_amount);
-  const totalCents = Number(String(form.total_amount || "").replace(/\D/g, "") || 0);
+  const total = parseTypedMoneyInput(form.total_amount, language);
+  const totalCents = Math.round(total * 100);
   const baseInstallmentCents = count ? Math.floor(totalCents / count) : 0;
   const lastInstallmentCents = count ? totalCents - (baseInstallmentCents * (count - 1)) : 0;
   const hasRoundingAdjustment = count > 1 && totalCents % count !== 0;
@@ -1362,7 +1362,8 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
     invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
   ));
 
-  const handleMoneyChange = (value) => updateForm({ total_amount: formatMoneyInput(value) });
+  const handleMoneyChange = (value) => updateForm({ total_amount: formatTypedMoneyForEditing(value, language) });
+  const normalizeMoneyField = (field) => updateForm({ [field]: formatTypedMoneyAsCurrency(form[field], language) });
 
   const buildDrafts = () => Array.from({ length: count }, (_, index) => {
     const dueDate = addMonthsToDate(firstInvoice.due_date, index);
@@ -1399,9 +1400,9 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
   };
 
   const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
-  const confirmedTotal = drafts.reduce((sum, draft) => sum + parseMoneyInput(draft.amount), 0);
+  const confirmedTotal = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.amount, language), 0);
   const invoiceCount = new Set(drafts.map((draft) => draft.invoice_id || `auto-${draft.month}`)).size;
-  const canCreate = drafts.length && drafts.every((draft) => parseMoneyInput(draft.amount) > 0);
+  const canCreate = drafts.length && drafts.every((draft) => parseTypedMoneyInput(draft.amount, language) > 0);
 
   const submitDrafts = (event) => {
     event.preventDefault();
@@ -1413,7 +1414,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
       first_invoice_id: Number(form.first_invoice_id),
       items: drafts.map((draft) => ({
         invoice_id: draft.invoice_id ? Number(draft.invoice_id) : null,
-        amount: parseMoneyInput(draft.amount),
+        amount: parseTypedMoneyInput(draft.amount, language),
         target_due_date: draft.month
       }))
     });
@@ -1437,7 +1438,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
             <div className="invoice-modal-body">
               <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
               <div className="installment-form-row">
-                <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} required /></label>
+                <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></label>
                 <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
               </div>
               <div className="installment-per-value" aria-live="polite">
@@ -1477,7 +1478,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
                             <small>{destination.automatic ? tt("installmentModal.createdAutomatically", "Será criada automaticamente") : tt("installmentModal.existingInvoice", "Fatura existente")} • {tt("installments.due", "vence")} {formatDateShort(destination.dueDate)}</small>
                           </span>
                         </div>
-                        <input inputMode="numeric" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatMoneyInput(event.target.value) })} />
+                        <input inputMode="decimal" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => updateDraft(draft.id, { amount: formatTypedMoneyAsCurrency(draft.amount, language) })} />
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
                       </div>
                     );
@@ -1684,7 +1685,7 @@ function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) 
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const normalizeAmount = () => {
     if (!form.total_amount) return;
-    updateForm({ total_amount: formatMoney(parseTypedMoneyInput(form.total_amount, language), language) });
+    updateForm({ total_amount: formatTypedMoneyAsCurrency(form.total_amount, language) });
   };
 
   const submit = (event) => {
@@ -1721,7 +1722,7 @@ function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) 
           )}
           <label><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
           <div className="receivable-form-row">
-            <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+            <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
             <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
           </div>
           <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
@@ -1744,7 +1745,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
   const paidAmount = parseTypedMoneyInput(data.amount, language);
   const normalizeAmount = () => {
     if (!data.amount) return;
-    updateData({ amount: formatMoney(paidAmount, language) });
+    updateData({ amount: formatTypedMoneyAsCurrency(data.amount, language) });
   };
   const submit = (event) => {
     event.preventDefault();
@@ -1766,7 +1767,7 @@ function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
             <span>{tt("receivables.remaining", "Restante")}</span>
             <strong>{formatMoney(remaining, language)}</strong>
           </div>
-          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="numeric" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: event.target.value })} onBlur={normalizeAmount} required /></label>
+          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
           <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
         </div>
         <div className="modal-actions">
@@ -1896,7 +1897,7 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 
   const goToReview = (event) => {
     event.preventDefault();
-    if (!form.template_id || !form.due_date || !parseMoneyInput(form.initial_amount)) return;
+    if (!form.template_id || !form.due_date || !parseTypedMoneyInput(form.initial_amount, language)) return;
     setDrafts(buildDrafts());
     setStep(2);
   };
@@ -1922,13 +1923,13 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
 
   const rowError = (draft) => {
     if (!draft.due_date) return "Informe uma data válida.";
-    if (!parseMoneyInput(draft.initial_amount)) return "Informe um valor maior que zero.";
+    if (!parseTypedMoneyInput(draft.initial_amount, language)) return "Informe um valor maior que zero.";
     return "";
   };
 
   const validDrafts = drafts.filter((draft) => !rowError(draft));
   const canCreate = drafts.length > 0 && validDrafts.length === drafts.length;
-  const totalCommitted = drafts.reduce((sum, draft) => sum + parseMoneyInput(draft.initial_amount), 0);
+  const totalCommitted = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.initial_amount, language), 0);
 
   const submitDrafts = (event) => {
     event.preventDefault();
@@ -1937,8 +1938,9 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
   };
 
   const handleMoneyChange = (value, setter) => {
-    setter(formatMoneyInput(value));
+    setter(formatTypedMoneyForEditing(value, language));
   };
+  const normalizeMoneyValue = (value) => formatTypedMoneyAsCurrency(value, language);
 
   return (
     <div className="modal-layer">
@@ -1982,7 +1984,7 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                 </div>
               </label>
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
-              <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="numeric" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} /></label>
+              <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input
@@ -2056,7 +2058,7 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                         <span>{index + 1}</span>
                         <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
                         <DateField className="compact" value={draft.due_date} onChange={(value) => updateDraft(draft.id, { due_date: value })} />
-                        <input inputMode="numeric" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} />
+                        <input inputMode="decimal" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} onBlur={() => updateDraft(draft.id, { initial_amount: normalizeMoneyValue(draft.initial_amount) })} />
                         <span className="review-template-name"><i style={{ "--invoice-color": draft.template_color }} />{draft.template_name}</span>
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
                       </div>
@@ -2132,7 +2134,7 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
   const saveOpeningBalance = async (event) => {
     event.preventDefault();
     try {
-      await setOpeningBalance(year, month, parseMoneyInput(openingBalance));
+      await setOpeningBalance(year, month, parseTypedMoneyInput(openingBalance, language));
       toast.success(t("toasts.openingBalanceUpdated"));
       await refresh();
     } catch {
@@ -2163,7 +2165,7 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
       </div>
       <form className="card" onSubmit={saveProfile}><h2>{t("settings.profile")}</h2><div className="form-stack"><label><span>{t("settings.name")}</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label><span>{t("settings.email")}</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label><button className="btn btn-primary">{t("settings.saveProfile")}</button></div></form>
       <form className="card" onSubmit={savePassword}><h2>{t("settings.password")}</h2><div className="form-stack"><label><span>{t("settings.currentPassword")}</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label><label><span>{t("settings.newPassword")}</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label><button className="btn">{t("settings.changePassword")}</button></div></form>
-      <form className="card" onSubmit={saveOpeningBalance}><h2>{t("settings.openingBalance")}</h2><p className="muted">{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p><div className="form-stack"><label><span>{t("settings.monthBalance")}</span><input placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(event.target.value)} /></label><button className="btn">{t("settings.saveBalance")}</button></div></form>
+      <form className="card" onSubmit={saveOpeningBalance}><h2>{t("settings.openingBalance")}</h2><p className="muted">{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p><div className="form-stack"><label><span>{t("settings.monthBalance")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setOpeningBalanceInput(formatTypedMoneyAsCurrency(openingBalance, language))} /></label><button className="btn">{t("settings.saveBalance")}</button></div></form>
       <div className="card"><h2>{t("settings.export")}</h2><p className="muted">{t("settings.exportDescription")}</p><button className="btn btn-primary" onClick={exportCsv}>{t("settings.exportCsv")}</button></div>
     </section>
   );
