@@ -15,6 +15,7 @@ import {
   Grid2X2,
   List,
   LogOut,
+  Menu,
   Moon,
   Plus,
   Power,
@@ -93,6 +94,11 @@ const CREATE_TEMPLATE_VALUE = "__create_template__";
 const CREATE_RECEIVABLE_PERSON_VALUE = "__create_receivable_person__";
 const BRAND_MARK_SRC = `${import.meta.env.BASE_URL}transparent-image.png`;
 const MONTHS_VIEW_MODE_KEY = "months-view-mode";
+const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
+
+function isMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_MEDIA_QUERY).matches;
+}
 
 function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
@@ -221,7 +227,7 @@ function Sidebar({ open, setOpen }) {
     [t("sidebar.receivables"), "/recebiveis", Wallet]
   ];
   const closeOnMobile = () => {
-    if (window.matchMedia("(max-width: 900px)").matches) setOpen(false);
+    if (isMobileViewport()) setOpen(false);
   };
 
   return (
@@ -294,6 +300,7 @@ function AppShell() {
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(() => {
+    if (isMobileViewport()) return false;
     try {
       const v = localStorage.getItem("menuOpen");
       if (v === null) return true;
@@ -304,12 +311,23 @@ function AppShell() {
   });
 
   useEffect(() => {
+    if (isMobileViewport()) return;
     try {
       localStorage.setItem("menuOpen", menuOpen ? "1" : "0");
     } catch (e) {
       // ignore
     }
   }, [menuOpen]);
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const closeMobileDrawer = () => {
+      if (media.matches) setMenuOpen(false);
+    };
+    closeMobileDrawer();
+    media.addEventListener("change", closeMobileDrawer);
+    return () => media.removeEventListener("change", closeMobileDrawer);
+  }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -326,6 +344,19 @@ function AppShell() {
   const [receivableToDelete, setReceivableToDelete] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
+  const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete;
+  const bodyLocked = overlayOpen || (menuOpen && isMobileViewport());
+
+  useEffect(() => {
+    if (bodyLocked) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [bodyLocked]);
 
   async function refresh() {
     setLoading(true);
@@ -663,6 +694,15 @@ function AppShell() {
     <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
+      <header className="mobile-topbar">
+        <button className="mobile-menu-btn" type="button" onClick={() => setMenuOpen(true)} aria-label={t("sidebar.expand")}>
+          <Menu size={22} />
+        </button>
+        <Link className="mobile-topbar-brand" to="/" aria-label="Kashy365">
+          <img src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
+          <span><strong>Kashy</strong>365</span>
+        </Link>
+      </header>
       <main className="content">
         <div className="content-inner">
           <header className="page-header">
@@ -674,7 +714,7 @@ function AppShell() {
               <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
               <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
               <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
-              <button className="btn btn-primary" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
+              <button className="btn btn-primary header-new-btn" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
             </div>
           </header>
 
@@ -959,6 +999,9 @@ function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setM
           }) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhum mês com lançamentos.</h3><p>Clique em + Novo para começar.</p></div>}
         </div>
       )}
+      <button className="month-new-fab" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")}>
+        <Plus size={24} />
+      </button>
     </section>
   );
 }
