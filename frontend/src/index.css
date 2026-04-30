@@ -787,6 +787,11 @@ select {
   background: rgba(60,200,140,0.15);
   color: var(--primary);
 }
+.filter-toggle.active {
+  border-color: rgba(20,160,120,0.45);
+  background: rgba(20,160,120,0.10);
+  color: var(--primary);
+}
 .month-year-list {
   display: grid;
   gap: 18px;
@@ -1635,6 +1640,29 @@ select {
 .invoice-group {
   display: grid;
   gap: 12px;
+}
+.invoice-group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: rgba(20,160,120,0.06);
+  color: var(--text);
+  text-align: left;
+}
+.invoice-group-toggle:hover {
+  background: rgba(20,160,120,0.10);
+}
+.invoice-group-toggle svg {
+  color: var(--muted);
+  transition: transform .2s ease;
+}
+.invoice-group.expanded .invoice-group-toggle svg {
+  transform: rotate(180deg);
 }
 .invoice-group-head {
   display: flex;

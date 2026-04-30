@@ -286,6 +286,7 @@ function Sidebar({ open, setOpen }) {
 
 function AppShell() {
   const { t, language } = useI18n();
+  const location = useLocation();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -344,6 +345,7 @@ function AppShell() {
   const [receivableToDelete, setReceivableToDelete] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
+  const showMonthHeader = location.pathname === "/" || location.pathname === "/meses";
   const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete;
   const bodyLocked = overlayOpen || (menuOpen && isMobileViewport());
 
@@ -705,18 +707,20 @@ function AppShell() {
       </header>
       <main className="content">
         <div className="content-inner">
-          <header className="page-header">
-            <div>
-              <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
-              <h1>{t("app.title")}</h1>
-            </div>
-            <div className="toolbar">
-              <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
-              <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-              <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
-              <button className="btn btn-primary header-new-btn" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
-            </div>
-          </header>
+          {showMonthHeader && (
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
+                <h1>{t("app.title")}</h1>
+              </div>
+              <div className="toolbar">
+                <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
+                <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
+                <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
+                <button className="btn btn-primary header-new-btn" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
+              </div>
+            </header>
+          )}
 
           {loading ? <Skeleton /> : (
             <Routes>
@@ -1124,6 +1128,8 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
   const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
@@ -1187,19 +1193,44 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
     const key = yearMonthKey(invoice.due_date);
     return key !== currentMonthKey && key !== nextMonthKey;
   });
+  const hasActiveFilters = filters.search || filters.statuses.length !== statusOrder.length || filters.color !== "all";
+  const invoiceGroups = [
+    { id: "current", label: tt("invoices.currentMonth", "Mês atual"), items: currentMonthInvoices, empty: "Sem faturas para o mês atual." },
+    { id: "next", label: tt("invoices.nextMonth", "Próximo mês"), items: nextMonthInvoices, empty: "Sem faturas para o próximo mês." },
+    { id: "other", label: "Demais faturas", items: otherInvoices, empty: "Sem demais faturas." }
+  ].filter((group) => group.id !== "other" || group.items.length > 0);
+
+  useEffect(() => {
+    setExpandedGroups((current) => {
+      const next = {};
+      invoiceGroups.forEach((group) => {
+        next[group.id] = current[group.id] ?? (group.id !== "other" && group.items.length > 0);
+      });
+      return next;
+    });
+  }, [currentMonthInvoices.length, nextMonthInvoices.length, otherInvoices.length]);
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
+  };
 
   return (
     <section>
       <div className="section-head">
         <div><p className="eyebrow">{tt("invoices.futureInvoices", "Faturas futuras")}</p><h2>{tt("invoices.invoices", "Faturas")}</h2></div>
         <div className="view-actions">
+          {invoices.length > 0 && (
+            <button className={`btn btn-ghost filter-toggle ${filterOpen || hasActiveFilters ? "active" : ""}`} type="button" onClick={() => setFilterOpen((current) => !current)}>
+              <Filter size={16} /> {tt("invoices.filterInvoices", "Filtrar faturas")}
+            </button>
+          )}
           <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> {tt("invoices.installmentPurchase", "Compra parcelada")}</button>
           <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> {tt("invoices.newInvoice", "Nova fatura")}</button>
         </div>
       </div>
       {invoices.length ? (
         <>
-          <div className="invoice-filter">
+          {filterOpen && <div className="invoice-filter">
             <div className="invoice-filter-head">
               <span><Filter size={15} /> {tt("invoices.filterInvoices", "Filtrar faturas")}</span>
               <small>{filteredInvoices.length} de {invoices.length}</small>
@@ -1260,41 +1291,33 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
                 </div>
               </div>
             </div>
-            {(filters.search || filters.statuses.length !== statusOrder.length || filters.color !== "all") && (
+            {hasActiveFilters && (
               <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "", statuses: ["open", "paid"], color: "all" })}>
                 Limpar filtros
               </button>
             )}
-          </div>
+          </div>}
           {filteredInvoices.length ? (
             <div className="invoice-groups">
-              <section className="invoice-group">
-                <div className="invoice-group-head">
-                  <h3>{tt("invoices.currentMonth", "Mês atual")}</h3>
-                  <small>{currentMonthInvoices.length}</small>
-                </div>
-                {currentMonthInvoices.length ? (
-                  <div className="invoice-grid">{currentMonthInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
-                ) : <div className="invoice-group-empty">Sem faturas para o mês atual.</div>}
-              </section>
-              <section className="invoice-group">
-                <div className="invoice-group-head">
-                  <h3>{tt("invoices.nextMonth", "Próximo mês")}</h3>
-                  <small>{nextMonthInvoices.length}</small>
-                </div>
-                {nextMonthInvoices.length ? (
-                  <div className="invoice-grid">{nextMonthInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
-                ) : <div className="invoice-group-empty">Sem faturas para o próximo mês.</div>}
-              </section>
-              {otherInvoices.length > 0 && (
-                <section className="invoice-group">
-                  <div className="invoice-group-head">
-                    <h3>Demais faturas</h3>
-                    <small>{otherInvoices.length}</small>
-                  </div>
-                  <div className="invoice-grid">{otherInvoices.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
-                </section>
-              )}
+              {invoiceGroups.map((group) => {
+                const expanded = expandedGroups[group.id];
+                return (
+                  <section className={`invoice-group ${expanded ? "expanded" : "collapsed"}`} key={group.id}>
+                    <button className="invoice-group-toggle" type="button" onClick={() => toggleGroup(group.id)} aria-expanded={expanded}>
+                      <div className="invoice-group-head">
+                        <h3>{group.label}</h3>
+                        <small>{group.items.length}</small>
+                      </div>
+                      <ChevronDown size={18} />
+                    </button>
+                    {expanded && (
+                      group.items.length ? (
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                      ) : <div className="invoice-group-empty">{group.empty}</div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura encontrada.</h3><p>Ajuste os filtros para ver outras faturas.</p></div>}
         </>
@@ -1548,6 +1571,7 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", status: "all" });
+  const [filterOpen, setFilterOpen] = useState(false);
   const today = todayIsoDate();
   const currentMonth = today.slice(0, 7);
 
@@ -1578,12 +1602,18 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
     const matchesStatus = filters.status === "all" || item.status === filters.status;
     return matchesSearch && matchesStatus;
   });
+  const hasActiveFilters = filters.search || filters.status !== "all";
 
   return (
     <section>
       <div className="section-head">
         <div><p className="eyebrow">{tt("receivables.title", "Recebíveis")}</p><h2>{tt("receivables.heading", "Recebíveis")}</h2></div>
-        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("receivables.new", "Nova conta")}</button>
+        <div className="view-actions">
+          <button className={`btn btn-ghost filter-toggle ${filterOpen || hasActiveFilters ? "active" : ""}`} type="button" onClick={() => setFilterOpen((current) => !current)}>
+            <Filter size={16} /> {tt("receivables.filter", "Filtrar recebíveis")}
+          </button>
+          <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> {tt("receivables.new", "Nova conta")}</button>
+        </div>
       </div>
 
       <section className="summary-grid receivable-summary">
@@ -1609,7 +1639,7 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
         </article>
       </section>
 
-      <div className="invoice-filter receivable-filter">
+      {filterOpen && <div className="invoice-filter receivable-filter">
         <div className="invoice-filter-head">
           <span><Filter size={15} /> {tt("receivables.filter", "Filtrar recebíveis")}</span>
           <small>{filtered.length} de {receivables.length}</small>
@@ -1626,7 +1656,12 @@ function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDele
             </select>
           </label>
         </div>
-      </div>
+        {hasActiveFilters && (
+          <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "", status: "all" })}>
+            Limpar filtros
+          </button>
+        )}
+      </div>}
 
       {filtered.length ? (
         <div className="receivable-list">
