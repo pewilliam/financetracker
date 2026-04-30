@@ -168,6 +168,57 @@ export function listInstallments() {
   return request("/installments");
 }
 
+export function listReceivables() {
+  return request("/receivables");
+}
+
+export function listReceivablePeople() {
+  return request("/receivables/people");
+}
+
+export function createReceivablePerson(payload) {
+  return request("/receivables/people", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function createReceivable(payload) {
+  return request("/receivables", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateReceivable(id, payload) {
+  return request(`/receivables/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteReceivable(id) {
+  return request(`/receivables/${id}`, { method: "DELETE" });
+}
+
+export function markReceivablePaid(id, payload) {
+  return request(`/receivables/${id}/paid`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function createReceivablePayment(id, payload) {
+  return request(`/receivables/${id}/payments`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteReceivablePayment(receivableId, paymentId) {
+  return request(`/receivables/${receivableId}/payments/${paymentId}`, { method: "DELETE" });
+}
+
 export function getInstallment(id) {
   return request(`/installments/${id}`);
 }
