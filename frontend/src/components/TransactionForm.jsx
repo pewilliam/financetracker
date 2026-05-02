@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Loader2, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
-import InvoiceSelector from "./InvoiceSelector.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -48,10 +47,8 @@ export default function TransactionForm({
   open,
   initial,
   date,
-  invoices = [],
   onClose,
-  onSave,
-  onCreateInvoice
+  onSave
 }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -60,8 +57,6 @@ export default function TransactionForm({
     type: "expense",
     amount: "",
     description: "",
-    is_future: false,
-    invoice_id: "",
     recurrence: false,
     day_of_month: "",
     recurrence_months: "12"
@@ -69,7 +64,6 @@ export default function TransactionForm({
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [saving, setSaving] = useState(false);
-  const [exclusiveHint, setExclusiveHint] = useState("");
 
   useEffect(() => {
     if (initial) {
@@ -78,8 +72,6 @@ export default function TransactionForm({
         type: initial.type,
         amount: formatMoney(initial.amount),
         description: initial.description || "",
-        is_future: initial.is_future,
-        invoice_id: initial.invoice_id || "",
         recurrence: false,
         day_of_month: "",
         recurrence_months: "12"
@@ -90,8 +82,6 @@ export default function TransactionForm({
         type: "expense",
         amount: "",
         description: "",
-        is_future: false,
-        invoice_id: "",
         recurrence: false,
         day_of_month: "",
         recurrence_months: "12"
@@ -100,7 +90,6 @@ export default function TransactionForm({
     setErrors({});
     setTouched({});
     setSaving(false);
-    setExclusiveHint("");
   }, [initial, date, open]);
 
   const handleAmount = (value) => {
@@ -135,10 +124,6 @@ export default function TransactionForm({
       if (data.recurrence && (!data.day_of_month || day < 1 || day > 31)) nextErrors.day_of_month = "Informe o dia do mês";
       else delete nextErrors.day_of_month;
     }
-    if (field === "invoice_id" || field === "is_future") {
-      if (data.is_future && !data.invoice_id) nextErrors.invoice_id = "Selecione uma fatura";
-      else delete nextErrors.invoice_id;
-    }
     setErrors(nextErrors);
     return nextErrors;
   };
@@ -152,8 +137,7 @@ export default function TransactionForm({
       const day = Number(form.day_of_month);
       if (!form.day_of_month || day < 1 || day > 31) nextErrors.day_of_month = "Informe o dia do mês";
     }
-    if (form.is_future && !form.invoice_id) nextErrors.invoice_id = "Selecione uma fatura";
-    setTouched({ amount: true, date: true, day_of_month: true, invoice_id: true });
+    setTouched({ amount: true, date: true, day_of_month: true });
     setErrors(nextErrors);
     return nextErrors;
   };
@@ -169,33 +153,11 @@ export default function TransactionForm({
     validateField(field);
   };
 
-  const toggleFuture = () => {
-    const enabled = !form.is_future;
-    if (enabled && form.recurrence) setExclusiveHint("Fatura futura e recorrência são alternativas. Ativei fatura futura e desliguei recorrência.");
-    else setExclusiveHint("");
-    const nextForm = {
-      ...form,
-      is_future: enabled,
-      recurrence: enabled ? false : form.recurrence,
-      invoice_id: enabled ? form.invoice_id : ""
-    };
-    setForm(nextForm);
-    if (!enabled) {
-      const { invoice_id, ...nextErrors } = errors;
-      setErrors(nextErrors);
-      setTouched({ ...touched, invoice_id: false });
-    }
-  };
-
   const toggleRecurrence = () => {
     const enabled = !form.recurrence;
-    if (enabled && form.is_future) setExclusiveHint("Fatura futura e recorrência são alternativas. Ativei recorrência e desliguei fatura futura.");
-    else setExclusiveHint("");
     const nextForm = {
       ...form,
       recurrence: enabled,
-      is_future: enabled ? false : form.is_future,
-      invoice_id: enabled ? "" : form.invoice_id,
       day_of_month: enabled ? form.day_of_month || getDayFromDate(form.date) : form.day_of_month,
       recurrence_months: enabled ? form.recurrence_months || "12" : form.recurrence_months
     };
@@ -215,9 +177,7 @@ export default function TransactionForm({
           date: form.date,
           type: form.type,
           amount,
-          description: form.description,
-          is_future: form.is_future,
-          invoice_id: form.invoice_id ? Number(form.invoice_id) : null
+          description: form.description
         },
         recurrence: form.recurrence
           ? {
@@ -287,31 +247,12 @@ export default function TransactionForm({
             <input placeholder={tt("transactionModal.descriptionPlaceholder", "Ex: mercado, salário, aluguel")} value={form.description} onChange={(event) => setField("description", event.target.value)} />
           </label>
 
-          <section className="conditional-section">
-            <button className={`switch-row ${form.is_future ? "active" : ""}`} type="button" onClick={toggleFuture}>
-              <span><ReceiptText size={16} /> {tt("transactionModal.linkFutureInvoice", "Vincular a uma fatura futura?")}</span>
-              <i aria-hidden="true" />
-            </button>
-
-            <div className={`conditional-content ${form.is_future ? "open" : ""}`}>
-              <div className={`future-invoice-field ${touched.invoice_id && errors.invoice_id ? "has-error" : ""}`}>
-                <InvoiceSelector
-                  invoices={invoices}
-                  value={form.invoice_id ? { templateId: String(invoices.find((invoice) => String(invoice.id) === String(form.invoice_id))?.template_id ?? ""), invoiceId: String(form.invoice_id) } : null}
-                  onChange={(selection) => setField("invoice_id", selection?.invoiceId || "")}
-                />
-                {touched.invoice_id && errors.invoice_id && <small className="field-error">{errors.invoice_id}</small>}
-              </div>
-            </div>
-          </section>
-
           {!initial && (
             <section className="conditional-section">
               <button className={`switch-row ${form.recurrence ? "active" : ""}`} type="button" onClick={toggleRecurrence}>
                 <span><Repeat2 size={16} /> {tt("transactionModal.recurringEntry", "Lançamento recorrente?")}</span>
                 <i aria-hidden="true" />
               </button>
-              {exclusiveHint && <p className="exclusive-hint">{exclusiveHint}</p>}
               <div className={`conditional-content ${form.recurrence ? "open" : ""}`}>
                 <div className="recurrence-grid">
                   <label>

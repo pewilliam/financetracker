@@ -133,14 +133,12 @@ function todayIsoDate() {
 
 function normalizeTransactionPayload(data) {
   const parsedAmount = Number(data?.amount);
-  const parsedInvoiceId = Number(data?.invoice_id);
   const normalized = {
     date: String(data?.date || "").slice(0, 10),
     type: String(data?.type || ""),
     amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
     description: data?.description ? String(data.description).trim() : "",
-    is_future: Boolean(data?.is_future),
-    invoice_id: Number.isFinite(parsedInvoiceId) && parsedInvoiceId > 0 ? parsedInvoiceId : null
+    is_future: Boolean(data?.is_future)
   };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized.date)) normalized.date = "";
   return normalized;
@@ -435,7 +433,7 @@ function AppShell() {
       await refresh();
     } catch (error) {
       const details = String(error?.message || "");
-      toast.error(details.includes("422") ? "Dados inválidos ao salvar. Revise data, valor e fatura." : "Erro ao salvar lançamento");
+      toast.error(details.includes("422") ? "Dados inválidos ao salvar. Revise data e valor." : "Erro ao salvar lançamento");
     }
   };
 
@@ -738,7 +736,7 @@ function AppShell() {
         </div>
       </main>
 
-      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} invoices={invoices} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} onCreateInvoice={openNewInvoiceModal} />
+      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} />}
@@ -1187,9 +1185,13 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
   const nextMonthDateValue = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const nextMonthKey = `${nextMonthDateValue.getFullYear()}-${String(nextMonthDateValue.getMonth() + 1).padStart(2, "0")}`;
 
-  const currentMonthInvoices = filteredInvoices.filter((invoice) => yearMonthKey(invoice.due_date) === currentMonthKey);
-  const nextMonthInvoices = filteredInvoices.filter((invoice) => yearMonthKey(invoice.due_date) === nextMonthKey);
-  const otherInvoices = filteredInvoices.filter((invoice) => {
+  const openInvoices = filteredInvoices.filter((invoice) => !invoice.paid);
+  const paidInvoices = filteredInvoices
+    .filter((invoice) => invoice.paid)
+    .sort((left, right) => String(right.due_date).localeCompare(String(left.due_date)));
+  const currentMonthInvoices = openInvoices.filter((invoice) => yearMonthKey(invoice.due_date) === currentMonthKey);
+  const nextMonthInvoices = openInvoices.filter((invoice) => yearMonthKey(invoice.due_date) === nextMonthKey);
+  const otherInvoices = openInvoices.filter((invoice) => {
     const key = yearMonthKey(invoice.due_date);
     return key !== currentMonthKey && key !== nextMonthKey;
   });
@@ -1197,18 +1199,19 @@ function InvoicesPage({ invoices, addItem, addInstallment, deleteItem, deleteIns
   const invoiceGroups = [
     { id: "current", label: tt("invoices.currentMonth", "Mês atual"), items: currentMonthInvoices, empty: "Sem faturas para o mês atual." },
     { id: "next", label: tt("invoices.nextMonth", "Próximo mês"), items: nextMonthInvoices, empty: "Sem faturas para o próximo mês." },
-    { id: "other", label: "Demais faturas", items: otherInvoices, empty: "Sem demais faturas." }
+    { id: "other", label: "Demais faturas", items: otherInvoices, empty: "Sem demais faturas." },
+    { id: "paid", label: "Faturas pagas", items: paidInvoices, empty: "Sem faturas pagas." }
   ].filter((group) => group.id !== "other" || group.items.length > 0);
 
   useEffect(() => {
     setExpandedGroups((current) => {
       const next = {};
       invoiceGroups.forEach((group) => {
-        next[group.id] = current[group.id] ?? (group.id !== "other" && group.items.length > 0);
+        next[group.id] = current[group.id] ?? (group.id !== "other" && group.id !== "paid" && group.items.length > 0);
       });
       return next;
     });
-  }, [currentMonthInvoices.length, nextMonthInvoices.length, otherInvoices.length]);
+  }, [currentMonthInvoices.length, nextMonthInvoices.length, otherInvoices.length, paidInvoices.length]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
