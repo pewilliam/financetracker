@@ -1797,6 +1797,7 @@ select {
     var(--invoice-color, #14A078);
   color: #fff;
 }
+.invoice-header > div { min-width: 0; }
 .invoice-header h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800; }
 .invoice-header p { margin: 7px 0 0; opacity: .86; }
 .invoice-color-dot {
@@ -1808,7 +1809,7 @@ select {
   background: var(--invoice-color, #14A078);
   box-shadow: 0 0 0 2px rgba(255,255,255,.22);
 }
-.due-badge { border-radius: 999px; background: #DCFAF0; color: #007864; padding: 6px 10px; font-size: 12px; font-weight: 800; }
+.due-badge { flex: 0 0 auto; border-radius: 999px; background: #DCFAF0; color: #007864; padding: 6px 10px; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .due-badge.compact { background: #DCFAF0; color: #007864; white-space: nowrap; }
 .due-badge.danger { background: #FFE8EE; color: #CC2244; }
 .due-badge.paid { background: #DCFAF0; color: #007864; }
@@ -1910,6 +1911,15 @@ select {
 .installment-line small { color: var(--muted); }
 
 @media (max-width: 380px) {
+  .invoice-header {
+    gap: 10px;
+    padding: 16px;
+  }
+  .invoice-header h3 { font-size: 17px; }
+  .due-badge {
+    padding: 6px 9px;
+    font-size: 11px;
+  }
   .installment-badge-full { display: none; }
   .installment-badge-short { display: inline; }
 }
