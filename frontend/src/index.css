@@ -1814,61 +1814,48 @@ select {
 .due-badge.danger { background: #FFE8EE; color: #CC2244; }
 .due-badge.paid { background: #DCFAF0; color: #007864; }
 .invoice-total-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid var(--border);
-  padding: 16px 20px;
+  padding: 14px 16px;
 }
-.invoice-total-value {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-.invoice-total-value span {
+.invoice-total-row span {
   color: var(--muted);
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
 }
-.invoice-total-value strong {
+.invoice-total-row strong {
   color: var(--primary);
-  font-size: 24px;
+  font-size: 18px;
+  font-weight: 700;
 }
-.invoice-total-actions {
+.invoice-items-toggle {
+  width: 100%;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.invoice-items-toggle,
-.invoice-add-toggle {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  gap: 8px;
   border: 0;
-  border-radius: 8px;
-  padding: 0 10px;
+  border-top: .5px dashed var(--color-border, var(--border));
+  border-radius: 0;
+  padding: 0 16px;
   background: transparent;
-  color: var(--primary);
-  font-weight: 900;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
 }
-.invoice-items-toggle:hover,
-.invoice-add-toggle:hover {
-  background: rgba(20,160,120,0.08);
-}
-.invoice-items-toggle svg,
-.invoice-add-toggle svg {
-  flex: 0 0 auto;
+.invoice-items-toggle:hover {
+  background: rgba(255,255,255,0.04);
 }
 .invoice-items-toggle svg {
-  transition: transform .25s ease;
+  flex: 0 0 auto;
+  transition: transform .2s ease;
 }
 .invoice-items-toggle.open svg {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 .invoice-items-panel {
   display: grid;
@@ -1885,7 +1872,8 @@ select {
 .invoice-items {
   display: grid;
   gap: 0;
-  padding: 12px 20px 0;
+  padding: 0;
+  border-top: .5px dashed var(--color-border, var(--border));
 }
 .invoice-item {
   display: grid;
@@ -1893,8 +1881,8 @@ select {
   align-items: center;
   gap: 12px;
   min-height: 40px;
-  border-bottom: .5px solid var(--color-border);
-  padding: 8px 0;
+  border-bottom: .5px solid var(--color-border, var(--border));
+  padding: 8px 16px;
 }
 .invoice-item:last-child { border-bottom: 0; }
 .invoice-item > span {
@@ -1903,7 +1891,12 @@ select {
   gap: 8px;
   min-width: 0;
 }
+.invoice-item > strong { white-space: nowrap; }
 .invoice-item > .icon-btn { opacity: 1; }
+.invoice-items > .muted {
+  margin: 0;
+  padding: 12px 16px;
+}
 .installment-line {
   grid-template-columns: minmax(0,1fr) auto 30px;
 }
@@ -1913,14 +1906,13 @@ select {
   align-items: center;
   gap: 4px;
   border: 0;
-  border-radius: 999px;
-  padding: 4px 7px;
+  border-radius: 4px;
+  padding: 3px 6px;
   background: #F0E7FF;
   color: #7C3AED;
   font-size: 10px;
   font-weight: 900;
 }
-.installment-badge svg { flex: 0 0 auto; }
 .installment-badge-short { display: none; }
 .installment-line small { color: var(--muted); }
 
@@ -1934,13 +1926,109 @@ select {
     padding: 6px 9px;
     font-size: 11px;
   }
+  .invoice-total-row strong { font-size: 16px; }
   .installment-badge-full { display: none; }
   .installment-badge-short { display: inline; }
 }
-.inline-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(92px, 110px); gap: 10px; padding: 12px 20px 20px; }
-.inline-form > * { min-width: 0; }
-.inline-form .btn { grid-column: 1 / -1; }
-.add-inline { margin: 8px 20px 20px; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--primary); font-weight: 800; }
+.invoice-card .inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: .5px dashed var(--color-border);
+}
+.invoice-card .inline-form > * { min-width: 0; }
+.invoice-card .inline-form input {
+  height: 34px;
+  border: .5px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--color-card-bg);
+  color: var(--text);
+  font-size: 13px;
+}
+.inline-form-actions {
+  display: contents;
+}
+.inline-add-submit {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 14px;
+  border-color: var(--color-primary);
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.inline-add-submit-symbol { display: none; }
+.inline-form-cancel {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  padding: 4px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.inline-form-cancel:hover {
+  color: var(--primary);
+}
+.add-inline {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-top: .5px dashed var(--color-border, var(--border));
+  padding: 0 16px;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 800;
+  text-align: left;
+}
+.add-inline:hover,
+.invoice-single-add-link:hover {
+  background: rgba(20,160,120,0.05);
+}
+.add-inline svg { flex: 0 0 auto; }
+.invoice-single-add-link {
+  width: 100%;
+  display: block;
+  border: 0;
+  border-top: .5px dashed var(--color-border);
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .invoice-items-toggle {
+    min-height: 44px;
+  }
+  .invoice-card .inline-form {
+    grid-template-columns: minmax(0, 1fr) 90px auto;
+    gap: 6px;
+  }
+  .inline-add-submit {
+    width: 34px;
+    padding: 0;
+  }
+  .inline-add-submit-text { display: none; }
+  .inline-add-submit-symbol { display: inline; }
+}
 .invoice-footer {
   margin-top: auto;
   border-top: 1px solid var(--border);
