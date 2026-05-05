@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarPlus, CheckCircle2, ChevronDown, CreditCard, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarPlus, CheckCircle2, ChevronDown, CreditCard, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -40,6 +40,11 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
     setAdding(false);
   };
 
+  const startAdding = () => {
+    if (canToggleItems) setItemsOpen(true);
+    setAdding(true);
+  };
+
   return (
     <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
@@ -53,56 +58,66 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
       </header>
 
       <div className="invoice-total-row">
-        <div>
+        <div className="invoice-total-value">
           <span>{tt("invoices.total", "Total")}:</span>
           <strong>{formatMoney(invoice.total_amount)}</strong>
         </div>
-        {canToggleItems && (
-          <button className={`invoice-items-toggle ${itemsOpen ? "open" : ""}`} type="button" onClick={() => setItemsOpen((current) => !current)} aria-expanded={itemsOpen}>
-            <ChevronDown size={16} />
-            {itemsLabel}
-          </button>
-        )}
+        <div className="invoice-total-actions">
+          {canToggleItems && (
+            <button className={`invoice-items-toggle ${itemsOpen ? "open" : ""}`} type="button" onClick={() => setItemsOpen((current) => !current)} aria-expanded={itemsOpen}>
+              <ChevronDown size={16} />
+              {itemsLabel}
+            </button>
+          )}
+          {!itemsOpen && !adding && (
+            <button className="invoice-add-toggle" type="button" onClick={startAdding}>
+              <Plus size={16} />
+              {tt("invoices.addItem", "+ item")}
+            </button>
+          )}
+        </div>
       </div>
 
-      {canToggleItems && (
-        <div className={`invoice-items-panel ${itemsOpen ? "open" : ""}`}>
+      {(canToggleItems || adding) && (
+        <div className={`invoice-items-panel ${itemsOpen || adding ? "open" : ""}`}>
           <div className="invoice-items-panel-inner">
-            <div className="invoice-items">
-              {totalItemCount ? (
-                <>
-                  {regularItems.map((item) => (
-                    <div className="invoice-item" key={`item-${item.id}`}>
-                      <span>{item.description}</span>
-                      <strong>{formatMoney(item.amount)}</strong>
-                      <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={tt("invoiceModels.delete", "Remover item")}>
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                  {installmentItems.map((item) => (
-                    <div
-                      className="invoice-item installment-line"
-                      key={`installment-${item.id}`}
-                      title={`Compra: ${formatMoney(item.purchase_total_amount)} em ${item.installment_count}x - parcelas restantes: ${item.remaining_installments}`}
-                    >
-                      <span>
-                        <button className="installment-badge" type="button" onClick={() => onViewInstallment(item.purchase_id)}>
-                          <CreditCard size={14} />
-                          <span className="installment-badge-full">{tt("invoices.installmentLabel", "PARCELA")} {item.installment_number}/{item.installment_count}</span>
-                          <span className="installment-badge-short">{item.installment_number}/{item.installment_count}</span>
+            {canToggleItems && (
+              <div className="invoice-items">
+                {totalItemCount ? (
+                  <>
+                    {regularItems.map((item) => (
+                      <div className="invoice-item" key={`item-${item.id}`}>
+                        <span>{item.description}</span>
+                        <strong>{formatMoney(item.amount)}</strong>
+                        <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={tt("invoiceModels.delete", "Remover item")}>
+                          <Trash2 size={15} />
                         </button>
-                        {item.purchase_description || item.description}
-                      </span>
-                      <strong>{formatMoney(item.amount)}</strong>
-                      <button className="icon-btn small danger" type="button" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </>
-              ) : <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>}
-            </div>
+                      </div>
+                    ))}
+                    {installmentItems.map((item) => (
+                      <div
+                        className="invoice-item installment-line"
+                        key={`installment-${item.id}`}
+                        title={`Compra: ${formatMoney(item.purchase_total_amount)} em ${item.installment_count}x - parcelas restantes: ${item.remaining_installments}`}
+                      >
+                        <span>
+                          <button className="installment-badge" type="button" onClick={() => onViewInstallment(item.purchase_id)}>
+                            <CreditCard size={14} />
+                            <span className="installment-badge-full">{tt("invoices.installmentLabel", "PARCELA")} {item.installment_number}/{item.installment_count}</span>
+                            <span className="installment-badge-short">{item.installment_number}/{item.installment_count}</span>
+                          </button>
+                          {item.purchase_description || item.description}
+                        </span>
+                        <strong>{formatMoney(item.amount)}</strong>
+                        <button className="icon-btn small danger" type="button" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                ) : <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>}
+              </div>
+            )}
 
             {adding ? (
               <form className="inline-form" onSubmit={handleSubmit}>
@@ -111,7 +126,7 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
                 <button className="btn btn-primary" type="submit">{tt("invoices.add", "Adicionar")}</button>
               </form>
             ) : (
-              <button className="add-inline" type="button" onClick={() => setAdding(true)}>
+              <button className="add-inline" type="button" onClick={startAdding}>
                 {tt("invoices.addItem", "+ item")}
               </button>
             )}

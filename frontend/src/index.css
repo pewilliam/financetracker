@@ -1821,21 +1821,30 @@ select {
   border-bottom: 1px solid var(--border);
   padding: 16px 20px;
 }
-.invoice-total-row div {
+.invoice-total-value {
   display: flex;
   align-items: baseline;
   gap: 10px;
   min-width: 0;
 }
-.invoice-total-row span {
+.invoice-total-value span {
   color: var(--muted);
   font-weight: 800;
 }
-.invoice-total-row strong {
+.invoice-total-value strong {
   color: var(--primary);
   font-size: 24px;
 }
-.invoice-items-toggle {
+.invoice-total-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.invoice-items-toggle,
+.invoice-add-toggle {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -1847,8 +1856,13 @@ select {
   color: var(--primary);
   font-weight: 900;
 }
-.invoice-items-toggle:hover {
+.invoice-items-toggle:hover,
+.invoice-add-toggle:hover {
   background: rgba(20,160,120,0.08);
+}
+.invoice-items-toggle svg,
+.invoice-add-toggle svg {
+  flex: 0 0 auto;
 }
 .invoice-items-toggle svg {
   transition: transform .25s ease;
