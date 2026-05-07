@@ -212,10 +212,11 @@ function AuthPage({ mode }) {
   );
 }
 
-function Sidebar({ open, setOpen }) {
+// Conteúdo interno da sidebar — compartilhado entre desktop e mobile
+function SidebarContent({ open, setOpen, onClose }) {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { t, language, setLanguage } = useI18n();
+  const { t } = useI18n();
   const links = [
     [t("sidebar.dashboard"), "/", BarChart3],
     [t("sidebar.months"), "/meses", CalendarDays],
@@ -224,60 +225,149 @@ function Sidebar({ open, setOpen }) {
     [t("sidebar.installments"), "/parcelamentos", CreditCard],
     [t("sidebar.receivables"), "/recebiveis", Wallet]
   ];
-  const closeOnMobile = () => {
-    if (isMobileViewport()) setOpen(false);
-  };
 
   return (
-    <>
-      <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="sidebar-shell">
-          <div className="sidebar-top">
-            <div className="sidebar-brand">
-              <Link className="sidebar-logo sidebar-action" to="/" onClick={closeOnMobile} aria-label="Kashy365" data-tooltip="Kashy365">
-                <span className="sidebar-logo-mark">
-                  <img className="sidebar-brand-mark" src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
-                </span>
-                <span className="sidebar-wordmark"><strong>Kashy</strong><em>365</em></span>
-              </Link>
-              <button
-                type="button"
-                className="sidebar-toggle sidebar-action"
-                onClick={() => setOpen((current) => !current)}
-                aria-label={open ? t("sidebar.collapse") : t("sidebar.expand")}
-                aria-expanded={open}
-                data-tooltip={open ? t("sidebar.collapseShort") : t("sidebar.expandShort")}
-              >
-                {open ? <ChevronsLeft className="sidebar-icon" /> : <ChevronsRight className="sidebar-icon" />}
-              </button>
-            </div>
-            <nav className="sidebar-nav" aria-label={t("sidebar.navigation")}>
-              {links.map(([label, path, Icon]) => (
-                <NavLink key={path} to={path} end={path === "/"} onClick={closeOnMobile} data-tooltip={label} className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}>
-                  <Icon className="sidebar-icon" />
-                  <span>{label}</span>
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-          <div className="sidebar-bottom">
-            <NavLink className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`} to="/configuracoes" onClick={closeOnMobile} data-tooltip={t("sidebar.settings")}>
-              <Settings className="sidebar-icon" />
-              <span>{t("sidebar.settings")}</span>
+    <div className="sidebar-shell">
+      <div className="sidebar-top">
+        <div className="sidebar-brand">
+          <Link className="sidebar-logo sidebar-action" to="/" onClick={onClose} aria-label="Kashy365" data-tooltip="Kashy365">
+            <span className="sidebar-logo-mark">
+              <img className="sidebar-brand-mark" src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
+            </span>
+            <span className="sidebar-wordmark"><strong>Kashy</strong><em>365</em></span>
+          </Link>
+          <button
+            type="button"
+            className="sidebar-toggle sidebar-action"
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? t("sidebar.collapse") : t("sidebar.expand")}
+            aria-expanded={open}
+            data-tooltip={open ? t("sidebar.collapseShort") : t("sidebar.expandShort")}
+          >
+            {open ? <ChevronsLeft className="sidebar-icon" /> : <ChevronsRight className="sidebar-icon" />}
+          </button>
+        </div>
+        <nav className="sidebar-nav" aria-label={t("sidebar.navigation")}>
+          {links.map(([label, path, Icon]) => (
+            <NavLink
+              key={path}
+              to={path}
+              end={path === "/"}
+              onClick={onClose}
+              data-tooltip={label}
+              className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}
+            >
+              <Icon className="sidebar-icon" />
+              <span>{label}</span>
             </NavLink>
-            <button className="theme-toggle sidebar-action" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-tooltip={t("sidebar.theme")}>
-              {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
-              <span>{t("sidebar.theme")}</span>
-            </button>
-            <div className="user-card sidebar-action" data-tooltip={user?.name || t("sidebar.user")}>
-              <div className="avatar">{user?.name?.[0]?.toUpperCase() || t("sidebar.user")[0]}</div>
-              <div className="user-meta"><strong>{user?.name}</strong><span>{user?.email}</span></div>
-            </div>
-            <button className="logout sidebar-action" onClick={logout} data-tooltip={t("sidebar.logout")}><LogOut className="sidebar-icon" /><span>{t("sidebar.logout")}</span></button>
+          ))}
+        </nav>
+      </div>
+      <div className="sidebar-bottom">
+        <NavLink
+          className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`}
+          to="/configuracoes"
+          onClick={onClose}
+          data-tooltip={t("sidebar.settings")}
+        >
+          <Settings className="sidebar-icon" />
+          <span>{t("sidebar.settings")}</span>
+        </NavLink>
+        <button
+          className="theme-toggle sidebar-action"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          data-tooltip={t("sidebar.theme")}
+        >
+          {theme === "dark" ? <Sun className="sidebar-icon" /> : <Moon className="sidebar-icon" />}
+          <span>{t("sidebar.theme")}</span>
+        </button>
+        <div className="user-card sidebar-action" data-tooltip={user?.name || t("sidebar.user")}>
+          <div className="avatar">{user?.name?.[0]?.toUpperCase() || t("sidebar.user")[0]}</div>
+          <div className="user-meta">
+            <strong>{user?.name}</strong>
+            <span>{user?.email}</span>
           </div>
         </div>
+        <button
+          className="logout sidebar-action"
+          onClick={logout}
+          data-tooltip={t("sidebar.logout")}
+        >
+          <LogOut className="sidebar-icon" />
+          <span>{t("sidebar.logout")}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Sidebar desktop — sempre visível, expande/colapsa
+function SidebarDesktop({ open, setOpen }) {
+  return (
+    <aside className={`sidebar ${open ? "open" : ""}`}>
+      <SidebarContent open={open} setOpen={setOpen} onClose={() => {}} />
+    </aside>
+  );
+}
+
+// Sidebar mobile — drawer com overlay, zero manipulação de body/overflow
+function SidebarMobile({ open, setOpen }) {
+  const { t } = useI18n();
+  const { theme } = useTheme();
+  const overlayRef = useRef(null);
+  const stopBackgroundScroll = (event) => event.preventDefault();
+
+  // Fecha ao pressionar Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, setOpen]);
+
+  // Sincroniza theme-color com a cor da sidebar quando aberta
+  useEffect(() => {
+    const sidebarColor = "#07120E";
+    const appColor = theme === "dark" ? "#0A1410" : "#F4FAF7";
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+    }
+    meta.content = open ? sidebarColor : appColor;
+    return () => { meta.content = appColor; };
+  }, [open, theme]);
+
+  return (
+    <div
+      ref={overlayRef}
+      className={`mob-sidebar-overlay${open ? " mob-sidebar-overlay--open" : ""}`}
+      aria-modal={open}
+      role="dialog"
+      aria-hidden={!open}
+    >
+      {/* Backdrop clicável — fecha o drawer */}
+      <div
+        className="mob-sidebar-backdrop"
+        onClick={() => setOpen(false)}
+        onTouchMove={stopBackgroundScroll}
+        onWheel={stopBackgroundScroll}
+        aria-label={t("sidebar.closeMenu")}
+      />
+      {/* Painel */}
+      <aside className={`mob-sidebar-panel${open ? " mob-sidebar-panel--open" : ""}`}>
+        <SidebarContent open={true} setOpen={setOpen} onClose={() => setOpen(false)} />
       </aside>
-      {open && <button className="mobile-backdrop" onClick={() => setOpen(false)} aria-label={t("sidebar.closeMenu")} />}
+    </div>
+  );
+}
+
+function Sidebar({ open, setOpen }) {
+  return (
+    <>
+      <SidebarDesktop open={open} setOpen={setOpen} />
+      <SidebarMobile open={open} setOpen={setOpen} />
     </>
   );
 }
@@ -345,16 +435,30 @@ function AppShell() {
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses";
   const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete;
-  const bodyLocked = overlayOpen || (menuOpen && isMobileViewport());
+  const bodyLocked = overlayOpen;
 
   useEffect(() => {
     if (bodyLocked) {
-      document.body.style.overflow = "hidden";
-    } else {
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
       document.body.style.overflow = "";
+    } else {
+      const scrollY = Math.abs(parseInt(document.body.style.top || "0", 10));
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
+      if (scrollY) window.scrollTo(0, scrollY);
     }
     return () => {
+      const scrollY = Math.abs(parseInt(document.body.style.top || "0", 10));
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
       document.body.style.overflow = "";
+      if (scrollY) window.scrollTo(0, scrollY);
     };
   }, [bodyLocked]);
 
@@ -1110,7 +1214,7 @@ function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
               <input type="color" value={normalizeInvoiceColor(form.color)} onChange={(event) => setForm({ ...form, color: event.target.value })} />
             </div>
           </label>
-          <label><span>{tt("invoiceModels.defaultDueDay", "Dia de vencimento padrão")}</span><input type="number" min="1" max="31" value={dueDay} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} required /></label>
+          <label><span>{tt("invoiceModels.defaultDueDay", "Dia de vencimento padrão")}</span><input type="number" min="1" max="31" value={form.default_due_day ?? ""} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} onBlur={() => setForm({ ...form, default_due_day: dueDay })} required /></label>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
@@ -1465,7 +1569,7 @@ function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
               <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
               <div className="installment-form-row">
                 <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></label>
-                <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={count} onChange={(event) => updateForm({ installment_count: Number(event.target.value) })} required /></label>
+                <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={form.installment_count ?? ""} onChange={(event) => updateForm({ installment_count: event.target.value })} onBlur={() => updateForm({ installment_count: count })} required /></label>
               </div>
               <div className="installment-per-value" aria-live="polite">
                 <strong>{tt("installmentModal.perInstallment", `= ${formatMoney(installmentAmount)} por parcela`, { value: formatMoney(installmentAmount) })}</strong>
@@ -2045,8 +2149,9 @@ function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, on
                       type="number"
                       min="1"
                       max="23"
-                      value={duplicateMonths}
-                      onChange={(event) => updateForm({ duplicate_months: Math.min(23, Math.max(1, Number(event.target.value) || 1)) })}
+                      value={form.duplicate_months ?? ""}
+                      onChange={(event) => updateForm({ duplicate_months: event.target.value })}
+                      onBlur={() => updateForm({ duplicate_months: duplicateMonths })}
                     />
                   </div>
                   <input
