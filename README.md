@@ -14,7 +14,7 @@ backend e banco de dados rodando em servicos separados pelo Docker Compose.
   autenticacao.
 - **Vite**: utilizado como ferramenta de desenvolvimento e build do frontend,
   oferecendo servidor local rapido e geracao dos arquivos estaticos de
-  producao.
+  produção.
 - **Tailwind CSS**: responsavel pela estilizacao da interface com classes
   utilitarias, mantendo os componentes visuais consistentes e responsivos.
 - **React Router DOM**: controla a navegacao entre telas da aplicacao no lado
