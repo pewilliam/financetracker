@@ -437,6 +437,7 @@ button:focus-visible {
 .sidebar .user-card strong { color: #E8F5EE; }
 .user-card span { color: var(--muted); font-size: 12px; }
 .sidebar .user-card span { color: rgba(232,245,238,0.62); }
+.mob-sidebar-overlay { display: none; }
 .mobile-backdrop { display: none; }
 .mobile-topbar { display: none; }
 
@@ -2724,6 +2725,47 @@ select {
   }
   .sidebar {
     position: fixed;
+<<<<<<< Updated upstream
+=======
+    inset: 0;
+    z-index: 40;
+    display: block;
+    pointer-events: none;
+    visibility: hidden;
+    overscroll-behavior: none;
+    transition: visibility 0s linear 240ms;
+  }
+  .mob-sidebar-overlay--open {
+    pointer-events: auto;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+  body:has(.mob-sidebar-overlay--open) {
+    background: #07120E;
+    overscroll-behavior: none;
+  }
+
+  /* ── Backdrop escuro ── */
+  .mob-sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 8, 6, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    opacity: 0;
+    transition: opacity 240ms ease;
+    overscroll-behavior: none;
+    touch-action: none;
+    will-change: opacity;
+  }
+  .mob-sidebar-overlay--open .mob-sidebar-backdrop {
+    opacity: 1;
+  }
+
+  /* ── Painel lateral ── */
+  .mob-sidebar-panel {
+    position: absolute;
+>>>>>>> Stashed changes
     inset: 0 auto 0 0;
     width: var(--sidebar-expanded);
     height: 100vh;
