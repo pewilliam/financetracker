@@ -126,7 +126,7 @@ export const enUS = {
     openingBalance: "Opening balance",
     viewAllDays: "View all days of the month",
     viewSummary: "View month summary",
-    nextDayWithoutEntries: "Next day without entries",
+    nextDayWithoutEntries: "No entries",
     expenses: "Expenses",
     income: "Income",
     closing: "Closing",

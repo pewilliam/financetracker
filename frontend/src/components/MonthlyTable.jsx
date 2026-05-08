@@ -72,7 +72,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                     </div>
                   ))
                 ) : (
-                  <span className="tx-description">{tt("monthlyTable.nextDayWithoutEntries", "Próximo dia sem lançamentos")}</span>
+                  <span className="tx-description">{tt("monthlyTable.nextDayWithoutEntries", "Sem lançamentos")}</span>
                 )}
               </div>
 
