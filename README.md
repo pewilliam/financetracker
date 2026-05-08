@@ -38,7 +38,7 @@ backend e banco de dados rodando em servicos separados pelo Docker Compose.
 - **SQLAlchemy**: camada de mapeamento objeto-relacional usada para modelar e
   consultar entidades como usuarios, transacoes, faturas, recorrencias, saldos
   mensais e parcelas.
-- **Alembic**: gerencia as migracoes do banco de dados, mantendo o historico de
+- **Alembic**: gerencia as migrções do banco de dados, mantendo o historico de
   evolucao do schema em `backend/alembic/versions`.
 - **Pydantic/FastAPI Schemas**: define os contratos de entrada e saida da API,
   validando os dados recebidos e padronizando as respostas.
