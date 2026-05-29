@@ -2317,6 +2317,10 @@ function SettingsPage({ summary, monthLabel, monthData, year, month, refresh }) 
 function Skeleton() {
   return <div className="summary-grid">{Array.from({ length: 4 }).map((_, i) => <div className="card skeleton" key={i} />)}</div>;
 }
+import { Route, Routes } from "react-router-dom";
+import AuthPage from "./pages/AuthPage.jsx";
+import AppShell from "./components/layout/AppShell.jsx";
+import Protected from "./components/layout/Protected.jsx";
 
 export default function App() {
   return (
