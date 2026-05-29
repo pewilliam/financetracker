@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, User
-from app.schemas.installments import InstallmentCreate, InstallmentPurchaseOut
+from app.schemas.installments import InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, recalculate_invoice_total
 
@@ -73,6 +73,12 @@ def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
         next_installment=next_item,
         items=items,
     )
+
+
+def _update_purchase_totals(purchase: InstallmentPurchase, items: list[InstallmentItem]) -> None:
+    purchase.installment_count = len(items)
+    purchase.total_amount = _money(sum((item.amount for item in items), Decimal("0.00")))
+    purchase.installment_value = _money(purchase.total_amount / purchase.installment_count) if purchase.installment_count else Decimal("0.00")
 
 
 @router.get("", response_model=list[InstallmentPurchaseOut])
@@ -236,6 +242,68 @@ def delete_installment(
     return None
 
 
+@router.put("/items/{item_id}", response_model=InstallmentPurchaseOut)
+def update_installment_item(
+    item_id: int,
+    payload: InstallmentItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = (
+        db.query(InstallmentItem)
+        .join(InstallmentPurchase)
+        .filter(InstallmentItem.id == item_id, InstallmentPurchase.user_id == current_user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Installment item not found")
+
+    target_invoice = None
+    if payload.invoice_id is not None:
+        target_invoice = (
+            db.query(Invoice)
+            .filter(Invoice.id == payload.invoice_id, Invoice.user_id == current_user.id)
+            .first()
+        )
+        if not target_invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+    purchase = item.purchase
+    previous_invoice_id = item.invoice_id
+    item.amount = _money(payload.amount)
+    item.invoice_id = target_invoice.id if target_invoice else None
+    if item.installment_number == 1:
+        purchase.first_invoice_id = item.invoice_id
+
+    items = (
+        db.query(InstallmentItem)
+        .filter(InstallmentItem.purchase_id == purchase.id)
+        .order_by(InstallmentItem.installment_number)
+        .all()
+    )
+    _update_purchase_totals(purchase, items)
+
+    db.flush()
+    touched_invoice_ids = {previous_invoice_id, item.invoice_id} - {None}
+    for invoice_id in touched_invoice_ids:
+        invoice = db.get(Invoice, invoice_id)
+        if invoice:
+            recalculate_invoice_total(db, invoice)
+
+    db.commit()
+    purchase = (
+        db.query(InstallmentPurchase)
+        .options(
+            selectinload(InstallmentPurchase.items)
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.template),
+        )
+        .filter(InstallmentPurchase.id == purchase.id, InstallmentPurchase.user_id == current_user.id)
+        .first()
+    )
+    return _purchase_summary(purchase)
+
+
 @router.delete("/items/{item_id}", status_code=204)
 def delete_installment_item(
     item_id: int,
@@ -268,8 +336,6 @@ def delete_installment_item(
     if not remaining:
         db.delete(purchase)
     else:
-        purchase.installment_count = len(remaining)
-        purchase.total_amount = _money(sum((row.amount for row in remaining), Decimal("0.00")))
-        purchase.installment_value = _money(purchase.total_amount / purchase.installment_count)
+        _update_purchase_totals(purchase, remaining)
     db.commit()
     return None

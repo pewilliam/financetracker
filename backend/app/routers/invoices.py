@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
-from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceOut, InvoicePaidUpdate
+from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, recalculate_invoice_total
 
@@ -159,6 +159,42 @@ def delete_invoice_item(
         raise HTTPException(status_code=404, detail="Item not found")
 
     db.delete(item)
+    db.flush()
+    recalculate_invoice_total(db, invoice)
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+@router.put("/{invoice_id}/items/{item_id}", response_model=InvoiceOut)
+def update_invoice_item(
+    invoice_id: int,
+    item_id: int,
+    payload: InvoiceItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    invoice = (
+        db.query(Invoice)
+        .options(
+            selectinload(Invoice.items),
+            selectinload(Invoice.template),
+            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
+        )
+        .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    item = db.get(InvoiceItem, item_id)
+    if not item or item.invoice_id != invoice.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    item.description = payload.description
+    item.amount = payload.amount
+
     db.flush()
     recalculate_invoice_total(db, invoice)
 

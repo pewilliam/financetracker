@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarPlus, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarPlus, Check, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -12,13 +12,17 @@ function normalizeName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
-export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
+export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [addMode, setAddMode] = useState(null);
   const [itemsOpen, setItemsOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [editDescription, setEditDescription] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [savingItemId, setSavingItemId] = useState(null);
   const adding = addMode !== null;
   const addingRefund = addMode === "refund";
   const status = daysUntil(invoice.due_date);
@@ -72,6 +76,36 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
     setAddMode(null);
   };
 
+  const startEditingItem = (item) => {
+    setAddMode(null);
+    setEditingItemId(item.id);
+    setEditDescription(item.description || "");
+    setEditAmount(formatMoney(Math.abs(Number(item.amount || 0)), language));
+  };
+
+  const cancelEditingItem = () => {
+    setEditingItemId(null);
+    setEditDescription("");
+    setEditAmount("");
+  };
+
+  const saveEditingItem = async (item) => {
+    const parsed = parseTypedMoneyInput(editAmount, language);
+    const refund = Number(item.amount) < 0;
+    const cleanDescription = editDescription.trim();
+    if (!parsed || (!refund && !cleanDescription)) return;
+    setSavingItemId(item.id);
+    try {
+      await onUpdateItem(invoice.id, item.id, {
+        description: cleanDescription || refundLabel,
+        amount: refund ? -Math.abs(parsed) : parsed
+      });
+      cancelEditingItem();
+    } finally {
+      setSavingItemId(null);
+    }
+  };
+
   const renderAddChoices = (single = false) => (
     <div className={single ? "invoice-single-add-actions" : "invoice-inline-actions"}>
       <button className={single ? "invoice-single-add-link" : "add-inline"} type="button" onClick={() => startAdding("item")}>
@@ -101,6 +135,46 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
       </div>
     </form>
   );
+
+  const renderRegularItem = (item) => {
+    const refund = Number(item.amount) < 0;
+    const isEditing = editingItemId === item.id;
+    const saveDisabled = savingItemId === item.id || !parseTypedMoneyInput(editAmount, language) || (!refund && !editDescription.trim());
+    return (
+      <div className={`invoice-item ${refund ? "refund-line" : ""} ${isEditing ? "editing" : ""}`} key={`item-${item.id}`}>
+        {isEditing ? (
+          <>
+            <input placeholder={refund ? refundDescriptionLabel : tt("invoices.description", "Descrição")} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} />
+            <input inputMode="decimal" placeholder={refund ? (language === "en-US" ? "Refund amount" : "Valor reembolsado") : "R$ 0,00"} value={editAmount} onChange={(event) => setEditAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setEditAmount(formatTypedMoneyAsCurrency(editAmount, language))} />
+            <span className="invoice-item-actions">
+              <button className="icon-btn small" type="button" onClick={() => saveEditingItem(item)} disabled={saveDisabled} aria-label={language === "en-US" ? "Save item" : "Salvar item"}>
+                <Check size={15} />
+              </button>
+              <button className="icon-btn small" type="button" onClick={cancelEditingItem} disabled={savingItemId === item.id} aria-label={cancelLabel}>
+                <X size={15} />
+              </button>
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              {refund && <em className="refund-badge">{refundLabel}</em>}
+              {item.description}
+            </span>
+            <strong>{formatMoney(item.amount)}</strong>
+            <span className="invoice-item-actions">
+              <button className="icon-btn small" type="button" onClick={() => startEditingItem(item)} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
+                <Pencil size={15} />
+              </button>
+              <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
+                <Trash2 size={15} />
+              </button>
+            </span>
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
@@ -132,21 +206,7 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
             <div className="invoice-items">
               {totalItemCount ? (
                 <>
-                  {regularItems.map((item) => {
-                    const refund = Number(item.amount) < 0;
-                    return (
-                      <div className={`invoice-item ${refund ? "refund-line" : ""}`} key={`item-${item.id}`}>
-                        <span>
-                          {refund && <em className="refund-badge">{refundLabel}</em>}
-                          {item.description}
-                        </span>
-                        <strong>{formatMoney(item.amount)}</strong>
-                        <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {regularItems.map(renderRegularItem)}
                   {installmentItems.map((item) => (
                     <div
                       className="invoice-item installment-line"
@@ -161,9 +221,11 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
                         {item.purchase_description || item.description}
                       </span>
                       <strong>{formatMoney(item.amount)}</strong>
-                      <button className="icon-btn small danger" type="button" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
-                        <Trash2 size={15} />
-                      </button>
+                      <span className="invoice-item-actions">
+                        <button className="icon-btn small danger" type="button" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
+                          <Trash2 size={15} />
+                        </button>
+                      </span>
                     </div>
                   ))}
                 </>
@@ -181,7 +243,12 @@ export default function InvoiceCard({ invoice, onAddItem, onAddInstallment, onDe
             {renderAddForm()}
           </div>
         ) : (
-          renderAddChoices(true)
+          <>
+            <div className="invoice-single-item-panel">
+              {regularItems.map(renderRegularItem)}
+            </div>
+            {renderAddChoices(true)}
+          </>
         )
       )}
 

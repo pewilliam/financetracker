@@ -21,6 +21,11 @@ class InstallmentCreate(APIModel):
     items: Optional[List[InstallmentDraftIn]] = None
 
 
+class InstallmentItemUpdate(APIModel):
+    invoice_id: Optional[int] = None
+    amount: Decimal = Field(gt=0)
+
+
 class InstallmentItemOut(APIModel):
     id: int
     invoice_id: Optional[int] = None

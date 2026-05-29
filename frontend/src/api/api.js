@@ -151,6 +151,13 @@ export function addInvoiceItem(invoiceId, payload) {
   });
 }
 
+export function updateInvoiceItem(invoiceId, itemId, payload) {
+  return request(`/invoices/${invoiceId}/items/${itemId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function deleteInvoiceItem(invoiceId, itemId) {
   return request(`/invoices/${invoiceId}/items/${itemId}`, {
     method: "DELETE" }
@@ -232,6 +239,13 @@ export function createInstallment(payload) {
 
 export function deleteInstallment(id) {
   return request(`/installments/${id}`, { method: "DELETE" });
+}
+
+export function updateInstallmentItem(itemId, payload) {
+  return request(`/installments/items/${itemId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
 }
 
 export function deleteInstallmentItem(itemId) {

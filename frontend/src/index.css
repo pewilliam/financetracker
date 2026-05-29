@@ -1895,12 +1895,15 @@ select {
 }
 .invoice-item {
   display: grid;
-  grid-template-columns: minmax(0,1fr) auto 30px;
+  grid-template-columns: minmax(0,1fr) auto 70px;
   align-items: center;
   gap: 12px;
   min-height: 40px;
   border-bottom: .5px solid var(--color-border, var(--border));
   padding: 8px 16px;
+}
+.invoice-item.editing {
+  grid-template-columns: minmax(0,1fr) 120px 70px;
 }
 .invoice-item:last-child { border-bottom: 0; }
 .invoice-item > span {
@@ -1910,7 +1913,22 @@ select {
   min-width: 0;
 }
 .invoice-item > strong { white-space: nowrap; }
-.invoice-item > .icon-btn { opacity: 1; }
+.invoice-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.invoice-item input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: .5px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--color-card-bg);
+  color: var(--text);
+  font-size: 13px;
+}
 .invoice-item.refund-line > strong {
   color: var(--income);
 }
@@ -1932,7 +1950,7 @@ select {
   padding: 12px 16px;
 }
 .installment-line {
-  grid-template-columns: minmax(0,1fr) auto 30px;
+  grid-template-columns: minmax(0,1fr) auto 70px;
 }
 .installment-badge {
   flex: 0 0 auto;
@@ -2651,6 +2669,18 @@ select {
 .installment-review-row {
   grid-template-columns: 58px 92px minmax(260px, 1fr) minmax(112px, 150px) 34px;
 }
+.installment-details-row {
+  grid-template-columns: 58px minmax(110px, 140px) minmax(250px, 1fr) minmax(112px, 140px) 74px;
+}
+.installment-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 .installment-destination {
   display: grid;
   grid-template-columns: 12px minmax(0, 1fr);
@@ -3338,6 +3368,10 @@ select {
   .installment-review-row {
     min-width: 640px;
     grid-template-columns: 48px 64px minmax(150px, 1fr) minmax(94px, 1fr) 32px;
+  }
+  .installment-details-row {
+    min-width: 720px;
+    grid-template-columns: 48px minmax(96px, 120px) minmax(170px, 1fr) minmax(92px, 110px) 70px;
   }
   .review-head { font-size: 11px; }
   .fab {

@@ -9,6 +9,10 @@ class InvoiceItemCreate(APIModel):
     amount: Decimal
 
 
+class InvoiceItemUpdate(InvoiceItemCreate):
+    pass
+
+
 class InvoiceItemOut(InvoiceItemCreate):
     id: int
     created_at: Optional[datetime] = None
