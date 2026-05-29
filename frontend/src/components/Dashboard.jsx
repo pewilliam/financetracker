@@ -20,6 +20,14 @@ function percentChange(current, previous) {
   return ((now - before) / Math.abs(before)) * 100;
 }
 
+function moneyAxisWidth(values, language) {
+  const longest = values.reduce((max, value) => {
+    const label = formatMoney(value, language);
+    return Math.max(max, label.length);
+  }, 0);
+  return Math.min(Math.max(longest * 8 + 28, 104), 168);
+}
+
 export default function Dashboard({
   summary,
   balanceSeries,
@@ -40,6 +48,15 @@ export default function Dashboard({
     .slice(0, 5);
   const maxExpense = Math.max(...topExpenses.map((tx) => Number(tx.amount)), 1);
   const openInvoices = invoices.filter((invoice) => !invoice.paid);
+  const balanceAxisWidth = moneyAxisWidth(balanceSeries.map((item) => item.balance), language);
+  const historyAxisWidth = moneyAxisWidth(
+    comparisons.flatMap((item) => [
+      item.total_expenses,
+      item.total_income,
+      item.projected_closing
+    ]),
+    language
+  );
 
   const cards = [
     {
@@ -88,7 +105,7 @@ export default function Dashboard({
       <section className="card chart-card wide">
         <h2>{t("dashboard.balanceEvolution")}</h2>
         <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={balanceSeries}>
+          <AreaChart data={balanceSeries} margin={{ left: 8, right: 12 }}>
             <defs>
               <linearGradient id="saldoFill" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor="#14A078" stopOpacity={0.22} />
@@ -97,7 +114,7 @@ export default function Dashboard({
             </defs>
             <CartesianGrid stroke="#E5E7EB" strokeDasharray="4 4" vertical={false} />
             <XAxis dataKey="date" tickFormatter={(value) => value.slice(-2)} tickLine={false} axisLine={false} />
-            <YAxis tickFormatter={(value) => formatMoney(value, language)} tickLine={false} axisLine={false} width={92} />
+            <YAxis tickFormatter={(value) => formatMoney(value, language)} tickLine={false} axisLine={false} tickMargin={8} width={balanceAxisWidth} />
             <Tooltip formatter={(value) => formatMoney(value, language)} labelFormatter={(value) => formatDateShort(value, language)} />
             <Area type="monotone" dataKey="balance" stroke="#14A078" strokeWidth={3} fill="url(#saldoFill)" />
           </AreaChart>
@@ -107,10 +124,10 @@ export default function Dashboard({
       <section className="card chart-card wide">
         <h2>{t("dashboard.monthlyHistory")}</h2>
         <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={comparisons}>
+          <ComposedChart data={comparisons} margin={{ left: 8, right: 12 }}>
             <CartesianGrid stroke="#E5E7EB" strokeDasharray="4 4" vertical={false} />
             <XAxis dataKey="label" tickLine={false} axisLine={false} />
-            <YAxis tickFormatter={(value) => formatMoney(value, language)} tickLine={false} axisLine={false} width={92} />
+            <YAxis tickFormatter={(value) => formatMoney(value, language)} tickLine={false} axisLine={false} tickMargin={8} width={historyAxisWidth} />
             <Tooltip formatter={(value) => formatMoney(value, language)} />
             <Bar dataKey="total_expenses" name={t("dashboard.expenses")} fill="#FF4D6A" radius={[6, 6, 0, 0]} />
             <Bar dataKey="total_income" name={t("dashboard.income")} fill="#3CC88C" radius={[6, 6, 0, 0]} />
