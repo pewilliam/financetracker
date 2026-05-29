@@ -661,10 +661,10 @@ function AppShell() {
   const addItem = async (invoiceId, payload) => {
     try {
       await addInvoiceItem(invoiceId, payload);
-      toast.success("Item adicionado");
+      toast.success(Number(payload.amount) < 0 ? "Reembolso adicionado" : "Item adicionado");
       await refresh();
     } catch {
-      toast.error("Erro ao adicionar item");
+      toast.error(Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
     }
   };
 

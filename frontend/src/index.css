@@ -1911,6 +1911,22 @@ select {
 }
 .invoice-item > strong { white-space: nowrap; }
 .invoice-item > .icon-btn { opacity: 1; }
+.invoice-item.refund-line > strong {
+  color: var(--income);
+}
+.refund-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: #DCFAF0;
+  color: #007864;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
 .invoice-items > .muted {
   margin: 0;
   padding: 12px 16px;
@@ -1999,6 +2015,12 @@ select {
 .inline-form-cancel:hover {
   color: var(--primary);
 }
+.invoice-inline-actions,
+.invoice-single-add-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-top: .5px dashed var(--color-border, var(--border));
+}
 .add-inline {
   width: 100%;
   min-height: 36px;
@@ -2006,23 +2028,35 @@ select {
   align-items: center;
   gap: 6px;
   border: 0;
-  border-top: .5px dashed var(--color-border, var(--border));
   padding: 0 16px;
   background: transparent;
   color: var(--primary);
   font-weight: 800;
   text-align: left;
 }
+.add-inline + .add-inline,
+.invoice-single-add-link + .invoice-single-add-link {
+  border-left: .5px dashed var(--color-border, var(--border));
+}
+.add-inline.refund,
+.invoice-single-add-link.refund {
+  color: #007864;
+}
 .add-inline:hover,
 .invoice-single-add-link:hover {
   background: rgba(20,160,120,0.05);
 }
+.add-inline.refund:hover,
+.invoice-single-add-link.refund:hover {
+  background: rgba(0,120,100,0.06);
+}
 .add-inline svg { flex: 0 0 auto; }
 .invoice-single-add-link {
   width: 100%;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   border: 0;
-  border-top: .5px dashed var(--color-border);
   padding: 10px 16px;
   background: transparent;
   color: var(--primary);
@@ -2046,6 +2080,17 @@ select {
   }
   .inline-add-submit-text { display: none; }
   .inline-add-submit-symbol { display: inline; }
+}
+@media (max-width: 420px) {
+  .invoice-inline-actions,
+  .invoice-single-add-actions {
+    grid-template-columns: 1fr;
+  }
+  .add-inline + .add-inline,
+  .invoice-single-add-link + .invoice-single-add-link {
+    border-top: .5px dashed var(--color-border, var(--border));
+    border-left: 0;
+  }
 }
 .invoice-footer {
   margin-top: auto;

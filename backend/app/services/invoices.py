@@ -23,7 +23,8 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
         .filter(InstallmentItem.invoice_id == invoice.id)
         .scalar()
     )
-    invoice.total_amount = Decimal(str(item_total or 0)) + Decimal(str(installment_total or 0))
+    calculated_total = Decimal(str(item_total or 0)) + Decimal(str(installment_total or 0))
+    invoice.total_amount = max(calculated_total, Decimal("0.00"))
 
     if invoice.linked_transaction_id:
         linked = db.get(Transaction, invoice.linked_transaction_id)
