@@ -1,11 +1,11 @@
-from datetime import date, datetime
+from datetime import date as Date, datetime
 from decimal import Decimal
 from typing import Optional
 from app.schemas.base import APIModel
 
 
 class TransactionBase(APIModel):
-    date: date
+    date: Date
     type: str
     amount: Decimal
     description: Optional[str] = None
@@ -19,7 +19,7 @@ class TransactionCreate(TransactionBase):
 
 
 class TransactionUpdate(APIModel):
-    date: Optional[date] = None
+    date: Optional[Date] = None
     type: Optional[str] = None
     amount: Optional[Decimal] = None
     description: Optional[str] = None
