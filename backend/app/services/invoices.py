@@ -12,6 +12,10 @@ def normalize_invoice_color(color: str | None) -> str:
     return color if color and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) else DEFAULT_INVOICE_COLOR
 
 
+def invoice_accepts_new_charges(invoice: Invoice) -> bool:
+    return not invoice.paid and invoice.due_date >= date.today()
+
+
 def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     item_total = (
         db.query(func.coalesce(func.sum(InvoiceItem.amount), 0))

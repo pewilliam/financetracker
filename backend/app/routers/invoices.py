@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
 from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate
 from app.security import get_current_user
-from app.services.invoices import create_invoice_with_transaction, recalculate_invoice_total
+from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -118,6 +118,8 @@ def add_invoice_item(
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    if not invoice_accepts_new_charges(invoice):
+        raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
 
     item = InvoiceItem(
         invoice_id=invoice.id,

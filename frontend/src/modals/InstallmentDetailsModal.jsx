@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, CreditCard, Pencil, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
+import { invoiceAcceptsNewCharges } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 export default function InstallmentDetailsModal({ purchase, invoices, onClose, onDelete, onSaveItem }) {
@@ -9,8 +10,9 @@ export default function InstallmentDetailsModal({ purchase, invoices, onClose, o
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({ amount: "", invoice_id: "" });
   const [savingId, setSavingId] = useState(null);
-  const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => a.due_date.localeCompare(b.due_date)), [invoices]);
-  const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
+  const selectableInvoices = useMemo(() => invoices.filter(invoiceAcceptsNewCharges), [invoices]);
+  const sortedInvoices = useMemo(() => [...selectableInvoices].sort((a, b) => a.due_date.localeCompare(b.due_date)), [selectableInvoices]);
+  const invoicesById = useMemo(() => new Map(selectableInvoices.map((invoice) => [String(invoice.id), invoice])), [selectableInvoices]);
 
   const startEdit = (item) => {
     setEditingId(item.id);
@@ -58,7 +60,8 @@ export default function InstallmentDetailsModal({ purchase, invoices, onClose, o
               {purchase.items.map((item) => {
                 const isEditing = editingId === item.id;
                 const selectedInvoice = isEditing ? invoicesById.get(String(draft.invoice_id)) : item.invoice;
-                const saveDisabled = savingId === item.id || parseTypedMoneyInput(draft.amount, language) <= 0;
+                const canEditItem = !item.invoice || invoiceAcceptsNewCharges(item.invoice);
+                const saveDisabled = savingId === item.id || parseTypedMoneyInput(draft.amount, language) <= 0 || (draft.invoice_id && !selectedInvoice);
                 return (
                   <div className="review-row installment-review-row installment-details-row" key={item.id}>
                     <span>{item.installment_number}/{purchase.installment_count}</span>
@@ -87,9 +90,9 @@ export default function InstallmentDetailsModal({ purchase, invoices, onClose, o
                           <button className="icon-btn small" type="button" onClick={() => saveEdit(item)} disabled={saveDisabled} aria-label="Salvar parcela"><Check size={15} /></button>
                           <button className="icon-btn small" type="button" onClick={cancelEdit} disabled={savingId === item.id} aria-label="Cancelar edição"><X size={15} /></button>
                         </>
-                      ) : (
+                      ) : canEditItem ? (
                         <button className="icon-btn small" type="button" onClick={() => startEdit(item)} aria-label="Editar parcela"><Pencil size={15} /></button>
-                      )}
+                      ) : null}
                     </span>
                   </div>
                 );

@@ -278,8 +278,8 @@ export default function AppShell() {
       setInstallmentModal(false);
       toast.success("Compra parcelada criada");
       await refresh();
-    } catch {
-      toast.error("Erro ao criar compra parcelada");
+    } catch (error) {
+      toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao criar compra parcelada");
     }
   };
 
@@ -311,7 +311,7 @@ export default function AppShell() {
       toast.success("Parcela atualizada");
       await refresh();
     } catch (error) {
-      toast.error("Erro ao atualizar parcela");
+      toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao atualizar parcela");
       throw error;
     }
   };
@@ -329,8 +329,8 @@ export default function AppShell() {
       await addInvoiceItem(invoiceId, payload);
       toast.success(Number(payload.amount) < 0 ? "Reembolso adicionado" : "Item adicionado");
       await refresh();
-    } catch {
-      toast.error(Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
+    } catch (error) {
+      toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "Esta fatura não aceita novos itens" : Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
     }
   };
 

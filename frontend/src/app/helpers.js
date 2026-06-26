@@ -52,6 +52,10 @@ export function todayIsoDate() {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
+export function invoiceAcceptsNewCharges(invoice) {
+  return Boolean(invoice) && !invoice.paid && String(invoice.due_date || "").slice(0, 10) >= todayIsoDate();
+}
+
 export function normalizeTransactionPayload(data) {
   const parsedAmount = Number(data?.amount);
   const normalized = {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, CreditCard, Filter, Plus } from "lucide-react";
 import InvoiceCard from "../components/InvoiceCard.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
+import { invoiceAcceptsNewCharges, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 
 export default function InvoicesPage({ invoices, addItem, updateItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
   const { t, language } = useI18n();
@@ -13,6 +13,7 @@ export default function InvoicesPage({ invoices, addItem, updateItem, addInstall
   const [expandedGroups, setExpandedGroups] = useState({});
   const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
+  const canCreateInstallment = invoices.some(invoiceAcceptsNewCharges);
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
   const selectedStatusCount = filters.statuses.length;
@@ -110,7 +111,7 @@ export default function InvoicesPage({ invoices, addItem, updateItem, addInstall
               <Filter size={16} /> {tt("invoices.filterInvoices", "Filtrar faturas")}
             </button>
           )}
-          <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> {tt("invoices.installmentPurchase", "Compra parcelada")}</button>
+          {canCreateInstallment && <button className="btn" onClick={openInstallmentModal}><CreditCard size={16} /> {tt("invoices.installmentPurchase", "Compra parcelada")}</button>}
           <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> {tt("invoices.newInvoice", "Nova fatura")}</button>
         </div>
       </div>

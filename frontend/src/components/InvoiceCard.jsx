@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarPlus, Check, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
+import { invoiceAcceptsNewCharges } from "../app/helpers.js";
 import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
 
 function invoiceColor(color) {
@@ -29,6 +30,7 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
   const overdue = !invoice.paid && getDaysUntil(invoice.due_date) <= 0;
   const regularItems = invoice.items || [];
   const installmentItems = invoice.installment_items || [];
+  const canAddToInvoice = invoiceAcceptsNewCharges(invoice);
   const totalItemCount = regularItems.length + installmentItems.length;
   const singleMainItem = totalItemCount === 1
     && regularItems.length === 1
@@ -53,6 +55,7 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    if (!canAddToInvoice) return;
     const parsed = parseTypedMoneyInput(amount, language);
     const cleanDescription = description.trim();
     if (!parsed || (!addingRefund && !cleanDescription)) return;
@@ -66,6 +69,7 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
   };
 
   const startAdding = (mode = "item") => {
+    if (!canAddToInvoice) return;
     if (canToggleItems) setItemsOpen(true);
     setAddMode(mode);
   };
@@ -232,7 +236,7 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
               ) : <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>}
             </div>
 
-            {adding ? renderAddForm() : renderAddChoices()}
+            {adding ? renderAddForm() : canAddToInvoice ? renderAddChoices() : null}
           </div>
         </div>
       )}
@@ -247,7 +251,7 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
             <div className="invoice-single-item-panel">
               {regularItems.map(renderRegularItem)}
             </div>
-            {renderAddChoices(true)}
+            {canAddToInvoice && renderAddChoices(true)}
           </>
         )
       )}
@@ -260,10 +264,12 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
           <CalendarPlus size={16} />
           {tt("invoices.nextInvoice", "Próxima fatura")}
         </button>
-        <button className="btn btn-ghost" onClick={() => onAddInstallment(invoice)}>
-          <CreditCard size={16} />
-          {tt("invoices.installment", "+ Parcela")}
-        </button>
+        {canAddToInvoice && (
+          <button className="btn btn-ghost" onClick={() => onAddInstallment(invoice)}>
+            <CreditCard size={16} />
+            {tt("invoices.installment", "+ Parcela")}
+          </button>
+        )}
         <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
           {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
           {invoice.paid ? tt("invoices.markAsPending", "Marcar pendente") : tt("invoices.markAsPaid", "Marcar paga")}

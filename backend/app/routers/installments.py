@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, User
 from app.schemas.installments import InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
 from app.security import get_current_user
-from app.services.invoices import create_invoice_with_transaction, recalculate_invoice_total
+from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
 
 router = APIRouter(prefix="/api/installments", tags=["installments"])
 
@@ -32,6 +32,11 @@ def _split_amount(total: Decimal, count: int) -> list[Decimal]:
     return values
 
 
+def _ensure_invoice_accepts_new_charges(invoice: Invoice) -> None:
+    if not invoice_accepts_new_charges(invoice):
+        raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
+
+
 def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset: int, target_due_date: Optional[date] = None) -> Invoice:
     target_date = target_due_date or _add_months(first_invoice.due_date, offset)
     invoice = (
@@ -46,7 +51,10 @@ def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset
         .first()
     )
     if invoice:
+        _ensure_invoice_accepts_new_charges(invoice)
         return invoice
+    if target_date < date.today():
+        raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
     return create_invoice_with_transaction(db, user_id, first_invoice.template, target_date)
 
 
@@ -135,6 +143,7 @@ def create_installment(
     )
     if not first_invoice:
         raise HTTPException(status_code=404, detail="First invoice not found")
+    _ensure_invoice_accepts_new_charges(first_invoice)
 
     if payload.items is not None:
         raw_values = [_money(item.amount) for item in payload.items if item.amount > 0]
@@ -168,6 +177,8 @@ def create_installment(
         selected_invoices = {invoice.id: invoice for invoice in rows}
         if len(selected_invoices) != len(provided_ids):
             raise HTTPException(status_code=404, detail="One or more invoices were not found")
+        for invoice in selected_invoices.values():
+            _ensure_invoice_accepts_new_charges(invoice)
 
     confirmed_total = _money(sum(raw_values, Decimal("0.00")))
     purchase = InstallmentPurchase(
@@ -267,6 +278,7 @@ def update_installment_item(
         )
         if not target_invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
+        _ensure_invoice_accepts_new_charges(target_invoice)
 
     purchase = item.purchase
     previous_invoice_id = item.invoice_id

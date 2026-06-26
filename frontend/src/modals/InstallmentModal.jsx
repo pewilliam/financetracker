@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, CreditCard, Trash2, X } from "lucide-react";
 import InvoiceSelector from "../components/InvoiceSelector.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { addMonthsToDate, formatMonthShort, formatMonthSlash, normalizeInvoiceColor } from "../app/helpers.js";
+import { addMonthsToDate, formatMonthShort, formatMonthSlash, invoiceAcceptsNewCharges, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 export default function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
@@ -10,7 +10,8 @@ export default function InstallmentModal({ form, setForm, invoices, onSubmit, on
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
-  const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
+  const selectableInvoices = useMemo(() => invoices.filter(invoiceAcceptsNewCharges), [invoices]);
+  const invoicesById = useMemo(() => new Map(selectableInvoices.map((invoice) => [String(invoice.id), invoice])), [selectableInvoices]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
   const total = parseTypedMoneyInput(form.total_amount, language);
@@ -20,10 +21,14 @@ export default function InstallmentModal({ form, setForm, invoices, onSubmit, on
   const hasRoundingAdjustment = count > 1 && totalCents % count !== 0;
   const installmentAmount = baseInstallmentCents / 100;
   const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
-  const firstInvoice = invoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
+  const firstInvoice = selectableInvoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
   const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
 
-  const matchingInvoice = (dateString) => invoices.find((invoice) => (
+  useEffect(() => {
+    if (form.first_invoice_id && !firstInvoice) updateForm({ first_invoice_id: "" });
+  }, [firstInvoice, form.first_invoice_id]);
+
+  const matchingInvoice = (dateString) => selectableInvoices.find((invoice) => (
     invoice.template_id === firstInvoice?.template_id &&
     invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
   ));
@@ -117,7 +122,7 @@ export default function InstallmentModal({ form, setForm, invoices, onSubmit, on
                 <span><strong>{tt("installmentModal.differentValues", "Parcelas com valores diferentes")}</strong><small>{tt("installmentModal.editEachValue", "Edite cada valor na revisão.")}</small></span>
               </label>
               <InvoiceSelector
-                invoices={invoices}
+                invoices={selectableInvoices}
                 value={firstInvoice ? { templateId: String(firstInvoice.template_id ?? firstInvoice.id), invoiceId: String(firstInvoice.id) } : null}
                 onChange={(selection) => updateForm({ first_invoice_id: selection?.invoiceId || "" })}
               />
