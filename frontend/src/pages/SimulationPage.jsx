@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDollarSign, LineChart as LineChartIcon, Plus, Trash2, X } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "react-hot-toast";
-import { createInstallment, createTransaction, getMonth, getMonthSummary } from "../api/api.js";
+import { createInstallment, createTransaction, getMonthSummary } from "../api/api.js";
 import { MonthField } from "../components/DateField.jsx";
 import { addMonthsToDate, invoiceAcceptsNewCharges, todayIsoDate } from "../app/helpers.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -156,36 +156,24 @@ function simulationEndIndex(items, language) {
   return Math.max(lastAffected + 1, start + 1);
 }
 
-function realTotalsForMonth(monthData, isCurrentMonth) {
-  if (!monthData) return { income: 0, expense: 0 };
-  const today = todayIsoDate();
-  return (monthData.days || []).reduce((totals, day) => {
-    if (isCurrentMonth && day.date <= today) return totals;
-    return {
-      income: totals.income + Number(day.income || 0),
-      expense: totals.expense + Number(day.expenses || 0)
-    };
-  }, { income: 0, expense: 0 });
-}
-
-function projectionRows({ baseBalance, includeReal, months, realByMonth, simulatedByMonth, language }) {
-  let withoutSimulation = Number(baseBalance || 0);
-  let withSimulation = Number(baseBalance || 0);
+function projectionRows({ baseBalance, includeReal, months, summaryByMonth, simulatedByMonth, language }) {
+  const startingBalance = Number(baseBalance || 0);
+  let simulatedCarry = 0;
 
   return months.map((month, index) => {
-    const real = includeReal ? (realByMonth.get(month.value) || { income: 0, expense: 0 }) : { income: 0, expense: 0 };
+    const summary = summaryByMonth.get(month.value);
+    const realProjectedClosing = includeReal ? Number(summary?.projected_closing ?? startingBalance) : startingBalance;
     const simulated = simulatedByMonth.get(month.value) || { income: 0, expense: 0, items: [] };
-    const initial = withSimulation;
-    withoutSimulation = withoutSimulation + real.income - real.expense;
-    withSimulation = withSimulation + real.income - real.expense + simulated.income - simulated.expense;
+    const initial = realProjectedClosing + simulatedCarry;
+    simulatedCarry += simulated.income - simulated.expense;
+    const withoutSimulation = realProjectedClosing;
+    const withSimulation = realProjectedClosing + simulatedCarry;
 
     return {
       ...month,
       label: formatMonthLabel(month.year, month.month, language),
       shortLabel: formatMonthLabel(month.year, month.month, language).slice(0, 3),
       initial,
-      realIncome: real.income,
-      realExpense: real.expense,
       simulatedIncome: simulated.income,
       simulatedExpense: simulated.expense,
       simulatedItems: simulated.items,
@@ -381,7 +369,7 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   const [activeItems, setActiveItems] = useState([]);
   const [includeReal, setIncludeReal] = useState(true);
   const [baseSummary, setBaseSummary] = useState(null);
-  const [realMonths, setRealMonths] = useState([]);
+  const [monthSummaries, setMonthSummaries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [restored, setRestored] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -439,16 +427,10 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
     async function loadProjectionBase() {
       setLoading(true);
       try {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        const [summaryPayload, ...monthPayloads] = await Promise.all([
-          getMonthSummary(currentYear, currentMonth),
-          ...months.map((item) => getMonth(item.year, item.month))
-        ]);
+        const summaryPayloads = await Promise.all(months.map((item) => getMonthSummary(item.year, item.month)));
         if (!mounted) return;
-        setBaseSummary(summaryPayload);
-        setRealMonths(monthPayloads);
+        setBaseSummary(summaryPayloads[0] || null);
+        setMonthSummaries(summaryPayloads);
       } catch {
         toast.error("Erro ao carregar dados do simulador");
       } finally {
@@ -460,22 +442,19 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   }, [months]);
 
   const simulatedByMonth = useMemo(() => buildSimulatedImpacts(activeItems, language), [activeItems, language]);
-  const realByMonth = useMemo(() => {
-    const current = currentMonthValue();
-    return new Map(realMonths.map((monthData) => {
-      const key = `${monthData.year}-${String(monthData.month).padStart(2, "0")}`;
-      return [key, realTotalsForMonth(monthData, key === current)];
-    }));
-  }, [realMonths]);
+  const summaryByMonth = useMemo(() => new Map(monthSummaries.map((summary) => [
+    `${summary.year}-${String(summary.month).padStart(2, "0")}`,
+    summary
+  ])), [monthSummaries]);
 
   const rows = useMemo(() => projectionRows({
     baseBalance: baseSummary?.current_balance,
     includeReal,
     months,
-    realByMonth,
+    summaryByMonth,
     simulatedByMonth,
     language
-  }), [baseSummary, includeReal, language, months, realByMonth, simulatedByMonth]);
+  }), [baseSummary, includeReal, language, months, summaryByMonth, simulatedByMonth]);
 
   const validItems = useMemo(() => activeItems.filter((item) => getItemTotal(item, language) > 0), [activeItems, language]);
   const baseBalance = Number(baseSummary?.current_balance || 0);
