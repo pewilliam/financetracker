@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDollarSign, LineChart as LineChartIcon, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, CircleDollarSign, LineChart as LineChartIcon, Plus, Save, Trash2, X } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "react-hot-toast";
 import { createInstallment, createSimulation, createTransaction, deleteSimulation, getMonthSummary, getSimulation, listSimulations, updateSimulation } from "../api/api.js";
@@ -452,6 +452,13 @@ function SimulationNameModal({ mode, initialName, saving, onClose, onSubmit }) {
   );
 }
 
+function formatSavedDate(value, language) {
+  if (!value) return "Sem data";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sem data";
+  return date.toLocaleDateString(language, { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 function findInvoiceForMonth(invoices, monthValue) {
   return invoices
     .filter(invoiceAcceptsNewCharges)
@@ -470,12 +477,14 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   const [loading, setLoading] = useState(true);
   const [restored, setRestored] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [localDraftEnabled, setLocalDraftEnabled] = useState(true);
   const [expandedRows, setExpandedRows] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [savedSimulations, setSavedSimulations] = useState([]);
   const [selectedSimulationId, setSelectedSimulationId] = useState("");
   const [savingSimulation, setSavingSimulation] = useState(false);
   const [saveDialog, setSaveDialog] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const refreshSavedSimulations = async () => {
     try {
@@ -484,9 +493,26 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
       toast.error("Erro ao carregar simulações salvas");
     }
   };
+  const clearLocalDraft = () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      // localStorage can be unavailable in private contexts.
+    }
+  };
+  const enableLocalDraft = () => {
+    if (selectedSimulationId) {
+      setLocalDraftEnabled(false);
+      clearLocalDraft();
+    } else {
+      setLocalDraftEnabled(true);
+    }
+    setRestored(false);
+  };
 
   useEffect(() => {
     setStorageReady(false);
+    setLocalDraftEnabled(true);
     try {
       const restoredItems = normalizeRestoredItems(JSON.parse(localStorage.getItem(storageKey) || "[]"));
       if (restoredItems.length) {
@@ -514,11 +540,15 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   useEffect(() => {
     if (!storageReady) return;
     try {
+      if (!localDraftEnabled || !items.length) {
+        localStorage.removeItem(storageKey);
+        return;
+      }
       localStorage.setItem(storageKey, JSON.stringify(items));
     } catch {
       // localStorage can be unavailable in private contexts.
     }
-  }, [items, storageKey, storageReady]);
+  }, [items, localDraftEnabled, storageKey, storageReady]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveItems(items), 500);
@@ -580,19 +610,30 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   const axisWidth = moneyAxisWidth(rows.flatMap((row) => [row.withoutSimulation, row.withSimulation]), language);
   const minBalance = Math.min(0, ...rows.flatMap((row) => [row.withoutSimulation, row.withSimulation]));
 
-  const updateItem = (id, patch) => setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
-  const removeItem = (id) => setItems((current) => current.filter((item) => item.id !== id));
-  const addItem = () => setItems((current) => [...current, blankItem()]);
+  const updateItem = (id, patch) => {
+    enableLocalDraft();
+    setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+  };
+  const removeItem = (id) => {
+    enableLocalDraft();
+    setItems((current) => current.filter((item) => item.id !== id));
+  };
+  const addItem = () => {
+    enableLocalDraft();
+    setItems((current) => [...current, blankItem()]);
+  };
   const clearItems = () => {
     if (!items.length || !window.confirm("Deseja limpar a simulação?")) return;
     setItems([]);
     setActiveItems([]);
     setRestored(false);
+    clearLocalDraft();
   };
   const discardRestored = () => {
     setItems([]);
     setActiveItems([]);
     setRestored(false);
+    clearLocalDraft();
   };
   const simulateNow = () => setActiveItems(items);
   const toggleRow = (value) => setExpandedRows((current) => ({ ...current, [value]: !current[value] }));
@@ -603,12 +644,29 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
     items: items.map((item) => draftItemToPayload(item, language))
   });
   const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
-  const openSaveAsSimulation = () => {
-    setSaveDialog({ mode: "create", name: defaultSimulationName() });
+  const startNewSimulation = () => {
+    setSelectedSimulationId("");
+    setItems([]);
+    setActiveItems([]);
+    setIncludeReal(true);
+    setExpandedRows({});
+    setRestored(false);
+    setLocalDraftEnabled(true);
+    clearLocalDraft();
+    setEditorOpen(true);
   };
-  const openUpdateSavedSimulation = () => {
-    if (!selectedSimulationId) return;
-    setSaveDialog({ mode: "update", name: selectedSimulation?.name || defaultSimulationName() });
+  const openDraftSimulation = () => {
+    setSelectedSimulationId("");
+    setLocalDraftEnabled(true);
+    setEditorOpen(true);
+  };
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setConfirmOpen(false);
+    setSaveDialog(null);
+  };
+  const openCreateSimulationDialog = () => {
+    setSaveDialog({ mode: "create", name: defaultSimulationName() });
   };
   const persistNamedSimulation = async (name) => {
     if (!saveDialog) return;
@@ -619,6 +677,9 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
         : await createSimulation(buildSavedPayload(name));
       await refreshSavedSimulations();
       setSelectedSimulationId(String(saved.id));
+      setLocalDraftEnabled(false);
+      setRestored(false);
+      clearLocalDraft();
       setSaveDialog(null);
       toast.success(saveDialog.mode === "update" ? "Simulação atualizada" : "Simulação salva");
     } catch (error) {
@@ -627,31 +688,69 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
       setSavingSimulation(false);
     }
   };
-  const loadSavedSimulation = async () => {
-    if (!selectedSimulationId) return;
+  const saveCurrentSimulation = async () => {
+    if (!selectedSimulationId) {
+      openCreateSimulationDialog();
+      return;
+    }
+    const name = selectedSimulation?.name || defaultSimulationName();
+    setSavingSimulation(true);
     try {
-      const saved = await getSimulation(selectedSimulationId);
+      const saved = await updateSimulation(selectedSimulationId, buildSavedPayload(name));
+      await refreshSavedSimulations();
+      setSelectedSimulationId(String(saved.id));
+      setLocalDraftEnabled(false);
+      setRestored(false);
+      clearLocalDraft();
+      toast.success("Simulação salva");
+    } catch (error) {
+      toast.error(String(error?.message || "").includes("409") ? "Já existe uma simulação com esse nome" : "Erro ao salvar simulação");
+    } finally {
+      setSavingSimulation(false);
+    }
+  };
+  const loadSavedSimulation = async (simulationId) => {
+    if (!simulationId) return;
+    try {
+      const saved = await getSimulation(simulationId);
       const loadedItems = saved.items.map((item) => savedItemToDraft(item, language));
       setItems(loadedItems);
       setActiveItems(loadedItems);
       setIncludeReal(Boolean(saved.include_real));
+      setSelectedSimulationId(String(saved.id));
+      setLocalDraftEnabled(false);
       setRestored(false);
+      setExpandedRows({});
+      clearLocalDraft();
+      setEditorOpen(true);
       toast.success("Simulação carregada");
     } catch {
       toast.error("Erro ao carregar simulação");
     }
   };
-  const removeSavedSimulation = async () => {
-    if (!selectedSimulationId || !selectedSimulation) return;
-    if (!window.confirm(`Excluir "${selectedSimulation.name}"?`)) return;
-    try {
-      await deleteSimulation(selectedSimulationId);
-      setSelectedSimulationId("");
-      await refreshSavedSimulations();
-      toast.success("Simulação excluída");
-    } catch {
-      toast.error("Erro ao excluir simulação");
+  const deleteCurrentSimulation = async () => {
+    if (selectedSimulationId && selectedSimulation) {
+      if (!window.confirm(`Excluir "${selectedSimulation.name}"?`)) return;
+      try {
+        await deleteSimulation(selectedSimulationId);
+        setSelectedSimulationId("");
+        setItems([]);
+        setActiveItems([]);
+        setEditorOpen(false);
+        await refreshSavedSimulations();
+        toast.success("Simulação excluída");
+      } catch {
+        toast.error("Erro ao excluir simulação");
+      }
+      return;
     }
+    if (items.length && !window.confirm("Descartar esta simulação?")) return;
+    setItems([]);
+    setActiveItems([]);
+    setSelectedSimulationId("");
+    setRestored(false);
+    setEditorOpen(false);
+    clearLocalDraft();
   };
 
   const insertItem = async (item) => {
@@ -712,14 +811,80 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
       setItems([]);
       setActiveItems([]);
       setRestored(false);
+      clearLocalDraft();
       await onInserted?.();
     } catch (error) {
       toast.error(error.message || "Erro ao inserir itens no sistema");
     }
   };
 
+  if (!editorOpen) {
+    return (
+      <section className="simulation-page">
+        <div className="simulation-library">
+          <div className="simulation-library-head">
+            <div>
+              <p className="eyebrow">Simulador financeiro</p>
+              <h2>Escolha uma simulação ou comece uma nova.</h2>
+            </div>
+            <button className="btn btn-primary" type="button" onClick={startNewSimulation}>
+              <Plus size={16} /> Criar nova
+            </button>
+          </div>
+
+          <div className="simulation-library-grid">
+            <button className="simulation-create-card" type="button" onClick={startNewSimulation}>
+              <span><Plus size={22} /></span>
+              <strong>Nova simulação</strong>
+              <small>Monte um cenário temporário sem alterar dados reais.</small>
+            </button>
+
+            {items.length > 0 && localDraftEnabled && (
+              <button className="simulation-card simulation-draft-card" type="button" onClick={openDraftSimulation}>
+                <span className="simulation-card-kicker">Rascunho local</span>
+                <strong>Continuar simulação não salva</strong>
+                <small>{items.length} {items.length === 1 ? "item simulado" : "itens simulados"}</small>
+                <em>Salvo apenas neste aparelho</em>
+              </button>
+            )}
+
+            {savedSimulations.map((simulation) => (
+              <button className="simulation-card" type="button" key={simulation.id} onClick={() => loadSavedSimulation(simulation.id)}>
+                <span className="simulation-card-kicker">Simulação salva</span>
+                <strong>{simulation.name}</strong>
+                <small>{simulation.items?.length || 0} {(simulation.items?.length || 0) === 1 ? "item" : "itens"} simulados</small>
+                <em>Atualizada em {formatSavedDate(simulation.updated_at || simulation.created_at, language)}</em>
+              </button>
+            ))}
+          </div>
+
+          {!savedSimulations.length && !(items.length > 0 && localDraftEnabled) && (
+            <div className="simulation-library-empty">
+              <CircleDollarSign size={28} />
+              <strong>Nenhuma simulação salva ainda.</strong>
+              <span>Crie uma nova para testar compras, parcelas e receitas futuras.</span>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="simulation-page">
+      <div className="simulation-editor-bar">
+        <button className="btn btn-ghost compact" type="button" onClick={closeEditor}>
+          <ArrowLeft size={16} /> Simulações
+        </button>
+        <div>
+          <button className="btn btn-ghost compact" type="button" onClick={saveCurrentSimulation} disabled={savingSimulation}>
+            <Save size={16} /> {savingSimulation ? "Salvando..." : "Salvar"}
+          </button>
+          <button className="btn btn-ghost compact danger-soft" type="button" onClick={deleteCurrentSimulation} disabled={savingSimulation}>
+            <Trash2 size={16} /> Excluir
+          </button>
+        </div>
+      </div>
       <div className="simulation-layout">
         <aside className="simulation-panel card">
           <div className="simulation-panel-head">
@@ -746,24 +911,6 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
               <button type="button" onClick={discardRestored}>Descartar</button>
             </div>
           )}
-
-          <div className="simulation-save-box">
-            <label>
-              <span>Simulações salvas</span>
-              <select value={selectedSimulationId} onChange={(event) => setSelectedSimulationId(event.target.value)}>
-                <option value="">Selecione para carregar</option>
-                {savedSimulations.map((simulation) => (
-                  <option value={simulation.id} key={simulation.id}>{simulation.name}</option>
-                ))}
-              </select>
-            </label>
-            <div className="simulation-save-actions">
-              <button className="btn btn-ghost compact" type="button" onClick={loadSavedSimulation} disabled={!selectedSimulationId}>Carregar</button>
-              <button className="btn btn-ghost compact" type="button" onClick={openSaveAsSimulation} disabled={savingSimulation}>Salvar nova</button>
-              <button className="btn btn-ghost compact" type="button" onClick={openUpdateSavedSimulation} disabled={!selectedSimulationId || savingSimulation}>Atualizar</button>
-              <button className="btn btn-ghost compact danger-soft" type="button" onClick={removeSavedSimulation} disabled={!selectedSimulationId}>Excluir</button>
-            </div>
-          </div>
 
           <div className="simulation-items">
             {items.map((item, index) => (

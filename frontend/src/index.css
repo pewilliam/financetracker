@@ -2902,6 +2902,123 @@ select {
 .simulation-page {
   padding-bottom: 18px;
 }
+.simulation-library {
+  display: grid;
+  gap: 20px;
+}
+.simulation-library-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.simulation-library-head h2 {
+  max-width: 560px;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+.simulation-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.simulation-card,
+.simulation-create-card {
+  min-height: 172px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+.simulation-card:hover,
+.simulation-create-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(20,160,120,0.38);
+  background: color-mix(in srgb, var(--card) 94%, var(--primary));
+}
+.simulation-card strong,
+.simulation-create-card strong {
+  font-size: 17px;
+  line-height: 1.25;
+}
+.simulation-card small,
+.simulation-create-card small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 800;
+}
+.simulation-card em {
+  align-self: end;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+.simulation-card-kicker {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.simulation-create-card {
+  border-style: dashed;
+  background: rgba(20,160,120,0.06);
+}
+.simulation-create-card > span {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+}
+.simulation-draft-card {
+  border-color: rgba(20,160,120,0.32);
+  background: rgba(20,160,120,0.08);
+}
+.simulation-library-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 18px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+.simulation-library-empty svg {
+  color: var(--primary);
+}
+.simulation-library-empty strong {
+  color: var(--text);
+}
+.simulation-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.simulation-editor-bar > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .simulation-layout {
   display: grid;
   grid-template-columns: minmax(320px, 0.4fr) minmax(0, 0.6fr);
@@ -2978,35 +3095,6 @@ select {
   background: transparent;
   color: var(--primary);
   font-weight: 900;
-}
-.simulation-save-box {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgba(20,160,120,0.04);
-}
-.simulation-save-box label {
-  display: grid;
-  gap: 6px;
-}
-.simulation-save-box label > span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-.simulation-save-box select {
-  width: 100%;
-  min-width: 0;
-}
-.simulation-save-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.simulation-save-actions .btn {
-  min-width: 0;
 }
 .simulation-name-modal {
   width: min(460px, calc(100% - 32px));
@@ -3970,6 +4058,22 @@ select {
   }
   .simulation-page {
     padding-bottom: 76px;
+  }
+  .simulation-library-head,
+  .simulation-editor-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .simulation-library-head .btn,
+  .simulation-editor-bar .btn {
+    width: 100%;
+  }
+  .simulation-editor-bar > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .simulation-library-grid {
+    grid-template-columns: 1fr;
   }
   .simulation-layout {
     grid-template-columns: 1fr;
