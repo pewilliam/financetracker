@@ -199,6 +199,7 @@ function ProjectionTooltip({ active, payload, label }) {
 }
 
 function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
+  const [collapsed, setCollapsed] = useState(false);
   const count = Math.max(1, Number(item.installmentCount) || 1);
   const recurrenceCount = Math.max(1, Number(item.recurrenceCount) || 1);
   const itemCount = getItemCount(item);
@@ -230,83 +231,101 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
     nextValues[valueIndex] = formatMoney(parseTypedMoneyInput(nextValues[valueIndex], language), language);
     onChange({ values: nextValues });
   };
+  const typeLabel = item.type === "income" ? "Receita" : "Gasto";
+  const modeLabel = item.mode === "installment" ? `${itemCount}x` : item.mode === "recurring" ? `${itemCount} meses` : "À vista";
+  const itemTitle = item.description?.trim() || `Item ${index + 1}`;
 
   return (
-    <article className="simulation-item-card">
+    <article className={`simulation-item-card ${collapsed ? "collapsed" : ""}`}>
       <header>
-        <strong>Item {index + 1}</strong>
-        <button className="icon-btn small danger" type="button" onClick={onRemove} aria-label="Remover item simulado">
-          <X size={15} />
+        <button className="simulation-item-collapse" type="button" onClick={() => setCollapsed((current) => !current)} aria-expanded={!collapsed}>
+          {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+          <span>
+            <strong>{itemTitle}</strong>
+            {collapsed && <small>{typeLabel} • {modeLabel} • {formatMoney(totalSimulated, language)}</small>}
+          </span>
         </button>
+        <div className="simulation-item-actions">
+          <button className="icon-btn small" type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? "Expandir detalhes do item" : "Recolher detalhes do item"}>
+            {collapsed ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          </button>
+          <button className="icon-btn small danger" type="button" onClick={onRemove} aria-label="Remover item simulado">
+            <X size={15} />
+          </button>
+        </div>
       </header>
 
-      <label>
-        <span>Descrição</span>
-        <input value={item.description} onChange={(event) => onChange({ description: event.target.value })} placeholder="Ex: TV Samsung 55&quot;" />
-      </label>
+      {!collapsed && (
+        <>
+          <label>
+            <span>Descrição</span>
+            <input value={item.description} onChange={(event) => onChange({ description: event.target.value })} placeholder="Ex: TV Samsung 55&quot;" />
+          </label>
 
-      <div className="simulation-toggle-grid">
-        <div className="segmented-control" aria-label="Tipo do item">
-          <button type="button" className={item.type === "expense" ? "active danger" : ""} onClick={() => setType("expense")}>Gasto</button>
-          <button type="button" className={item.type === "income" ? "active success" : ""} onClick={() => setType("income")}>Receita</button>
-        </div>
-        <div className="segmented-control" aria-label="Modalidade">
-          <button type="button" className={item.mode === "cash" ? "active" : ""} onClick={() => onChange({ mode: "cash" })}>À vista</button>
-          {item.type === "income" ? (
-            <button type="button" className={item.mode === "recurring" ? "active success" : ""} onClick={() => onChange({ mode: "recurring" })}>Recorrente</button>
-          ) : (
-            <button type="button" className={item.mode === "installment" ? "active" : ""} onClick={() => onChange({ mode: "installment" })}>Parcelado</button>
-          )}
-        </div>
-      </div>
-
-      <div className={item.mode !== "cash" ? "simulation-form-grid three" : "simulation-form-grid"}>
-        <label>
-          <span>{item.mode === "recurring" ? "Valor mensal" : "Valor total"}</span>
-          <input inputMode="decimal" value={item.totalAmount} onChange={(event) => setMoney(event.target.value)} onBlur={normalizeMoney} placeholder="R$ 0,00" />
-        </label>
-        {item.mode !== "cash" && (
-          <>
-            <label>
-              <span>{repeatedLabel}</span>
-              {item.mode === "installment" ? (
-                <input type="number" min="1" max="48" value={item.installmentCount} onChange={(event) => onChange({ installmentCount: event.target.value })} onBlur={() => normalizeCount("installmentCount", count)} />
+          <div className="simulation-toggle-grid">
+            <div className="segmented-control" aria-label="Tipo do item">
+              <button type="button" className={item.type === "expense" ? "active danger" : ""} onClick={() => setType("expense")}>Gasto</button>
+              <button type="button" className={item.type === "income" ? "active success" : ""} onClick={() => setType("income")}>Receita</button>
+            </div>
+            <div className="segmented-control" aria-label="Modalidade">
+              <button type="button" className={item.mode === "cash" ? "active" : ""} onClick={() => onChange({ mode: "cash" })}>À vista</button>
+              {item.type === "income" ? (
+                <button type="button" className={item.mode === "recurring" ? "active success" : ""} onClick={() => onChange({ mode: "recurring" })}>Recorrente</button>
               ) : (
-                <input type="number" min="1" value={item.recurrenceCount} onChange={(event) => onChange({ recurrenceCount: event.target.value })} onBlur={() => normalizeCount("recurrenceCount", recurrenceCount)} />
+                <button type="button" className={item.mode === "installment" ? "active" : ""} onClick={() => onChange({ mode: "installment" })}>Parcelado</button>
               )}
-            </label>
+            </div>
+          </div>
+
+          <div className={item.mode !== "cash" ? "simulation-form-grid three" : "simulation-form-grid"}>
             <label>
-              <span>{variableValuesEnabled ? "Total simulado" : repeatedValueLabel}</span>
-              <input value={formatMoney(variableValuesEnabled ? totalSimulated : values[0] || 0, language)} readOnly />
+              <span>{item.mode === "recurring" ? "Valor mensal" : "Valor total"}</span>
+              <input inputMode="decimal" value={item.totalAmount} onChange={(event) => setMoney(event.target.value)} onBlur={normalizeMoney} placeholder="R$ 0,00" />
             </label>
-          </>
-        )}
-        <label>
-          <span>{item.mode === "installment" ? "Primeira parcela" : item.mode === "recurring" ? "Primeira receita" : "Data prevista"}</span>
-          <MonthField value={item.month} onChange={(value) => onChange({ month: value })} />
-        </label>
-      </div>
+            {item.mode !== "cash" && (
+              <>
+                <label>
+                  <span>{repeatedLabel}</span>
+                  {item.mode === "installment" ? (
+                    <input type="number" min="1" max="48" value={item.installmentCount} onChange={(event) => onChange({ installmentCount: event.target.value })} onBlur={() => normalizeCount("installmentCount", count)} />
+                  ) : (
+                    <input type="number" min="1" value={item.recurrenceCount} onChange={(event) => onChange({ recurrenceCount: event.target.value })} onBlur={() => normalizeCount("recurrenceCount", recurrenceCount)} />
+                  )}
+                </label>
+                <label>
+                  <span>{variableValuesEnabled ? "Total simulado" : repeatedValueLabel}</span>
+                  <input value={formatMoney(variableValuesEnabled ? totalSimulated : values[0] || 0, language)} readOnly />
+                </label>
+              </>
+            )}
+            <label>
+              <span>{item.mode === "installment" ? "Primeira parcela" : item.mode === "recurring" ? "Primeira receita" : "Data prevista"}</span>
+              <MonthField value={item.month} onChange={(value) => onChange({ month: value })} />
+            </label>
+          </div>
 
-      {item.mode !== "cash" && (
-        <label className={`switch-row simulation-switch ${variableValuesEnabled ? "active" : ""}`}>
-          <input type="checkbox" checked={variableValuesEnabled} onChange={(event) => setValueMode(event.target.checked)} />
-          <span><i /> Valores diferentes {item.mode === "installment" ? "entre parcelas" : "entre meses"}</span>
-        </label>
-      )}
+          {item.mode !== "cash" && (
+            <label className={`switch-row simulation-switch ${variableValuesEnabled ? "active" : ""}`}>
+              <input type="checkbox" checked={variableValuesEnabled} onChange={(event) => setValueMode(event.target.checked)} />
+              <span><i /> Valores diferentes {item.mode === "installment" ? "entre parcelas" : "entre meses"}</span>
+            </label>
+          )}
 
-      {variableValuesEnabled && (
-        <div className="simulation-values-grid">
-          {Array.from({ length: itemCount }, (_, valueIndex) => {
-            const month = monthFromIndex(monthIndex(item.month) + valueIndex);
-            const valueText = item.values?.[valueIndex] || formatMoney(equalValues[valueIndex] || 0, language);
-            return (
-              <label key={`${item.id}-value-${valueIndex}`}>
-                <span>{item.mode === "installment" ? `Parcela ${valueIndex + 1}` : `Mês ${valueIndex + 1}`} - {formatMonthLabel(month.year, month.month, language)}</span>
-                <input inputMode="decimal" value={valueText} onChange={(event) => setCustomValue(valueIndex, event.target.value)} onBlur={() => normalizeCustomValue(valueIndex)} />
-              </label>
-            );
-          })}
-        </div>
+          {variableValuesEnabled && (
+            <div className="simulation-values-grid">
+              {Array.from({ length: itemCount }, (_, valueIndex) => {
+                const month = monthFromIndex(monthIndex(item.month) + valueIndex);
+                const valueText = item.values?.[valueIndex] || formatMoney(equalValues[valueIndex] || 0, language);
+                return (
+                  <label key={`${item.id}-value-${valueIndex}`}>
+                    <span>{item.mode === "installment" ? `Parcela ${valueIndex + 1}` : `Mês ${valueIndex + 1}`} - {formatMonthLabel(month.year, month.month, language)}</span>
+                    <input inputMode="decimal" value={valueText} onChange={(event) => setCustomValue(valueIndex, event.target.value)} onBlur={() => normalizeCustomValue(valueIndex)} />
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </article>
   );

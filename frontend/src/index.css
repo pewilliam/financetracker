@@ -2997,6 +2997,46 @@ select {
   justify-content: space-between;
   gap: 12px;
 }
+.simulation-item-card.collapsed {
+  gap: 0;
+  padding-block: 10px;
+}
+.simulation-item-collapse {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-weight: 900;
+}
+.simulation-item-collapse > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.simulation-item-collapse span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.simulation-item-collapse strong,
+.simulation-item-collapse small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.simulation-item-collapse small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.simulation-item-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
 .simulation-item-card label {
   display: grid;
   gap: 6px;
