@@ -262,3 +262,29 @@ export function createRecurrence(payload) {
     body: JSON.stringify(payload)
   });
 }
+
+export function listSimulations() {
+  return request("/simulations");
+}
+
+export function getSimulation(id) {
+  return request(`/simulations/${id}`);
+}
+
+export function createSimulation(payload) {
+  return request("/simulations", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateSimulation(id, payload) {
+  return request(`/simulations/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteSimulation(id) {
+  return request(`/simulations/${id}`, { method: "DELETE" });
+}

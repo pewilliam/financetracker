@@ -6,5 +6,6 @@ from app.routers.installments import router as installments
 from app.routers.receivables import router as receivables
 from app.routers.recurrences import router as recurrences
 from app.routers.months import router as months
+from app.routers.simulations import router as simulations
 
-__all__ = ["auth", "transactions", "invoice_templates", "invoices", "installments", "receivables", "recurrences", "months"]
+__all__ = ["auth", "transactions", "invoice_templates", "invoices", "installments", "receivables", "recurrences", "months", "simulations"]

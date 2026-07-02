@@ -2979,6 +2979,104 @@ select {
   color: var(--primary);
   font-weight: 900;
 }
+.simulation-save-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(20,160,120,0.04);
+}
+.simulation-save-box label {
+  display: grid;
+  gap: 6px;
+}
+.simulation-save-box label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.simulation-save-box select {
+  width: 100%;
+  min-width: 0;
+}
+.simulation-save-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.simulation-save-actions .btn {
+  min-width: 0;
+}
+.simulation-name-modal {
+  width: min(460px, calc(100% - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+.simulation-name-modal .modal-titlebar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--card);
+}
+.simulation-name-modal .modal-titlebar > div {
+  min-width: 0;
+}
+.simulation-name-modal .modal-titlebar h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+.simulation-name-modal .modal-titlebar .eyebrow {
+  margin: 0 0 4px;
+}
+.simulation-name-modal .icon-btn {
+  flex: 0 0 auto;
+}
+.simulation-name-body {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.simulation-name-body label {
+  display: grid;
+  gap: 7px;
+}
+.simulation-name-body label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.simulation-name-body input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--card);
+  color: var(--text);
+  font-weight: 800;
+}
+.simulation-name-body input:focus {
+  outline: none;
+  border-color: rgba(20,160,120,0.45);
+  box-shadow: 0 0 0 3px rgba(20,160,120,0.14);
+}
+.simulation-name-body .has-error input {
+  border-color: rgba(255,77,106,0.65);
+}
+.simulation-name-body small {
+  color: var(--expense);
+  font-size: 12px;
+  font-weight: 800;
+}
+.simulation-name-modal .modal-actions {
+  padding: 0 20px 20px;
+}
 .simulation-items {
   display: grid;
   gap: 12px;

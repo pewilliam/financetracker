@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDollarSign, LineChart as LineChartIcon, Plus, Trash2, X } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "react-hot-toast";
-import { createInstallment, createTransaction, getMonthSummary } from "../api/api.js";
+import { createInstallment, createSimulation, createTransaction, deleteSimulation, getMonthSummary, getSimulation, listSimulations, updateSimulation } from "../api/api.js";
 import { MonthField } from "../components/DateField.jsx";
 import { addMonthsToDate, invoiceAcceptsNewCharges, todayIsoDate } from "../app/helpers.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -74,7 +74,7 @@ function normalizeRestoredItems(items) {
       installmentCount: Math.max(1, Number(item.installmentCount) || 2),
       recurrenceCount: Math.max(1, Number(item.recurrenceCount) || 6),
       valueMode: item.valueMode === "different" ? "different" : "equal",
-      values: Array.isArray(item.values) ? item.values : [],
+      values: Array.isArray(item.custom_values) ? item.custom_values : Array.isArray(item.values) ? item.values : [],
       month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue()
     };
   });
@@ -115,6 +115,35 @@ function getItemValues(item, language) {
 
 function getItemTotal(item, language) {
   return getItemValues(item, language).reduce((sum, value) => sum + Number(value || 0), 0);
+}
+
+function savedItemToDraft(item, language) {
+  return {
+    id: makeItemId(),
+    description: item.description || "",
+    type: item.type === "income" ? "income" : "expense",
+    mode: item.mode === "recurring" || item.mode === "installment" ? item.mode : "cash",
+    totalAmount: formatMoney(item.total_amount || 0, language),
+    installmentCount: item.installment_count || 1,
+    recurrenceCount: item.recurrence_count || 1,
+    valueMode: item.value_mode === "different" ? "different" : "equal",
+    values: Array.isArray(item.custom_values) ? item.custom_values.map((value) => formatMoney(value || 0, language)) : [],
+    month: /^\d{4}-\d{2}$/.test(item.start_month || "") ? item.start_month : currentMonthValue()
+  };
+}
+
+function draftItemToPayload(item, language) {
+  return {
+    description: item.description?.trim() || "",
+    type: item.type,
+    mode: item.mode,
+    total_amount: getItemAmount(item, language),
+    installment_count: Math.max(1, Number(item.installmentCount) || 1),
+    recurrence_count: Math.max(1, Number(item.recurrenceCount) || 1),
+    value_mode: item.valueMode === "different" ? "different" : "equal",
+    start_month: item.month,
+    custom_values: item.valueMode === "different" ? getItemValues(item, language) : []
+  };
 }
 
 function buildSimulatedImpacts(items, language) {
@@ -374,6 +403,55 @@ function ConfirmationModal({ items, invoices, onClose, onConfirm, language }) {
   );
 }
 
+function SimulationNameModal({ mode, initialName, saving, onClose, onSubmit }) {
+  const [name, setName] = useState(initialName || "");
+  const [touched, setTouched] = useState(false);
+  const trimmedName = name.trim();
+  const isUpdate = mode === "update";
+  const showError = touched && !trimmedName;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setTouched(true);
+    if (!trimmedName) return;
+    await onSubmit(trimmedName);
+  };
+
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" type="button" onClick={saving ? undefined : onClose} />
+      <form className="modal-card simulation-name-modal" onSubmit={handleSubmit}>
+        <div className="modal-titlebar">
+          <div>
+            <p className="eyebrow">Simulação financeira</p>
+            <h2>{isUpdate ? "Atualizar simulação" : "Salvar simulação"}</h2>
+          </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal" disabled={saving}><X size={18} /></button>
+        </div>
+        <div className="simulation-name-body">
+          <label className={showError ? "has-error" : ""}>
+            <span>Nome da simulação</span>
+            <input
+              autoFocus
+              value={name}
+              onBlur={() => setTouched(true)}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex: Compra da TV"
+            />
+            {showError && <small>Informe um nome para salvar a simulação.</small>}
+          </label>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn btn-primary" type="submit" disabled={saving || !trimmedName}>
+            {saving ? "Salvando..." : isUpdate ? "Salvar alterações" : "Salvar simulação"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function findInvoiceForMonth(invoices, monthValue) {
   return invoices
     .filter(invoiceAcceptsNewCharges)
@@ -394,6 +472,18 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   const [storageReady, setStorageReady] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [savedSimulations, setSavedSimulations] = useState([]);
+  const [selectedSimulationId, setSelectedSimulationId] = useState("");
+  const [savingSimulation, setSavingSimulation] = useState(false);
+  const [saveDialog, setSaveDialog] = useState(null);
+
+  const refreshSavedSimulations = async () => {
+    try {
+      setSavedSimulations(await listSimulations());
+    } catch {
+      toast.error("Erro ao carregar simulações salvas");
+    }
+  };
 
   useEffect(() => {
     setStorageReady(false);
@@ -416,6 +506,10 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
       setStorageReady(true);
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    refreshSavedSimulations();
+  }, []);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -502,6 +596,63 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   };
   const simulateNow = () => setActiveItems(items);
   const toggleRow = (value) => setExpandedRows((current) => ({ ...current, [value]: !current[value] }));
+  const selectedSimulation = savedSimulations.find((simulation) => String(simulation.id) === String(selectedSimulationId));
+  const buildSavedPayload = (name) => ({
+    name,
+    include_real: includeReal,
+    items: items.map((item) => draftItemToPayload(item, language))
+  });
+  const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
+  const openSaveAsSimulation = () => {
+    setSaveDialog({ mode: "create", name: defaultSimulationName() });
+  };
+  const openUpdateSavedSimulation = () => {
+    if (!selectedSimulationId) return;
+    setSaveDialog({ mode: "update", name: selectedSimulation?.name || defaultSimulationName() });
+  };
+  const persistNamedSimulation = async (name) => {
+    if (!saveDialog) return;
+    setSavingSimulation(true);
+    try {
+      const saved = saveDialog.mode === "update"
+        ? await updateSimulation(selectedSimulationId, buildSavedPayload(name))
+        : await createSimulation(buildSavedPayload(name));
+      await refreshSavedSimulations();
+      setSelectedSimulationId(String(saved.id));
+      setSaveDialog(null);
+      toast.success(saveDialog.mode === "update" ? "Simulação atualizada" : "Simulação salva");
+    } catch (error) {
+      toast.error(String(error?.message || "").includes("409") ? "Já existe uma simulação com esse nome" : "Erro ao salvar simulação");
+    } finally {
+      setSavingSimulation(false);
+    }
+  };
+  const loadSavedSimulation = async () => {
+    if (!selectedSimulationId) return;
+    try {
+      const saved = await getSimulation(selectedSimulationId);
+      const loadedItems = saved.items.map((item) => savedItemToDraft(item, language));
+      setItems(loadedItems);
+      setActiveItems(loadedItems);
+      setIncludeReal(Boolean(saved.include_real));
+      setRestored(false);
+      toast.success("Simulação carregada");
+    } catch {
+      toast.error("Erro ao carregar simulação");
+    }
+  };
+  const removeSavedSimulation = async () => {
+    if (!selectedSimulationId || !selectedSimulation) return;
+    if (!window.confirm(`Excluir "${selectedSimulation.name}"?`)) return;
+    try {
+      await deleteSimulation(selectedSimulationId);
+      setSelectedSimulationId("");
+      await refreshSavedSimulations();
+      toast.success("Simulação excluída");
+    } catch {
+      toast.error("Erro ao excluir simulação");
+    }
+  };
 
   const insertItem = async (item) => {
     const amount = getItemTotal(item, language);
@@ -595,6 +746,24 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
               <button type="button" onClick={discardRestored}>Descartar</button>
             </div>
           )}
+
+          <div className="simulation-save-box">
+            <label>
+              <span>Simulações salvas</span>
+              <select value={selectedSimulationId} onChange={(event) => setSelectedSimulationId(event.target.value)}>
+                <option value="">Selecione para carregar</option>
+                {savedSimulations.map((simulation) => (
+                  <option value={simulation.id} key={simulation.id}>{simulation.name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="simulation-save-actions">
+              <button className="btn btn-ghost compact" type="button" onClick={loadSavedSimulation} disabled={!selectedSimulationId}>Carregar</button>
+              <button className="btn btn-ghost compact" type="button" onClick={openSaveAsSimulation} disabled={savingSimulation}>Salvar nova</button>
+              <button className="btn btn-ghost compact" type="button" onClick={openUpdateSavedSimulation} disabled={!selectedSimulationId || savingSimulation}>Atualizar</button>
+              <button className="btn btn-ghost compact danger-soft" type="button" onClick={removeSavedSimulation} disabled={!selectedSimulationId}>Excluir</button>
+            </div>
+          </div>
 
           <div className="simulation-items">
             {items.map((item, index) => (
@@ -739,6 +908,15 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
           language={language}
           onClose={() => setConfirmOpen(false)}
           onConfirm={confirmInsert}
+        />
+      )}
+      {saveDialog && (
+        <SimulationNameModal
+          mode={saveDialog.mode}
+          initialName={saveDialog.name}
+          saving={savingSimulation}
+          onClose={() => setSaveDialog(null)}
+          onSubmit={persistNamedSimulation}
         />
       )}
     </section>
