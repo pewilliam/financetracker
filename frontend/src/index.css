@@ -3022,7 +3022,7 @@ select {
 }
 .simulation-toggle-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 .segmented-control {
@@ -3043,6 +3043,9 @@ select {
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
+  white-space: normal;
+  line-height: 1.15;
+  padding: 0 8px;
 }
 .segmented-control button + button {
   border-left: 1px solid var(--border);
@@ -3065,8 +3068,9 @@ select {
   gap: 10px;
 }
 .simulation-form-grid.three {
-  grid-template-columns: minmax(0, 1fr) minmax(84px, 0.44fr) minmax(126px, 0.65fr);
+  grid-template-columns: minmax(118px, 1fr) minmax(84px, 0.62fr);
 }
+.simulation-form-grid.three label:nth-child(3),
 .simulation-form-grid.three label:last-child {
   grid-column: 1 / -1;
 }
@@ -3080,9 +3084,10 @@ select {
   min-width: 0;
 }
 .simulation-values-grid label > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-height: 30px;
+  overflow: visible;
+  line-height: 1.25;
+  white-space: normal;
 }
 .simulation-empty {
   display: grid;
