@@ -2930,11 +2930,12 @@ select {
 }
 .simulation-card,
 .simulation-create-card {
-  min-height: 172px;
+  min-height: 184px;
   display: grid;
+  grid-template-rows: auto auto auto 1fr;
   align-content: start;
-  gap: 10px;
-  padding: 18px;
+  gap: 12px;
+  padding: 22px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card);
@@ -2951,7 +2952,8 @@ select {
 }
 .simulation-card strong,
 .simulation-create-card strong {
-  font-size: 17px;
+  margin-top: 2px;
+  font-size: 18px;
   line-height: 1.25;
 }
 .simulation-card small,
@@ -2963,6 +2965,7 @@ select {
 }
 .simulation-card em {
   align-self: end;
+  margin-top: 12px;
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
@@ -2971,6 +2974,7 @@ select {
 .simulation-card-kicker {
   color: var(--primary);
   font-size: 12px;
+  line-height: 1.2;
   font-weight: 900;
   text-transform: uppercase;
 }
