@@ -9,8 +9,6 @@ import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatMonthLabel, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-const MAX_ITEMS = 10;
-
 function makeItemId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `sim-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -29,6 +27,9 @@ function blankItem() {
     mode: "cash",
     totalAmount: "",
     installmentCount: 2,
+    recurrenceCount: 6,
+    valueMode: "equal",
+    values: [],
     month: currentMonthValue()
   };
 }
@@ -59,14 +60,24 @@ function splitAmount(total, count) {
 
 function normalizeRestoredItems(items) {
   if (!Array.isArray(items)) return [];
-  return items.slice(0, MAX_ITEMS).map((item) => ({
-    ...blankItem(),
-    ...item,
-    id: item.id || makeItemId(),
-    type: item.type === "income" ? "income" : "expense",
-    mode: item.mode === "installment" ? "installment" : "cash",
-    month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue()
-  }));
+  return items.map((item) => {
+    const type = item.type === "income" ? "income" : "expense";
+    let mode = item.mode === "recurring" || item.mode === "installment" ? item.mode : "cash";
+    if (type === "income" && mode === "installment") mode = "recurring";
+    if (type === "expense" && mode === "recurring") mode = "cash";
+    return {
+      ...blankItem(),
+      ...item,
+      id: item.id || makeItemId(),
+      type,
+      mode,
+      installmentCount: Math.max(1, Number(item.installmentCount) || 2),
+      recurrenceCount: Math.max(1, Number(item.recurrenceCount) || 6),
+      valueMode: item.valueMode === "different" ? "different" : "equal",
+      values: Array.isArray(item.values) ? item.values : [],
+      month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue()
+    };
+  });
 }
 
 function moneyAxisWidth(values, language) {
@@ -78,16 +89,44 @@ function getItemAmount(item, language) {
   return parseTypedMoneyInput(item.totalAmount, language);
 }
 
+function getItemCount(item) {
+  if (item.mode === "installment") return Math.max(1, Number(item.installmentCount) || 1);
+  if (item.mode === "recurring") return Math.max(1, Number(item.recurrenceCount) || 1);
+  return 1;
+}
+
+function getEqualValues(item, language) {
+  const amount = getItemAmount(item, language);
+  const count = getItemCount(item);
+  if (item.mode === "installment") return splitAmount(amount, count);
+  if (item.mode === "recurring") return Array.from({ length: count }, () => amount);
+  return [amount];
+}
+
+function getItemValues(item, language) {
+  const equalValues = getEqualValues(item, language);
+  if (item.mode === "cash" || item.valueMode !== "different") return equalValues;
+  return Array.from({ length: getItemCount(item) }, (_, index) => {
+    const rawValue = item.values?.[index];
+    if (rawValue !== undefined && String(rawValue).trim() !== "") return parseTypedMoneyInput(rawValue, language);
+    return equalValues[index] || 0;
+  });
+}
+
+function getItemTotal(item, language) {
+  return getItemValues(item, language).reduce((sum, value) => sum + Number(value || 0), 0);
+}
+
 function buildSimulatedImpacts(items, language) {
   const impacts = new Map();
 
   items.forEach((item) => {
-    const amount = getItemAmount(item, language);
-    if (!amount || !item.month) return;
+    const values = getItemValues(item, language);
+    if (!getItemTotal(item, language) || !item.month) return;
     const description = item.description?.trim() || "Item simulado";
-    const values = item.mode === "installment" ? splitAmount(amount, item.installmentCount) : [amount];
 
     values.forEach((value, index) => {
+      if (!value) return;
       const target = monthFromIndex(monthIndex(item.month) + index).value;
       const entry = impacts.get(target) || { expense: 0, income: 0, items: [] };
       if (item.type === "income") entry.income += value;
@@ -97,7 +136,8 @@ function buildSimulatedImpacts(items, language) {
         description,
         type: item.type,
         amount: value,
-        installmentLabel: item.mode === "installment" ? `${index + 1}/${values.length}` : null
+        installmentLabel: item.mode !== "cash" ? `${index + 1}/${values.length}` : null,
+        periodType: item.mode === "recurring" ? "mês" : "parcela"
       });
       impacts.set(target, entry);
     });
@@ -109,9 +149,8 @@ function buildSimulatedImpacts(items, language) {
 function simulationEndIndex(items, language) {
   const start = monthIndex(currentMonthValue());
   const lastAffected = items.reduce((last, item) => {
-    const amount = getItemAmount(item, language);
-    if (!amount) return last;
-    const offset = item.mode === "installment" ? Math.max(1, Number(item.installmentCount) || 1) - 1 : 0;
+    if (!getItemTotal(item, language)) return last;
+    const offset = getItemCount(item) - 1;
     return Math.max(last, monthIndex(item.month) + offset);
   }, start);
   return Math.max(lastAffected + 1, start + 1);
@@ -172,13 +211,37 @@ function ProjectionTooltip({ active, payload, label }) {
 }
 
 function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
-  const total = getItemAmount(item, language);
   const count = Math.max(1, Number(item.installmentCount) || 1);
-  const installments = splitAmount(total, count);
-  const perInstallment = installments[0] || 0;
+  const recurrenceCount = Math.max(1, Number(item.recurrenceCount) || 1);
+  const itemCount = getItemCount(item);
+  const equalValues = getEqualValues(item, language);
+  const values = getItemValues(item, language);
+  const variableValuesEnabled = item.mode !== "cash" && item.valueMode === "different";
+  const totalSimulated = getItemTotal(item, language);
+  const repeatedLabel = item.mode === "installment" ? "Parcelas" : "Meses";
+  const repeatedValueLabel = item.mode === "installment" ? "Valor por parcela" : "Valor por mês";
 
   const setMoney = (value) => onChange({ totalAmount: formatTypedMoneyForEditing(value, language) });
   const normalizeMoney = () => onChange({ totalAmount: formatTypedMoneyAsCurrency(item.totalAmount, language) });
+  const normalizeCount = (field, value) => onChange({ [field]: Math.max(1, Number(value) || 1) });
+  const setType = (type) => onChange({
+    type,
+    mode: type === "income" && item.mode === "installment" ? "cash" : type === "expense" && item.mode === "recurring" ? "cash" : item.mode
+  });
+  const setValueMode = (different) => onChange({
+    valueMode: different ? "different" : "equal",
+    values: different ? equalValues.map((value, valueIndex) => item.values?.[valueIndex] || formatMoney(value, language)) : []
+  });
+  const setCustomValue = (valueIndex, value) => {
+    const nextValues = Array.from({ length: itemCount }, (_, currentIndex) => item.values?.[currentIndex] || formatMoney(equalValues[currentIndex] || 0, language));
+    nextValues[valueIndex] = formatTypedMoneyForEditing(value, language);
+    onChange({ values: nextValues });
+  };
+  const normalizeCustomValue = (valueIndex) => {
+    const nextValues = Array.from({ length: itemCount }, (_, currentIndex) => item.values?.[currentIndex] || formatMoney(equalValues[currentIndex] || 0, language));
+    nextValues[valueIndex] = formatMoney(parseTypedMoneyInput(nextValues[valueIndex], language), language);
+    onChange({ values: nextValues });
+  };
 
   return (
     <article className="simulation-item-card">
@@ -196,43 +259,73 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
 
       <div className="simulation-toggle-grid">
         <div className="segmented-control" aria-label="Tipo do item">
-          <button type="button" className={item.type === "expense" ? "active danger" : ""} onClick={() => onChange({ type: "expense" })}>Gasto</button>
-          <button type="button" className={item.type === "income" ? "active success" : ""} onClick={() => onChange({ type: "income" })}>Receita</button>
+          <button type="button" className={item.type === "expense" ? "active danger" : ""} onClick={() => setType("expense")}>Gasto</button>
+          <button type="button" className={item.type === "income" ? "active success" : ""} onClick={() => setType("income")}>Receita</button>
         </div>
         <div className="segmented-control" aria-label="Modalidade">
           <button type="button" className={item.mode === "cash" ? "active" : ""} onClick={() => onChange({ mode: "cash" })}>À vista</button>
-          <button type="button" className={item.mode === "installment" ? "active" : ""} onClick={() => onChange({ mode: "installment" })}>Parcelado</button>
+          {item.type === "income" ? (
+            <button type="button" className={item.mode === "recurring" ? "active success" : ""} onClick={() => onChange({ mode: "recurring" })}>Recorrente</button>
+          ) : (
+            <button type="button" className={item.mode === "installment" ? "active" : ""} onClick={() => onChange({ mode: "installment" })}>Parcelado</button>
+          )}
         </div>
       </div>
 
-      <div className={item.mode === "installment" ? "simulation-form-grid three" : "simulation-form-grid"}>
+      <div className={item.mode !== "cash" ? "simulation-form-grid three" : "simulation-form-grid"}>
         <label>
-          <span>Valor total</span>
+          <span>{item.mode === "recurring" ? "Valor mensal" : "Valor total"}</span>
           <input inputMode="decimal" value={item.totalAmount} onChange={(event) => setMoney(event.target.value)} onBlur={normalizeMoney} placeholder="R$ 0,00" />
         </label>
-        {item.mode === "installment" && (
+        {item.mode !== "cash" && (
           <>
             <label>
-              <span>Parcelas</span>
-              <input type="number" min="1" max="48" value={item.installmentCount} onChange={(event) => onChange({ installmentCount: event.target.value })} onBlur={() => onChange({ installmentCount: count })} />
+              <span>{repeatedLabel}</span>
+              {item.mode === "installment" ? (
+                <input type="number" min="1" max="48" value={item.installmentCount} onChange={(event) => onChange({ installmentCount: event.target.value })} onBlur={() => normalizeCount("installmentCount", count)} />
+              ) : (
+                <input type="number" min="1" value={item.recurrenceCount} onChange={(event) => onChange({ recurrenceCount: event.target.value })} onBlur={() => normalizeCount("recurrenceCount", recurrenceCount)} />
+              )}
             </label>
             <label>
-              <span>Valor por parcela</span>
-              <input value={formatMoney(perInstallment, language)} readOnly />
+              <span>{variableValuesEnabled ? "Total simulado" : repeatedValueLabel}</span>
+              <input value={formatMoney(variableValuesEnabled ? totalSimulated : values[0] || 0, language)} readOnly />
             </label>
           </>
         )}
         <label>
-          <span>{item.mode === "installment" ? "Primeira parcela" : "Data prevista"}</span>
+          <span>{item.mode === "installment" ? "Primeira parcela" : item.mode === "recurring" ? "Primeira receita" : "Data prevista"}</span>
           <MonthField value={item.month} onChange={(value) => onChange({ month: value })} />
         </label>
       </div>
+
+      {item.mode !== "cash" && (
+        <label className={`switch-row simulation-switch ${variableValuesEnabled ? "active" : ""}`}>
+          <input type="checkbox" checked={variableValuesEnabled} onChange={(event) => setValueMode(event.target.checked)} />
+          <span><i /> Valores diferentes {item.mode === "installment" ? "entre parcelas" : "entre meses"}</span>
+        </label>
+      )}
+
+      {variableValuesEnabled && (
+        <div className="simulation-values-grid">
+          {Array.from({ length: itemCount }, (_, valueIndex) => {
+            const month = monthFromIndex(monthIndex(item.month) + valueIndex);
+            const valueText = item.values?.[valueIndex] || formatMoney(equalValues[valueIndex] || 0, language);
+            return (
+              <label key={`${item.id}-value-${valueIndex}`}>
+                <span>{item.mode === "installment" ? `Parcela ${valueIndex + 1}` : `Mês ${valueIndex + 1}`} - {formatMonthLabel(month.year, month.month, language)}</span>
+                <input inputMode="decimal" value={valueText} onChange={(event) => setCustomValue(valueIndex, event.target.value)} onBlur={() => normalizeCustomValue(valueIndex)} />
+              </label>
+            );
+          })}
+        </div>
+      )}
     </article>
   );
 }
 
 function ConfirmationModal({ items, invoices, onClose, onConfirm, language }) {
-  const validItems = items.filter((item) => getItemAmount(item, language) > 0);
+  const validItems = items.filter((item) => getItemTotal(item, language) > 0);
 
   return (
     <div className="modal-layer">
@@ -248,16 +341,17 @@ function ConfirmationModal({ items, invoices, onClose, onConfirm, language }) {
         <div className="simulation-confirm-list">
           {validItems.map((item) => {
             const firstInvoice = findInvoiceForMonth(invoices, item.month);
+            const modeLabel = item.mode === "installment" ? `${getItemCount(item)}x` : item.mode === "recurring" ? `${getItemCount(item)} meses` : "À vista";
             return (
               <div className="simulation-confirm-row" key={item.id}>
                 <span className={`type-chip ${item.type}`}>{item.type === "income" ? "Receita" : "Gasto"}</span>
                 <strong>{item.description?.trim() || "Item simulado"}</strong>
-                <span>{item.mode === "installment" ? `${item.installmentCount}x` : "À vista"} em {formatMonthLabel(...item.month.split("-").map(Number), language)}</span>
-                <span>{formatMoney(getItemAmount(item, language), language)}</span>
+                <span>{modeLabel} em {formatMonthLabel(...item.month.split("-").map(Number), language)}</span>
+                <span>{formatMoney(getItemTotal(item, language), language)}</span>
                 {item.mode === "installment" && item.type === "expense" && !firstInvoice && (
                   <small className="danger-text">Sem fatura elegível no mês inicial.</small>
                 )}
-                {item.mode === "installment" && item.type === "income" && (
+                {item.mode === "recurring" && item.type === "income" && (
                   <small>Será inserido como lançamentos mensais de receita.</small>
                 )}
               </div>
@@ -279,7 +373,7 @@ function findInvoiceForMonth(invoices, monthValue) {
     .find((invoice) => String(invoice.due_date || "").slice(0, 7) === monthValue);
 }
 
-export default function SimulationPage({ invoices = [], onInserted }) {
+export default function SimulationPage({ invoices = [], monthCards = [], onInserted }) {
   const { user } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
@@ -330,7 +424,11 @@ export default function SimulationPage({ invoices = [], onInserted }) {
     return () => window.clearTimeout(timer);
   }, [items]);
 
-  const endIndex = useMemo(() => simulationEndIndex(activeItems, language), [activeItems, language]);
+  const registeredEndIndex = useMemo(() => {
+    const current = monthIndex(currentMonthValue());
+    return monthCards.reduce((last, item) => Math.max(last, monthIndex(`${item.year}-${String(item.month).padStart(2, "0")}`)), current);
+  }, [monthCards]);
+  const endIndex = useMemo(() => Math.max(simulationEndIndex(activeItems, language), registeredEndIndex), [activeItems, language, registeredEndIndex]);
   const months = useMemo(() => {
     const start = monthIndex(currentMonthValue());
     return Array.from({ length: endIndex - start + 1 }, (_, offset) => monthFromIndex(start + offset));
@@ -379,7 +477,7 @@ export default function SimulationPage({ invoices = [], onInserted }) {
     language
   }), [baseSummary, includeReal, language, months, realByMonth, simulatedByMonth]);
 
-  const validItems = useMemo(() => activeItems.filter((item) => getItemAmount(item, language) > 0), [activeItems, language]);
+  const validItems = useMemo(() => activeItems.filter((item) => getItemTotal(item, language) > 0), [activeItems, language]);
   const baseBalance = Number(baseSummary?.current_balance || 0);
   const finalRow = rows[rows.length - 1];
   const projectedBalance = finalRow?.withSimulation ?? baseBalance;
@@ -392,7 +490,7 @@ export default function SimulationPage({ invoices = [], onInserted }) {
 
   const updateItem = (id, patch) => setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
   const removeItem = (id) => setItems((current) => current.filter((item) => item.id !== id));
-  const addItem = () => setItems((current) => current.length >= MAX_ITEMS ? current : [...current, blankItem()]);
+  const addItem = () => setItems((current) => [...current, blankItem()]);
   const clearItems = () => {
     if (!items.length || !window.confirm("Deseja limpar a simulação?")) return;
     setItems([]);
@@ -408,7 +506,7 @@ export default function SimulationPage({ invoices = [], onInserted }) {
   const toggleRow = (value) => setExpandedRows((current) => ({ ...current, [value]: !current[value] }));
 
   const insertItem = async (item) => {
-    const amount = getItemAmount(item, language);
+    const amount = getItemTotal(item, language);
     const description = item.description?.trim() || "Item simulado";
     if (!amount) return 0;
 
@@ -423,14 +521,16 @@ export default function SimulationPage({ invoices = [], onInserted }) {
       return 1;
     }
 
-    const values = splitAmount(amount, item.installmentCount);
-    if (item.type === "income") {
-      await Promise.all(values.map((value, index) => createTransaction({
-        date: monthStartDate(monthFromIndex(monthIndex(item.month) + index).value),
+    const scheduledValues = getItemValues(item, language)
+      .map((value, index) => ({ value: Number(value || 0), index }))
+      .filter((entry) => entry.value > 0);
+    if (item.mode === "recurring" || item.type === "income") {
+      await Promise.all(scheduledValues.map((entry, index) => createTransaction({
+        date: monthStartDate(monthFromIndex(monthIndex(item.month) + entry.index).value),
         type: "income",
-        amount: value,
-        description: `${description} (${index + 1}/${values.length})`,
-        is_future: monthStartDate(monthFromIndex(monthIndex(item.month) + index).value) > todayIsoDate()
+        amount: entry.value,
+        description: `${description} (${index + 1}/${scheduledValues.length})`,
+        is_future: monthStartDate(monthFromIndex(monthIndex(item.month) + entry.index).value) > todayIsoDate()
       })));
       return 1;
     }
@@ -441,12 +541,12 @@ export default function SimulationPage({ invoices = [], onInserted }) {
     await createInstallment({
       description,
       total_amount: amount,
-      installment_count: values.length,
+      installment_count: scheduledValues.length,
       first_invoice_id: Number(firstInvoice.id),
-      items: values.map((value, index) => ({
+      items: scheduledValues.map((entry, index) => ({
         invoice_id: index === 0 ? Number(firstInvoice.id) : null,
-        amount: value,
-        target_due_date: addMonthsToDate(firstInvoice.due_date, index)
+        amount: entry.value,
+        target_due_date: addMonthsToDate(firstInvoice.due_date, entry.index)
       }))
     });
     return 1;
@@ -519,7 +619,7 @@ export default function SimulationPage({ invoices = [], onInserted }) {
           </div>
 
           <div className="simulation-actions">
-            <button className="btn btn-ghost" type="button" onClick={addItem} disabled={items.length >= MAX_ITEMS}>
+            <button className="btn btn-ghost" type="button" onClick={addItem}>
               <Plus size={16} /> Adicionar item simulado
             </button>
             <button className="btn btn-ghost danger-soft" type="button" onClick={clearItems} disabled={!items.length}>
@@ -609,7 +709,7 @@ export default function SimulationPage({ invoices = [], onInserted }) {
                           {row.simulatedItems.map((entry) => (
                             <div key={entry.id}>
                               <span>{entry.type === "income" ? "Receita" : "Gasto"}</span>
-                              <strong>{entry.description}{entry.installmentLabel ? ` - parcela ${entry.installmentLabel}` : ""}</strong>
+                              <strong>{entry.description}{entry.installmentLabel ? ` - ${entry.periodType} ${entry.installmentLabel}` : ""}</strong>
                               <em className={entry.type === "income" ? "money-income" : "money-expense"}>{entry.type === "income" ? "+" : "-"}{formatMoney(entry.amount, language)}</em>
                             </div>
                           ))}

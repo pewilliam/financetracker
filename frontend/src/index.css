@@ -3070,6 +3070,20 @@ select {
 .simulation-form-grid.three label:last-child {
   grid-column: 1 / -1;
 }
+.simulation-values-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 2px;
+}
+.simulation-values-grid label {
+  min-width: 0;
+}
+.simulation-values-grid label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .simulation-empty {
   display: grid;
   justify-items: center;
@@ -3822,7 +3836,8 @@ select {
   }
   .simulation-toggle-grid,
   .simulation-form-grid,
-  .simulation-form-grid.three {
+  .simulation-form-grid.three,
+  .simulation-values-grid {
     grid-template-columns: 1fr;
   }
   .simulation-form-grid.three label:last-child {
