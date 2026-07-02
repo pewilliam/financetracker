@@ -2578,6 +2578,14 @@ select {
   opacity: .55;
   transform: none;
 }
+.btn-danger {
+  border-color: transparent;
+  background: var(--expense);
+  color: #fff;
+}
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--expense) 88%, #000);
+}
 .invoice-review {
   display: flex;
   flex-direction: column;
@@ -3167,6 +3175,35 @@ select {
   font-weight: 800;
 }
 .simulation-name-modal .modal-actions {
+  padding: 0 20px 20px;
+}
+.simulation-decision-modal {
+  width: min(520px, calc(100% - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+.simulation-decision-modal .modal-titlebar {
+  grid-template-columns: 46px minmax(0, 1fr) 38px;
+  align-items: center;
+  padding: 18px 20px;
+  background: rgba(255,77,106,0.08);
+}
+.simulation-decision-modal .modal-titlebar h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+.simulation-decision-body {
+  padding: 18px 20px;
+}
+.simulation-decision-body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+.simulation-decision-modal .modal-actions {
   padding: 0 20px 20px;
 }
 .simulation-items {

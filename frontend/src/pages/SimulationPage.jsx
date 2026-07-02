@@ -452,6 +452,31 @@ function SimulationNameModal({ mode, initialName, saving, onClose, onSubmit }) {
   );
 }
 
+function SimulationDecisionModal({ title, message, confirmLabel, danger = false, onClose, onConfirm }) {
+  return (
+    <div className="modal-layer">
+      <button className="modal-backdrop" type="button" onClick={onClose} />
+      <div className={`modal-card simulation-decision-modal ${danger ? "danger" : ""}`}>
+        <div className="modal-titlebar">
+          <div className="modal-icon danger"><Trash2 size={20} /></div>
+          <div>
+            <p className="eyebrow">{danger ? "Ação irreversível" : "Confirmar ação"}</p>
+            <h2>{title}</h2>
+          </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
+        </div>
+        <div className="simulation-decision-body">
+          <p>{message}</p>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button>
+          <button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} type="button" onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatSavedDate(value, language) {
   if (!value) return "Sem data";
   const date = new Date(value);
@@ -485,6 +510,7 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   const [savingSimulation, setSavingSimulation] = useState(false);
   const [saveDialog, setSaveDialog] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [decisionDialog, setDecisionDialog] = useState(null);
 
   const refreshSavedSimulations = async () => {
     try {
@@ -623,9 +649,25 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
     setItems((current) => [...current, blankItem()]);
   };
   const clearItems = () => {
-    if (!items.length || !window.confirm("Deseja limpar a simulação?")) return;
+    if (!items.length) return;
+    setDecisionDialog({
+      title: "Limpar itens simulados",
+      message: "Todos os itens desta simulação serão removidos. A simulação salva no sistema não será alterada até você salvar novamente.",
+      confirmLabel: "Limpar tudo",
+      danger: true,
+      onConfirm: () => {
+        setItems([]);
+        setActiveItems([]);
+        setRestored(false);
+        clearLocalDraft();
+        setDecisionDialog(null);
+      }
+    });
+  };
+  const clearUnsavedSimulation = () => {
     setItems([]);
     setActiveItems([]);
+    setSelectedSimulationId("");
     setRestored(false);
     clearLocalDraft();
   };
@@ -664,6 +706,7 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
     setEditorOpen(false);
     setConfirmOpen(false);
     setSaveDialog(null);
+    setDecisionDialog(null);
   };
   const openCreateSimulationDialog = () => {
     setSaveDialog({ mode: "create", name: defaultSimulationName() });
@@ -730,27 +773,44 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
   };
   const deleteCurrentSimulation = async () => {
     if (selectedSimulationId && selectedSimulation) {
-      if (!window.confirm(`Excluir "${selectedSimulation.name}"?`)) return;
-      try {
-        await deleteSimulation(selectedSimulationId);
-        setSelectedSimulationId("");
-        setItems([]);
-        setActiveItems([]);
-        setEditorOpen(false);
-        await refreshSavedSimulations();
-        toast.success("Simulação excluída");
-      } catch {
-        toast.error("Erro ao excluir simulação");
-      }
+      setDecisionDialog({
+        title: "Excluir simulação",
+        message: `A simulação "${selectedSimulation.name}" será removida do sistema e não aparecerá em outros aparelhos.`,
+        confirmLabel: "Excluir simulação",
+        danger: true,
+        onConfirm: async () => {
+          try {
+            await deleteSimulation(selectedSimulationId);
+            setSelectedSimulationId("");
+            setItems([]);
+            setActiveItems([]);
+            setEditorOpen(false);
+            setDecisionDialog(null);
+            await refreshSavedSimulations();
+            toast.success("Simulação excluída");
+          } catch {
+            toast.error("Erro ao excluir simulação");
+          }
+        }
+      });
       return;
     }
-    if (items.length && !window.confirm("Descartar esta simulação?")) return;
-    setItems([]);
-    setActiveItems([]);
-    setSelectedSimulationId("");
-    setRestored(false);
+    if (items.length) {
+      setDecisionDialog({
+        title: "Descartar simulação",
+        message: "Esta simulação ainda não foi salva. Ao descartar, os itens simulados serão removidos deste aparelho.",
+        confirmLabel: "Descartar",
+        danger: true,
+        onConfirm: () => {
+          clearUnsavedSimulation();
+          setEditorOpen(false);
+          setDecisionDialog(null);
+        }
+      });
+      return;
+    }
+    clearUnsavedSimulation();
     setEditorOpen(false);
-    clearLocalDraft();
   };
 
   const insertItem = async (item) => {
@@ -1064,6 +1124,16 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
           saving={savingSimulation}
           onClose={() => setSaveDialog(null)}
           onSubmit={persistNamedSimulation}
+        />
+      )}
+      {decisionDialog && (
+        <SimulationDecisionModal
+          title={decisionDialog.title}
+          message={decisionDialog.message}
+          confirmLabel={decisionDialog.confirmLabel}
+          danger={decisionDialog.danger}
+          onClose={() => setDecisionDialog(null)}
+          onConfirm={decisionDialog.onConfirm}
         />
       )}
     </section>
