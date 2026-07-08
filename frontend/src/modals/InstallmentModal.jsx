@@ -5,12 +5,15 @@ import { useI18n } from "../i18n/index.ts";
 import { addMonthsToDate, formatMonthShort, formatMonthSlash, invoiceAcceptsNewCharges, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InstallmentModal({ form, setForm, invoices, onSubmit, onClose }) {
+export default function InstallmentModal({ form, setForm, invoices, allowOverdueInvoiceEdits = false, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
-  const selectableInvoices = useMemo(() => invoices.filter(invoiceAcceptsNewCharges), [invoices]);
+  const selectableInvoices = useMemo(
+    () => invoices.filter((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits)),
+    [invoices, allowOverdueInvoiceEdits]
+  );
   const invoicesById = useMemo(() => new Map(selectableInvoices.map((invoice) => [String(invoice.id), invoice])), [selectableInvoices]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));

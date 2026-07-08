@@ -360,7 +360,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   );
 }
 
-function ConfirmationModal({ items, invoices, onClose, onConfirm, language }) {
+function ConfirmationModal({ items, invoices, allowOverdueInvoiceEdits = false, onClose, onConfirm, language }) {
   const validItems = items.filter((item) => getItemTotal(item, language) > 0);
 
   return (
@@ -376,7 +376,7 @@ function ConfirmationModal({ items, invoices, onClose, onConfirm, language }) {
         </div>
         <div className="simulation-confirm-list">
           {validItems.map((item) => {
-            const firstInvoice = findInvoiceForMonth(invoices, item.month);
+            const firstInvoice = findInvoiceForMonth(invoices, item.month, allowOverdueInvoiceEdits);
             const modeLabel = item.mode === "installment" ? `${getItemCount(item)}x` : item.mode === "recurring" ? `${getItemCount(item)} meses` : "À vista";
             return (
               <div className="simulation-confirm-row" key={item.id}>
@@ -484,13 +484,13 @@ function formatSavedDate(value, language) {
   return date.toLocaleDateString(language, { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function findInvoiceForMonth(invoices, monthValue) {
+function findInvoiceForMonth(invoices, monthValue, allowOverdueInvoiceEdits = false) {
   return invoices
-    .filter(invoiceAcceptsNewCharges)
+    .filter((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits))
     .find((invoice) => String(invoice.due_date || "").slice(0, 7) === monthValue);
 }
 
-export default function SimulationPage({ invoices = [], monthCards = [], onInserted }) {
+export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits = false, monthCards = [], onInserted }) {
   const { user } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
@@ -843,7 +843,7 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
       return 1;
     }
 
-    const firstInvoice = findInvoiceForMonth(invoices, item.month);
+    const firstInvoice = findInvoiceForMonth(invoices, item.month, allowOverdueInvoiceEdits);
     if (!firstInvoice) throw new Error(`Crie uma fatura elegível em ${formatMonthLabel(...item.month.split("-").map(Number), language)} antes de inserir "${description}".`);
 
     await createInstallment({
@@ -1112,6 +1112,7 @@ export default function SimulationPage({ invoices = [], monthCards = [], onInser
         <ConfirmationModal
           items={validItems}
           invoices={invoices}
+          allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
           language={language}
           onClose={() => setConfirmOpen(false)}
           onConfirm={confirmInsert}

@@ -118,7 +118,7 @@ def add_invoice_item(
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if not invoice_accepts_new_charges(invoice):
+    if not invoice_accepts_new_charges(invoice, current_user.allow_overdue_invoice_edits):
         raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
 
     item = InvoiceItem(
@@ -159,6 +159,15 @@ def delete_invoice_item(
     item = db.get(InvoiceItem, item_id)
     if not item or item.invoice_id != invoice.id:
         raise HTTPException(status_code=404, detail="Item not found")
+
+    refund_installment = (
+        db.query(InstallmentItem)
+        .filter(InstallmentItem.refund_invoice_item_id == item.id)
+        .first()
+    )
+    if refund_installment:
+        refund_installment.status = "pending"
+        refund_installment.refund_invoice_item_id = None
 
     db.delete(item)
     db.flush()

@@ -27,6 +27,9 @@
   --muted: var(--color-text-muted);
   --border: var(--color-border);
   --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --focus-border: var(--color-primary);
+  --focus-ring: inset 0 0 0 1px var(--color-primary);
+  --error-ring: inset 0 0 0 1px rgba(220,38,38,0.65);
 }
 
 [data-theme="dark"],
@@ -70,10 +73,15 @@ button, input, select { font: inherit; }
 button { cursor: pointer; }
 input:focus,
 select:focus,
-textarea:focus,
+textarea:focus {
+  outline: 0;
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
+}
 button:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: 0;
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
 }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -519,12 +527,12 @@ button:focus-visible {
 }
 .date-field.open .date-input-shell,
 .date-input-shell:focus-within {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(20,160,120,0.14);
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
 }
 .has-error .date-input-shell {
   border-color: #DC2626;
-  box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+  box-shadow: var(--error-ring);
 }
 .date-input-shell input {
   width: 100%;
@@ -537,6 +545,9 @@ button:focus-visible {
   color: var(--text);
   font-weight: 700;
   outline: 0;
+  box-shadow: none;
+}
+.date-input-shell input:focus {
   box-shadow: none;
 }
 .date-trigger {
@@ -1147,16 +1158,15 @@ select {
 }
 .transaction-modal-body input:focus,
 .transaction-modal-body select:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(20,160,120,0.12);
+  outline: 0;
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
 }
 .transaction-modal-body .has-error input,
 .transaction-modal-body .has-error select,
 .transaction-modal-body .has-error .money-input {
   border-color: #DC2626;
-  box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+  box-shadow: var(--error-ring);
 }
 .field-error {
   color: #DC2626;
@@ -1232,6 +1242,10 @@ select {
   text-align: center;
   font-size: 24px;
   font-weight: 700;
+}
+.money-input:focus-within {
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
 }
 .money-input input:focus { box-shadow: none; }
 .money-input.danger input { color: #CC2244; }
@@ -1321,7 +1335,7 @@ select {
 }
 .future-invoice-field.has-error .invoice-selector {
   border-radius: 10px;
-  box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+  box-shadow: var(--error-ring);
 }
 .transaction-modal-body .recurrence-grid {
   margin: 0;
@@ -1332,6 +1346,13 @@ select {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
+}
+.recurrence-summary {
+  padding: 9px 10px;
+  border: 1px solid rgba(20,160,120,0.18);
+  border-radius: 8px;
+  background: rgba(20,160,120,0.06);
+  line-height: 1.35;
 }
 .exclusive-hint { color: var(--primary); }
 .transaction-modal-actions {
@@ -1831,6 +1852,7 @@ select {
 .due-badge.compact { background: #DCFAF0; color: #007864; white-space: nowrap; }
 .due-badge.danger { background: #FFE8EE; color: #CC2244; }
 .due-badge.paid { background: #DCFAF0; color: #007864; }
+.due-badge.refunded { background: #E8F2FF; color: #1663B8; }
 .invoice-total-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -3162,9 +3184,9 @@ select {
   font-weight: 800;
 }
 .simulation-name-body input:focus {
-  outline: none;
-  border-color: rgba(20,160,120,0.45);
-  box-shadow: 0 0 0 3px rgba(20,160,120,0.14);
+  outline: 0;
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
 }
 .simulation-name-body .has-error input {
   border-color: rgba(255,77,106,0.65);

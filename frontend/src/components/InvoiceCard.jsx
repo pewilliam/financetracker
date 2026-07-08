@@ -13,7 +13,7 @@ function normalizeName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
-export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
+export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false, onAddItem, onUpdateItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [addMode, setAddMode] = useState(null);
@@ -30,7 +30,7 @@ export default function InvoiceCard({ invoice, onAddItem, onUpdateItem, onAddIns
   const overdue = !invoice.paid && getDaysUntil(invoice.due_date) <= 0;
   const regularItems = invoice.items || [];
   const installmentItems = invoice.installment_items || [];
-  const canAddToInvoice = invoiceAcceptsNewCharges(invoice);
+  const canAddToInvoice = invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
   const totalItemCount = regularItems.length + installmentItems.length;
   const singleMainItem = totalItemCount === 1
     && regularItems.length === 1

@@ -196,6 +196,7 @@ export default function TransactionForm({
   const recurrenceMonths = clampNumber(form.recurrence_months, 1, 60, 12);
   const recurrenceDay = clampNumber(form.day_of_month || getDayFromDate(form.date), 1, 31, 1);
   const recurrenceEnd = form.date ? formatMonthShort(addMonths(form.date, recurrenceMonths)) : "";
+  const recurrenceTotal = recurrenceMonths + 1;
 
   if (!open) return null;
 
@@ -256,7 +257,7 @@ export default function TransactionForm({
               <div className={`conditional-content ${form.recurrence ? "open" : ""}`}>
                 <div className="recurrence-grid">
                   <label>
-                    <span>{tt("transactionModal.repeatFor", "Repetir por")}</span>
+                    <span>{tt("transactionModal.repeatFor", "Parcelas adicionais")}</span>
                     <input type="number" min="1" max="60" value={form.recurrence_months} disabled={!form.recurrence} onChange={(event) => setField("recurrence_months", event.target.value)} />
                   </label>
                   <label className={errors.day_of_month ? "has-error" : ""}>
@@ -268,10 +269,11 @@ export default function TransactionForm({
                 <p className="recurrence-summary">
                   {tt(
                     "transactionModal.recurrenceSummary",
-                    `Será lançado todo dia ${recurrenceDay} por ${recurrenceMonths} meses${recurrenceEnd ? ` (até ${recurrenceEnd})` : ""}`,
+                    `Total: ${recurrenceTotal} parcelas (1 atual + ${recurrenceMonths} futuras). Todo dia ${recurrenceDay}${recurrenceEnd ? `, até ${recurrenceEnd}` : ""}.`,
                     {
                       day: recurrenceDay,
                       months: recurrenceMonths,
+                      total: recurrenceTotal,
                       until: recurrenceEnd ? t("transactionModal.recurrenceUntil", { date: recurrenceEnd }) : ""
                     }
                   )}

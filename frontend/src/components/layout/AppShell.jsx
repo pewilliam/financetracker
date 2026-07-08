@@ -22,6 +22,7 @@ import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
+import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
 import { addInvoiceItem, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentItem, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateTransaction } from "../../api/api.js";
@@ -29,6 +30,7 @@ import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils
 
 export default function AppShell() {
   const { t, language } = useI18n();
+  const { user } = useAuth();
   const location = useLocation();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -88,6 +90,7 @@ export default function AppShell() {
   const [receivableToDelete, setReceivableToDelete] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
+  const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses";
   const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete;
   const bodyLocked = overlayOpen;
@@ -117,8 +120,8 @@ export default function AppShell() {
     };
   }, [bodyLocked]);
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh({ showLoading = true } = {}) {
+    if (showLoading) setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
@@ -148,11 +151,50 @@ export default function AppShell() {
     } catch (error) {
       toast.error(t("toasts.loadDataError"));
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
   useEffect(() => { refresh(); }, [year, month, language]);
+
+  const sortInvoicesByDueDate = (items) => [...items].sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || left.id - right.id);
+
+  const upsertInvoice = (updatedInvoice) => {
+    setInvoices((current) => {
+      const exists = current.some((invoice) => invoice.id === updatedInvoice.id);
+      const next = exists
+        ? current.map((invoice) => invoice.id === updatedInvoice.id ? updatedInvoice : invoice)
+        : [...current, updatedInvoice];
+      return sortInvoicesByDueDate(next);
+    });
+  };
+
+  const syncInvoiceCollections = async () => {
+    const [invoicesPayload, installmentsPayload] = await Promise.all([
+      listInvoices(),
+      listInstallments()
+    ]);
+    setInvoices(invoicesPayload);
+    setInstallments(installmentsPayload);
+  };
+
+  const syncMonthCollections = async () => {
+    const offsets = [-5, -4, -3, -2, -1, 0];
+    const [monthPayload, summaryPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      getMonth(year, month),
+      getMonthSummary(year, month),
+      getMonthsSummary(),
+      Promise.all(offsets.map(async (offset) => {
+        const target = shiftMonth(year, month, offset);
+        const data = await getMonthSummary(target.year, target.month);
+        return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
+      }))
+    ]);
+    setMonthData(monthPayload);
+    setSummary(summaryPayload);
+    setMonthCards(monthCardsPayload);
+    setComparisons(comparisonPayload);
+  };
 
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
 
@@ -189,7 +231,7 @@ export default function AppShell() {
       }
       toast.success(editing ? "Lançamento salvo" : "Lançamento adicionado!");
       setDrawerOpen(false);
-      await refresh();
+      await syncMonthCollections();
     } catch (error) {
       const details = String(error?.message || "");
       toast.error(details.includes("422") ? "Dados inválidos ao salvar. Revise data e valor." : "Erro ao salvar lançamento");
@@ -200,7 +242,7 @@ export default function AppShell() {
     try {
       await deleteTransaction(id);
       toast.success("Item removido");
-      await refresh();
+      await syncMonthCollections();
     } catch {
       toast.error("Erro ao remover item");
     }
@@ -208,15 +250,19 @@ export default function AppShell() {
 
   const createNewInvoice = async (drafts) => {
     try {
-      await Promise.all(drafts.map((draft) => createInvoice({
+      const createdInvoices = await Promise.all(drafts.map((draft) => createInvoice({
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
         initial_amount: parseTypedMoneyInput(draft.initial_amount, language)
       })));
+      const createdIds = new Set(createdInvoices.map((invoice) => invoice.id));
+      setInvoices((current) => sortInvoicesByDueDate([
+        ...current.filter((invoice) => !createdIds.has(invoice.id)),
+        ...createdInvoices
+      ]));
       setInvoiceForm(defaultInvoiceForm());
       setInvoiceModal(false);
       toast.success(`${drafts.length} ${drafts.length === 1 ? "fatura criada" : "faturas criadas"} com sucesso!`);
-      await refresh();
     } catch {
       toast.error("Erro ao criar fatura");
     }
@@ -278,7 +324,7 @@ export default function AppShell() {
       setInstallmentForm(defaultInstallmentForm());
       setInstallmentModal(false);
       toast.success("Compra parcelada criada");
-      await refresh();
+      await syncInvoiceCollections();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao criar compra parcelada");
     }
@@ -289,7 +335,7 @@ export default function AppShell() {
       await deleteInstallment(id);
       setInstallmentDetails(null);
       toast.success("Compra parcelada removida");
-      await refresh();
+      await syncInvoiceCollections();
     } catch {
       toast.error("Erro ao remover compra parcelada");
     }
@@ -299,7 +345,7 @@ export default function AppShell() {
     try {
       await deleteInstallmentItem(id);
       toast.success("Parcela removida");
-      await refresh();
+      await syncInvoiceCollections();
     } catch {
       toast.error("Erro ao remover parcela");
     }
@@ -309,8 +355,9 @@ export default function AppShell() {
     try {
       const updated = await updateInstallmentItem(id, payload);
       setInstallmentDetails(updated);
+      setInstallments((current) => current.map((purchase) => purchase.id === updated.id ? updated : purchase));
       toast.success("Parcela atualizada");
-      await refresh();
+      await syncInvoiceCollections();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao atualizar parcela");
       throw error;
@@ -327,9 +374,9 @@ export default function AppShell() {
 
   const addItem = async (invoiceId, payload) => {
     try {
-      await addInvoiceItem(invoiceId, payload);
+      const updated = await addInvoiceItem(invoiceId, payload);
+      upsertInvoice(updated);
       toast.success(Number(payload.amount) < 0 ? "Reembolso adicionado" : "Item adicionado");
-      await refresh();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "Esta fatura não aceita novos itens" : Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
     }
@@ -337,9 +384,9 @@ export default function AppShell() {
 
   const saveItem = async (invoiceId, itemId, payload) => {
     try {
-      await updateInvoiceItem(invoiceId, itemId, payload);
+      const updated = await updateInvoiceItem(invoiceId, itemId, payload);
+      upsertInvoice(updated);
       toast.success(Number(payload.amount) < 0 ? "Reembolso atualizado" : "Item atualizado");
-      await refresh();
     } catch (error) {
       toast.error(Number(payload.amount) < 0 ? "Erro ao atualizar reembolso" : "Erro ao atualizar item");
       throw error;
@@ -348,9 +395,9 @@ export default function AppShell() {
 
   const deleteItem = async (invoiceId, itemId) => {
     try {
-      await deleteInvoiceItem(invoiceId, itemId);
+      const updated = await deleteInvoiceItem(invoiceId, itemId);
+      upsertInvoice(updated);
       toast.success("Item removido");
-      await refresh();
     } catch {
       toast.error("Erro ao remover item");
     }
@@ -358,9 +405,9 @@ export default function AppShell() {
 
   const toggleInvoicePaid = async (invoiceId, paid) => {
     try {
-      await setInvoicePaid(invoiceId, paid);
+      const updated = await setInvoicePaid(invoiceId, paid);
+      upsertInvoice(updated);
       toast.success(paid ? "Fatura marcada como paga" : "Fatura marcada como pendente");
-      await refresh();
     } catch {
       toast.error("Erro ao atualizar fatura");
     }
@@ -506,10 +553,10 @@ export default function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} updateItem={saveItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
-              <Route path="/simulador" element={<SimulationPage invoices={invoices} monthCards={monthCards} onInserted={refresh} />} />
+              <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
               <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />
@@ -521,8 +568,8 @@ export default function AppShell() {
 
       <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
-      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
-      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} />}
+      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
+      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} />}
       {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
       {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}

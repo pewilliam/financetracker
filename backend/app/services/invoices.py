@@ -12,8 +12,10 @@ def normalize_invoice_color(color: str | None) -> str:
     return color if color and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) else DEFAULT_INVOICE_COLOR
 
 
-def invoice_accepts_new_charges(invoice: Invoice) -> bool:
-    return not invoice.paid and invoice.due_date >= date.today()
+def invoice_accepts_new_charges(invoice: Invoice, allow_overdue: bool = False) -> bool:
+    if invoice.paid:
+        return False
+    return allow_overdue or invoice.due_date >= date.today()
 
 
 def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
@@ -24,7 +26,7 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     )
     installment_total = (
         db.query(func.coalesce(func.sum(InstallmentItem.amount), 0))
-        .filter(InstallmentItem.invoice_id == invoice.id)
+        .filter(InstallmentItem.invoice_id == invoice.id, InstallmentItem.status != "canceled")
         .scalar()
     )
     calculated_total = Decimal(str(item_total or 0)) + Decimal(str(installment_total or 0))

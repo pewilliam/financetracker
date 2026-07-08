@@ -151,10 +151,10 @@ export const enUS = {
     income: "INCOME",
     selectOrCreateInvoice: "Select or create an invoice",
     months: "Months",
-    repeatFor: "Repeat for",
+    repeatFor: "Additional installments",
     dayOfMonth: "Day of month",
-    recurrenceSummary: "Will be posted every {{day}}th for {{months}} months{{until}}",
-    recurrenceUntil: " (until {{date}})",
+    recurrenceSummary: "Total: {{total}} installments (1 current + {{months}} future). Every month on day {{day}}{{until}}.",
+    recurrenceUntil: ", until {{date}}",
     saving: "Saving..."
   },
   invoices: {
