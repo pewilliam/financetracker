@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, installments, invoice_templates, invoices, months, receivables, recurrences, transactions
+from app.routers import auth, installments, invoice_templates, invoices, months, receivables, recurrences, simulations, transactions
 
 load_dotenv()
 
@@ -29,6 +29,7 @@ app.include_router(installments)
 app.include_router(receivables)
 app.include_router(recurrences)
 app.include_router(months)
+app.include_router(simulations)
 
 
 @app.get("/api/health")

@@ -28,6 +28,7 @@ export const enUS = {
     invoices: "Invoices",
     invoiceModels: "Invoice models",
     installments: "Installments",
+    simulator: "Simulator",
     receivables: "Receivables",
     settings: "Settings",
     collapse: "Collapse sidebar",

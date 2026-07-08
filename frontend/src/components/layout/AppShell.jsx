@@ -11,6 +11,7 @@ import MonthsPage from "../../pages/MonthsPage.jsx";
 import InvoicesPage from "../../pages/InvoicesPage.jsx";
 import InvoiceTemplatesPage from "../../pages/InvoiceTemplatesPage.jsx";
 import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
+import SimulationPage from "../../pages/SimulationPage.jsx";
 import ReceivablesPage from "../../pages/ReceivablesPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
 import InvoiceModal from "../../modals/InvoiceModal.jsx";
@@ -508,6 +509,7 @@ export default function AppShell() {
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} addItem={addItem} updateItem={saveItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
+              <Route path="/simulador" element={<SimulationPage invoices={invoices} monthCards={monthCards} onInserted={refresh} />} />
               <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} refresh={refresh} />} />

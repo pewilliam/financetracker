@@ -28,6 +28,7 @@ export const ptBR = {
     invoices: "Faturas",
     invoiceModels: "Modelos de fatura",
     installments: "Parcelamentos",
+    simulator: "Simulador",
     receivables: "Recebíveis",
     settings: "Configurações",
     collapse: "Recolher sidebar",
