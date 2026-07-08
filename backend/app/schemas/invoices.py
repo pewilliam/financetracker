@@ -25,6 +25,7 @@ class InvoiceInstallmentItemOut(APIModel):
     installment_count: int = 0
     amount: Decimal
     description: str
+    status: str = "pending"
     purchase_description: str = ""
     purchase_total_amount: Decimal = Decimal("0.00")
     remaining_installments: int = 0

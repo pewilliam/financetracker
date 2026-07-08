@@ -13,6 +13,7 @@ class UserCreate(APIModel):
 class UserUpdate(APIModel):
     name: str
     email: EmailStr
+    allow_overdue_invoice_edits: Optional[bool] = None
 
 
 class PasswordUpdate(APIModel):
@@ -29,6 +30,7 @@ class UserOut(APIModel):
     id: int
     name: str
     email: EmailStr
+    allow_overdue_invoice_edits: bool = False
     created_at: Optional[datetime] = None
 
 

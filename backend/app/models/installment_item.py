@@ -12,6 +12,8 @@ class InstallmentItem(Base):
     installment_number = Column(Integer, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
     description = Column(String(255), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    refund_invoice_item_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     purchase = relationship("InstallmentPurchase", back_populates="items")

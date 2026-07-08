@@ -4,7 +4,7 @@ import InvoiceCard from "../components/InvoiceCard.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 
-export default function InvoicesPage({ invoices, addItem, updateItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, allowOverdueInvoiceEdits = false, addItem, updateItem, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
@@ -13,7 +13,7 @@ export default function InvoicesPage({ invoices, addItem, updateItem, addInstall
   const [expandedGroups, setExpandedGroups] = useState({});
   const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
-  const canCreateInstallment = invoices.some(invoiceAcceptsNewCharges);
+  const canCreateInstallment = invoices.some((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits));
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
   const selectedStatusCount = filters.statuses.length;
@@ -199,7 +199,7 @@ export default function InvoicesPage({ invoices, addItem, updateItem, addInstall
                     </button>
                     {expanded && (
                       group.items.length ? (
-                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} onAddItem={addItem} onUpdateItem={updateItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddItem={addItem} onUpdateItem={updateItem} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
                     )}
                   </section>

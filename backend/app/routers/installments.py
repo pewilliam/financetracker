@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, User
+from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, User
 from app.schemas.installments import InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
@@ -32,12 +32,61 @@ def _split_amount(total: Decimal, count: int) -> list[Decimal]:
     return values
 
 
-def _ensure_invoice_accepts_new_charges(invoice: Invoice) -> None:
-    if not invoice_accepts_new_charges(invoice):
+def _ensure_invoice_accepts_new_charges(invoice: Invoice, allow_overdue: bool = False) -> None:
+    if not invoice_accepts_new_charges(invoice, allow_overdue):
         raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
 
 
-def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset: int, target_due_date: Optional[date] = None) -> Invoice:
+def _delete_refund_invoice_item(db: Session, item: InstallmentItem) -> set[int]:
+    touched_invoice_ids = set()
+    if not item.refund_invoice_item_id:
+        return touched_invoice_ids
+
+    refund_item = db.get(InvoiceItem, item.refund_invoice_item_id)
+    if refund_item:
+        touched_invoice_ids.add(refund_item.invoice_id)
+        db.delete(refund_item)
+    item.refund_invoice_item_id = None
+    return touched_invoice_ids
+
+
+def _sync_refund_invoice_item(db: Session, item: InstallmentItem) -> set[int]:
+    touched_invoice_ids = set()
+    refund_item = db.get(InvoiceItem, item.refund_invoice_item_id) if item.refund_invoice_item_id else None
+
+    if item.status != "refunded" or not item.invoice_id:
+        return touched_invoice_ids | _delete_refund_invoice_item(db, item)
+
+    description = f"Reembolso: {item.description}"
+    refund_amount = -_money(item.amount)
+
+    if refund_item:
+        touched_invoice_ids.add(refund_item.invoice_id)
+        refund_item.invoice_id = item.invoice_id
+        refund_item.description = description
+        refund_item.amount = refund_amount
+    else:
+        refund_item = InvoiceItem(
+            invoice_id=item.invoice_id,
+            description=description,
+            amount=refund_amount,
+        )
+        db.add(refund_item)
+        db.flush()
+        item.refund_invoice_item_id = refund_item.id
+
+    touched_invoice_ids.add(item.invoice_id)
+    return touched_invoice_ids
+
+
+def _invoice_for_month(
+    db: Session,
+    user_id: int,
+    first_invoice: Invoice,
+    offset: int,
+    target_due_date: Optional[date] = None,
+    allow_overdue: bool = False,
+) -> Invoice:
     target_date = target_due_date or _add_months(first_invoice.due_date, offset)
     invoice = (
         db.query(Invoice)
@@ -51,19 +100,28 @@ def _invoice_for_month(db: Session, user_id: int, first_invoice: Invoice, offset
         .first()
     )
     if invoice:
-        _ensure_invoice_accepts_new_charges(invoice)
+        _ensure_invoice_accepts_new_charges(invoice, allow_overdue)
         return invoice
-    if target_date < date.today():
+    if target_date < date.today() and not allow_overdue:
         raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
     return create_invoice_with_transaction(db, user_id, first_invoice.template, target_date)
 
 
 def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
     items = sorted(purchase.items, key=lambda item: item.installment_number)
-    paid_items = [item for item in items if item.invoice and item.invoice.paid]
+    pending_items = [item for item in items if item.status == "pending"]
+    paid_items = [item for item in pending_items if item.invoice and item.invoice.paid]
+    refunded_items = [item for item in items if item.status == "refunded"]
+    canceled_items = [item for item in items if item.status == "canceled"]
     paid_amount = sum((item.amount for item in paid_items), Decimal("0.00"))
-    remaining_amount = _money((purchase.total_amount or Decimal("0.00")) - paid_amount)
-    next_item = next((item for item in items if not item.invoice or not item.invoice.paid), None)
+    remaining_items = [item for item in pending_items if not item.invoice or not item.invoice.paid]
+    remaining_amount = _money(sum((item.amount for item in remaining_items), Decimal("0.00")))
+    next_item = next(iter(remaining_items), None)
+    progress_parts = [f"{len(paid_items)} de {len(items)} parcelas pagas"]
+    if refunded_items:
+        progress_parts.append(f"{len(refunded_items)} reembolsada{'s' if len(refunded_items) != 1 else ''}")
+    if canceled_items:
+        progress_parts.append(f"{len(canceled_items)} cancelada{'s' if len(canceled_items) != 1 else ''}")
 
     return InstallmentPurchaseOut(
         id=purchase.id,
@@ -75,9 +133,9 @@ def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
         created_at=purchase.created_at,
         paid_installments=len(paid_items),
         paid_amount=paid_amount,
-        remaining_installments=max(len(items) - len(paid_items), 0),
+        remaining_installments=len(remaining_items),
         remaining_amount=remaining_amount,
-        progress_label=f"{len(paid_items)} de {len(items)} parcelas pagas",
+        progress_label=" • ".join(progress_parts),
         next_installment=next_item,
         items=items,
     )
@@ -143,7 +201,8 @@ def create_installment(
     )
     if not first_invoice:
         raise HTTPException(status_code=404, detail="First invoice not found")
-    _ensure_invoice_accepts_new_charges(first_invoice)
+    allow_overdue = current_user.allow_overdue_invoice_edits
+    _ensure_invoice_accepts_new_charges(first_invoice, allow_overdue)
 
     if payload.items is not None:
         raw_values = [_money(item.amount) for item in payload.items if item.amount > 0]
@@ -178,7 +237,7 @@ def create_installment(
         if len(selected_invoices) != len(provided_ids):
             raise HTTPException(status_code=404, detail="One or more invoices were not found")
         for invoice in selected_invoices.values():
-            _ensure_invoice_accepts_new_charges(invoice)
+            _ensure_invoice_accepts_new_charges(invoice, allow_overdue)
 
     confirmed_total = _money(sum(raw_values, Decimal("0.00")))
     purchase = InstallmentPurchase(
@@ -195,7 +254,14 @@ def create_installment(
     touched_invoice_ids = set()
     for index, value in enumerate(raw_values):
         selected_id = invoice_ids[index]
-        invoice = selected_invoices[selected_id] if selected_id else _invoice_for_month(db, current_user.id, first_invoice, index, target_dates[index])
+        invoice = selected_invoices[selected_id] if selected_id else _invoice_for_month(
+            db,
+            current_user.id,
+            first_invoice,
+            index,
+            target_dates[index],
+            allow_overdue,
+        )
         touched_invoice_ids.add(invoice.id)
         db.add(
             InstallmentItem(
@@ -243,6 +309,8 @@ def delete_installment(
         raise HTTPException(status_code=404, detail="Installment purchase not found")
 
     touched_invoice_ids = {item.invoice_id for item in purchase.items if item.invoice_id}
+    for item in purchase.items:
+        touched_invoice_ids |= _delete_refund_invoice_item(db, item)
     db.delete(purchase)
     db.flush()
     for invoice_id in touched_invoice_ids:
@@ -270,19 +338,25 @@ def update_installment_item(
         raise HTTPException(status_code=404, detail="Installment item not found")
 
     target_invoice = None
-    if payload.invoice_id is not None:
+    target_invoice_id = None if payload.status == "canceled" else payload.invoice_id
+    if target_invoice_id is not None:
         target_invoice = (
             db.query(Invoice)
-            .filter(Invoice.id == payload.invoice_id, Invoice.user_id == current_user.id)
+            .filter(Invoice.id == target_invoice_id, Invoice.user_id == current_user.id)
             .first()
         )
         if not target_invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
-        _ensure_invoice_accepts_new_charges(target_invoice)
+        if target_invoice.id != item.invoice_id:
+            _ensure_invoice_accepts_new_charges(target_invoice, current_user.allow_overdue_invoice_edits)
+
+    if payload.status == "refunded" and not target_invoice:
+        raise HTTPException(status_code=400, detail="Refunded installment requires an invoice")
 
     purchase = item.purchase
     previous_invoice_id = item.invoice_id
     item.amount = _money(payload.amount)
+    item.status = payload.status
     item.invoice_id = target_invoice.id if target_invoice else None
     if item.installment_number == 1:
         purchase.first_invoice_id = item.invoice_id
@@ -297,6 +371,8 @@ def update_installment_item(
 
     db.flush()
     touched_invoice_ids = {previous_invoice_id, item.invoice_id} - {None}
+    touched_invoice_ids |= _sync_refund_invoice_item(db, item)
+    db.flush()
     for invoice_id in touched_invoice_ids:
         invoice = db.get(Invoice, invoice_id)
         if invoice:
@@ -333,9 +409,11 @@ def delete_installment_item(
 
     purchase = item.purchase
     invoice_id = item.invoice_id
+    touched_invoice_ids = {invoice_id} - {None}
+    touched_invoice_ids |= _delete_refund_invoice_item(db, item)
     db.delete(item)
     db.flush()
-    if invoice_id:
+    for invoice_id in touched_invoice_ids:
         invoice = db.get(Invoice, invoice_id)
         if invoice:
             recalculate_invoice_total(db, invoice)

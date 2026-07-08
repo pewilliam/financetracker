@@ -57,6 +57,8 @@ def update_me(
 
     current_user.name = payload.name.strip()
     current_user.email = email
+    if payload.allow_overdue_invoice_edits is not None:
+        current_user.allow_overdue_invoice_edits = payload.allow_overdue_invoice_edits
     db.commit()
     db.refresh(current_user)
     return current_user
