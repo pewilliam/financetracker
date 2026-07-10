@@ -1962,7 +1962,7 @@ select {
   background: var(--invoice-color, #14A078);
   box-shadow: 0 0 0 2px rgba(255,255,255,.22);
 }
-.due-badge { flex: 0 0 auto; border-radius: 999px; background: #DCFAF0; color: #007864; padding: 6px 10px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.due-badge { flex: 0 0 auto; border-radius: 999px; background: #DCFAF0; color: #007864; padding: 5px 10px; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .due-badge.compact { background: #DCFAF0; color: #007864; white-space: nowrap; }
 .due-badge.danger { background: #FFE8EE; color: #CC2244; }
 .due-badge.paid { background: #DCFAF0; color: #007864; }
