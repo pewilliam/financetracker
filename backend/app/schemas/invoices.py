@@ -42,6 +42,10 @@ class InvoicePaidUpdate(APIModel):
     paid: bool
 
 
+class InvoiceUpdate(APIModel):
+    due_date: date
+
+
 class InvoiceOut(APIModel):
     id: int
     template_id: int

@@ -144,6 +144,13 @@ export function createInvoice(payload) {
   });
 }
 
+export function updateInvoice(id, payload) {
+  return request(`/invoices/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function addInvoiceItem(invoiceId, payload) {
   return request(`/invoices/${invoiceId}/items`, {
     method: "POST",
@@ -259,6 +266,13 @@ export function listRecurrences() {
 export function createRecurrence(payload) {
   return request("/recurrences", {
     method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateRecurrence(id, payload) {
+  return request(`/recurrences/${id}`, {
+    method: "PUT",
     body: JSON.stringify(payload)
   });
 }

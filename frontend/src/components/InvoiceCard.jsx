@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarPlus, Check, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import DateField from "./DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges } from "../app/helpers.js";
 import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
@@ -13,7 +14,7 @@ function normalizeName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
-export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false, onAddItem, onUpdateItem, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
+export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false, onAddItem, onUpdateItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [addMode, setAddMode] = useState(null);
@@ -24,6 +25,9 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const [editDescription, setEditDescription] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [savingItemId, setSavingItemId] = useState(null);
+  const [editingDueDate, setEditingDueDate] = useState(false);
+  const [dueDateDraft, setDueDateDraft] = useState(invoice.due_date);
+  const [savingDueDate, setSavingDueDate] = useState(false);
   const adding = addMode !== null;
   const addingRefund = addMode === "refund";
   const status = daysUntil(invoice.due_date);
@@ -52,6 +56,30 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const submitLabel = addingRefund
     ? (language === "en-US" ? "Refund" : "Reembolsar")
     : tt("invoices.add", "Adicionar");
+
+  const startEditingDueDate = () => {
+    setDueDateDraft(invoice.due_date);
+    setEditingDueDate(true);
+  };
+
+  const cancelEditingDueDate = () => {
+    setDueDateDraft(invoice.due_date);
+    setEditingDueDate(false);
+  };
+
+  const saveDueDate = async () => {
+    if (!dueDateDraft || dueDateDraft === invoice.due_date || savingDueDate) {
+      setEditingDueDate(false);
+      return;
+    }
+    setSavingDueDate(true);
+    try {
+      await onUpdateDueDate(invoice.id, dueDateDraft);
+      setEditingDueDate(false);
+    } finally {
+      setSavingDueDate(false);
+    }
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -183,13 +211,35 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   return (
     <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
-        <div>
+        <div className="invoice-header-main">
           <h3><span className="invoice-color-dot" />{invoice.name}</h3>
-          <p>{tt("invoices.dueOn", "Vencimento em")} {formatDateShort(invoice.due_date)}</p>
+          {editingDueDate ? (
+            <div className="invoice-due-editor">
+              <DateField className="compact" value={dueDateDraft} onChange={setDueDateDraft} />
+              <button className="icon-btn small" type="button" onClick={saveDueDate} disabled={savingDueDate || !dueDateDraft} aria-label={language === "en-US" ? "Save due date" : "Salvar vencimento"}>
+                <Check size={15} />
+              </button>
+              <button className="icon-btn small" type="button" onClick={cancelEditingDueDate} disabled={savingDueDate} aria-label={language === "en-US" ? "Cancel date edit" : "Cancelar edicao de data"}>
+                <X size={15} />
+              </button>
+            </div>
+          ) : (
+            <p className="invoice-due-line">
+              <CalendarDays size={14} />
+              <span>{tt("invoices.dueOn", "Vencimento em")} {formatDateShort(invoice.due_date)}</span>
+            </p>
+          )}
         </div>
-        <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
-          {invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
-        </span>
+        <div className="invoice-status-actions">
+          <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
+            {invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
+          </span>
+          {!editingDueDate && (
+            <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="invoice-total-row">

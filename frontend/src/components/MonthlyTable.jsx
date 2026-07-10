@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Clock3, Edit3, Plus, Trash2 } from "lucide-react";
+import { Clock3, Edit3, Plus, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 
@@ -60,7 +60,10 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                       <strong className={tx.type === "income" ? "money-income" : "money-expense"}>
                         {formatMoney(tx.amount)}
                       </strong>
-                      <span className="tx-description">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
+                      <span className="tx-description">
+                        {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
+                        {tx.description || tt("monthlyTable.noDescription", "Sem descrição")}
+                      </span>
                       <div className="row-actions">
                         <button className="icon-btn small" onClick={() => onEdit(tx)} aria-label="Editar">
                           <Edit3 size={15} />

@@ -136,7 +136,8 @@ export const enUS = {
     expenseChip: "EXPENSE",
     incomeChip: "INCOME",
     balanceChip: "BALANCE",
-    noDescription: "No description"
+    noDescription: "No description",
+    recurring: "Recurring"
   },
   transactionModal: {
     newEntry: "New entry",
@@ -155,6 +156,11 @@ export const enUS = {
     dayOfMonth: "Day of month",
     recurrenceSummary: "Total: {{total}} installments (1 current + {{months}} future). Every month on day {{day}}{{until}}.",
     recurrenceUntil: ", until {{date}}",
+    applyRecurringEdit: "How should this apply?",
+    recurringEditHint: "This entry belongs to a recurring series.",
+    onlyThisEntry: "Only this entry",
+    thisAndNext: "This and next",
+    allRecurringEntries: "Entire recurrence",
     saving: "Saving..."
   },
   invoices: {

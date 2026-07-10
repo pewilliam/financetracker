@@ -1,10 +1,11 @@
 import calendar
 from datetime import date
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Recurrence, Transaction, User
-from app.schemas.recurrences import RecurrenceCreate, RecurrenceOut
+from app.schemas.recurrences import RecurrenceCreate, RecurrenceOut, RecurrenceUpdate
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api/recurrences", tags=["recurrences"])
@@ -32,6 +33,36 @@ def _transaction_exists(db: Session, recurrence_id: int, user_id: int, target_da
         .first()
         is not None
     )
+
+
+def _sync_recurrence_transactions(
+    db: Session,
+    recurrence: Recurrence,
+    user_id: int,
+    apply_to: str,
+    effective_date: Optional[date],
+) -> None:
+    query = db.query(Transaction).filter(
+        Transaction.recurrence_id == recurrence.id,
+        Transaction.user_id == user_id,
+    )
+    if apply_to == "future":
+        query = query.filter(Transaction.date >= (effective_date or date.today()))
+
+    today = date.today()
+    transactions = query.order_by(Transaction.date, Transaction.id).all()
+    for transaction in transactions:
+        transaction.description = recurrence.description
+        transaction.type = recurrence.type
+        transaction.amount = recurrence.amount
+
+        last_day = calendar.monthrange(transaction.date.year, transaction.date.month)[1]
+        transaction.date = date(
+            transaction.date.year,
+            transaction.date.month,
+            max(1, min(recurrence.day_of_month, last_day)),
+        )
+        transaction.is_future = transaction.date > today
 
 
 @router.get("", response_model=list[RecurrenceOut])
@@ -88,6 +119,40 @@ def create_recurrence(
                 recurrence_id=recurrence.id,
             )
         )
+
+    db.commit()
+    db.refresh(recurrence)
+    return recurrence
+
+
+@router.put("/{recurrence_id}", response_model=RecurrenceOut)
+def update_recurrence(
+    recurrence_id: int,
+    payload: RecurrenceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    recurrence = (
+        db.query(Recurrence)
+        .filter(Recurrence.id == recurrence_id, Recurrence.user_id == current_user.id)
+        .first()
+    )
+    if not recurrence:
+        raise HTTPException(status_code=404, detail="Recurrence not found")
+
+    recurrence.description = payload.description
+    recurrence.type = payload.type
+    recurrence.amount = payload.amount
+    recurrence.day_of_month = max(1, min(payload.day_of_month, 31))
+    recurrence.active = payload.active
+
+    _sync_recurrence_transactions(
+        db,
+        recurrence,
+        current_user.id,
+        payload.apply_to,
+        payload.effective_date,
+    )
 
     db.commit()
     db.refresh(recurrence)

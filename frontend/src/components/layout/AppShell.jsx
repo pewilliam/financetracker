@@ -25,7 +25,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentItem, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -196,6 +196,13 @@ export default function AppShell() {
     setComparisons(comparisonPayload);
   };
 
+  const syncInvoiceAndMonthCollections = async () => {
+    await Promise.all([
+      syncInvoiceCollections(),
+      syncMonthCollections()
+    ]);
+  };
+
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
 
   const openAddForm = (dateString = todayIsoDate()) => {
@@ -209,7 +216,19 @@ export default function AppShell() {
       const normalizedData = normalizeTransactionPayload(payload.data);
       if (editing) {
         if (!normalizedData.date) delete normalizedData.date;
-        await updateTransaction(editing.id, normalizedData);
+        if (payload.recurrenceUpdate?.enabled) {
+          await updateRecurrence(payload.recurrenceUpdate.id, {
+            description: normalizedData.description || "Recorrência",
+            type: normalizedData.type,
+            amount: normalizedData.amount,
+            day_of_month: payload.recurrenceUpdate.day_of_month,
+            active: true,
+            apply_to: payload.recurrenceUpdate.apply_to,
+            effective_date: payload.recurrenceUpdate.effective_date
+          });
+        } else {
+          await updateTransaction(editing.id, normalizedData);
+        }
       } else {
         if (!normalizedData.date) {
           toast.error("Data inválida para criar lançamento");
@@ -229,7 +248,7 @@ export default function AppShell() {
           await createTransaction(normalizedData);
         }
       }
-      toast.success(editing ? "Lançamento salvo" : "Lançamento adicionado!");
+      toast.success(payload.recurrenceUpdate?.enabled ? "Recorrência atualizada" : editing ? "Lançamento salvo" : "Lançamento adicionado!");
       setDrawerOpen(false);
       await syncMonthCollections();
     } catch (error) {
@@ -263,6 +282,7 @@ export default function AppShell() {
       setInvoiceForm(defaultInvoiceForm());
       setInvoiceModal(false);
       toast.success(`${drafts.length} ${drafts.length === 1 ? "fatura criada" : "faturas criadas"} com sucesso!`);
+      await syncMonthCollections();
     } catch {
       toast.error("Erro ao criar fatura");
     }
@@ -324,7 +344,7 @@ export default function AppShell() {
       setInstallmentForm(defaultInstallmentForm());
       setInstallmentModal(false);
       toast.success("Compra parcelada criada");
-      await syncInvoiceCollections();
+      await syncInvoiceAndMonthCollections();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao criar compra parcelada");
     }
@@ -335,7 +355,7 @@ export default function AppShell() {
       await deleteInstallment(id);
       setInstallmentDetails(null);
       toast.success("Compra parcelada removida");
-      await syncInvoiceCollections();
+      await syncInvoiceAndMonthCollections();
     } catch {
       toast.error("Erro ao remover compra parcelada");
     }
@@ -345,7 +365,7 @@ export default function AppShell() {
     try {
       await deleteInstallmentItem(id);
       toast.success("Parcela removida");
-      await syncInvoiceCollections();
+      await syncInvoiceAndMonthCollections();
     } catch {
       toast.error("Erro ao remover parcela");
     }
@@ -357,7 +377,7 @@ export default function AppShell() {
       setInstallmentDetails(updated);
       setInstallments((current) => current.map((purchase) => purchase.id === updated.id ? updated : purchase));
       toast.success("Parcela atualizada");
-      await syncInvoiceCollections();
+      await syncInvoiceAndMonthCollections();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao atualizar parcela");
       throw error;
@@ -377,6 +397,7 @@ export default function AppShell() {
       const updated = await addInvoiceItem(invoiceId, payload);
       upsertInvoice(updated);
       toast.success(Number(payload.amount) < 0 ? "Reembolso adicionado" : "Item adicionado");
+      await syncMonthCollections();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "Esta fatura não aceita novos itens" : Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
     }
@@ -387,6 +408,7 @@ export default function AppShell() {
       const updated = await updateInvoiceItem(invoiceId, itemId, payload);
       upsertInvoice(updated);
       toast.success(Number(payload.amount) < 0 ? "Reembolso atualizado" : "Item atualizado");
+      await syncMonthCollections();
     } catch (error) {
       toast.error(Number(payload.amount) < 0 ? "Erro ao atualizar reembolso" : "Erro ao atualizar item");
       throw error;
@@ -398,8 +420,21 @@ export default function AppShell() {
       const updated = await deleteInvoiceItem(invoiceId, itemId);
       upsertInvoice(updated);
       toast.success("Item removido");
+      await syncMonthCollections();
     } catch {
       toast.error("Erro ao remover item");
+    }
+  };
+
+  const saveInvoiceDueDate = async (invoiceId, dueDate) => {
+    try {
+      const updated = await updateInvoice(invoiceId, { due_date: dueDate });
+      upsertInvoice(updated);
+      toast.success("Data da fatura atualizada");
+      await syncMonthCollections();
+    } catch (error) {
+      toast.error("Erro ao atualizar data da fatura");
+      throw error;
     }
   };
 
@@ -408,6 +443,7 @@ export default function AppShell() {
       const updated = await setInvoicePaid(invoiceId, paid);
       upsertInvoice(updated);
       toast.success(paid ? "Fatura marcada como paga" : "Fatura marcada como pendente");
+      await syncMonthCollections();
     } catch {
       toast.error("Erro ao atualizar fatura");
     }
@@ -553,7 +589,7 @@ export default function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />

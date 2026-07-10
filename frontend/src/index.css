@@ -783,6 +783,19 @@ select {
 .money-income { color: var(--income); }
 .money-expense { color: var(--expense); }
 .tx-description { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recurrence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: rgba(20,160,120,0.10);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: middle;
+}
 .day-balance { text-align: right; }
 .day-balance span { display: block; color: var(--muted); font-size: 12px; }
 .day-balance strong { color: var(--primary); font-size: 16px; }
@@ -1354,6 +1367,46 @@ select {
   background: rgba(20,160,120,0.06);
   line-height: 1.35;
 }
+.recurrence-edit-scope {
+  padding: 12px;
+  border: 1px solid rgba(20,160,120,0.18);
+  border-radius: 8px;
+  background: rgba(20,160,120,0.06);
+}
+.scope-heading {
+  display: grid;
+  gap: 3px;
+}
+.scope-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 800;
+}
+.scope-heading small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.scope-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.scope-options button {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted);
+  font-weight: 800;
+}
+.scope-options button.active {
+  border-color: rgba(20,160,120,0.55);
+  background: rgba(20,160,120,0.14);
+  color: var(--primary);
+}
 .exclusive-hint { color: var(--primary); }
 .transaction-modal-actions {
   display: grid;
@@ -1836,9 +1889,70 @@ select {
     var(--invoice-color, #14A078);
   color: #fff;
 }
-.invoice-header > div { min-width: 0; }
+.invoice-header-main { min-width: 0; }
 .invoice-header h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800; }
 .invoice-header p { margin: 7px 0 0; opacity: .86; }
+.invoice-status-actions {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.invoice-due-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.invoice-due-line span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.invoice-date-edit {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 8px;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+}
+.invoice-date-edit:hover {
+  background: rgba(255,255,255,.2);
+}
+.invoice-due-editor {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 30px 30px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+.invoice-due-editor .date-input-shell {
+  height: 36px;
+  border-color: rgba(255,255,255,.42);
+  background: rgba(0,0,0,.14);
+  color: #fff;
+  box-shadow: none;
+}
+.invoice-due-editor .date-input-shell input,
+.invoice-due-editor .date-trigger {
+  height: 34px;
+}
+.invoice-due-editor .date-input-shell input {
+  color: #fff;
+}
+.invoice-due-editor .date-trigger {
+  border-left-color: rgba(255,255,255,.28);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+}
+.invoice-due-editor .icon-btn {
+  border-color: rgba(255,255,255,.34);
+  background: rgba(255,255,255,.14);
+  color: #fff;
+}
 .invoice-color-dot {
   width: 12px;
   height: 12px;
@@ -4044,6 +4158,9 @@ select {
     min-height: 0;
     padding: 14px;
     padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  .scope-options {
+    grid-template-columns: 1fr;
   }
   .transaction-modal-body .transaction-kind {
     display: grid;

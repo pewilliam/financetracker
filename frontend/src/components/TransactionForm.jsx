@@ -58,6 +58,7 @@ export default function TransactionForm({
     amount: "",
     description: "",
     recurrence: false,
+    recurrence_scope: "single",
     day_of_month: "",
     recurrence_months: "12"
   });
@@ -73,6 +74,7 @@ export default function TransactionForm({
         amount: formatMoney(initial.amount),
         description: initial.description || "",
         recurrence: false,
+        recurrence_scope: "single",
         day_of_month: "",
         recurrence_months: "12"
       });
@@ -83,6 +85,7 @@ export default function TransactionForm({
         amount: "",
         description: "",
         recurrence: false,
+        recurrence_scope: "single",
         day_of_month: "",
         recurrence_months: "12"
       });
@@ -185,6 +188,15 @@ export default function TransactionForm({
               day_of_month: Number(form.day_of_month || 1),
               recurrence_months: recurrenceMonths
             }
+          : null,
+        recurrenceUpdate: initial?.recurrence_id && form.recurrence_scope !== "single"
+          ? {
+              enabled: true,
+              id: initial.recurrence_id,
+              apply_to: form.recurrence_scope,
+              effective_date: initial.date,
+              day_of_month: Number(getDayFromDate(form.date) || 1)
+            }
           : null
       });
     } finally {
@@ -247,6 +259,38 @@ export default function TransactionForm({
             <span>{tt("transactionModal.description", "Descrição")}</span>
             <input placeholder={tt("transactionModal.descriptionPlaceholder", "Ex: mercado, salário, aluguel")} value={form.description} onChange={(event) => setField("description", event.target.value)} />
           </label>
+
+          {initial?.recurrence_id && (
+            <section className="conditional-section recurrence-edit-scope">
+              <div className="scope-heading">
+                <span><Repeat2 size={16} /> {tt("transactionModal.applyRecurringEdit", "Como aplicar?")}</span>
+                <small>{tt("transactionModal.recurringEditHint", "Este lançamento faz parte de uma recorrência.")}</small>
+              </div>
+              <div className="scope-options">
+                <button
+                  type="button"
+                  className={form.recurrence_scope === "single" ? "active" : ""}
+                  onClick={() => setField("recurrence_scope", "single")}
+                >
+                  {tt("transactionModal.onlyThisEntry", "Só este lançamento")}
+                </button>
+                <button
+                  type="button"
+                  className={form.recurrence_scope === "future" ? "active" : ""}
+                  onClick={() => setField("recurrence_scope", "future")}
+                >
+                  {tt("transactionModal.thisAndNext", "Este e próximos")}
+                </button>
+                <button
+                  type="button"
+                  className={form.recurrence_scope === "all" ? "active" : ""}
+                  onClick={() => setField("recurrence_scope", "all")}
+                >
+                  {tt("transactionModal.allRecurringEntries", "Toda recorrência")}
+                </button>
+              </div>
+            </section>
+          )}
 
           {!initial && (
             <section className="conditional-section">
