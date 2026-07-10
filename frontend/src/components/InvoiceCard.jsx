@@ -35,6 +35,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const regularItems = invoice.items || [];
   const installmentItems = invoice.installment_items || [];
   const canAddToInvoice = invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
+  const canEditDueDate = canAddToInvoice;
   const totalItemCount = regularItems.length + installmentItems.length;
   const singleMainItem = totalItemCount === 1
     && regularItems.length === 1
@@ -58,6 +59,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
     : tt("invoices.add", "Adicionar");
 
   const startEditingDueDate = () => {
+    if (!canEditDueDate) return;
     setDueDateDraft(invoice.due_date);
     setEditingDueDate(true);
   };
@@ -234,7 +236,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
           <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
             {invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
           </span>
-          {!editingDueDate && (
+          {canEditDueDate && !editingDueDate && (
             <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
               <Pencil size={13} />
             </button>

@@ -91,7 +91,7 @@ export default function InvoicesPage({ invoices, allowOverdueInvoiceEdits = fals
     setExpandedGroups((current) => {
       const next = {};
       invoiceGroups.forEach((group) => {
-        next[group.id] = current[group.id] ?? (group.id !== "other" && group.id !== "paid" && group.items.length > 0);
+        next[group.id] = current[group.id] ?? (group.id === "current" && group.items.length > 0);
       });
       return next;
     });
