@@ -802,7 +802,7 @@ select {
 .row-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .18s ease; }
 .day-row:hover .row-actions { opacity: 1; }
 .week-separator { border-top: 1px dashed var(--border); margin: 8px 0; }
-.month-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.month-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .month-totals { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); }
 .view-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .view-toggle {
@@ -3233,27 +3233,58 @@ select {
   border-radius: 8px;
   background: color-mix(in srgb, var(--card) 94%, var(--primary));
 }
+.simulation-planning.collapsed {
+  gap: 0;
+  padding-block: 11px;
+}
 .simulation-planning-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
-.simulation-planning-head > span {
+.simulation-planning-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.simulation-planning-head > div > span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 13px;
   font-weight: 900;
 }
-.simulation-planning-head svg {
+.simulation-planning-head > div > span svg {
   color: var(--primary);
 }
 .simulation-planning-head small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
-  text-align: right;
+}
+.simulation-planning-collapse {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.simulation-planning-collapse:hover {
+  border-color: rgba(20,160,120,0.35);
+  background: rgba(20,160,120,0.08);
+  color: var(--primary);
 }
 .simulation-planning-fields {
   display: grid;

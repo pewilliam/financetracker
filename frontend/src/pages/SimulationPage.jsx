@@ -467,6 +467,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [reserveStartMonth, setReserveStartMonth] = useState(currentMonthValue());
   const [reserveEndMonth, setReserveEndMonth] = useState("");
   const [reserveSourceItemIds, setReserveSourceItemIds] = useState([]);
+  const [planningCollapsed, setPlanningCollapsed] = useState(true);
   const [planningResult, setPlanningResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [restored, setRestored] = useState(false);
@@ -1042,11 +1043,31 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             <span><i /> Incluir lançamentos já cadastrados</span>
           </label>
 
-          <section className="simulation-planning">
+          <section className={`simulation-planning ${planningCollapsed ? "collapsed" : ""}`}>
             <div className="simulation-planning-head">
-              <span><PiggyBank size={18} /> Planejamento</span>
-              <small>Meta mensal de reserva</small>
+              <div>
+                <span><PiggyBank size={18} /> Planejamento</span>
+                <small>
+                  {planningCollapsed
+                    ? `${reserveMode === "percentage"
+                      ? `${Number(reserveValue || 0).toLocaleString(language, { maximumFractionDigits: 2 })}%`
+                      : formatMoney(parseTypedMoneyInput(reserveValue, language), language)} · ${reserveSourceLabel} · ${reservePeriodLabel}`
+                    : "Meta mensal de reserva"}
+                </small>
+              </div>
+              <button
+                type="button"
+                className="simulation-planning-collapse"
+                onClick={() => setPlanningCollapsed((collapsed) => !collapsed)}
+                aria-expanded={!planningCollapsed}
+                aria-label={planningCollapsed ? "Expandir planejamento de reserva" : "Minimizar planejamento de reserva"}
+                title={planningCollapsed ? "Expandir" : "Minimizar"}
+              >
+                {planningCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              </button>
             </div>
+            {!planningCollapsed && (
+              <>
             <div className="segmented-control" aria-label="Modo da meta de reserva">
               <button className={reserveMode === "percentage" ? "active" : ""} type="button" onClick={() => setPlanningMode("percentage")}>Percentual</button>
               <button className={reserveMode === "fixed" ? "active" : ""} type="button" onClick={() => setPlanningMode("fixed")}>Valor fixo</button>
@@ -1152,6 +1173,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <Check size={14} />
               <span>A meta será calculada sobre {reserveSourceLabel} {reservePeriodLabel}.</span>
             </div>
+              </>
+            )}
           </section>
 
           {restored && (

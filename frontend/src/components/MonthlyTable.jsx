@@ -1,4 +1,3 @@
-import { useMemo, useState } from "react";
 import { Clock3, Edit3, Plus, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
@@ -12,20 +11,8 @@ function isFutureDate(dateString) {
 export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
-  const [expanded, setExpanded] = useState(false);
-  const visibleDays = useMemo(() => {
-    if (expanded) return days;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-    return days.filter((day) => {
-      const dayDate = new Date(`${day.date}T00:00:00`);
-      return day.transactions.length || (dayDate >= today && dayDate <= nextWeek);
-    });
-  }, [days, expanded]);
 
-  if (!visibleDays.length) {
+  if (!days.length) {
     return (
       <div className="empty-state">
         <div className="empty-illustration">+</div>
@@ -37,7 +24,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
 
   return (
     <div className="month-list">
-      {visibleDays.map((day, index) => {
+      {days.map((day, index) => {
         const dayDate = new Date(`${day.date}T00:00:00`);
         const weekSeparator = index > 0 && dayDate.getDay() === 1;
         const future = day.has_future || isFutureDate(day.date);
@@ -92,9 +79,6 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
       })}
 
       <div className="month-footer">
-        <button className="btn btn-ghost" onClick={() => setExpanded(!expanded)}>
-          {expanded ? tt("monthlyTable.viewSummary", "Ver resumo do mês") : tt("monthlyTable.viewAllDays", "Ver todos os dias do mês")}
-        </button>
         {summary && (
           <div className="month-totals">
             <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
