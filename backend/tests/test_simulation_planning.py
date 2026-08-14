@@ -120,6 +120,45 @@ class SimulationPlanningTests(unittest.TestCase):
         self.assertEqual(october["free_money"], Decimal("525.00"))
         self.assertEqual(result["summary"]["total_planned_reserve"], Decimal("925.00"))
 
+    def test_percentage_reserve_can_use_one_simulated_income(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[
+                RealMonth(month="2026-09", total_income=2000, total_expenses=400, projected_closing=1600),
+            ],
+            items=[
+                item(item_type="income", mode="recurring", amount="1000", recurrences=1),
+                item(item_type="income", mode="recurring", amount="500", recurrences=1),
+            ],
+            reserve_mode="percentage",
+            reserve_value=50,
+            reserve_source_item_position=0,
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["income"], Decimal("3500.00"))
+        self.assertEqual(row["reserve_base_income"], Decimal("1000.00"))
+        self.assertEqual(row["planned_reserve"], Decimal("500.00"))
+        self.assertEqual(result["summary"]["average_reserve_rate"], Decimal("50.00"))
+
+    def test_fixed_reserve_uses_only_months_with_selected_income(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=False,
+            real_months=[
+                RealMonth(month="2026-09", total_income=0, total_expenses=0, projected_closing=0),
+                RealMonth(month="2026-10", total_income=0, total_expenses=0, projected_closing=0),
+            ],
+            items=[item(item_type="income", mode="cash", amount="1000")],
+            reserve_mode="fixed",
+            reserve_value=300,
+            reserve_source_item_position=0,
+        )
+        self.assertEqual(
+            [row["planned_reserve"] for row in result["rows"]],
+            [Decimal("300.00"), Decimal("0.00")],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

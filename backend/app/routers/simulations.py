@@ -62,6 +62,13 @@ def _validate_reserve(mode: str, value: Decimal) -> None:
         raise HTTPException(status_code=400, detail="Reserve percentage cannot exceed 100")
 
 
+def _validate_reserve_source(position: int | None, items) -> None:
+    if position is None:
+        return
+    if position >= len(items) or items[position].type != "income":
+        raise HTTPException(status_code=400, detail="Reserve source must be a simulated income item")
+
+
 def _load_simulation(db: Session, simulation_id: int, user_id: int) -> Simulation:
     simulation = (
         db.query(Simulation)
@@ -128,6 +135,7 @@ def preview_simulation(
     _validate_reserve(payload.reserve_mode, payload.reserve_value)
     for item in payload.items:
         _validate_item(item)
+    _validate_reserve_source(payload.reserve_source_item_position, payload.items)
 
     real_months = []
     current_balance = Decimal("0.00")
@@ -156,6 +164,7 @@ def preview_simulation(
         reserve_mode=payload.reserve_mode,
         reserve_value=payload.reserve_value,
         reserve_start_month=payload.reserve_start_month,
+        reserve_source_item_position=payload.reserve_source_item_position,
     )
 
 
@@ -177,6 +186,7 @@ def create_simulation(
     _validate_reserve(payload.reserve_mode, payload.reserve_value)
     if payload.reserve_start_month is not None:
         _validate_month_value(payload.reserve_start_month, "Invalid reserve start month")
+    _validate_reserve_source(payload.reserve_source_item_position, payload.items)
     simulation = Simulation(
         user_id=current_user.id,
         name=_validate_name(payload.name),
@@ -184,6 +194,7 @@ def create_simulation(
         reserve_mode=payload.reserve_mode,
         reserve_value=_money(payload.reserve_value),
         reserve_start_month=payload.reserve_start_month,
+        reserve_source_item_position=payload.reserve_source_item_position,
     )
     db.add(simulation)
     _replace_items(simulation, payload.items)
@@ -214,9 +225,12 @@ def update_simulation(
     if payload.reserve_start_month is not None:
         _validate_month_value(payload.reserve_start_month, "Invalid reserve start month")
         simulation.reserve_start_month = payload.reserve_start_month
+    if "reserve_source_item_position" in payload.model_fields_set:
+        simulation.reserve_source_item_position = payload.reserve_source_item_position
     _validate_reserve(simulation.reserve_mode, simulation.reserve_value)
     if payload.items is not None:
         _replace_items(simulation, payload.items)
+    _validate_reserve_source(simulation.reserve_source_item_position, simulation.items)
     try:
         db.commit()
     except IntegrityError:

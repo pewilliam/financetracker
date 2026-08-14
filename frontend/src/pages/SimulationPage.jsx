@@ -171,12 +171,19 @@ function ProjectionTooltip({ active, payload, label }) {
   );
 }
 
+function reserveSourcePosition(draftItems, sourceItemId) {
+  if (sourceItemId === "all") return null;
+  const position = draftItems.findIndex((item) => item.id === sourceItemId && item.type === "income");
+  return position >= 0 ? position : null;
+}
+
 function PlanningTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   return (
     <div className="simulation-tooltip">
       <strong>{label}</strong>
+      <span>Base da reserva: {formatMoney(row.reserveBaseIncome)}</span>
       <span>Reserva acumulada: {formatMoney(row.reserveAccumulated)}</span>
       <span className={row.freeMoney < 0 ? "money-expense" : "money-income"}>Dinheiro livre: {formatMoney(row.freeMoney)}</span>
     </div>
@@ -456,6 +463,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [reserveMode, setReserveMode] = useState("percentage");
   const [reserveValue, setReserveValue] = useState("");
   const [reserveStartMonth, setReserveStartMonth] = useState(currentMonthValue());
+  const [reserveSourceItemId, setReserveSourceItemId] = useState("all");
   const [planningResult, setPlanningResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [restored, setRestored] = useState(false);
@@ -501,6 +509,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
+    setReserveSourceItemId("all");
     try {
       const storedDraft = JSON.parse(localStorage.getItem(storageKey) || "[]");
       const restoredItems = normalizeRestoredItems(Array.isArray(storedDraft) ? storedDraft : storedDraft.items);
@@ -510,6 +519,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         setReserveMode(storedDraft.reserveMode === "fixed" ? "fixed" : "percentage");
         setReserveValue(String(storedDraft.reserveValue || ""));
         setReserveStartMonth(/^\d{4}-\d{2}$/.test(storedDraft.reserveStartMonth || "") ? storedDraft.reserveStartMonth : currentMonthValue());
+        setReserveSourceItemId(storedDraft.reserveSourceItemId || "all");
       }
       if (restoredItems.length || hasStoredPlanning) {
         setItems(restoredItems);
@@ -540,16 +550,22 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         localStorage.removeItem(storageKey);
         return;
       }
-      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth }));
+      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth, reserveSourceItemId }));
     } catch {
       // localStorage can be unavailable in private contexts.
     }
-  }, [includeReal, items, localDraftEnabled, reserveMode, reserveStartMonth, reserveValue, storageKey, storageReady]);
+  }, [includeReal, items, localDraftEnabled, reserveMode, reserveSourceItemId, reserveStartMonth, reserveValue, storageKey, storageReady]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveItems(items), 500);
     return () => window.clearTimeout(timer);
   }, [items]);
+
+  useEffect(() => {
+    if (reserveSourceItemId === "all") return;
+    const sourceItem = items.find((item) => item.id === reserveSourceItemId);
+    if (!sourceItem || sourceItem.type !== "income") setReserveSourceItemId("all");
+  }, [items, reserveSourceItemId]);
 
   const registeredEndIndex = useMemo(() => {
     const current = monthIndex(currentMonthValue());
@@ -577,6 +593,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           reserve_mode: reserveMode,
           reserve_value: reserveMode === "fixed" ? parseTypedMoneyInput(reserveValue, language) : Number(reserveValue || 0),
           reserve_start_month: reserveStartMonth,
+          reserve_source_item_position: reserveSourcePosition(activeItems, reserveSourceItemId),
           items: activeItems.map((item) => draftItemToPayload(item, language))
         });
         if (!mounted) return;
@@ -590,7 +607,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     }
     loadProjection();
     return () => { mounted = false; };
-  }, [activeItems, includeReal, language, months, reserveMode, reserveStartMonth, reserveValue]);
+  }, [activeItems, includeReal, language, months, reserveMode, reserveSourceItemId, reserveStartMonth, reserveValue]);
 
   const rows = useMemo(() => (planningResult?.rows || []).map((row, index) => {
     const [year, month] = row.month.split("-").map(Number);
@@ -612,6 +629,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
       expenses: Number(row.expenses || 0),
       plannedReserve: Number(row.planned_reserve || 0),
       reserveAccumulated: Number(row.reserve_accumulated || 0),
+      reserveBaseIncome: Number(row.reserve_base_income || 0),
       freeMoney: Number(row.free_money || 0),
       reserveActive: Boolean(row.reserve_active),
       isCurrent: index === 0
@@ -632,6 +650,11 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const planningAxisWidth = moneyAxisWidth(rows.flatMap((row) => [row.reserveAccumulated, row.freeMoney]), language);
   const minBalance = Math.min(0, ...rows.flatMap((row) => [row.withoutSimulation, row.finalBalance]));
   const minPlanningValue = Math.min(0, ...rows.map((row) => row.freeMoney));
+  const simulatedIncomeItems = items.filter((item) => item.type === "income");
+  const reserveSourceItem = items.find((item) => item.id === reserveSourceItemId);
+  const reserveSourceLabel = reserveSourceItemId === "all"
+    ? "todas as receitas"
+    : reserveSourceItem?.description?.trim() || "receita simulada selecionada";
 
   const updateItem = (id, patch) => {
     enableLocalDraft();
@@ -669,6 +692,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
+    setReserveSourceItemId("all");
     setRestored(false);
     clearLocalDraft();
   };
@@ -680,6 +704,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
+    setReserveSourceItemId("all");
     clearLocalDraft();
   };
   const simulateNow = () => setActiveItems(items);
@@ -698,6 +723,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     reserve_mode: reserveMode,
     reserve_value: reserveMode === "fixed" ? parseTypedMoneyInput(reserveValue, language) : Number(reserveValue || 0),
     reserve_start_month: reserveStartMonth,
+    reserve_source_item_position: reserveSourcePosition(items, reserveSourceItemId),
     items: items.map((item) => draftItemToPayload(item, language))
   });
   const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
@@ -709,6 +735,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
+    setReserveSourceItemId("all");
     setExpandedRows({});
     setRestored(false);
     setLocalDraftEnabled(true);
@@ -783,6 +810,11 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         ? formatMoney(saved.reserve_value || 0, language)
         : String(Number(saved.reserve_value || 0)));
       setReserveStartMonth(/^\d{4}-\d{2}$/.test(saved.reserve_start_month || "") ? saved.reserve_start_month : currentMonthValue());
+      setReserveSourceItemId(
+        Number.isInteger(saved.reserve_source_item_position) && loadedItems[saved.reserve_source_item_position]?.type === "income"
+          ? loadedItems[saved.reserve_source_item_position].id
+          : "all"
+      );
       setSelectedSimulationId(String(saved.id));
       setLocalDraftEnabled(false);
       setRestored(false);
@@ -1032,10 +1064,25 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                   setReserveStartMonth(value);
                 }} />
               </label>
+              <label className="simulation-reserve-source">
+                <span>Calcular reserva sobre</span>
+                <select value={reserveSourceItemId} onChange={(event) => {
+                  enableLocalDraft();
+                  setReserveSourceItemId(event.target.value);
+                }}>
+                  <option value="all">Todas as receitas</option>
+                  {simulatedIncomeItems.map((item, index) => (
+                    <option value={item.id} key={item.id}>
+                      {item.description?.trim() || `Receita simulada ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+                {!simulatedIncomeItems.length && <small>Adicione uma receita simulada para vinculá-la à reserva.</small>}
+              </label>
             </div>
             <div className="simulation-planning-hint">
               <Check size={14} />
-              <span>A mesma meta será aplicada mensalmente a partir de {formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}.</span>
+              <span>A meta será calculada sobre {reserveSourceLabel} a partir de {formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}.</span>
             </div>
           </section>
 
@@ -1106,7 +1153,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <div>
                 <span>Reserva planejada</span>
                 <strong>{formatMoney(summary.total_planned_reserve || 0, language)}</strong>
-                <small>A partir de {formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}</small>
+                <small>Sobre {reserveSourceLabel}</small>
               </div>
               <div className={Number(summary.total_free_money || 0) < 0 ? "negative" : "free"}>
                 <span>Dinheiro livre</span>
@@ -1116,7 +1163,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <div>
                 <span>Taxa média de reserva</span>
                 <strong>{Number(summary.average_reserve_rate || 0).toLocaleString(language, { maximumFractionDigits: 2 })}%</strong>
-                <small>Sobre as receitas</small>
+                <small>Sobre a base selecionada</small>
               </div>
             </div>
             <p className="simulation-summary-note">A reserva reduz somente o dinheiro livre. Ela não é uma despesa e não altera o saldo projetado.</p>

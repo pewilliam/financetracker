@@ -3265,6 +3265,38 @@ select {
   display: grid;
   gap: 6px;
 }
+.simulation-reserve-source {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+.simulation-reserve-source > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.simulation-reserve-source select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 36px 0 12px;
+  background-color: var(--card);
+  color: var(--text);
+  font-weight: 900;
+}
+.simulation-reserve-source select:focus {
+  outline: 0;
+  border-color: var(--focus-border);
+  box-shadow: var(--focus-ring);
+}
+.simulation-reserve-source small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
 .simulation-reserve-field > span,
 .simulation-reserve-start > span {
   color: var(--muted);
