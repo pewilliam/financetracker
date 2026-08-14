@@ -101,6 +101,7 @@ def calculate_planning(
     items: Iterable,
     reserve_mode: str,
     reserve_value,
+    reserve_start_month: str | None = None,
 ) -> dict:
     """Calculate balances and planned allocations without treating reserve as an expense."""
     starting_balance = money(current_balance)
@@ -122,16 +123,25 @@ def calculate_planning(
         income = money(real_income + simulated_income)
         expenses = money(real_expenses + simulated_expenses)
 
-        if reserve_mode == "percentage":
+        reserve_is_active = (
+            reserve_start_month is None
+            or month_index(real_month.month) >= month_index(reserve_start_month)
+        )
+        if not reserve_is_active:
+            planned_reserve = money(0)
+        elif reserve_mode == "percentage":
             planned_reserve = money(income * reserve_setting / Decimal("100"))
         else:
             planned_reserve = reserve_setting
 
-        free_before_simulation = money(real_income - real_expenses - (
-            money(real_income * reserve_setting / Decimal("100"))
-            if reserve_mode == "percentage"
-            else reserve_setting
-        ))
+        baseline_reserve = money(0)
+        if reserve_is_active:
+            baseline_reserve = (
+                money(real_income * reserve_setting / Decimal("100"))
+                if reserve_mode == "percentage"
+                else reserve_setting
+            )
+        free_before_simulation = money(real_income - real_expenses - baseline_reserve)
         free_money = money(income - expenses - planned_reserve)
         reserve_accumulated = money(reserve_accumulated + planned_reserve)
 
@@ -161,6 +171,7 @@ def calculate_planning(
                 "reserve_accumulated": reserve_accumulated,
                 "free_money": free_money,
                 "reserve_rate": monthly_rate,
+                "reserve_active": reserve_is_active,
                 "without_simulation": without_simulation,
                 "final_balance": final_balance,
                 "difference": money(final_balance - without_simulation),

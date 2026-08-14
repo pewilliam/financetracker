@@ -98,6 +98,28 @@ class SimulationPlanningTests(unittest.TestCase):
         )
         self.assertEqual(result["rows"][-1]["final_balance"], Decimal("-373.00"))
 
+    def test_reserve_starts_in_selected_month(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[
+                RealMonth(month="2026-09", total_income=1850, total_expenses=400, projected_closing=1450),
+                RealMonth(month="2026-10", total_income=1850, total_expenses=400, projected_closing=2900),
+            ],
+            items=[],
+            reserve_mode="percentage",
+            reserve_value=50,
+            reserve_start_month="2026-10",
+        )
+        september, october = result["rows"]
+        self.assertFalse(september["reserve_active"])
+        self.assertEqual(september["planned_reserve"], Decimal("0.00"))
+        self.assertEqual(september["free_money"], Decimal("1450.00"))
+        self.assertTrue(october["reserve_active"])
+        self.assertEqual(october["planned_reserve"], Decimal("925.00"))
+        self.assertEqual(october["free_money"], Decimal("525.00"))
+        self.assertEqual(result["summary"]["total_planned_reserve"], Decimal("925.00"))
+
 
 if __name__ == "__main__":
     unittest.main()

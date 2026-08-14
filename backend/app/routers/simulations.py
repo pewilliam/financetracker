@@ -116,6 +116,8 @@ def preview_simulation(
 ):
     _validate_month_value(payload.start_month, "Invalid simulation period")
     _validate_month_value(payload.end_month, "Invalid simulation period")
+    if payload.reserve_start_month is not None:
+        _validate_month_value(payload.reserve_start_month, "Invalid reserve start month")
     try:
         start_index = month_index(payload.start_month)
         end_index = month_index(payload.end_month)
@@ -153,6 +155,7 @@ def preview_simulation(
         items=payload.items,
         reserve_mode=payload.reserve_mode,
         reserve_value=payload.reserve_value,
+        reserve_start_month=payload.reserve_start_month,
     )
 
 
@@ -172,12 +175,15 @@ def create_simulation(
     current_user: User = Depends(get_current_user),
 ):
     _validate_reserve(payload.reserve_mode, payload.reserve_value)
+    if payload.reserve_start_month is not None:
+        _validate_month_value(payload.reserve_start_month, "Invalid reserve start month")
     simulation = Simulation(
         user_id=current_user.id,
         name=_validate_name(payload.name),
         include_real=payload.include_real,
         reserve_mode=payload.reserve_mode,
         reserve_value=_money(payload.reserve_value),
+        reserve_start_month=payload.reserve_start_month,
     )
     db.add(simulation)
     _replace_items(simulation, payload.items)
@@ -205,6 +211,9 @@ def update_simulation(
         simulation.reserve_mode = payload.reserve_mode
     if payload.reserve_value is not None:
         simulation.reserve_value = _money(payload.reserve_value)
+    if payload.reserve_start_month is not None:
+        _validate_month_value(payload.reserve_start_month, "Invalid reserve start month")
+        simulation.reserve_start_month = payload.reserve_start_month
     _validate_reserve(simulation.reserve_mode, simulation.reserve_value)
     if payload.items is not None:
         _replace_items(simulation, payload.items)

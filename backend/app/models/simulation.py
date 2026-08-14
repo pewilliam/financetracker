@@ -13,6 +13,7 @@ class Simulation(Base):
     include_real = Column(Boolean, nullable=False, default=True)
     reserve_mode = Column(String(20), nullable=False, default="percentage")
     reserve_value = Column(Numeric(10, 2), nullable=False, default=0)
+    reserve_start_month = Column(String(7), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
