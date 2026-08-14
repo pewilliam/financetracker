@@ -5,8 +5,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import Simulation, SimulationItem, User
-from app.schemas.simulations import SimulationCreate, SimulationItemPayload, SimulationOut, SimulationUpdate
+from app.routers.months import _build_month_data, _summarize_month_data
+from app.schemas.simulations import (
+    SimulationCreate,
+    SimulationItemPayload,
+    SimulationOut,
+    SimulationPreviewOut,
+    SimulationPreviewPayload,
+    SimulationUpdate,
+)
 from app.security import get_current_user
+from app.services.simulations import RealMonth, calculate_planning, month_from_index, month_index
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -27,6 +36,13 @@ def _validate_name(name: str) -> str:
     return normalized[:255]
 
 
+def _validate_month_value(value: str, detail: str) -> None:
+    if not MONTH_RE.match(value or ""):
+        raise HTTPException(status_code=400, detail=detail)
+    if not 1 <= int(value[-2:]) <= 12:
+        raise HTTPException(status_code=400, detail=detail)
+
+
 def _validate_item(item: SimulationItemPayload) -> None:
     if item.type not in VALID_TYPES:
         raise HTTPException(status_code=400, detail="Invalid simulation item type")
@@ -34,15 +50,16 @@ def _validate_item(item: SimulationItemPayload) -> None:
         raise HTTPException(status_code=400, detail="Invalid simulation item mode")
     if item.value_mode not in VALID_VALUE_MODES:
         raise HTTPException(status_code=400, detail="Invalid simulation item value mode")
-    if not MONTH_RE.match(item.start_month or ""):
-        raise HTTPException(status_code=400, detail="Invalid simulation item month")
-    month = int(item.start_month[-2:])
-    if month < 1 or month > 12:
-        raise HTTPException(status_code=400, detail="Invalid simulation item month")
+    _validate_month_value(item.start_month, "Invalid simulation item month")
     if item.type == "income" and item.mode == "installment":
         raise HTTPException(status_code=400, detail="Income simulations should use cash or recurring mode")
     if item.type == "expense" and item.mode == "recurring":
         raise HTTPException(status_code=400, detail="Expense simulations should use cash or installment mode")
+
+
+def _validate_reserve(mode: str, value: Decimal) -> None:
+    if mode == "percentage" and value > Decimal("100"):
+        raise HTTPException(status_code=400, detail="Reserve percentage cannot exceed 100")
 
 
 def _load_simulation(db: Session, simulation_id: int, user_id: int) -> Simulation:
@@ -91,6 +108,54 @@ def list_simulations(
     )
 
 
+@router.post("/preview", response_model=SimulationPreviewOut)
+def preview_simulation(
+    payload: SimulationPreviewPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _validate_month_value(payload.start_month, "Invalid simulation period")
+    _validate_month_value(payload.end_month, "Invalid simulation period")
+    try:
+        start_index = month_index(payload.start_month)
+        end_index = month_index(payload.end_month)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid simulation period")
+    if end_index < start_index or end_index - start_index >= 120:
+        raise HTTPException(status_code=400, detail="Simulation period must contain between 1 and 120 months")
+    _validate_reserve(payload.reserve_mode, payload.reserve_value)
+    for item in payload.items:
+        _validate_item(item)
+
+    real_months = []
+    current_balance = Decimal("0.00")
+    for index in range(start_index, end_index + 1):
+        month_value = month_from_index(index)
+        year, month = (int(part) for part in month_value.split("-"))
+        month_summary = _summarize_month_data(
+            _build_month_data(db, year, month, current_user.id)
+        )
+        if index == start_index:
+            current_balance = month_summary.current_balance
+        real_months.append(
+            RealMonth(
+                month=month_value,
+                total_income=month_summary.total_income,
+                total_expenses=month_summary.total_expenses,
+                projected_closing=month_summary.projected_closing,
+            )
+        )
+
+    return calculate_planning(
+        current_balance=current_balance,
+        include_real=payload.include_real,
+        real_months=real_months,
+        items=payload.items,
+        reserve_mode=payload.reserve_mode,
+        reserve_value=payload.reserve_value,
+    )
+
+
 @router.get("/{simulation_id}", response_model=SimulationOut)
 def get_simulation(
     simulation_id: int,
@@ -106,10 +171,13 @@ def create_simulation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _validate_reserve(payload.reserve_mode, payload.reserve_value)
     simulation = Simulation(
         user_id=current_user.id,
         name=_validate_name(payload.name),
         include_real=payload.include_real,
+        reserve_mode=payload.reserve_mode,
+        reserve_value=_money(payload.reserve_value),
     )
     db.add(simulation)
     _replace_items(simulation, payload.items)
@@ -133,6 +201,11 @@ def update_simulation(
         simulation.name = _validate_name(payload.name)
     if payload.include_real is not None:
         simulation.include_real = payload.include_real
+    if payload.reserve_mode is not None:
+        simulation.reserve_mode = payload.reserve_mode
+    if payload.reserve_value is not None:
+        simulation.reserve_value = _money(payload.reserve_value)
+    _validate_reserve(simulation.reserve_mode, simulation.reserve_value)
     if payload.items is not None:
         _replace_items(simulation, payload.items)
     try:
