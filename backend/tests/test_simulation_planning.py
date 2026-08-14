@@ -133,7 +133,7 @@ class SimulationPlanningTests(unittest.TestCase):
             ],
             reserve_mode="percentage",
             reserve_value=50,
-            reserve_source_item_position=0,
+            reserve_source_item_positions=[0],
         )
         row = result["rows"][0]
         self.assertEqual(row["income"], Decimal("3500.00"))
@@ -152,12 +152,53 @@ class SimulationPlanningTests(unittest.TestCase):
             items=[item(item_type="income", mode="cash", amount="1000")],
             reserve_mode="fixed",
             reserve_value=300,
-            reserve_source_item_position=0,
+            reserve_source_item_positions=[0],
         )
         self.assertEqual(
             [row["planned_reserve"] for row in result["rows"]],
             [Decimal("300.00"), Decimal("0.00")],
         )
+
+    def test_percentage_reserve_can_sum_multiple_simulated_incomes(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[
+                RealMonth(month="2026-09", total_income=2000, total_expenses=400, projected_closing=1600),
+            ],
+            items=[
+                item(item_type="income", mode="cash", amount="1000"),
+                item(item_type="income", mode="cash", amount="500"),
+            ],
+            reserve_mode="percentage",
+            reserve_value=50,
+            reserve_source_item_positions=[0, 1],
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["reserve_base_income"], Decimal("1500.00"))
+        self.assertEqual(row["planned_reserve"], Decimal("750.00"))
+        self.assertEqual(result["summary"]["average_reserve_rate"], Decimal("50.00"))
+
+    def test_reserve_stops_after_selected_end_month(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[
+                RealMonth(month=f"2026-{month:02d}", total_income=1850, total_expenses=400, projected_closing=1450)
+                for month in range(9, 12)
+            ],
+            items=[],
+            reserve_mode="percentage",
+            reserve_value=50,
+            reserve_start_month="2026-09",
+            reserve_end_month="2026-10",
+        )
+        self.assertEqual(
+            [row["planned_reserve"] for row in result["rows"]],
+            [Decimal("925.00"), Decimal("925.00"), Decimal("0.00")],
+        )
+        self.assertFalse(result["rows"][2]["reserve_active"])
+        self.assertEqual(result["summary"]["total_planned_reserve"], Decimal("1850.00"))
 
 
 if __name__ == "__main__":

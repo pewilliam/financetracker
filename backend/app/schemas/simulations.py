@@ -23,7 +23,8 @@ class SimulationCreate(APIModel):
     reserve_mode: Literal["percentage", "fixed"] = "percentage"
     reserve_value: Decimal = Field(default=Decimal("0.00"), ge=0)
     reserve_start_month: Optional[str] = None
-    reserve_source_item_position: Optional[int] = Field(default=None, ge=0)
+    reserve_end_month: Optional[str] = None
+    reserve_source_item_positions: List[int] = []
     items: List[SimulationItemPayload] = []
 
 
@@ -33,7 +34,8 @@ class SimulationUpdate(APIModel):
     reserve_mode: Optional[Literal["percentage", "fixed"]] = None
     reserve_value: Optional[Decimal] = Field(default=None, ge=0)
     reserve_start_month: Optional[str] = None
-    reserve_source_item_position: Optional[int] = Field(default=None, ge=0)
+    reserve_end_month: Optional[str] = None
+    reserve_source_item_positions: Optional[List[int]] = None
     items: Optional[List[SimulationItemPayload]] = None
 
 
@@ -50,7 +52,8 @@ class SimulationOut(APIModel):
     reserve_mode: Literal["percentage", "fixed"] = "percentage"
     reserve_value: Decimal = Decimal("0.00")
     reserve_start_month: Optional[str] = None
-    reserve_source_item_position: Optional[int] = None
+    reserve_end_month: Optional[str] = None
+    reserve_source_item_positions: List[int] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     items: List[SimulationItemOut] = []
@@ -63,7 +66,8 @@ class SimulationPreviewPayload(APIModel):
     reserve_mode: Literal["percentage", "fixed"] = "percentage"
     reserve_value: Decimal = Field(default=Decimal("0.00"), ge=0)
     reserve_start_month: Optional[str] = None
-    reserve_source_item_position: Optional[int] = Field(default=None, ge=0)
+    reserve_end_month: Optional[str] = None
+    reserve_source_item_positions: List[int] = []
     items: List[SimulationItemPayload] = []
 
 

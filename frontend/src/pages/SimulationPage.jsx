@@ -171,10 +171,12 @@ function ProjectionTooltip({ active, payload, label }) {
   );
 }
 
-function reserveSourcePosition(draftItems, sourceItemId) {
-  if (sourceItemId === "all") return null;
-  const position = draftItems.findIndex((item) => item.id === sourceItemId && item.type === "income");
-  return position >= 0 ? position : null;
+function reserveSourcePositions(draftItems, sourceItemIds) {
+  const selectedIds = new Set(sourceItemIds || []);
+  return draftItems.reduce((positions, item, position) => {
+    if (item.type === "income" && selectedIds.has(item.id)) positions.push(position);
+    return positions;
+  }, []);
 }
 
 function PlanningTooltip({ active, payload, label }) {
@@ -463,7 +465,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [reserveMode, setReserveMode] = useState("percentage");
   const [reserveValue, setReserveValue] = useState("");
   const [reserveStartMonth, setReserveStartMonth] = useState(currentMonthValue());
-  const [reserveSourceItemId, setReserveSourceItemId] = useState("all");
+  const [reserveEndMonth, setReserveEndMonth] = useState("");
+  const [reserveSourceItemIds, setReserveSourceItemIds] = useState([]);
   const [planningResult, setPlanningResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [restored, setRestored] = useState(false);
@@ -509,7 +512,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
-    setReserveSourceItemId("all");
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
     try {
       const storedDraft = JSON.parse(localStorage.getItem(storageKey) || "[]");
       const restoredItems = normalizeRestoredItems(Array.isArray(storedDraft) ? storedDraft : storedDraft.items);
@@ -519,7 +523,12 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         setReserveMode(storedDraft.reserveMode === "fixed" ? "fixed" : "percentage");
         setReserveValue(String(storedDraft.reserveValue || ""));
         setReserveStartMonth(/^\d{4}-\d{2}$/.test(storedDraft.reserveStartMonth || "") ? storedDraft.reserveStartMonth : currentMonthValue());
-        setReserveSourceItemId(storedDraft.reserveSourceItemId || "all");
+        setReserveEndMonth(/^\d{4}-\d{2}$/.test(storedDraft.reserveEndMonth || "") ? storedDraft.reserveEndMonth : "");
+        setReserveSourceItemIds(Array.isArray(storedDraft.reserveSourceItemIds)
+          ? storedDraft.reserveSourceItemIds
+          : storedDraft.reserveSourceItemId && storedDraft.reserveSourceItemId !== "all"
+            ? [storedDraft.reserveSourceItemId]
+            : []);
       }
       if (restoredItems.length || hasStoredPlanning) {
         setItems(restoredItems);
@@ -550,11 +559,11 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         localStorage.removeItem(storageKey);
         return;
       }
-      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth, reserveSourceItemId }));
+      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth, reserveEndMonth, reserveSourceItemIds }));
     } catch {
       // localStorage can be unavailable in private contexts.
     }
-  }, [includeReal, items, localDraftEnabled, reserveMode, reserveSourceItemId, reserveStartMonth, reserveValue, storageKey, storageReady]);
+  }, [includeReal, items, localDraftEnabled, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, storageKey, storageReady]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveItems(items), 500);
@@ -562,10 +571,12 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   }, [items]);
 
   useEffect(() => {
-    if (reserveSourceItemId === "all") return;
-    const sourceItem = items.find((item) => item.id === reserveSourceItemId);
-    if (!sourceItem || sourceItem.type !== "income") setReserveSourceItemId("all");
-  }, [items, reserveSourceItemId]);
+    const validIds = new Set(items.filter((item) => item.type === "income").map((item) => item.id));
+    setReserveSourceItemIds((current) => {
+      const next = current.filter((itemId) => validIds.has(itemId));
+      return next.length === current.length && next.every((itemId, index) => itemId === current[index]) ? current : next;
+    });
+  }, [items]);
 
   const registeredEndIndex = useMemo(() => {
     const current = monthIndex(currentMonthValue());
@@ -574,8 +585,9 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const endIndex = useMemo(() => Math.max(
     simulationEndIndex(activeItems, language),
     registeredEndIndex,
-    monthIndex(reserveStartMonth) + 1
-  ), [activeItems, language, registeredEndIndex, reserveStartMonth]);
+    monthIndex(reserveStartMonth) + 1,
+    reserveEndMonth ? monthIndex(reserveEndMonth) : registeredEndIndex
+  ), [activeItems, language, registeredEndIndex, reserveEndMonth, reserveStartMonth]);
   const months = useMemo(() => {
     const start = monthIndex(currentMonthValue());
     return Array.from({ length: endIndex - start + 1 }, (_, offset) => monthFromIndex(start + offset));
@@ -593,7 +605,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           reserve_mode: reserveMode,
           reserve_value: reserveMode === "fixed" ? parseTypedMoneyInput(reserveValue, language) : Number(reserveValue || 0),
           reserve_start_month: reserveStartMonth,
-          reserve_source_item_position: reserveSourcePosition(activeItems, reserveSourceItemId),
+          reserve_end_month: reserveEndMonth || null,
+          reserve_source_item_positions: reserveSourcePositions(activeItems, reserveSourceItemIds),
           items: activeItems.map((item) => draftItemToPayload(item, language))
         });
         if (!mounted) return;
@@ -607,7 +620,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     }
     loadProjection();
     return () => { mounted = false; };
-  }, [activeItems, includeReal, language, months, reserveMode, reserveSourceItemId, reserveStartMonth, reserveValue]);
+  }, [activeItems, includeReal, language, months, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue]);
 
   const rows = useMemo(() => (planningResult?.rows || []).map((row, index) => {
     const [year, month] = row.month.split("-").map(Number);
@@ -651,10 +664,15 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const minBalance = Math.min(0, ...rows.flatMap((row) => [row.withoutSimulation, row.finalBalance]));
   const minPlanningValue = Math.min(0, ...rows.map((row) => row.freeMoney));
   const simulatedIncomeItems = items.filter((item) => item.type === "income");
-  const reserveSourceItem = items.find((item) => item.id === reserveSourceItemId);
-  const reserveSourceLabel = reserveSourceItemId === "all"
+  const selectedReserveSources = simulatedIncomeItems.filter((item) => reserveSourceItemIds.includes(item.id));
+  const reserveSourceLabel = !selectedReserveSources.length
     ? "todas as receitas"
-    : reserveSourceItem?.description?.trim() || "receita simulada selecionada";
+    : selectedReserveSources.length === 1
+      ? selectedReserveSources[0].description?.trim() || "uma receita simulada"
+      : `${selectedReserveSources.length} receitas simuladas`;
+  const reservePeriodLabel = reserveEndMonth
+    ? `de ${formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)} até ${formatMonthLabel(...reserveEndMonth.split("-").map(Number), language)}`
+    : `a partir de ${formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}`;
 
   const updateItem = (id, patch) => {
     enableLocalDraft();
@@ -692,7 +710,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
-    setReserveSourceItemId("all");
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
     setRestored(false);
     clearLocalDraft();
   };
@@ -704,7 +723,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
-    setReserveSourceItemId("all");
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
     clearLocalDraft();
   };
   const simulateNow = () => setActiveItems(items);
@@ -723,7 +743,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     reserve_mode: reserveMode,
     reserve_value: reserveMode === "fixed" ? parseTypedMoneyInput(reserveValue, language) : Number(reserveValue || 0),
     reserve_start_month: reserveStartMonth,
-    reserve_source_item_position: reserveSourcePosition(items, reserveSourceItemId),
+    reserve_end_month: reserveEndMonth || null,
+    reserve_source_item_positions: reserveSourcePositions(items, reserveSourceItemIds),
     items: items.map((item) => draftItemToPayload(item, language))
   });
   const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
@@ -735,7 +756,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveMode("percentage");
     setReserveValue("");
     setReserveStartMonth(currentMonthValue());
-    setReserveSourceItemId("all");
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
     setExpandedRows({});
     setRestored(false);
     setLocalDraftEnabled(true);
@@ -810,11 +832,11 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         ? formatMoney(saved.reserve_value || 0, language)
         : String(Number(saved.reserve_value || 0)));
       setReserveStartMonth(/^\d{4}-\d{2}$/.test(saved.reserve_start_month || "") ? saved.reserve_start_month : currentMonthValue());
-      setReserveSourceItemId(
-        Number.isInteger(saved.reserve_source_item_position) && loadedItems[saved.reserve_source_item_position]?.type === "income"
-          ? loadedItems[saved.reserve_source_item_position].id
-          : "all"
-      );
+      setReserveEndMonth(/^\d{4}-\d{2}$/.test(saved.reserve_end_month || "") ? saved.reserve_end_month : "");
+      setReserveSourceItemIds((saved.reserve_source_item_positions || [])
+        .map((position) => loadedItems[position])
+        .filter((item) => item?.type === "income")
+        .map((item) => item.id));
       setSelectedSimulationId(String(saved.id));
       setLocalDraftEnabled(false);
       setRestored(false);
@@ -1062,27 +1084,73 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                 <MonthField value={reserveStartMonth} onChange={(value) => {
                   enableLocalDraft();
                   setReserveStartMonth(value);
+                  setReserveEndMonth((current) => current && monthIndex(current) < monthIndex(value) ? value : current);
                 }} />
               </label>
-              <label className="simulation-reserve-source">
+              <div className="simulation-reserve-end">
+                <div>
+                  <span>Mês limite</span>
+                  <label className="simulation-limit-toggle">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(reserveEndMonth)}
+                      onChange={(event) => {
+                        enableLocalDraft();
+                        setReserveEndMonth(event.target.checked ? reserveStartMonth : "");
+                      }}
+                    />
+                    <span>{reserveEndMonth ? "Com limite" : "Sem limite"}</span>
+                  </label>
+                </div>
+                {reserveEndMonth
+                  ? <MonthField value={reserveEndMonth} onChange={(value) => {
+                    enableLocalDraft();
+                    setReserveEndMonth(monthIndex(value) < monthIndex(reserveStartMonth) ? reserveStartMonth : value);
+                  }} />
+                  : <small>A reserva continuará até o fim da projeção.</small>}
+              </div>
+              <div className="simulation-reserve-source">
                 <span>Calcular reserva sobre</span>
-                <select value={reserveSourceItemId} onChange={(event) => {
-                  enableLocalDraft();
-                  setReserveSourceItemId(event.target.value);
-                }}>
-                  <option value="all">Todas as receitas</option>
-                  {simulatedIncomeItems.map((item, index) => (
-                    <option value={item.id} key={item.id}>
-                      {item.description?.trim() || `Receita simulada ${index + 1}`}
-                    </option>
-                  ))}
-                </select>
+                <details className="simulation-source-picker">
+                  <summary>
+                    <span>{reserveSourceLabel}</span>
+                    <ChevronDown size={15} />
+                  </summary>
+                  <div className="simulation-source-options">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!reserveSourceItemIds.length}
+                        onChange={() => {
+                          enableLocalDraft();
+                          setReserveSourceItemIds([]);
+                        }}
+                      />
+                      <span>Todas as receitas</span>
+                    </label>
+                    {simulatedIncomeItems.map((item, index) => (
+                      <label key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={reserveSourceItemIds.includes(item.id)}
+                          onChange={() => {
+                            enableLocalDraft();
+                            setReserveSourceItemIds((current) => current.includes(item.id)
+                              ? current.filter((itemId) => itemId !== item.id)
+                              : [...current, item.id]);
+                          }}
+                        />
+                        <span>{item.description?.trim() || `Receita simulada ${index + 1}`}</span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
                 {!simulatedIncomeItems.length && <small>Adicione uma receita simulada para vinculá-la à reserva.</small>}
-              </label>
+              </div>
             </div>
             <div className="simulation-planning-hint">
               <Check size={14} />
-              <span>A meta será calculada sobre {reserveSourceLabel} a partir de {formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}.</span>
+              <span>A meta será calculada sobre {reserveSourceLabel} {reservePeriodLabel}.</span>
             </div>
           </section>
 
@@ -1258,7 +1326,9 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                         <span>{row.simulatedItems.length ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <span className="simulation-row-spacer" />} {row.label}</span>
                         <span>{formatMoney(row.income, language)}</span>
                         <span>{formatMoney(row.expenses, language)}</span>
-                        <span className={!row.reserveActive ? "simulation-reserve-pending" : ""}>{row.reserveActive ? formatMoney(row.plannedReserve, language) : "Não iniciada"}</span>
+                        <span className={!row.reserveActive ? "simulation-reserve-pending" : ""}>{row.reserveActive
+                          ? formatMoney(row.plannedReserve, language)
+                          : monthIndex(row.value) < monthIndex(reserveStartMonth) ? "Não iniciada" : "Encerrada"}</span>
                         <span className={row.freeMoney < 0 ? "money-expense" : "money-income"}>{formatMoney(row.freeMoney, language)}</span>
                         <strong>{formatMoney(row.finalBalance, language)}</strong>
                       </button>

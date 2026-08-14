@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -14,7 +14,8 @@ class Simulation(Base):
     reserve_mode = Column(String(20), nullable=False, default="percentage")
     reserve_value = Column(Numeric(10, 2), nullable=False, default=0)
     reserve_start_month = Column(String(7), nullable=True)
-    reserve_source_item_position = Column(Integer, nullable=True)
+    reserve_end_month = Column(String(7), nullable=True)
+    reserve_source_item_positions = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

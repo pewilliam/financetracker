@@ -60,9 +60,10 @@ def item_values(item) -> list[Decimal]:
 
 def build_item_impacts(
     items: Iterable,
-    reserve_source_item_position: int | None = None,
+    reserve_source_item_positions: Iterable[int] | None = None,
 ) -> dict[str, dict]:
     impacts: dict[str, dict] = {}
+    source_positions = set(reserve_source_item_positions or [])
     for item_index, item in enumerate(items):
         values = item_values(item)
         description = (item.description or "").strip() or "Item simulado"
@@ -81,7 +82,7 @@ def build_item_impacts(
                 },
             )
             impact[item.type] += amount
-            if item_index == reserve_source_item_position and item.type == "income":
+            if item_index in source_positions and item.type == "income":
                 impact["reserve_source_income"] += amount
             impact["items"].append(
                 {
@@ -115,12 +116,14 @@ def calculate_planning(
     reserve_mode: str,
     reserve_value,
     reserve_start_month: str | None = None,
-    reserve_source_item_position: int | None = None,
+    reserve_end_month: str | None = None,
+    reserve_source_item_positions: Iterable[int] | None = None,
 ) -> dict:
     """Calculate balances and planned allocations without treating reserve as an expense."""
     starting_balance = money(current_balance)
     reserve_setting = money(reserve_value)
-    impacts = build_item_impacts(items, reserve_source_item_position)
+    source_positions = set(reserve_source_item_positions or [])
+    impacts = build_item_impacts(items, source_positions)
     rows = []
     simulated_carry = money(0)
     reserve_accumulated = money(0)
@@ -143,25 +146,25 @@ def calculate_planning(
         expenses = money(real_expenses + simulated_expenses)
 
         reserve_is_active = (
-            reserve_start_month is None
-            or month_index(real_month.month) >= month_index(reserve_start_month)
+            (reserve_start_month is None or month_index(real_month.month) >= month_index(reserve_start_month))
+            and (reserve_end_month is None or month_index(real_month.month) <= month_index(reserve_end_month))
         )
         reserve_base_income = (
             income
-            if reserve_source_item_position is None
+            if not source_positions
             else money(impact["reserve_source_income"])
         )
         if not reserve_is_active:
             planned_reserve = money(0)
         elif reserve_mode == "percentage":
             planned_reserve = money(reserve_base_income * reserve_setting / Decimal("100"))
-        elif reserve_source_item_position is not None and reserve_base_income <= 0:
+        elif source_positions and reserve_base_income <= 0:
             planned_reserve = money(0)
         else:
             planned_reserve = reserve_setting
 
         baseline_reserve = money(0)
-        if reserve_is_active and reserve_source_item_position is None:
+        if reserve_is_active and not source_positions:
             baseline_reserve = (
                 money(real_income * reserve_setting / Decimal("100"))
                 if reserve_mode == "percentage"
