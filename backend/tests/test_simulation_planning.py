@@ -57,22 +57,22 @@ class SimulationPlanningTests(unittest.TestCase):
             ],
             items=[],
             reserve_mode="fixed",
-            reserve_value=500,
+            reserve_value=0,
             allocation_categories=[
                 {"id": "games", "name": "Jogos", "mode": "fixed", "value": 200},
                 {"id": "dates", "name": "Namorada", "mode": "fixed", "value": 300},
             ],
         )
         row = result["rows"][0]
-        self.assertEqual(row["planned_reserve"], Decimal("500.00"))
-        self.assertEqual(row["free_money"], Decimal("0.00"))
+        self.assertEqual(row["planned_reserve"], Decimal("0.00"))
+        self.assertEqual(row["free_money"], Decimal("500.00"))
         self.assertEqual(
             [category["allocated"] for category in row["category_allocations"]],
             [Decimal("200.00"), Decimal("300.00")],
         )
         self.assertEqual(result["summary"]["total_free_money_before_allocations"], Decimal("500.00"))
 
-    def test_percentage_categories_distribute_the_monthly_reserve(self):
+    def test_percentage_categories_distribute_free_money(self):
         result = calculate_planning(
             current_balance=0,
             include_real=True,
@@ -82,13 +82,13 @@ class SimulationPlanningTests(unittest.TestCase):
             ],
             items=[],
             reserve_mode="fixed",
-            reserve_value=500,
+            reserve_value=0,
             allocation_categories=[
                 {"id": "games", "name": "Jogos", "mode": "percentage", "value": 40},
                 {"id": "dates", "name": "Namorada", "mode": "percentage", "value": 60},
             ],
         )
-        self.assertEqual([row["free_money"] for row in result["rows"]], [Decimal("0.00"), Decimal("0.00")])
+        self.assertEqual([row["free_money"] for row in result["rows"]], [Decimal("500.00"), Decimal("500.00")])
         summaries = result["summary"]["category_summaries"]
         self.assertEqual(summaries[0]["current_month_allocated"], Decimal("200.00"))
         self.assertEqual(summaries[0]["total_allocated"], Decimal("400.00"))
@@ -106,8 +106,8 @@ class SimulationPlanningTests(unittest.TestCase):
             allocation_categories=[{"id": "games", "name": "Jogos", "mode": "fixed", "value": 200}],
         )
         self.assertEqual(result["rows"][0]["free_money"], Decimal("500.00"))
-        self.assertEqual(result["rows"][0]["category_allocations"][0]["allocated"], Decimal("0.00"))
-        self.assertEqual(result["summary"]["category_summaries"][0]["total_allocated"], Decimal("0.00"))
+        self.assertEqual(result["rows"][0]["category_allocations"][0]["allocated"], Decimal("200.00"))
+        self.assertEqual(result["summary"]["category_summaries"][0]["total_allocated"], Decimal("200.00"))
 
     def test_categories_do_not_reduce_free_money_twice(self):
         result = calculate_planning(
@@ -122,7 +122,26 @@ class SimulationPlanningTests(unittest.TestCase):
         self.assertEqual(result["rows"][0]["planned_reserve"], Decimal("200.00"))
         self.assertEqual(result["rows"][0]["category_allocations"][0]["allocated"], Decimal("200.00"))
         self.assertEqual(result["rows"][0]["free_money"], Decimal("800.00"))
-        self.assertEqual(result["summary"]["total_uncategorized_reserve"], Decimal("0.00"))
+        self.assertEqual(result["rows"][0]["unplanned_free_money"], Decimal("600.00"))
+        self.assertEqual(result["summary"]["total_unplanned_free_money"], Decimal("600.00"))
+
+    def test_unplanned_free_money_is_the_remainder_after_categories(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[RealMonth(month="2026-09", total_income=900, total_expenses=400, projected_closing=500)],
+            items=[],
+            reserve_mode="fixed",
+            reserve_value=0,
+            allocation_categories=[
+                {"id": "games", "name": "Jogos", "mode": "fixed", "value": 200},
+                {"id": "leisure", "name": "Lazer", "mode": "fixed", "value": 150},
+            ],
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["free_money"], Decimal("500.00"))
+        self.assertEqual(row["unplanned_free_money"], Decimal("150.00"))
+        self.assertEqual(result["summary"]["current_unplanned_free_money"], Decimal("150.00"))
 
     def test_percentage_reserve(self):
         row = calculate()["rows"][0]

@@ -190,15 +190,15 @@ def calculate_planning(
         reserve_accumulated = money(reserve_accumulated + planned_reserve)
 
         category_allocations = []
-        remaining_reserve = max(planned_reserve, money(0))
+        remaining_free_money = max(free_money, money(0))
         for category in categories:
             requested = (
-                money(planned_reserve * category["value"] / Decimal("100"))
+                money(max(free_money, money(0)) * category["value"] / Decimal("100"))
                 if category["mode"] == "percentage"
                 else category["value"]
             )
-            allocated = money(min(max(requested, money(0)), remaining_reserve))
-            remaining_reserve = money(remaining_reserve - allocated)
+            allocated = money(min(max(requested, money(0)), remaining_free_money))
+            remaining_free_money = money(remaining_free_money - allocated)
             category_accumulated[category["id"]] = money(category_accumulated[category["id"]] + allocated)
             category_allocations.append(
                 {
@@ -242,6 +242,7 @@ def calculate_planning(
                 "reserve_unsustainable": free_money < 0,
                 "simulation_caused_negative": free_money < 0 <= free_before_simulation,
                 "category_allocations": category_allocations,
+                "unplanned_free_money": money(free_money - sum((entry["allocated"] for entry in category_allocations), Decimal("0"))),
                 "simulated_items": impact["items"],
             }
         )
@@ -251,7 +252,7 @@ def calculate_planning(
     total_free_before_allocations = money(
         sum((row["income"] - row["expenses"] for row in rows), Decimal("0"))
     )
-    total_categorized_reserve = money(sum(category_accumulated.values(), Decimal("0")))
+    total_categorized_free_money = money(sum(category_accumulated.values(), Decimal("0")))
     total_reserve_base_income = money(
         sum((row["reserve_base_income"] for row in rows if row["reserve_active"]), Decimal("0"))
     )
@@ -278,7 +279,7 @@ def calculate_planning(
                     "total_allocated": category_accumulated[category["id"]],
                 }
             )
-    current_categorized_reserve = money(
+    current_categorized_free_money = money(
         sum((allocation["allocated"] for allocation in (rows[0]["category_allocations"] if rows else [])), Decimal("0"))
     )
 
@@ -292,8 +293,8 @@ def calculate_planning(
             "total_planned_reserve": total_reserve,
             "total_free_money": total_free,
             "total_free_money_before_allocations": total_free_before_allocations,
-            "current_uncategorized_reserve": money((rows[0]["planned_reserve"] if rows else money(0)) - current_categorized_reserve),
-            "total_uncategorized_reserve": money(total_reserve - total_categorized_reserve),
+            "current_unplanned_free_money": money((rows[0]["free_money"] if rows else money(0)) - current_categorized_free_money),
+            "total_unplanned_free_money": money(total_free - total_categorized_free_money),
             "total_reserve_base_income": total_reserve_base_income,
             "average_free_money": average_free,
             "average_reserve_rate": average_rate,

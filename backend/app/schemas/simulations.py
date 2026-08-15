@@ -122,6 +122,7 @@ class SimulationMonthOut(APIModel):
     reserve_unsustainable: bool
     simulation_caused_negative: bool
     category_allocations: List[SimulationCategoryAllocationOut] = []
+    unplanned_free_money: Decimal = Decimal("0.00")
     simulated_items: List[SimulationImpactOut] = []
 
 
@@ -133,8 +134,8 @@ class SimulationPlanningSummaryOut(APIModel):
     total_planned_reserve: Decimal
     total_free_money: Decimal
     total_free_money_before_allocations: Decimal = Decimal("0.00")
-    current_uncategorized_reserve: Decimal = Decimal("0.00")
-    total_uncategorized_reserve: Decimal = Decimal("0.00")
+    current_unplanned_free_money: Decimal = Decimal("0.00")
+    total_unplanned_free_money: Decimal = Decimal("0.00")
     total_reserve_base_income: Decimal
     average_free_money: Decimal
     average_reserve_rate: Decimal
