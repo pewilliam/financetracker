@@ -3224,8 +3224,10 @@ select {
 .simulation-panel {
   position: sticky;
   top: 24px;
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
+  /* The panel starts below the editor toolbar, so its available height is
+     smaller than the sticky offset alone. Keep the whole card in view. */
+  max-height: calc(100vh - 100px);
+  max-height: calc(100dvh - 100px);
   display: grid;
   gap: 16px;
   overflow-y: auto;
@@ -4170,6 +4172,46 @@ select {
 }
 .simulation-mobile-fab {
   display: none;
+}
+
+@media (min-width: 768px) and (max-height: 1100px) {
+  .simulation-panel {
+    gap: 11px;
+    padding: 16px;
+  }
+  .simulation-panel-head h2 {
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .simulation-panel-head .eyebrow {
+    margin-bottom: 4px;
+  }
+  .simulation-balance-box {
+    padding: 11px 12px;
+  }
+  .simulation-switch {
+    min-height: 46px;
+    padding: 8px 11px;
+  }
+  .simulation-planning {
+    gap: 11px;
+    padding: 11px 12px;
+  }
+  .simulation-planning.collapsed {
+    padding-block: 9px;
+  }
+  .simulation-items {
+    gap: 9px;
+  }
+  .simulation-item-card.collapsed {
+    padding-block: 7px;
+  }
+  .simulation-actions {
+    gap: 7px;
+  }
+  .simulation-submit {
+    min-height: 42px;
+  }
 }
 .simulation-tutorial-layer {
   position: fixed;
