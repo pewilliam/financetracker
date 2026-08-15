@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, CircleDollarSign, LineChart as LineChartIcon, PiggyBank, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, CircleDollarSign, CircleHelp, LineChart as LineChartIcon, Pencil, PiggyBank, Plus, Save, Trash2, X } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "react-hot-toast";
 import { createInstallment, createSimulation, createTransaction, deleteSimulation, getSimulation, listSimulations, previewSimulation, updateSimulation } from "../api/api.js";
@@ -398,6 +398,7 @@ function SimulationNameModal({ mode, initialName, saving, onClose, onSubmit }) {
             <span>Nome da simulação</span>
             <input
               autoFocus
+              maxLength={255}
               value={name}
               onBlur={() => setTouched(true)}
               onChange={(event) => setName(event.target.value)}
@@ -455,10 +456,163 @@ function findInvoiceForMonth(invoices, monthValue, allowOverdueInvoiceEdits = fa
     .find((invoice) => String(invoice.due_date || "").slice(0, 7) === monthValue);
 }
 
+const SIMULATION_TUTORIAL_STEPS = [
+  {
+    target: "library",
+    eyebrow: "Boas-vindas",
+    title: "Seus cenários ficam organizados aqui",
+    description: "Crie cenários para testar decisões financeiras sem alterar seus lançamentos. Simulações salvas podem ser abertas novamente em qualquer aparelho."
+  },
+  {
+    target: "create",
+    eyebrow: "Primeiro passo",
+    title: "Comece uma nova simulação",
+    description: "Você também pode continuar um rascunho deste aparelho ou abrir uma simulação já salva.",
+    nextLabel: "Abrir editor"
+  },
+  {
+    target: "balance",
+    eyebrow: "Ponto de partida",
+    title: "Confira o saldo usado na projeção",
+    description: "Ative “Incluir lançamentos já cadastrados” para combinar o cenário com receitas, gastos e faturas que já existem."
+  },
+  {
+    target: "planning",
+    eyebrow: "Planejamento",
+    title: "Defina uma meta de reserva",
+    description: "Planeje quanto deseja guardar por mês, por quanto tempo e sobre quais receitas. A reserva reduz o dinheiro livre, mas não é tratada como despesa."
+  },
+  {
+    target: "items",
+    eyebrow: "Cenário",
+    title: "Monte o cenário com receitas e gastos",
+    description: "Cada item pode ser à vista, parcelado ou recorrente. Informe valor e mês inicial para enxergar o impacto ao longo do tempo."
+  },
+  {
+    target: "actions",
+    eyebrow: "Começar a usar",
+    title: "Adicione um item e clique em Simular",
+    description: "Você pode ajustar os dados quantas vezes quiser. Até efetivar os itens, nenhum lançamento real é criado."
+  },
+  {
+    target: "results",
+    eyebrow: "Leitura do cenário",
+    title: "Acompanhe o resultado da projeção",
+    description: "O resumo mostra o impacto e o saldo projetado. Mais abaixo, gráficos e a tabela mensal ajudam a encontrar períodos de aperto."
+  },
+  {
+    target: "save",
+    eyebrow: "Quando terminar",
+    title: "Salve ou transforme o cenário em lançamentos",
+    description: "Salvar mantém a simulação para consultas futuras. “Inserir itens no sistema”, no fim dos resultados, efetiva somente os itens que você confirmar.",
+    nextLabel: "Concluir"
+  }
+];
+
+function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNext }) {
+  const [targetRect, setTargetRect] = useState(null);
+  const step = SIMULATION_TUTORIAL_STEPS[stepIndex];
+
+  useEffect(() => {
+    if (!open || !step) return undefined;
+    const selector = `[data-simulation-tour="${step.target}"]`;
+    const element = document.querySelector(selector);
+    let settleTimer;
+
+    const measure = () => {
+      const currentTarget = document.querySelector(selector);
+      if (!currentTarget) {
+        setTargetRect(null);
+        return;
+      }
+      const rect = currentTarget.getBoundingClientRect();
+      setTargetRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom });
+    };
+
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      const outsideViewport = rect.top < 12 || rect.bottom > window.innerHeight - 12;
+      if (outsideViewport) element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    measure();
+    settleTimer = window.setTimeout(measure, 320);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.clearTimeout(settleTimer);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, step]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open || !step) return null;
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const compact = viewportWidth <= 720;
+  const spotlightStyle = targetRect ? {
+    top: Math.max(8, targetRect.top - 6),
+    left: Math.max(8, targetRect.left - 6),
+    width: Math.min(viewportWidth - Math.max(8, targetRect.left - 6) - 8, targetRect.width + 12),
+    height: Math.min(viewportHeight - Math.max(8, targetRect.top - 6) - 8, targetRect.height + 12)
+  } : null;
+  let cardStyle = compact ? { left: 16, right: 16, bottom: 16 } : { left: "50%", top: "50%", transform: "translate(-50%, -50%)" };
+
+  if (!compact && targetRect) {
+    if (viewportWidth - targetRect.right >= 390) {
+      cardStyle = { left: targetRect.right + 18, top: Math.max(16, Math.min(targetRect.top, viewportHeight - 330)) };
+    } else if (targetRect.left >= 390) {
+      cardStyle = { right: viewportWidth - targetRect.left + 18, top: Math.max(16, Math.min(targetRect.top, viewportHeight - 330)) };
+    } else if (viewportHeight - targetRect.bottom >= 300) {
+      cardStyle = { left: Math.max(16, Math.min(targetRect.left, viewportWidth - 376)), top: targetRect.bottom + 18 };
+    } else {
+      cardStyle = { left: Math.max(16, Math.min(targetRect.left, viewportWidth - 376)), bottom: viewportHeight - targetRect.top + 18 };
+    }
+  }
+
+  const relativeStep = stepIndex - startStep + 1;
+  const totalSteps = SIMULATION_TUTORIAL_STEPS.length - startStep;
+
+  return (
+    <div className={`simulation-tutorial-layer ${targetRect ? "has-target" : ""}`} role="dialog" aria-modal="true" aria-labelledby="simulation-tutorial-title">
+      <button className="simulation-tutorial-backdrop" type="button" onClick={onClose} aria-label="Fechar tutorial" />
+      {spotlightStyle && <div className="simulation-tutorial-spotlight" style={spotlightStyle} />}
+      <div className="simulation-tutorial-card" style={cardStyle}>
+        <div className="simulation-tutorial-head">
+          <span>{step.eyebrow}</span>
+          <button className="icon-btn small" type="button" onClick={onClose} aria-label="Fechar tutorial"><X size={16} /></button>
+        </div>
+        <h2 id="simulation-tutorial-title">{step.title}</h2>
+        <p>{step.description}</p>
+        <div className="simulation-tutorial-progress" aria-label={`Etapa ${relativeStep} de ${totalSteps}`}>
+          <span>{relativeStep} de {totalSteps}</span>
+          <div>{Array.from({ length: totalSteps }, (_, index) => <i className={index < relativeStep ? "active" : ""} key={index} />)}</div>
+        </div>
+        <div className="simulation-tutorial-actions">
+          {stepIndex > startStep
+            ? <button className="btn btn-ghost" type="button" onClick={onBack}>Voltar</button>
+            : <button className="btn btn-ghost" type="button" onClick={onClose}>Pular tutorial</button>}
+          <button className="btn btn-primary" type="button" onClick={onNext}>{step.nextLabel || "Próximo"}<ChevronRight size={16} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits = false, monthCards = [], onInserted }) {
   const { user } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
+  const tutorialStorageKey = `kashy365_simulation_tutorial_v1_${user?.id || "local"}`;
   const [items, setItems] = useState([]);
   const [activeItems, setActiveItems] = useState([]);
   const [includeReal, setIncludeReal] = useState(true);
@@ -481,6 +635,9 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [saveDialog, setSaveDialog] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [decisionDialog, setDecisionDialog] = useState(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialStartStep, setTutorialStartStep] = useState(0);
 
   const refreshSavedSimulations = async () => {
     try {
@@ -552,6 +709,18 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   useEffect(() => {
     refreshSavedSimulations();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      if (localStorage.getItem(tutorialStorageKey) === "1") return;
+    } catch {
+      // The tutorial can still be displayed when storage is unavailable.
+    }
+    setTutorialStartStep(0);
+    setTutorialStep(0);
+    setTutorialOpen(true);
+  }, [tutorialStorageKey, user?.id]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -776,8 +945,50 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setSaveDialog(null);
     setDecisionDialog(null);
   };
+  const markTutorialSeen = () => {
+    try {
+      localStorage.setItem(tutorialStorageKey, "1");
+    } catch {
+      // localStorage can be unavailable in private contexts.
+    }
+  };
+  const closeTutorial = () => {
+    markTutorialSeen();
+    setTutorialOpen(false);
+  };
+  const openTutorial = () => {
+    const firstStep = editorOpen ? 2 : 0;
+    setTutorialStartStep(firstStep);
+    setTutorialStep(firstStep);
+    setTutorialOpen(true);
+  };
+  const advanceTutorial = () => {
+    if (tutorialStep === 1 && !editorOpen) {
+      if (hasLocalDraft && localDraftEnabled) openDraftSimulation();
+      else startNewSimulation();
+      setTutorialStep(2);
+      return;
+    }
+    if (tutorialStep >= SIMULATION_TUTORIAL_STEPS.length - 1) {
+      closeTutorial();
+      return;
+    }
+    setTutorialStep((current) => current + 1);
+  };
+  const returnTutorial = () => {
+    if (tutorialStep === 2 && tutorialStartStep === 0) {
+      closeEditor();
+      setTutorialStep(1);
+      return;
+    }
+    setTutorialStep((current) => Math.max(tutorialStartStep, current - 1));
+  };
   const openCreateSimulationDialog = () => {
     setSaveDialog({ mode: "create", name: defaultSimulationName() });
+  };
+  const openRenameSimulationDialog = () => {
+    if (!selectedSimulation) return;
+    setSaveDialog({ mode: "update", name: selectedSimulation.name });
   };
   const persistNamedSimulation = async (name) => {
     if (!saveDialog) return;
@@ -960,18 +1171,23 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     return (
       <section className="simulation-page">
         <div className="simulation-library">
-          <div className="simulation-library-head">
+          <div className="simulation-library-head" data-simulation-tour="library">
             <div>
               <p className="eyebrow">Simulador financeiro</p>
               <h2>Escolha uma simulação ou comece uma nova.</h2>
             </div>
-            <button className="btn btn-primary" type="button" onClick={startNewSimulation}>
-              <Plus size={16} /> Criar nova
-            </button>
+            <div className="simulation-library-actions">
+              <button className="icon-btn simulation-help-button" type="button" onClick={openTutorial} aria-label="Abrir tutorial do simulador" title="Como usar o simulador">
+                <CircleHelp size={19} />
+              </button>
+              <button className="btn btn-primary" type="button" onClick={startNewSimulation}>
+                <Plus size={16} /> Criar nova
+              </button>
+            </div>
           </div>
 
           <div className="simulation-library-grid">
-            <button className="simulation-create-card" type="button" onClick={startNewSimulation}>
+            <button className="simulation-create-card" type="button" onClick={startNewSimulation} data-simulation-tour="create">
               <span><Plus size={22} /></span>
               <strong>Nova simulação</strong>
               <small>Monte um cenário temporário sem alterar dados reais.</small>
@@ -1004,6 +1220,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           )}
         </div>
+        <SimulationTutorial open={tutorialOpen} stepIndex={tutorialStep} startStep={tutorialStartStep} onBack={returnTutorial} onClose={closeTutorial} onNext={advanceTutorial} />
       </section>
     );
   }
@@ -1011,11 +1228,28 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   return (
     <section className="simulation-page">
       <div className="simulation-editor-bar">
-        <button className="btn btn-ghost compact" type="button" onClick={closeEditor}>
-          <ArrowLeft size={16} /> Simulações
-        </button>
-        <div>
-          <button className="btn btn-ghost compact" type="button" onClick={saveCurrentSimulation} disabled={savingSimulation}>
+        <div className="simulation-editor-context">
+          <button className="btn btn-ghost compact" type="button" onClick={closeEditor}>
+            <ArrowLeft size={16} /> Simulações
+          </button>
+          {selectedSimulation && (
+            <button
+              className="simulation-editor-name"
+              type="button"
+              onClick={openRenameSimulationDialog}
+              aria-label={`Editar nome da simulação ${selectedSimulation.name}`}
+              title="Editar nome"
+            >
+              <span>{selectedSimulation.name}</span>
+              <Pencil size={14} />
+            </button>
+          )}
+        </div>
+        <div className="simulation-editor-actions">
+          <button className="icon-btn simulation-help-button" type="button" onClick={openTutorial} aria-label="Abrir tutorial do simulador" title="Como usar o simulador">
+            <CircleHelp size={19} />
+          </button>
+          <button className="btn btn-ghost compact" type="button" onClick={saveCurrentSimulation} disabled={savingSimulation} data-simulation-tour="save">
             <Save size={16} /> {savingSimulation ? "Salvando..." : "Salvar"}
           </button>
           <button className="btn btn-ghost compact danger-soft" type="button" onClick={deleteCurrentSimulation} disabled={savingSimulation}>
@@ -1033,7 +1267,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             <LineChartIcon size={22} />
           </div>
 
-          <div className="simulation-balance-box">
+          <div className="simulation-balance-box" data-simulation-tour="balance">
             <span>Saldo atual</span>
             <strong>{loading ? "Carregando..." : formatMoney(baseBalance, language)}</strong>
           </div>
@@ -1043,7 +1277,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             <span><i /> Incluir lançamentos já cadastrados</span>
           </label>
 
-          <section className={`simulation-planning ${planningCollapsed ? "collapsed" : ""}`}>
+          <section className={`simulation-planning ${planningCollapsed ? "collapsed" : ""}`} data-simulation-tour="planning">
             <div className="simulation-planning-head">
               <div>
                 <span><PiggyBank size={18} /> Planejamento</span>
@@ -1184,7 +1418,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           )}
 
-          <div className="simulation-items">
+          <div className="simulation-items" data-simulation-tour="items">
             {items.map((item, index) => (
               <SimulatedItemCard
                 key={item.id}
@@ -1204,7 +1438,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             )}
           </div>
 
-          <div className="simulation-actions">
+          <div className="simulation-actions" data-simulation-tour="actions">
             <button className="btn btn-ghost" type="button" onClick={addItem}>
               <Plus size={16} /> Adicionar item simulado
             </button>
@@ -1218,7 +1452,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         </aside>
 
         <div className="simulation-results">
-          <section className="card simulation-summary-card">
+          <section className="card simulation-summary-card" data-simulation-tour="results">
             <div className="simulation-summary-head">
               <div>
                 <p className="eyebrow">Resumo</p>
@@ -1414,6 +1648,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           onConfirm={decisionDialog.onConfirm}
         />
       )}
+      <SimulationTutorial open={tutorialOpen} stepIndex={tutorialStep} startStep={tutorialStartStep} onBack={returnTutorial} onClose={closeTutorial} onNext={advanceTutorial} />
     </section>
   );
 }
