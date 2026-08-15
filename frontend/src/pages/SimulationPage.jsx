@@ -493,50 +493,86 @@ const SIMULATION_TUTORIAL_STEPS = [
     target: "library",
     eyebrow: "Boas-vindas",
     title: "Seus cenários ficam organizados aqui",
-    description: "Crie cenários para testar decisões financeiras sem alterar seus lançamentos. Simulações salvas podem ser abertas novamente em qualquer aparelho."
+    description: "Crie cenários para testar decisões sem alterar suas finanças reais. Um rascunho fica somente neste aparelho; uma simulação salva permanece disponível na sua conta para continuar depois."
   },
   {
     target: "create",
     eyebrow: "Primeiro passo",
     title: "Comece uma nova simulação",
-    description: "Você também pode continuar um rascunho deste aparelho ou abrir uma simulação já salva.",
+    description: "Use este card para começar do zero. Se já houver conteúdo, você também poderá continuar o rascunho local ou abrir uma das simulações salvas.",
     nextLabel: "Abrir editor"
   },
   {
     target: "balance",
     eyebrow: "Ponto de partida",
-    title: "Confira o saldo usado na projeção",
-    description: "Ative “Incluir lançamentos já cadastrados” para combinar o cenário com receitas, gastos e faturas que já existem."
+    title: "Confira o saldo atual",
+    description: "Este é o saldo usado como início da projeção. Ele vem dos seus dados financeiros e serve de referência para comparar o cenário com a sua situação atual."
+  },
+  {
+    target: "real-data",
+    eyebrow: "Dados existentes",
+    title: "Escolha o que entra na projeção",
+    description: "Mantenha esta opção ativa para considerar receitas, gastos e faturas já cadastrados. Desative-a quando quiser analisar somente os itens criados dentro da simulação."
   },
   {
     target: "planning",
-    eyebrow: "Planejamento",
-    title: "Defina sua reserva mensal",
-    description: "Primeiro escolha quanto deseja reservar por mês. Depois, use as categorias para planejar o dinheiro livre sem descontá-lo novamente."
+    eyebrow: "Reserva mensal",
+    title: "Defina quanto pretende reservar",
+    description: "A reserva é opcional. Escolha percentual ou valor fixo, o mês inicial e, se desejar, um mês limite. Você também pode calculá-la sobre todas as receitas ou somente sobre receitas simuladas selecionadas."
+  },
+  {
+    target: "categories",
+    eyebrow: "Dinheiro livre",
+    title: "Organize o valor restante em categorias",
+    description: "Cadastre categorias mesmo sem criar uma reserva. Cada uma pode receber um valor fixo mensal ou um percentual do dinheiro livre e pode ser recolhida pelo próprio nome. Elas apenas distribuem o disponível: não são descontadas novamente nem alteram o saldo projetado."
   },
   {
     target: "items",
-    eyebrow: "Cenário",
+    eyebrow: "Itens simulados",
     title: "Monte o cenário com receitas e gastos",
-    description: "Cada item pode ser à vista, parcelado ou recorrente. Informe valor e mês inicial para enxergar o impacto ao longo do tempo."
+    description: "Gastos podem ser à vista ou parcelados; receitas podem ser únicas ou recorrentes. Informe descrição, valor e mês inicial. Em itens repetidos, também é possível definir valores diferentes por parcela ou mês e recolher cada card pelo nome."
   },
   {
     target: "actions",
-    eyebrow: "Começar a usar",
-    title: "Adicione um item e clique em Simular",
-    description: "Você pode ajustar os dados quantas vezes quiser. Até efetivar os itens, nenhum lançamento real é criado."
+    eyebrow: "Calcular cenário",
+    title: "Aplique as alterações com Simular",
+    description: "Adicione quantos itens precisar e clique em “Simular” para atualizar os resultados. “Limpar tudo” remove os itens do editor, mas uma simulação já salva só muda quando você salvar novamente. Nenhuma dessas ações cria lançamentos reais."
   },
   {
     target: "results",
-    eyebrow: "Leitura do cenário",
-    title: "Acompanhe o resultado da projeção",
-    description: "O resumo mostra o impacto e o saldo projetado. Mais abaixo, gráficos e a tabela mensal ajudam a encontrar períodos de aperto."
+    eyebrow: "Resumo",
+    title: "Leia os principais resultados",
+    description: "Compare o saldo projetado, a reserva planejada e o dinheiro livre do período. Abra os indicadores complementares para ver médias e extremos. Se alguma meta ou mês ficar negativo, o alerta indica onde revisar."
+  },
+  {
+    target: "projection-chart",
+    eyebrow: "Comparação visual",
+    title: "Compare os saldos ao longo do tempo",
+    description: "O gráfico coloca lado a lado a evolução sem a simulação e com a simulação. Passe o cursor sobre cada mês para conferir os valores e a diferença causada pelo cenário."
+  },
+  {
+    target: "category-results",
+    eyebrow: "Distribuição",
+    title: "Acompanhe suas categorias",
+    description: "Veja quanto cada categoria recebe no mês atual e em todo o período. “Dinheiro livre não planejado” mostra o que ainda restou depois dessa distribuição, sem realizar um novo desconto."
+  },
+  {
+    target: "planning-chart",
+    eyebrow: "Reserva e valor livre",
+    title: "Entenda a sustentabilidade do plano",
+    description: "Este gráfico mostra a reserva acumulada e o dinheiro livre de cada mês. Use-o para identificar quando a meta de reserva está consumindo mais do que o orçamento mensal comporta."
+  },
+  {
+    target: "monthly-table",
+    eyebrow: "Detalhamento mensal",
+    title: "Abra cada mês para conferir a composição",
+    description: "A tabela reúne receitas, despesas, reserva, dinheiro livre e saldo final. Clique em uma linha para separar valores cadastrados e simulados e consultar a reserva, as categorias e o dinheiro ainda não planejado daquele mês."
   },
   {
     target: "save",
     eyebrow: "Quando terminar",
-    title: "Salve ou transforme o cenário em lançamentos",
-    description: "Salvar mantém a simulação para consultas futuras. “Inserir itens no sistema”, no fim dos resultados, efetiva somente os itens que você confirmar.",
+    title: "Salve ou efetive somente os itens",
+    description: "Clique no nome para renomear e em “Salvar” para guardar todo o cenário; “Excluir” remove a simulação salva. No fim da página, “Inserir itens no sistema” cria apenas as receitas e os gastos confirmados: reserva e categorias continuam sendo planejamento.",
     nextLabel: "Concluir"
   }
 ];
@@ -615,7 +651,7 @@ function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNex
   const totalSteps = SIMULATION_TUTORIAL_STEPS.length - startStep;
 
   return (
-    <div className={`simulation-tutorial-layer ${targetRect ? "has-target" : ""}`} role="dialog" aria-modal="true" aria-labelledby="simulation-tutorial-title">
+    <div className={`simulation-tutorial-layer ${targetRect ? "has-target" : ""}`} role="dialog" aria-modal="true" aria-labelledby="simulation-tutorial-title" aria-describedby="simulation-tutorial-description">
       <button className="simulation-tutorial-backdrop" type="button" onClick={onClose} aria-label="Fechar tutorial" />
       {spotlightStyle && <div className="simulation-tutorial-spotlight" style={spotlightStyle} />}
       <div className="simulation-tutorial-card" style={cardStyle}>
@@ -624,7 +660,7 @@ function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNex
           <button className="icon-btn small" type="button" onClick={onClose} aria-label="Fechar tutorial"><X size={16} /></button>
         </div>
         <h2 id="simulation-tutorial-title">{step.title}</h2>
-        <p>{step.description}</p>
+        <p id="simulation-tutorial-description">{step.description}</p>
         <div className="simulation-tutorial-progress" aria-label={`Etapa ${relativeStep} de ${totalSteps}`}>
           <span>{relativeStep} de {totalSteps}</span>
           <div>{Array.from({ length: totalSteps }, (_, index) => <i className={index < relativeStep ? "active" : ""} key={index} />)}</div>
@@ -644,7 +680,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const { user } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
-  const tutorialStorageKey = `kashy365_simulation_tutorial_v1_${user?.id || "local"}`;
+  const tutorialStorageKey = `kashy365_simulation_tutorial_v2_${user?.id || "local"}`;
   const [items, setItems] = useState([]);
   const [activeItems, setActiveItems] = useState([]);
   const [includeReal, setIncludeReal] = useState(true);
@@ -674,6 +710,14 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [tutorialStartStep, setTutorialStartStep] = useState(0);
+
+  useEffect(() => {
+    if (!tutorialOpen || !editorOpen) return;
+    const target = SIMULATION_TUTORIAL_STEPS[tutorialStep]?.target;
+    if (target === "planning") setPlanningCollapsed(false);
+    if (target === "categories") setCategoriesCollapsed(false);
+    if (target === "items") setItemsCollapsed(false);
+  }, [editorOpen, tutorialOpen, tutorialStep]);
 
   const refreshSavedSimulations = async () => {
     try {
@@ -1354,7 +1398,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             <strong>{loading ? "Carregando..." : formatMoney(baseBalance, language)}</strong>
           </div>
 
-          <label className={`switch-row simulation-switch ${includeReal ? "active" : ""}`}>
+          <label className={`switch-row simulation-switch ${includeReal ? "active" : ""}`} data-simulation-tour="real-data">
             <input type="checkbox" checked={includeReal} onChange={(event) => setIncludeReal(event.target.checked)} />
             <span><i /> Incluir lançamentos já cadastrados</span>
           </label>
@@ -1483,7 +1527,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             )}
           </section>
 
-          <section className={`simulation-categories-panel ${categoriesCollapsed ? "collapsed" : ""}`}>
+          <section className={`simulation-categories-panel ${categoriesCollapsed ? "collapsed" : ""}`} data-simulation-tour="categories">
             <div className="simulation-categories-head">
               <div>
                 <strong>Categorias do dinheiro livre</strong>
@@ -1681,7 +1725,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             )}
           </section>
 
-          <section className="card simulation-chart-card">
+          <section className="card simulation-chart-card" data-simulation-tour="projection-chart">
             <h2>Projeção de saldo</h2>
             <div className="simulation-chart-scroll">
               <div className="simulation-chart-inner">
@@ -1701,7 +1745,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           </section>
 
-          <section className="card simulation-category-card">
+          <section className="card simulation-category-card" data-simulation-tour="category-results">
             <div className="simulation-summary-head">
               <div>
                 <p className="eyebrow">Categorias</p>
@@ -1742,7 +1786,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           </section>
 
-          <section className="card simulation-chart-card">
+          <section className="card simulation-chart-card" data-simulation-tour="planning-chart">
             <h2>Reserva e dinheiro livre</h2>
             <div className="simulation-chart-scroll">
               <div className="simulation-chart-inner planning-chart">
@@ -1762,7 +1806,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           </section>
 
-          <section className="card simulation-table-card">
+          <section className="card simulation-table-card" data-simulation-tour="monthly-table">
             <h2>Tabela mensal da projeção</h2>
             <div className="simulation-table-wrap">
               <div className="simulation-table">
