@@ -62,6 +62,24 @@ def _validate_reserve(mode: str, value: Decimal) -> None:
         raise HTTPException(status_code=400, detail="Reserve percentage cannot exceed 100")
 
 
+def _serialize_allocation_categories(categories) -> list[dict]:
+    serialized = []
+    seen_ids = set()
+    for category in categories or []:
+        category_id = str(category.id or "").strip()[:64]
+        name = str(category.name or "").strip()[:80]
+        value = _money(category.value)
+        if not category_id or category_id in seen_ids:
+            raise HTTPException(status_code=400, detail="Allocation category ids must be unique")
+        if not name:
+            raise HTTPException(status_code=400, detail="Allocation category name is required")
+        if category.mode == "percentage" and value > Decimal("100"):
+            raise HTTPException(status_code=400, detail="Allocation percentage cannot exceed 100")
+        seen_ids.add(category_id)
+        serialized.append({"id": category_id, "name": name, "mode": category.mode, "value": float(value)})
+    return serialized
+
+
 def _validate_reserve_sources(positions: list[int] | None, items) -> None:
     selected_positions = positions or []
     if len(selected_positions) != len(set(selected_positions)):
@@ -142,6 +160,7 @@ def preview_simulation(
     if end_index < start_index or end_index - start_index >= 120:
         raise HTTPException(status_code=400, detail="Simulation period must contain between 1 and 120 months")
     _validate_reserve(payload.reserve_mode, payload.reserve_value)
+    _serialize_allocation_categories(payload.allocation_categories)
     for item in payload.items:
         _validate_item(item)
     _validate_reserve_sources(payload.reserve_source_item_positions, payload.items)
@@ -175,6 +194,7 @@ def preview_simulation(
         reserve_start_month=payload.reserve_start_month,
         reserve_end_month=payload.reserve_end_month,
         reserve_source_item_positions=payload.reserve_source_item_positions,
+        allocation_categories=payload.allocation_categories,
     )
 
 
@@ -196,6 +216,7 @@ def create_simulation(
     _validate_reserve(payload.reserve_mode, payload.reserve_value)
     _validate_reserve_period(payload.reserve_start_month, payload.reserve_end_month)
     _validate_reserve_sources(payload.reserve_source_item_positions, payload.items)
+    allocation_categories = _serialize_allocation_categories(payload.allocation_categories)
     simulation = Simulation(
         user_id=current_user.id,
         name=_validate_name(payload.name),
@@ -205,6 +226,7 @@ def create_simulation(
         reserve_start_month=payload.reserve_start_month,
         reserve_end_month=payload.reserve_end_month,
         reserve_source_item_positions=payload.reserve_source_item_positions,
+        allocation_categories=allocation_categories,
     )
     db.add(simulation)
     _replace_items(simulation, payload.items)
@@ -238,6 +260,8 @@ def update_simulation(
         simulation.reserve_end_month = payload.reserve_end_month
     if "reserve_source_item_positions" in payload.model_fields_set:
         simulation.reserve_source_item_positions = payload.reserve_source_item_positions or []
+    if "allocation_categories" in payload.model_fields_set:
+        simulation.allocation_categories = _serialize_allocation_categories(payload.allocation_categories)
     _validate_reserve(simulation.reserve_mode, simulation.reserve_value)
     _validate_reserve_period(simulation.reserve_start_month, simulation.reserve_end_month)
     if payload.items is not None:

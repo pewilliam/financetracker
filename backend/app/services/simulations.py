@@ -118,15 +118,29 @@ def calculate_planning(
     reserve_start_month: str | None = None,
     reserve_end_month: str | None = None,
     reserve_source_item_positions: Iterable[int] | None = None,
+    allocation_categories: Iterable | None = None,
 ) -> dict:
-    """Calculate balances and planned allocations without treating reserve as an expense."""
+    """Calculate balances and category allocations without treating them as expenses."""
     starting_balance = money(current_balance)
     reserve_setting = money(reserve_value)
     source_positions = set(reserve_source_item_positions or [])
+    categories = []
+    for position, category in enumerate(allocation_categories or []):
+        raw = category if isinstance(category, dict) else category.model_dump()
+        categories.append(
+            {
+                "id": str(raw.get("id") or f"category-{position + 1}"),
+                "name": str(raw.get("name") or "Categoria").strip() or "Categoria",
+                "mode": "percentage" if raw.get("mode") == "percentage" else "fixed",
+                "value": money(raw.get("value")),
+            }
+        )
+    uses_categories = bool(categories)
     impacts = build_item_impacts(items, source_positions)
     rows = []
     simulated_carry = money(0)
     reserve_accumulated = money(0)
+    category_accumulated = {category["id"]: money(0) for category in categories}
 
     for real_month in real_months:
         impact = impacts.get(
@@ -170,9 +184,29 @@ def calculate_planning(
                 if reserve_mode == "percentage"
                 else reserve_setting
             )
+        free_before_allocations = money(income - expenses)
         free_before_simulation = money(real_income - real_expenses - baseline_reserve)
-        free_money = money(income - expenses - planned_reserve)
+        free_money = money(free_before_allocations - planned_reserve)
         reserve_accumulated = money(reserve_accumulated + planned_reserve)
+
+        category_allocations = []
+        remaining_reserve = max(planned_reserve, money(0))
+        for category in categories:
+            requested = (
+                money(planned_reserve * category["value"] / Decimal("100"))
+                if category["mode"] == "percentage"
+                else category["value"]
+            )
+            allocated = money(min(max(requested, money(0)), remaining_reserve))
+            remaining_reserve = money(remaining_reserve - allocated)
+            category_accumulated[category["id"]] = money(category_accumulated[category["id"]] + allocated)
+            category_allocations.append(
+                {
+                    **category,
+                    "allocated": allocated,
+                    "accumulated": category_accumulated[category["id"]],
+                }
+            )
 
         without_simulation = (
             money(real_month.projected_closing) if include_real else starting_balance
@@ -207,12 +241,17 @@ def calculate_planning(
                 "difference": money(final_balance - without_simulation),
                 "reserve_unsustainable": free_money < 0,
                 "simulation_caused_negative": free_money < 0 <= free_before_simulation,
+                "category_allocations": category_allocations,
                 "simulated_items": impact["items"],
             }
         )
 
     total_reserve = money(sum((row["planned_reserve"] for row in rows), Decimal("0")))
     total_free = money(sum((row["free_money"] for row in rows), Decimal("0")))
+    total_free_before_allocations = money(
+        sum((row["income"] - row["expenses"] for row in rows), Decimal("0"))
+    )
+    total_categorized_reserve = money(sum(category_accumulated.values(), Decimal("0")))
     total_reserve_base_income = money(
         sum((row["reserve_base_income"] for row in rows if row["reserve_active"]), Decimal("0"))
     )
@@ -226,6 +265,22 @@ def calculate_planning(
     best_free_row = max(rows, key=lambda row: row["free_money"], default=None)
     worst_balance_row = min(rows, key=lambda row: row["final_balance"], default=None)
     final_row = rows[-1] if rows else None
+    category_summaries = []
+    if uses_categories:
+        first_allocations = {
+            allocation["id"]: allocation for allocation in (rows[0]["category_allocations"] if rows else [])
+        }
+        for category in categories:
+            category_summaries.append(
+                {
+                    **category,
+                    "current_month_allocated": first_allocations.get(category["id"], {}).get("allocated", money(0)),
+                    "total_allocated": category_accumulated[category["id"]],
+                }
+            )
+    current_categorized_reserve = money(
+        sum((allocation["allocated"] for allocation in (rows[0]["category_allocations"] if rows else [])), Decimal("0"))
+    )
 
     return {
         "rows": rows,
@@ -236,6 +291,9 @@ def calculate_planning(
             "simulated_impact": final_row["difference"] if final_row else money(0),
             "total_planned_reserve": total_reserve,
             "total_free_money": total_free,
+            "total_free_money_before_allocations": total_free_before_allocations,
+            "current_uncategorized_reserve": money((rows[0]["planned_reserve"] if rows else money(0)) - current_categorized_reserve),
+            "total_uncategorized_reserve": money(total_reserve - total_categorized_reserve),
             "total_reserve_base_income": total_reserve_base_income,
             "average_free_money": average_free,
             "average_reserve_rate": average_rate,
@@ -247,5 +305,6 @@ def calculate_planning(
             "minimum_balance": worst_balance_row["final_balance"] if worst_balance_row else starting_balance,
             "negative_free_months": [row["month"] for row in rows if row["free_money"] < 0],
             "simulation_negative_months": [row["month"] for row in rows if row["simulation_caused_negative"]],
+            "category_summaries": category_summaries,
         },
     }

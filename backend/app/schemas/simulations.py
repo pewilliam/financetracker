@@ -5,6 +5,13 @@ from pydantic import Field
 from app.schemas.base import APIModel
 
 
+class SimulationAllocationCategory(APIModel):
+    id: str
+    name: str
+    mode: Literal["percentage", "fixed"] = "fixed"
+    value: Decimal = Field(default=Decimal("0.00"), ge=0)
+
+
 class SimulationItemPayload(APIModel):
     description: str = ""
     type: str
@@ -25,6 +32,7 @@ class SimulationCreate(APIModel):
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: List[int] = []
+    allocation_categories: List[SimulationAllocationCategory] = []
     items: List[SimulationItemPayload] = []
 
 
@@ -36,6 +44,7 @@ class SimulationUpdate(APIModel):
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: Optional[List[int]] = None
+    allocation_categories: Optional[List[SimulationAllocationCategory]] = None
     items: Optional[List[SimulationItemPayload]] = None
 
 
@@ -54,6 +63,7 @@ class SimulationOut(APIModel):
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: List[int] = []
+    allocation_categories: List[SimulationAllocationCategory] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     items: List[SimulationItemOut] = []
@@ -68,6 +78,7 @@ class SimulationPreviewPayload(APIModel):
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: List[int] = []
+    allocation_categories: List[SimulationAllocationCategory] = []
     items: List[SimulationItemPayload] = []
 
 
@@ -78,6 +89,16 @@ class SimulationImpactOut(APIModel):
     amount: Decimal
     installment_label: Optional[str] = None
     period_type: Literal["month", "installment"]
+
+
+class SimulationCategoryAllocationOut(SimulationAllocationCategory):
+    allocated: Decimal
+    accumulated: Decimal
+
+
+class SimulationCategorySummaryOut(SimulationAllocationCategory):
+    current_month_allocated: Decimal
+    total_allocated: Decimal
 
 
 class SimulationMonthOut(APIModel):
@@ -100,6 +121,7 @@ class SimulationMonthOut(APIModel):
     difference: Decimal
     reserve_unsustainable: bool
     simulation_caused_negative: bool
+    category_allocations: List[SimulationCategoryAllocationOut] = []
     simulated_items: List[SimulationImpactOut] = []
 
 
@@ -110,6 +132,9 @@ class SimulationPlanningSummaryOut(APIModel):
     simulated_impact: Decimal
     total_planned_reserve: Decimal
     total_free_money: Decimal
+    total_free_money_before_allocations: Decimal = Decimal("0.00")
+    current_uncategorized_reserve: Decimal = Decimal("0.00")
+    total_uncategorized_reserve: Decimal = Decimal("0.00")
     total_reserve_base_income: Decimal
     average_free_money: Decimal
     average_reserve_rate: Decimal
@@ -121,6 +146,7 @@ class SimulationPlanningSummaryOut(APIModel):
     minimum_balance: Decimal
     negative_free_months: List[str] = []
     simulation_negative_months: List[str] = []
+    category_summaries: List[SimulationCategorySummaryOut] = []
 
 
 class SimulationPreviewOut(APIModel):

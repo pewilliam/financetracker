@@ -171,6 +171,38 @@ function ProjectionTooltip({ active, payload, label }) {
   );
 }
 
+function blankAllocationCategory(name = "") {
+  return {
+    id: makeItemId(),
+    name,
+    mode: "fixed",
+    value: ""
+  };
+}
+
+function normalizeAllocationCategories(categories, language) {
+  if (!Array.isArray(categories)) return [];
+  return categories.map((category) => ({
+    id: category.id || makeItemId(),
+    name: category.name || "",
+    mode: category.mode === "percentage" ? "percentage" : "fixed",
+    value: category.mode === "percentage"
+      ? String(Number(category.value || 0))
+      : formatMoney(category.value || 0, language)
+  }));
+}
+
+function allocationCategoryToPayload(category, language) {
+  return {
+    id: category.id,
+    name: category.name.trim(),
+    mode: category.mode,
+    value: category.mode === "percentage"
+      ? Number(category.value || 0)
+      : parseTypedMoneyInput(category.value, language)
+  };
+}
+
 function reserveSourcePositions(draftItems, sourceItemIds) {
   const selectedIds = new Set(sourceItemIds || []);
   return draftItems.reduce((positions, item, position) => {
@@ -479,8 +511,8 @@ const SIMULATION_TUTORIAL_STEPS = [
   {
     target: "planning",
     eyebrow: "Planejamento",
-    title: "Defina uma meta de reserva",
-    description: "Planeje quanto deseja guardar por mês, por quanto tempo e sobre quais receitas. A reserva reduz o dinheiro livre, mas não é tratada como despesa."
+    title: "Defina sua reserva mensal",
+    description: "Primeiro escolha quanto deseja reservar por mês. Depois, use as categorias para distribuir essa reserva sem descontar o dinheiro livre novamente."
   },
   {
     target: "items",
@@ -621,6 +653,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [reserveStartMonth, setReserveStartMonth] = useState(currentMonthValue());
   const [reserveEndMonth, setReserveEndMonth] = useState("");
   const [reserveSourceItemIds, setReserveSourceItemIds] = useState([]);
+  const [allocationCategories, setAllocationCategories] = useState([]);
   const [planningCollapsed, setPlanningCollapsed] = useState(true);
   const [planningResult, setPlanningResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -672,10 +705,14 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveStartMonth(currentMonthValue());
     setReserveEndMonth("");
     setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     try {
       const storedDraft = JSON.parse(localStorage.getItem(storageKey) || "[]");
       const restoredItems = normalizeRestoredItems(Array.isArray(storedDraft) ? storedDraft : storedDraft.items);
-      const hasStoredPlanning = !Array.isArray(storedDraft) && Boolean(storedDraft.reserveValue);
+      const storedCategories = !Array.isArray(storedDraft)
+        ? normalizeAllocationCategories(storedDraft.allocationCategories, language)
+        : [];
+      const hasStoredPlanning = storedCategories.length > 0 || (!Array.isArray(storedDraft) && Boolean(storedDraft.reserveValue));
       if (!Array.isArray(storedDraft)) {
         setIncludeReal(storedDraft.includeReal !== false);
         setReserveMode(storedDraft.reserveMode === "fixed" ? "fixed" : "percentage");
@@ -687,6 +724,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           : storedDraft.reserveSourceItemId && storedDraft.reserveSourceItemId !== "all"
             ? [storedDraft.reserveSourceItemId]
             : []);
+        setAllocationCategories(storedCategories);
       }
       if (restoredItems.length || hasStoredPlanning) {
         setItems(restoredItems);
@@ -725,15 +763,15 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   useEffect(() => {
     if (!storageReady) return;
     try {
-      if (!localDraftEnabled || (!items.length && !reserveValue)) {
+      if (!localDraftEnabled || (!items.length && !reserveValue && !allocationCategories.length)) {
         localStorage.removeItem(storageKey);
         return;
       }
-      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth, reserveEndMonth, reserveSourceItemIds }));
+      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth, reserveEndMonth, reserveSourceItemIds, allocationCategories }));
     } catch {
       // localStorage can be unavailable in private contexts.
     }
-  }, [includeReal, items, localDraftEnabled, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, storageKey, storageReady]);
+  }, [allocationCategories, includeReal, items, localDraftEnabled, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, storageKey, storageReady]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveItems(items), 500);
@@ -762,6 +800,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     const start = monthIndex(currentMonthValue());
     return Array.from({ length: endIndex - start + 1 }, (_, offset) => monthFromIndex(start + offset));
   }, [endIndex]);
+  const validAllocationCategories = useMemo(() => allocationCategories.filter((category) => category.name.trim()), [allocationCategories]);
 
   useEffect(() => {
     let mounted = true;
@@ -777,6 +816,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           reserve_start_month: reserveStartMonth,
           reserve_end_month: reserveEndMonth || null,
           reserve_source_item_positions: reserveSourcePositions(activeItems, reserveSourceItemIds),
+          allocation_categories: validAllocationCategories.map((category) => allocationCategoryToPayload(category, language)),
           items: activeItems.map((item) => draftItemToPayload(item, language))
         });
         if (!mounted) return;
@@ -790,7 +830,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     }
     loadProjection();
     return () => { mounted = false; };
-  }, [activeItems, includeReal, language, months, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue]);
+  }, [activeItems, includeReal, language, months, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, validAllocationCategories]);
 
   const rows = useMemo(() => (planningResult?.rows || []).map((row, index) => {
     const [year, month] = row.month.split("-").map(Number);
@@ -815,6 +855,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
       reserveBaseIncome: Number(row.reserve_base_income || 0),
       freeMoney: Number(row.free_money || 0),
       reserveActive: Boolean(row.reserve_active),
+      categoryAllocations: row.category_allocations || [],
       isCurrent: index === 0
     };
   }), [language, planningResult]);
@@ -843,6 +884,9 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const reservePeriodLabel = reserveEndMonth
     ? `de ${formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)} até ${formatMonthLabel(...reserveEndMonth.split("-").map(Number), language)}`
     : `a partir de ${formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}`;
+  const categorySummaries = summary.category_summaries || [];
+  const currentFreeBeforeAllocations = rows.length ? rows[0].income - rows[0].expenses : 0;
+  const currentFreeAfterAllocations = rows[0]?.freeMoney || 0;
 
   const updateItem = (id, patch) => {
     enableLocalDraft();
@@ -855,6 +899,18 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const addItem = () => {
     enableLocalDraft();
     setItems((current) => [...current, blankItem()]);
+  };
+  const addAllocationCategory = () => {
+    enableLocalDraft();
+    setAllocationCategories((current) => [...current, blankAllocationCategory()]);
+  };
+  const updateAllocationCategory = (id, patch) => {
+    enableLocalDraft();
+    setAllocationCategories((current) => current.map((category) => category.id === id ? { ...category, ...patch } : category));
+  };
+  const removeAllocationCategory = (id) => {
+    enableLocalDraft();
+    setAllocationCategories((current) => current.filter((category) => category.id !== id));
   };
   const clearItems = () => {
     if (!items.length) return;
@@ -882,6 +938,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveStartMonth(currentMonthValue());
     setReserveEndMonth("");
     setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     setRestored(false);
     clearLocalDraft();
   };
@@ -895,12 +952,13 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveStartMonth(currentMonthValue());
     setReserveEndMonth("");
     setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     clearLocalDraft();
   };
   const simulateNow = () => setActiveItems(items);
   const toggleRow = (value) => setExpandedRows((current) => ({ ...current, [value]: !current[value] }));
   const selectedSimulation = savedSimulations.find((simulation) => String(simulation.id) === String(selectedSimulationId));
-  const hasLocalDraft = items.length > 0 || Boolean(reserveValue);
+  const hasLocalDraft = items.length > 0 || Boolean(reserveValue) || allocationCategories.length > 0;
   const setPlanningMode = (mode) => {
     if (mode === reserveMode) return;
     enableLocalDraft();
@@ -915,6 +973,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     reserve_start_month: reserveStartMonth,
     reserve_end_month: reserveEndMonth || null,
     reserve_source_item_positions: reserveSourcePositions(items, reserveSourceItemIds),
+    allocation_categories: validAllocationCategories.map((category) => allocationCategoryToPayload(category, language)),
     items: items.map((item) => draftItemToPayload(item, language))
   });
   const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
@@ -928,6 +987,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setReserveStartMonth(currentMonthValue());
     setReserveEndMonth("");
     setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     setExpandedRows({});
     setRestored(false);
     setLocalDraftEnabled(true);
@@ -1049,6 +1109,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         .map((position) => loadedItems[position])
         .filter((item) => item?.type === "income")
         .map((item) => item.id));
+      const loadedCategories = normalizeAllocationCategories(saved.allocation_categories, language);
+      setAllocationCategories(loadedCategories);
       setSelectedSimulationId(String(saved.id));
       setLocalDraftEnabled(false);
       setRestored(false);
@@ -1197,7 +1259,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <button className="simulation-card simulation-draft-card" type="button" onClick={openDraftSimulation}>
                 <span className="simulation-card-kicker">Rascunho local</span>
                 <strong>Continuar simulação não salva</strong>
-                <small>{items.length} {items.length === 1 ? "item simulado" : "itens simulados"} · planejamento de reserva</small>
+                <small>{items.length} {items.length === 1 ? "item simulado" : "itens simulados"} · {allocationCategories.length} {allocationCategories.length === 1 ? "categoria" : "categorias"}</small>
                 <em>Salvo apenas neste aparelho</em>
               </button>
             )}
@@ -1206,7 +1268,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <button className="simulation-card" type="button" key={simulation.id} onClick={() => loadSavedSimulation(simulation.id)}>
                 <span className="simulation-card-kicker">Simulação salva</span>
                 <strong>{simulation.name}</strong>
-                <small>{simulation.items?.length || 0} {(simulation.items?.length || 0) === 1 ? "item" : "itens"} simulados</small>
+                <small>{simulation.items?.length || 0} {(simulation.items?.length || 0) === 1 ? "item" : "itens"} simulados · {simulation.allocation_categories?.length || 0} {(simulation.allocation_categories?.length || 0) === 1 ? "categoria" : "categorias"}</small>
                 <em>Atualizada em {formatSavedDate(simulation.updated_at || simulation.created_at, language)}</em>
               </button>
             ))}
@@ -1286,7 +1348,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                     ? `${reserveMode === "percentage"
                       ? `${Number(reserveValue || 0).toLocaleString(language, { maximumFractionDigits: 2 })}%`
                       : formatMoney(parseTypedMoneyInput(reserveValue, language), language)} · ${reserveSourceLabel} · ${reservePeriodLabel}`
-                    : "Meta mensal de reserva"}
+                    : "Defina quanto reservar por mês"}
                 </small>
               </div>
               <button
@@ -1294,7 +1356,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                 className="simulation-planning-collapse"
                 onClick={() => setPlanningCollapsed((collapsed) => !collapsed)}
                 aria-expanded={!planningCollapsed}
-                aria-label={planningCollapsed ? "Expandir planejamento de reserva" : "Minimizar planejamento de reserva"}
+                aria-label={planningCollapsed ? "Expandir planejamento da reserva" : "Minimizar planejamento da reserva"}
                 title={planningCollapsed ? "Expandir" : "Minimizar"}
               >
                 {planningCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -1302,13 +1364,13 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
             {!planningCollapsed && (
               <>
-            <div className="segmented-control" aria-label="Modo da meta de reserva">
+            <div className="segmented-control" aria-label="Modo da reserva mensal">
               <button className={reserveMode === "percentage" ? "active" : ""} type="button" onClick={() => setPlanningMode("percentage")}>Percentual</button>
               <button className={reserveMode === "fixed" ? "active" : ""} type="button" onClick={() => setPlanningMode("fixed")}>Valor fixo</button>
             </div>
             <div className="simulation-planning-fields">
               <label className="simulation-reserve-field">
-                <span>Meta mensal</span>
+                <span>Reserva mensal</span>
                 <div>
                   {reserveMode === "percentage" && <b>%</b>}
                   <input
@@ -1367,20 +1429,10 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <div className="simulation-reserve-source">
                 <span>Calcular reserva sobre</span>
                 <details className="simulation-source-picker">
-                  <summary>
-                    <span>{reserveSourceLabel}</span>
-                    <ChevronDown size={15} />
-                  </summary>
+                  <summary><span>{reserveSourceLabel}</span><ChevronDown size={15} /></summary>
                   <div className="simulation-source-options">
                     <label>
-                      <input
-                        type="checkbox"
-                        checked={!reserveSourceItemIds.length}
-                        onChange={() => {
-                          enableLocalDraft();
-                          setReserveSourceItemIds([]);
-                        }}
-                      />
+                      <input type="checkbox" checked={!reserveSourceItemIds.length} onChange={() => { enableLocalDraft(); setReserveSourceItemIds([]); }} />
                       <span>Todas as receitas</span>
                     </label>
                     {simulatedIncomeItems.map((item, index) => (
@@ -1405,10 +1457,68 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
             <div className="simulation-planning-hint">
               <Check size={14} />
-              <span>A meta será calculada sobre {reserveSourceLabel} {reservePeriodLabel}.</span>
+              <span>A reserva será calculada sobre {reserveSourceLabel} {reservePeriodLabel}.</span>
             </div>
               </>
             )}
+          </section>
+
+          <section className="simulation-categories-panel">
+            <div className="simulation-categories-head">
+              <div>
+                <strong>Categorias da reserva</strong>
+                <small>Distribua a reserva sem descontar o dinheiro livre novamente.</small>
+              </div>
+              <span>{allocationCategories.length}</span>
+            </div>
+            <div className="simulation-category-editor">
+              {allocationCategories.map((category, index) => (
+                <article className="simulation-category-form" key={category.id}>
+                  <div className="simulation-category-form-head">
+                    <strong>Categoria {index + 1}</strong>
+                    <button className="icon-btn small danger" type="button" onClick={() => removeAllocationCategory(category.id)} aria-label={`Remover categoria ${category.name || index + 1}`}><X size={14} /></button>
+                  </div>
+                  <label>
+                    <span>Nome</span>
+                    <input maxLength="80" value={category.name} onChange={(event) => updateAllocationCategory(category.id, { name: event.target.value })} placeholder="Ex.: Jogos" />
+                  </label>
+                  <div className="segmented-control" aria-label={`Modo da categoria ${category.name || index + 1}`}>
+                    <button className={category.mode === "percentage" ? "active" : ""} type="button" onClick={() => updateAllocationCategory(category.id, { mode: "percentage", value: "" })}>Percentual</button>
+                    <button className={category.mode === "fixed" ? "active" : ""} type="button" onClick={() => updateAllocationCategory(category.id, { mode: "fixed", value: "" })}>Valor fixo</button>
+                  </div>
+                  <label className="simulation-reserve-field">
+                    <span>{category.mode === "percentage" ? "Percentual da reserva" : "Valor da reserva por mês"}</span>
+                    <div>
+                      {category.mode === "percentage" && <b>%</b>}
+                      <input
+                        type={category.mode === "percentage" ? "number" : "text"}
+                        min={category.mode === "percentage" ? "0" : undefined}
+                        max={category.mode === "percentage" ? "100" : undefined}
+                        step={category.mode === "percentage" ? "1" : undefined}
+                        inputMode="decimal"
+                        placeholder={category.mode === "percentage" ? "Ex.: 40" : "R$ 0,00"}
+                        value={category.value}
+                        onChange={(event) => {
+                          if (category.mode === "fixed") {
+                            updateAllocationCategory(category.id, { value: formatTypedMoneyForEditing(event.target.value, language) });
+                            return;
+                          }
+                          const nextValue = event.target.value;
+                          updateAllocationCategory(category.id, { value: nextValue === "" ? "" : String(Math.min(100, Math.max(0, Number(nextValue)))) });
+                        }}
+                        onBlur={() => updateAllocationCategory(category.id, {
+                          value: category.mode === "fixed"
+                            ? formatTypedMoneyAsCurrency(category.value, language)
+                            : String(Math.min(100, Math.max(0, Number(category.value || 0))))
+                        })}
+                      />
+                    </div>
+                  </label>
+                </article>
+              ))}
+              {!allocationCategories.length && <p className="simulation-category-empty">Você pode cadastrar categorias agora, mesmo sem definir uma reserva.</p>}
+              <button className="btn btn-ghost simulation-add-category" type="button" onClick={addAllocationCategory}><Plus size={15} /> Nova categoria</button>
+            </div>
           </section>
 
           {restored && (
@@ -1478,7 +1588,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <div>
                 <span>Reserva planejada</span>
                 <strong>{formatMoney(summary.total_planned_reserve || 0, language)}</strong>
-                <small>Sobre {reserveSourceLabel}</small>
+                <small>Total no período</small>
               </div>
               <div className={Number(summary.total_free_money || 0) < 0 ? "negative" : "free"}>
                 <span>Dinheiro livre</span>
@@ -1491,7 +1601,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                 <small>Sobre a base selecionada</small>
               </div>
             </div>
-            <p className="simulation-summary-note">A reserva reduz somente o dinheiro livre. Ela não é uma despesa e não altera o saldo projetado.</p>
+            <p className="simulation-summary-note">A reserva reduz o dinheiro livre. As categorias apenas distribuem essa reserva e não alteram o saldo projetado.</p>
 
             <div className="simulation-indicators-head">Indicadores do período</div>
             <div className="simulation-indicators">
@@ -1511,7 +1621,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <div className="simulation-alert">
                 <AlertTriangle size={18} />
                 <span>{negativeFreeRow.plannedReserve > 0
-                  ? `A meta de reserva não é sustentável em ${negativeFreeRow.label}.`
+                  ? `A reserva ultrapassa o dinheiro livre em ${negativeFreeRow.label}.`
                   : `Os compromissos superam as receitas em ${negativeFreeRow.label}.`} O dinheiro livre fica em {formatMoney(negativeFreeRow.freeMoney, language)}.</span>
               </div>
             )}
@@ -1541,6 +1651,61 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                 </ResponsiveContainer>
               </div>
             </div>
+          </section>
+
+          <section className="card simulation-category-card">
+            <div className="simulation-summary-head">
+              <div>
+                <p className="eyebrow">Categorias</p>
+                <h2>Distribuição da reserva</h2>
+              </div>
+              <span>{categorySummaries.length} {categorySummaries.length === 1 ? "categoria" : "categorias"}</span>
+            </div>
+            {categorySummaries.length ? (
+              <div className="simulation-category-overview">
+                {categorySummaries.map((category) => (
+                  <article className="simulation-category-overview-row" key={category.id}>
+                    <div>
+                      <strong>{category.name}</strong>
+                      <small>{category.mode === "percentage"
+                        ? `${Number(category.value || 0).toLocaleString(language, { maximumFractionDigits: 2 })}% da reserva`
+                        : `${formatMoney(category.value || 0, language)} da reserva por mês`}</small>
+                    </div>
+                    <dl>
+                      <div><dt>Usado no mês</dt><dd>{formatMoney(category.current_month_allocated || 0, language)}</dd></div>
+                      <div><dt>Valor total</dt><dd>{formatMoney(category.total_allocated || 0, language)}</dd></div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="simulation-category-card-empty">
+                <PiggyBank size={22} />
+                <span>Cadastre categorias no bloco separado para acompanhar a distribuição da reserva.</span>
+              </div>
+            )}
+            <div className="simulation-free-comparison">
+              <div>
+                <span>Dinheiro livre restante</span>
+                <strong className={currentFreeAfterAllocations < 0 ? "money-expense" : "money-income"}>{formatMoney(currentFreeAfterAllocations, language)}</strong>
+                <small>No mês atual, após a reserva</small>
+              </div>
+              <div>
+                <span>Dinheiro livre total</span>
+                <strong>{formatMoney(currentFreeBeforeAllocations, language)}</strong>
+                <small>No mês atual, antes da reserva</small>
+              </div>
+            </div>
+            <div className="simulation-category-period-total">
+              <span>Comparação no período</span>
+              <strong>{formatMoney(summary.total_free_money || 0, language)} restantes de {formatMoney(summary.total_free_money_before_allocations || 0, language)}</strong>
+            </div>
+            {Number(summary.total_uncategorized_reserve || 0) > 0 && (
+              <div className="simulation-category-unassigned">
+                <span>Reserva ainda sem categoria</span>
+                <strong>{formatMoney(summary.current_uncategorized_reserve || 0, language)} no mês · {formatMoney(summary.total_uncategorized_reserve || 0, language)} no período</strong>
+              </div>
+            )}
           </section>
 
           <section className="card simulation-chart-card">
