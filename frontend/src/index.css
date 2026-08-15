@@ -3044,7 +3044,11 @@ select {
   font-size: 18px;
 }
 .simulation-page {
+  min-width: 0;
   padding-bottom: 18px;
+}
+.app-layout.sidebar-open .content-inner:has(> .simulation-page) {
+  max-width: none;
 }
 .simulation-library {
   display: grid;
@@ -3220,6 +3224,14 @@ select {
   grid-template-columns: minmax(320px, 0.4fr) minmax(0, 0.6fr);
   gap: 20px;
   align-items: start;
+}
+@media (min-width: 1280px) {
+  .app-layout.sidebar-closed .content-inner:has(> .simulation-page) {
+    max-width: 1440px;
+  }
+  .app-layout.sidebar-closed .simulation-layout {
+    grid-template-columns: minmax(320px, 0.3fr) minmax(0, 0.7fr);
+  }
 }
 .simulation-panel {
   position: sticky;
@@ -4015,8 +4027,13 @@ select {
 }
 .simulation-results {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   min-width: 0;
+}
+.simulation-results > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .simulation-summary-card {
   display: grid;
@@ -4440,6 +4457,8 @@ select {
 }
 .simulation-chart-scroll {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -4470,18 +4489,22 @@ select {
   color: var(--muted);
 }
 .simulation-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
 }
 .simulation-table {
-  min-width: 900px;
+  width: 100%;
+  min-width: 680px;
   display: grid;
   gap: 8px;
 }
 .simulation-table-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.1fr) repeat(5, minmax(118px, 0.8fr));
+  grid-template-columns: minmax(170px, 1.2fr) repeat(5, minmax(90px, 0.8fr));
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 .simulation-table-head {
   padding: 0 12px 6px;
@@ -4655,6 +4678,17 @@ select {
 .simulation-month-detail-block b,
 .simulation-month-detail-block small {
   font-size: 12px;
+}
+@media (min-width: 768px) and (max-width: 1180px) {
+  .app-layout.sidebar-open .simulation-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-layout.sidebar-open .simulation-panel {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    scrollbar-gutter: auto;
+  }
 }
 @media (max-width: 1200px) {
   .simulation-month-details {
