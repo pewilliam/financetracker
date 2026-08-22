@@ -17,6 +17,7 @@ export const enUS = {
     futureNet: "Future net {{value}}",
     expenses: "Expenses",
     income: "Income",
+    balance: "Balance",
     finalBalance: "Final balance",
     noFutureInvoices: "No upcoming invoices.",
     noExpenses: "No expenses registered this month.",
