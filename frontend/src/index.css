@@ -735,6 +735,13 @@ select {
 .progress .income { background: var(--income); }
 .wide { grid-column: 1 / -1; }
 .chart-card h2 { margin-bottom: 12px; }
+.chart-card .recharts-default-tooltip {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.chart-card .recharts-tooltip-label { color: var(--text); }
 
 .stack-list { display: grid; gap: 12px; margin-top: 14px; }
 .due-item {
