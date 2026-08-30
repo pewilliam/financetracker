@@ -1,0 +1,21 @@
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy.orm import relationship
+
+from app.database import Base
+
+
+class Category(Base):
+    __tablename__ = "categories"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_categories_user_name"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(80), nullable=False)
+    color = Column(String(7), nullable=False, default="#64748B")
+    created_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("User", back_populates="categories")
+    transactions = relationship("Transaction", back_populates="category")
+    invoice_items = relationship("InvoiceItem", back_populates="category")
+    installment_purchases = relationship("InstallmentPurchase", back_populates="category")
+    recurrences = relationship("Recurrence", back_populates="category")
