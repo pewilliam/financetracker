@@ -25,7 +25,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -395,6 +395,20 @@ export default function AppShell() {
     }
   };
 
+  const saveInstallmentCategory = async (id, categoryId) => {
+    try {
+      const updated = await updateInstallmentCategory(id, categoryId);
+      setInstallmentDetails(updated);
+      setInstallments((current) => current.map((purchase) => purchase.id === updated.id ? updated : purchase));
+      toast.success(categoryId ? "Categoria da compra atualizada" : "Categoria removida da compra");
+      await syncInvoiceAndMonthCollections();
+      return updated;
+    } catch (error) {
+      toast.error("Erro ao atualizar categoria da compra");
+      throw error;
+    }
+  };
+
   const showInstallmentDetails = async (id) => {
     try {
       setInstallmentDetails(await getInstallment(id));
@@ -633,7 +647,7 @@ export default function AppShell() {
       <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} onCreateCategory={saveCategory} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
-      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} />}
+      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
       {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
       {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}

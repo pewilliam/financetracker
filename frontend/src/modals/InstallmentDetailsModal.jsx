@@ -1,16 +1,36 @@
-import { useMemo, useState } from "react";
-import { Check, CreditCard, Pencil, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, CreditCard, Loader2, Pencil, Trash2, X } from "lucide-react";
+import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InstallmentDetailsModal({ purchase, invoices, allowOverdueInvoiceEdits = false, onClose, onDelete, onSaveItem }) {
+export default function InstallmentDetailsModal({ purchase, invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onClose, onDelete, onSaveItem, onSaveCategory }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({ amount: "", invoice_id: "", status: "pending" });
   const [savingId, setSavingId] = useState(null);
+  const [categoryId, setCategoryId] = useState(purchase.category_id ? String(purchase.category_id) : "");
+  const [savingCategory, setSavingCategory] = useState(false);
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
+
+  useEffect(() => {
+    setCategoryId(purchase.category_id ? String(purchase.category_id) : "");
+  }, [purchase.category_id]);
+
+  const saveCategory = async (value) => {
+    const previous = categoryId;
+    setCategoryId(value);
+    setSavingCategory(true);
+    try {
+      await onSaveCategory(purchase.id, value ? Number(value) : null);
+    } catch (error) {
+      setCategoryId(previous);
+    } finally {
+      setSavingCategory(false);
+    }
+  };
 
   const startEdit = (item) => {
     setEditingId(item.id);
@@ -63,6 +83,13 @@ export default function InstallmentDetailsModal({ purchase, invoices, allowOverd
         <div className="modal-titlebar">
           <div className="modal-icon"><CreditCard size={22} /></div>
           <div><p className="eyebrow">{purchase.progress_label}</p><h2>{purchase.description}</h2></div>
+          <div className="installment-category-control">
+            <span>Categoria da compra</span>
+            <div>
+              <CategorySelect className="compact" categories={categories} value={categoryId} onChange={saveCategory} onCreate={onCreateCategory} />
+              {savingCategory && <Loader2 className="spin" size={15} />}
+            </div>
+          </div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-review">

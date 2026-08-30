@@ -29,6 +29,10 @@ class InstallmentItemUpdate(APIModel):
     status: Literal["pending", "refunded", "canceled"] = "pending"
 
 
+class InstallmentCategoryUpdate(APIModel):
+    category_id: Optional[int] = None
+
+
 class InstallmentItemOut(APIModel):
     id: int
     invoice_id: Optional[int] = None

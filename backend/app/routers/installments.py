@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, User
-from app.schemas.installments import InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
+from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
 from app.services.categories import get_user_category
@@ -295,6 +295,45 @@ def create_installment(
             .selectinload(Invoice.template),
         )
         .filter(InstallmentPurchase.id == purchase.id)
+        .first()
+    )
+    return _purchase_summary(purchase)
+
+
+@router.patch("/{purchase_id}/category", response_model=InstallmentPurchaseOut)
+def update_installment_category(
+    purchase_id: int,
+    payload: InstallmentCategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_user_category(db, current_user.id, payload.category_id)
+    purchase = (
+        db.query(InstallmentPurchase)
+        .options(selectinload(InstallmentPurchase.items))
+        .filter(InstallmentPurchase.id == purchase_id, InstallmentPurchase.user_id == current_user.id)
+        .first()
+    )
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Installment purchase not found")
+
+    purchase.category_id = payload.category_id
+    refund_item_ids = [item.refund_invoice_item_id for item in purchase.items if item.refund_invoice_item_id]
+    if refund_item_ids:
+        db.query(InvoiceItem).filter(InvoiceItem.id.in_(refund_item_ids)).update(
+            {InvoiceItem.category_id: payload.category_id},
+            synchronize_session=False,
+        )
+    db.commit()
+
+    purchase = (
+        db.query(InstallmentPurchase)
+        .options(
+            selectinload(InstallmentPurchase.items)
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.template),
+        )
+        .filter(InstallmentPurchase.id == purchase_id, InstallmentPurchase.user_id == current_user.id)
         .first()
     )
     return _purchase_summary(purchase)
