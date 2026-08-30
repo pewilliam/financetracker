@@ -159,6 +159,17 @@ export function createCategory(payload) {
   });
 }
 
+export function updateCategory(id, payload) {
+  return request(`/categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteCategory(id) {
+  return request(`/categories/${id}`, { method: "DELETE" });
+}
+
 export function updateInvoice(id, payload) {
   return request(`/invoices/${id}`, {
     method: "PUT",

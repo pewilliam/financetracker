@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { BarChart3, CalendarDays, ChartNoAxesCombined, CreditCard, ChevronsLeft, ChevronsRight, List, LogOut, Moon, Settings, Sun, Wallet } from "lucide-react";
+import { BarChart3, CalendarDays, ChartNoAxesCombined, CreditCard, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun, Wallet } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
@@ -15,7 +15,6 @@ function SidebarContent({ open, setOpen, onClose }) {
     [t("sidebar.dashboard"), "/", BarChart3],
     [t("sidebar.months"), "/meses", CalendarDays],
     [t("sidebar.invoices"), "/faturas", CreditCard],
-    [t("sidebar.invoiceModels"), "/modelos-de-fatura", List],
     [t("sidebar.installments"), "/parcelamentos", CreditCard],
     [t("sidebar.simulator"), "/simulador", ChartNoAxesCombined],
     [t("sidebar.receivables"), "/recebiveis", Wallet]

@@ -6,7 +6,7 @@ import InvoiceTemplateModal from "../modals/InvoiceTemplateModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { defaultTemplateForm, normalizeInvoiceColor } from "../app/helpers.js";
 
-export default function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete }) {
+export default function InvoiceTemplatesPage({ templates, onSave, onToggle, onDelete, embedded = false }) {
   const location = useLocation();
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -30,9 +30,12 @@ export default function InvoiceTemplatesPage({ templates, onSave, onToggle, onDe
   };
 
   return (
-    <section>
-      <div className="section-head">
-        <div><p className="eyebrow">{tt("invoiceModels.title", "Modelos de fatura")}</p><h2>{tt("invoiceModels.manage", "Gerenciar modelos")}</h2></div>
+    <section className={embedded ? "invoice-models-embedded" : ""}>
+      <div className={embedded ? "settings-models-toolbar" : "section-head"}>
+        <div>
+          {!embedded && <p className="eyebrow">{tt("invoiceModels.title", "Modelos de fatura")}</p>}
+          <h2>{embedded ? `${templates.length} ${templates.length === 1 ? tt("invoiceModels.model", "modelo") : tt("invoiceModels.models", "modelos")}` : tt("invoiceModels.manage", "Gerenciar modelos")}</h2>
+        </div>
         <button className="btn btn-primary" onClick={() => setEditingTemplate(defaultTemplateForm())}><Plus size={16} /> {tt("invoiceModels.newModel", "Novo modelo")}</button>
       </div>
       <div className="template-list card">

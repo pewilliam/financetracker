@@ -269,7 +269,7 @@ export default function InvoiceCard({ invoice, categories = [], onCreateCategory
       )}
 
       <div className="invoice-template-footer">
-        <Link to={`/modelos-de-fatura#template-${invoice.template_id}`}>{tt("invoices.model", "Modelo:")} {invoice.name} →</Link>
+        <Link to={`/configuracoes?secao=modelos#template-${invoice.template_id}`}>{tt("invoices.model", "Modelo:")} {invoice.name} →</Link>
       </div>
       <div className="invoice-actions">
         <button className="btn btn-ghost" onClick={() => onDuplicateNext(invoice)}>

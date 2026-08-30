@@ -6,10 +6,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Transaction, User
+from fastapi import HTTPException
+
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Recurrence, Transaction, User
+from app.routers.categories import delete_category, update_category
 from app.routers.installments import update_installment_category
 from app.routers.months import get_category_breakdown
 from app.routers.receivables import mark_receivable_paid
+from app.schemas.categories import CategoryUpdate
 from app.schemas.installments import InstallmentCategoryUpdate
 from app.schemas.receivables import ReceivablePaidPayload
 
@@ -219,6 +223,81 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
         transaction = self.db.get(Transaction, result.payments[0].transaction_id)
         self.assertEqual(result.category_id, category.id)
         self.assertEqual(transaction.category_id, category.id)
+
+    def test_category_can_be_edited_without_allowing_duplicate_name(self):
+        category = Category(user_id=self.user.id, name="Mercado", color="#14A078")
+        duplicate = Category(user_id=self.user.id, name="Transporte", color="#3B82F6")
+        self.db.add_all([category, duplicate])
+        self.db.commit()
+
+        result = update_category(
+            category.id,
+            CategoryUpdate(name="  Alimentação   geral  ", color="#8b5cf6"),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(result.name, "Alimentação geral")
+        self.assertEqual(result.color, "#8B5CF6")
+        with self.assertRaises(HTTPException) as context:
+            update_category(
+                category.id,
+                CategoryUpdate(name="transporte"),
+                self.db,
+                self.user,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_deleting_category_preserves_items_as_uncategorized(self):
+        category = Category(user_id=self.user.id, name="Temporária", color="#EF4444")
+        person = ReceivablePerson(user_id=self.user.id, name="Cliente categoria")
+        self.db.add_all([category, person])
+        self.db.flush()
+        recurrence = Recurrence(
+            user_id=self.user.id,
+            description="Mensalidade",
+            type="income",
+            amount=Decimal("100.00"),
+            day_of_month=10,
+            recurrence_months=2,
+            category_id=category.id,
+        )
+        transaction = Transaction(
+            user_id=self.user.id,
+            date=date.today(),
+            type="income",
+            amount=Decimal("100.00"),
+            description="Mensalidade",
+            category_id=category.id,
+        )
+        purchase = InstallmentPurchase(
+            user_id=self.user.id,
+            description="Compra categorizada",
+            total_amount=Decimal("100.00"),
+            installment_count=1,
+            installment_value=Decimal("100.00"),
+            category_id=category.id,
+        )
+        receivable = Receivable(
+            user_id=self.user.id,
+            person_id=person.id,
+            description="Projeto categorizado",
+            total_amount=Decimal("100.00"),
+            received_amount=Decimal("0.00"),
+            due_date=date.today(),
+            status="pending",
+            category_id=category.id,
+        )
+        self.db.add_all([recurrence, transaction, purchase, receivable])
+        self.db.commit()
+
+        delete_category(category.id, self.db, self.user)
+
+        self.assertIsNone(self.db.get(Transaction, transaction.id).category_id)
+        self.assertIsNone(self.db.get(Recurrence, recurrence.id).category_id)
+        self.assertIsNone(self.db.get(InstallmentPurchase, purchase.id).category_id)
+        self.assertIsNone(self.db.get(Receivable, receivable.id).category_id)
+        self.assertIsNone(self.db.get(Category, category.id))
 
 
 if __name__ == "__main__":

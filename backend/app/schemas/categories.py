@@ -11,6 +11,11 @@ class CategoryCreate(APIModel):
     color: Optional[str] = None
 
 
+class CategoryUpdate(APIModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    color: Optional[str] = None
+
+
 class CategoryOut(APIModel):
     id: int
     name: str

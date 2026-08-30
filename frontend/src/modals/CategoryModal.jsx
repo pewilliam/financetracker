@@ -6,10 +6,11 @@ import { Check, Loader2, Tags, X } from "lucide-react";
 export const CATEGORY_COLORS = ["#14A078", "#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#84CC16"];
 
 
-export default function CategoryModal({ suggestedColor = CATEGORY_COLORS[0], onSave, onClose }) {
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(suggestedColor);
+export default function CategoryModal({ category = null, suggestedColor = CATEGORY_COLORS[0], onSave, onClose }) {
+  const [name, setName] = useState(category?.name || "");
+  const [color, setColor] = useState(category?.color || suggestedColor);
   const [saving, setSaving] = useState(false);
+  const editing = Boolean(category);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -44,8 +45,8 @@ export default function CategoryModal({ suggestedColor = CATEGORY_COLORS[0], onS
         <div className="category-modal-header">
           <div className="category-modal-icon"><Tags size={21} /></div>
           <div>
-            <p className="eyebrow">Organização dos gastos</p>
-            <h2>Nova categoria</h2>
+            <p className="eyebrow">Organização financeira</p>
+            <h2>{editing ? "Editar categoria" : "Nova categoria"}</h2>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} disabled={saving} aria-label="Fechar"><X size={18} /></button>
         </div>
@@ -84,7 +85,7 @@ export default function CategoryModal({ suggestedColor = CATEGORY_COLORS[0], onS
         <div className="category-modal-footer">
           <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
           <button className="btn btn-primary" type="submit" disabled={!cleanName || saving}>
-            {saving ? <><Loader2 className="spin" size={16} /> Criando...</> : "Criar categoria"}
+            {saving ? <><Loader2 className="spin" size={16} /> Salvando...</> : editing ? "Salvar alterações" : "Criar categoria"}
           </button>
         </div>
       </form>
