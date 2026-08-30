@@ -62,6 +62,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                       </strong>
                       <span className="tx-description">
                         {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
+                        {tx.category && <span className="transaction-category-pill" style={{ "--category-color": tx.category.color }}>{tx.category.name}</span>}
                         {tx.description || tt("monthlyTable.noDescription", "Sem descrição")}
                       </span>
                       <div className="row-actions">

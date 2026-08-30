@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, CreditCard, Filter, Plus } from "lucide-react";
 import InvoiceCard from "../components/InvoiceCard.jsx";
+import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 
-export default function InvoicesPage({ invoices, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [editingItem, setEditingItem] = useState(null);
   const statusMenuRef = useRef(null);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const canCreateInstallment = invoices.some((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits));
@@ -99,6 +101,12 @@ export default function InvoicesPage({ invoices, allowOverdueInvoiceEdits = fals
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
+  };
+
+  const saveEditedItem = async (payload) => {
+    if (!editingItem) return;
+    await updateItem(editingItem.invoice.id, editingItem.item.id, payload);
+    setEditingItem(null);
   };
 
   return (
@@ -199,7 +207,7 @@ export default function InvoicesPage({ invoices, allowOverdueInvoiceEdits = fals
                     </button>
                     {expanded && (
                       group.items.length ? (
-                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddItem={addItem} onUpdateItem={updateItem} onUpdateDueDate={updateDueDate} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} categories={categories} onCreateCategory={onCreateCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddItem={addItem} onEditItem={(targetInvoice, item) => setEditingItem({ invoice: targetInvoice, item })} onUpdateDueDate={updateDueDate} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
                     )}
                   </section>
@@ -210,6 +218,16 @@ export default function InvoicesPage({ invoices, allowOverdueInvoiceEdits = fals
         </>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
+      {editingItem && (
+        <InvoiceItemModal
+          invoice={editingItem.invoice}
+          item={editingItem.item}
+          categories={categories}
+          onCreateCategory={onCreateCategory}
+          onSave={saveEditedItem}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
     </section>
   );
 }

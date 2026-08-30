@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import extract, func, or_
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import MonthlyBalance, Transaction, User
-from app.schemas.months import MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
+from app.models import Category, InstallmentItem, Invoice, InvoiceItem, MonthlyBalance, Transaction, User
+from app.schemas.months import CategoryBreakdownOut, CategoryExpenseOut, MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api/months", tags=["months"])
@@ -230,6 +230,86 @@ def get_month_summary(
         current_balance=current_balance,
         projected_closing=projected_closing,
         future_net=future_net,
+    )
+
+
+@router.get("/{year}/{month}/categories", response_model=CategoryBreakdownOut)
+def get_category_breakdown(
+    year: int,
+    month: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    start, end, _ = _month_bounds(year, month)
+    totals: dict[int | None, Decimal] = {}
+    categories = {
+        category.id: category
+        for category in db.query(Category).filter(Category.user_id == current_user.id).all()
+    }
+
+    direct_transactions = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.type == "expense",
+            Transaction.invoice_id.is_(None),
+            Transaction.date >= start,
+            Transaction.date <= end,
+        )
+        .all()
+    )
+    for transaction in direct_transactions:
+        totals[transaction.category_id] = totals.get(transaction.category_id, Decimal("0.00")) + transaction.amount
+
+    invoice_ids = [
+        row.id
+        for row in db.query(Invoice.id).filter(
+            Invoice.user_id == current_user.id,
+            Invoice.due_date >= start,
+            Invoice.due_date <= end,
+        ).all()
+    ]
+    if invoice_ids:
+        invoice_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id.in_(invoice_ids)).all()
+        for item in invoice_items:
+            totals[item.category_id] = totals.get(item.category_id, Decimal("0.00")) + item.amount
+
+        installment_items = (
+            db.query(InstallmentItem)
+            .filter(
+                InstallmentItem.invoice_id.in_(invoice_ids),
+                InstallmentItem.status != "canceled",
+            )
+            .all()
+        )
+        for item in installment_items:
+            category_id = item.purchase.category_id if item.purchase else None
+            totals[category_id] = totals.get(category_id, Decimal("0.00")) + item.amount
+
+    categorized_total = sum(totals.values(), Decimal("0.00"))
+    percentage_base = categorized_total if categorized_total > 0 else Decimal("0.00")
+    result = []
+    for category_id, amount in totals.items():
+        if amount == 0:
+            continue
+        category = categories.get(category_id)
+        percentage = (amount / percentage_base * Decimal("100")) if percentage_base else Decimal("0.00")
+        result.append(
+            CategoryExpenseOut(
+                category_id=category_id,
+                name=category.name if category else "Sem categoria",
+                color=category.color if category else "#94A3B8",
+                amount=amount,
+                percentage=percentage.quantize(Decimal("0.01")),
+            )
+        )
+    result.sort(key=lambda item: item.amount, reverse=True)
+
+    month_data = _build_month_data(db, year, month, current_user.id)
+    return CategoryBreakdownOut(
+        total_expenses=month_data.total_expenses,
+        categorized_total=categorized_total,
+        items=result,
     )
 
 

@@ -3,12 +3,13 @@ import { toast } from "react-hot-toast";
 import { CalendarPlus, Check, CreditCard, Trash2, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
 import InvoiceTemplateModal from "./InvoiceTemplateModal.jsx";
+import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { CREATE_TEMPLATE_VALUE } from "../app/constants.js";
 import { addMonthsToDate, formatMonthShort, nextDueDateFromDay, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InvoiceModal({ form, setForm, templates, onCreateTemplate, onSubmit, onClose }) {
+export default function InvoiceModal({ form, setForm, templates, categories = [], onCreateCategory, onCreateTemplate, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
@@ -55,7 +56,8 @@ export default function InvoiceModal({ form, setForm, templates, onCreateTemplat
     template_name: selectedTemplate?.name || "",
     template_color: normalizeInvoiceColor(selectedTemplate?.color),
     due_date: addMonthsToDate(form.due_date, index),
-    initial_amount: form.initial_amount
+    initial_amount: form.initial_amount,
+    category_id: form.category_id || ""
   }));
 
   const goToReview = (event) => {
@@ -148,6 +150,7 @@ export default function InvoiceModal({ form, setForm, templates, onCreateTemplat
               </label>
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
+              <label><span>Categoria do valor inicial</span><CategorySelect categories={categories} value={form.category_id} onChange={(value) => updateForm({ category_id: value })} onCreate={onCreateCategory} /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input

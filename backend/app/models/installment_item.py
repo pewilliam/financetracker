@@ -36,3 +36,11 @@ class InstallmentItem(Base):
         if not self.purchase:
             return 0
         return max(self.purchase.installment_count - self.installment_number, 0)
+
+    @property
+    def category_id(self):
+        return self.purchase.category_id if self.purchase else None
+
+    @property
+    def category(self):
+        return self.purchase.category if self.purchase else None

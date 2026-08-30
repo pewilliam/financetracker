@@ -9,6 +9,7 @@ from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceIte
 from app.schemas.installments import InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
+from app.services.categories import get_user_category
 
 router = APIRouter(prefix="/api/installments", tags=["installments"])
 
@@ -65,11 +66,13 @@ def _sync_refund_invoice_item(db: Session, item: InstallmentItem) -> set[int]:
         refund_item.invoice_id = item.invoice_id
         refund_item.description = description
         refund_item.amount = refund_amount
+        refund_item.category_id = item.purchase.category_id
     else:
         refund_item = InvoiceItem(
             invoice_id=item.invoice_id,
             description=description,
             amount=refund_amount,
+            category_id=item.purchase.category_id,
         )
         db.add(refund_item)
         db.flush()
@@ -138,6 +141,8 @@ def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
         progress_label=" • ".join(progress_parts),
         next_installment=next_item,
         items=items,
+        category_id=purchase.category_id,
+        category=purchase.category,
     )
 
 
@@ -193,6 +198,7 @@ def create_installment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    get_user_category(db, current_user.id, payload.category_id)
     first_invoice = (
         db.query(Invoice)
         .options(selectinload(Invoice.template))
@@ -247,6 +253,7 @@ def create_installment(
         installment_count=len(raw_values),
         installment_value=_money(confirmed_total / len(raw_values)),
         first_invoice_id=first_invoice.id,
+        category_id=payload.category_id,
     )
     db.add(purchase)
     db.flush()

@@ -144,6 +144,21 @@ export function createInvoice(payload) {
   });
 }
 
+export function getCategoryBreakdown(year, month) {
+  return request(`/months/${year}/${month}/categories`);
+}
+
+export function listCategories() {
+  return request("/categories");
+}
+
+export function createCategory(payload) {
+  return request("/categories", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function updateInvoice(id, payload) {
   return request(`/invoices/${id}`, {
     method: "PUT",

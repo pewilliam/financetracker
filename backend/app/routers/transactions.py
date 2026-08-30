@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import Invoice, Recurrence, Transaction, User
 from app.schemas.transactions import TransactionCreate, TransactionOut, TransactionUpdate
 from app.security import get_current_user
+from app.services.categories import get_user_category
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -40,6 +41,8 @@ def create_transaction(
         if not recurrence:
             raise HTTPException(status_code=404, detail="Recurrence not found")
 
+    get_user_category(db, current_user.id, payload.category_id)
+
     transaction = Transaction(
         user_id=current_user.id,
         date=payload.date,
@@ -49,6 +52,7 @@ def create_transaction(
         is_future=is_future,
         invoice_id=payload.invoice_id,
         recurrence_id=payload.recurrence_id,
+        category_id=payload.category_id,
     )
     db.add(transaction)
     db.commit()
@@ -94,6 +98,9 @@ def update_transaction(
         )
         if not recurrence:
             raise HTTPException(status_code=404, detail="Recurrence not found")
+
+    if "category_id" in payload.model_fields_set:
+        get_user_category(db, current_user.id, payload.category_id)
 
     if payload.date and transaction.is_future is False and payload.date > date.today():
         transaction.is_future = True

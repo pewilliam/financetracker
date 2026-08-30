@@ -12,6 +12,7 @@ class RecurrenceCreate(APIModel):
     recurrence_months: int = 1
     start_date: Optional[date] = None
     active: bool = True
+    category_id: Optional[int] = None
 
 
 class RecurrenceUpdate(APIModel):
@@ -22,6 +23,7 @@ class RecurrenceUpdate(APIModel):
     active: bool = True
     apply_to: Literal["all", "future"] = "future"
     effective_date: Optional[date] = None
+    category_id: Optional[int] = None
 
 
 class RecurrenceOut(APIModel):
@@ -33,3 +35,4 @@ class RecurrenceOut(APIModel):
     recurrence_months: int = 1
     active: bool = True
     created_at: Optional[datetime] = None
+    category_id: Optional[int] = None

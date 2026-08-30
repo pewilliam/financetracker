@@ -13,10 +13,12 @@ class InstallmentPurchase(Base):
     installment_count = Column(Integer, nullable=False)
     installment_value = Column(Numeric(10, 2), nullable=False)
     first_invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
 
     user = relationship("User", back_populates="installment_purchases")
     first_invoice = relationship("Invoice", foreign_keys=[first_invoice_id])
+    category = relationship("Category", back_populates="installment_purchases")
     items = relationship(
         "InstallmentItem",
         back_populates="purchase",

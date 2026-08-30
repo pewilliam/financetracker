@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Loader2, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
+import CategorySelect from "./CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -47,6 +48,8 @@ export default function TransactionForm({
   open,
   initial,
   date,
+  categories = [],
+  onCreateCategory,
   onClose,
   onSave
 }) {
@@ -57,6 +60,7 @@ export default function TransactionForm({
     type: "expense",
     amount: "",
     description: "",
+    category_id: "",
     recurrence: false,
     recurrence_scope: "single",
     day_of_month: "",
@@ -73,6 +77,7 @@ export default function TransactionForm({
         type: initial.type,
         amount: formatMoney(initial.amount),
         description: initial.description || "",
+        category_id: initial.category_id ? String(initial.category_id) : "",
         recurrence: false,
         recurrence_scope: "single",
         day_of_month: "",
@@ -84,6 +89,7 @@ export default function TransactionForm({
         type: "expense",
         amount: "",
         description: "",
+        category_id: "",
         recurrence: false,
         recurrence_scope: "single",
         day_of_month: "",
@@ -180,7 +186,8 @@ export default function TransactionForm({
           date: form.date,
           type: form.type,
           amount,
-          description: form.description
+          description: form.description,
+          category_id: form.type === "expense" && form.category_id ? Number(form.category_id) : null
         },
         recurrence: form.recurrence
           ? {
@@ -259,6 +266,13 @@ export default function TransactionForm({
             <span>{tt("transactionModal.description", "Descrição")}</span>
             <input placeholder={tt("transactionModal.descriptionPlaceholder", "Ex: mercado, salário, aluguel")} value={form.description} onChange={(event) => setField("description", event.target.value)} />
           </label>
+
+          {isExpense && (
+            <label>
+              <span>Categoria</span>
+              <CategorySelect categories={categories} value={form.category_id} onChange={(value) => setField("category_id", value)} onCreate={onCreateCategory} />
+            </label>
+          )}
 
           {initial?.recurrence_id && (
             <section className="conditional-section recurrence-edit-scope">

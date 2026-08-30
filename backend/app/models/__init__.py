@@ -12,6 +12,7 @@ from app.models.recurrence import Recurrence
 from app.models.monthly_balance import MonthlyBalance
 from app.models.simulation import Simulation
 from app.models.simulation_item import SimulationItem
+from app.models.category import Category
 
 __all__ = [
     "User",
@@ -28,4 +29,5 @@ __all__ = [
     "MonthlyBalance",
     "Simulation",
     "SimulationItem",
+    "Category",
 ]

@@ -5,6 +5,9 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  Pie,
+  PieChart,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -34,6 +37,7 @@ export default function Dashboard({
   comparisons,
   invoices = [],
   monthData,
+  categoryBreakdown = { total_expenses: 0, categorized_total: 0, items: [] },
   onOpenInvoice
 }) {
   const { t, language } = useI18n();
@@ -57,6 +61,8 @@ export default function Dashboard({
     ]),
     language
   );
+  const categoryItems = categoryBreakdown.items || [];
+  const categoryChartItems = categoryItems.filter((item) => Number(item.amount) > 0);
 
   const cards = [
     {
@@ -134,6 +140,40 @@ export default function Dashboard({
             <Line dataKey="projected_closing" name={t("dashboard.finalBalance")} stroke="#14A078" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
+      </section>
+
+      <section className="card category-spending-card wide">
+        <div className="category-spending-head">
+          <div>
+            <p className="eyebrow">Visão por categoria</p>
+            <h2>Para onde seu dinheiro está indo</h2>
+          </div>
+          <strong>{formatMoney(categoryBreakdown.total_expenses, language)}</strong>
+        </div>
+        {categoryChartItems.length ? (
+          <div className="category-spending-content">
+            <div className="category-donut" aria-label="Distribuição de gastos por categoria">
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={categoryChartItems} dataKey="amount" nameKey="name" innerRadius={66} outerRadius={96} paddingAngle={2} stroke="none">
+                    {categoryChartItems.map((item) => <Cell key={item.category_id ?? "uncategorized"} fill={item.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value) => formatMoney(value, language)} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="category-donut-center"><small>Total</small><strong>{formatMoney(categoryBreakdown.categorized_total, language)}</strong></div>
+            </div>
+            <div className="category-breakdown-list">
+              {categoryItems.map((item) => (
+                <div className="category-breakdown-row" key={item.category_id ?? "uncategorized"}>
+                  <i style={{ "--category-color": item.color }} />
+                  <span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}% dos gastos</small></span>
+                  <strong>{formatMoney(item.amount, language)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : <p className="muted category-empty">Categorize seus próximos gastos para visualizar a distribuição aqui.</p>}
       </section>
 
       <section className="card">

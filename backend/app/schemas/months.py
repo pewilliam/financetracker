@@ -50,3 +50,17 @@ class MonthCardSummaryOut(APIModel):
 
 class OpeningBalancePayload(APIModel):
     opening_balance: Decimal
+
+
+class CategoryExpenseOut(APIModel):
+    category_id: Optional[int] = None
+    name: str
+    color: str
+    amount: Decimal
+    percentage: Decimal
+
+
+class CategoryBreakdownOut(APIModel):
+    total_expenses: Decimal
+    categorized_total: Decimal
+    items: List[CategoryExpenseOut] = []

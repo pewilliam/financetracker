@@ -6,6 +6,7 @@ from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, T
 from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
+from app.services.categories import get_user_category
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -35,6 +36,7 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    get_user_category(db, current_user.id, payload.category_id)
     template = (
         db.query(InvoiceTemplate)
         .filter(InvoiceTemplate.id == payload.template_id, InvoiceTemplate.user_id == current_user.id, InvoiceTemplate.active.is_(True))
@@ -50,6 +52,7 @@ def create_invoice(
             invoice_id=invoice.id,
             description=template.name,
             amount=payload.initial_amount,
+            category_id=payload.category_id,
         )
         db.add(item)
         db.flush()
@@ -149,10 +152,13 @@ def add_invoice_item(
     if not invoice_accepts_new_charges(invoice, current_user.allow_overdue_invoice_edits):
         raise HTTPException(status_code=400, detail="Invoice no longer accepts new items")
 
+    get_user_category(db, current_user.id, payload.category_id)
+
     item = InvoiceItem(
         invoice_id=invoice.id,
         description=payload.description,
         amount=payload.amount,
+        category_id=payload.category_id,
     )
     db.add(item)
 
@@ -231,8 +237,11 @@ def update_invoice_item(
     if not item or item.invoice_id != invoice.id:
         raise HTTPException(status_code=404, detail="Item not found")
 
+    get_user_category(db, current_user.id, payload.category_id)
+
     item.description = payload.description
     item.amount = payload.amount
+    item.category_id = payload.category_id
 
     db.flush()
     recalculate_invoice_total(db, invoice)

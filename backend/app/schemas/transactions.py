@@ -2,6 +2,7 @@ from datetime import date as Date, datetime
 from decimal import Decimal
 from typing import Optional
 from app.schemas.base import APIModel
+from app.schemas.categories import CategoryOut
 
 
 class TransactionBase(APIModel):
@@ -12,6 +13,7 @@ class TransactionBase(APIModel):
     is_future: bool = False
     invoice_id: Optional[int] = None
     recurrence_id: Optional[int] = None
+    category_id: Optional[int] = None
 
 
 class TransactionCreate(TransactionBase):
@@ -26,8 +28,10 @@ class TransactionUpdate(APIModel):
     is_future: Optional[bool] = None
     invoice_id: Optional[int] = None
     recurrence_id: Optional[int] = None
+    category_id: Optional[int] = None
 
 
 class TransactionOut(TransactionBase):
     id: int
     created_at: Optional[datetime] = None
+    category: Optional[CategoryOut] = None

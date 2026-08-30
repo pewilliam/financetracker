@@ -4,6 +4,7 @@ from typing import Literal, List, Optional
 from pydantic import Field
 from app.schemas.base import APIModel
 from app.schemas.invoices import InvoiceOut
+from app.schemas.categories import CategoryOut
 
 
 class InstallmentDraftIn(APIModel):
@@ -19,6 +20,7 @@ class InstallmentCreate(APIModel):
     first_invoice_id: int
     custom_values: Optional[List[Decimal]] = None
     items: Optional[List[InstallmentDraftIn]] = None
+    category_id: Optional[int] = None
 
 
 class InstallmentItemUpdate(APIModel):
@@ -54,3 +56,5 @@ class InstallmentPurchaseOut(APIModel):
     progress_label: str = ""
     next_installment: Optional[InstallmentItemOut] = None
     items: List[InstallmentItemOut] = []
+    category_id: Optional[int] = None
+    category: Optional[CategoryOut] = None

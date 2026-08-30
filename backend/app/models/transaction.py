@@ -15,8 +15,10 @@ class Transaction(Base):
     is_future = Column(Boolean, default=False)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
     recurrence_id = Column(Integer, ForeignKey("recurrences.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
 
     user = relationship("User", back_populates="transactions")
     invoice = relationship("Invoice", foreign_keys=[invoice_id], back_populates="transactions")
     recurrence = relationship("Recurrence", foreign_keys=[recurrence_id], back_populates="transactions")
+    category = relationship("Category", back_populates="transactions")

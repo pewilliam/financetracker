@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
+import CategorySelect from "./CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges } from "../app/helpers.js";
 import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
@@ -14,17 +15,14 @@ function normalizeName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
-export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false, onAddItem, onUpdateItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
+export default function InvoiceCard({ invoice, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onAddItem, onEditItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [addMode, setAddMode] = useState(null);
   const [itemsOpen, setItemsOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [editingItemId, setEditingItemId] = useState(null);
-  const [editDescription, setEditDescription] = useState("");
-  const [editAmount, setEditAmount] = useState("");
-  const [savingItemId, setSavingItemId] = useState(null);
+  const [categoryId, setCategoryId] = useState("");
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateDraft, setDueDateDraft] = useState(invoice.due_date);
   const [savingDueDate, setSavingDueDate] = useState(false);
@@ -91,10 +89,12 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
     if (!parsed || (!addingRefund && !cleanDescription)) return;
     onAddItem(invoice.id, {
       description: cleanDescription || refundLabel,
-      amount: addingRefund ? -Math.abs(parsed) : parsed
+      amount: addingRefund ? -Math.abs(parsed) : parsed,
+      category_id: categoryId ? Number(categoryId) : null
     });
     setDescription("");
     setAmount("");
+    setCategoryId("");
     setAddMode(null);
   };
 
@@ -107,37 +107,13 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const cancelAdding = () => {
     setDescription("");
     setAmount("");
+    setCategoryId("");
     setAddMode(null);
   };
 
   const startEditingItem = (item) => {
     setAddMode(null);
-    setEditingItemId(item.id);
-    setEditDescription(item.description || "");
-    setEditAmount(formatMoney(Math.abs(Number(item.amount || 0)), language));
-  };
-
-  const cancelEditingItem = () => {
-    setEditingItemId(null);
-    setEditDescription("");
-    setEditAmount("");
-  };
-
-  const saveEditingItem = async (item) => {
-    const parsed = parseTypedMoneyInput(editAmount, language);
-    const refund = Number(item.amount) < 0;
-    const cleanDescription = editDescription.trim();
-    if (!parsed || (!refund && !cleanDescription)) return;
-    setSavingItemId(item.id);
-    try {
-      await onUpdateItem(invoice.id, item.id, {
-        description: cleanDescription || refundLabel,
-        amount: refund ? -Math.abs(parsed) : parsed
-      });
-      cancelEditingItem();
-    } finally {
-      setSavingItemId(null);
-    }
+    onEditItem?.(invoice, item);
   };
 
   const renderAddChoices = (single = false) => (
@@ -156,6 +132,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const renderAddForm = () => (
     <form className={`inline-form ${addingRefund ? "refund-form" : ""}`} onSubmit={handleSubmit}>
       <input placeholder={addingRefund ? refundDescriptionLabel : tt("invoices.description", "Descrição")} value={description} onChange={(event) => setDescription(event.target.value)} />
+      <CategorySelect className="compact" categories={categories} value={categoryId} onChange={setCategoryId} onCreate={onCreateCategory} />
       <input inputMode="decimal" placeholder={amountPlaceholder} value={amount} onChange={(event) => setAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setAmount(formatTypedMoneyAsCurrency(amount, language))} />
       <div className="inline-form-actions">
         <button className="btn btn-primary compact inline-add-submit" type="submit">
@@ -172,40 +149,22 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
 
   const renderRegularItem = (item) => {
     const refund = Number(item.amount) < 0;
-    const isEditing = editingItemId === item.id;
-    const saveDisabled = savingItemId === item.id || !parseTypedMoneyInput(editAmount, language) || (!refund && !editDescription.trim());
     return (
-      <div className={`invoice-item ${refund ? "refund-line" : ""} ${isEditing ? "editing" : ""}`} key={`item-${item.id}`}>
-        {isEditing ? (
-          <>
-            <input placeholder={refund ? refundDescriptionLabel : tt("invoices.description", "Descrição")} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} />
-            <input inputMode="decimal" placeholder={refund ? (language === "en-US" ? "Refund amount" : "Valor reembolsado") : "R$ 0,00"} value={editAmount} onChange={(event) => setEditAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setEditAmount(formatTypedMoneyAsCurrency(editAmount, language))} />
-            <span className="invoice-item-actions">
-              <button className="icon-btn small" type="button" onClick={() => saveEditingItem(item)} disabled={saveDisabled} aria-label={language === "en-US" ? "Save item" : "Salvar item"}>
-                <Check size={15} />
-              </button>
-              <button className="icon-btn small" type="button" onClick={cancelEditingItem} disabled={savingItemId === item.id} aria-label={cancelLabel}>
-                <X size={15} />
-              </button>
-            </span>
-          </>
-        ) : (
-          <>
-            <span>
-              {refund && <em className="refund-badge">{refundLabel}</em>}
-              {item.description}
-            </span>
-            <strong>{formatMoney(item.amount)}</strong>
-            <span className="invoice-item-actions">
-              <button className="icon-btn small" type="button" onClick={() => startEditingItem(item)} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
-                <Pencil size={15} />
-              </button>
-              <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
-                <Trash2 size={15} />
-              </button>
-            </span>
-          </>
-        )}
+      <div className={`invoice-item ${refund ? "refund-line" : ""}`} key={`item-${item.id}`}>
+        <span>
+          {refund && <em className="refund-badge">{refundLabel}</em>}
+          {item.description}
+          {item.category && <small className="category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</small>}
+        </span>
+        <strong>{formatMoney(item.amount)}</strong>
+        <span className="invoice-item-actions">
+          <button className="icon-btn small" type="button" onClick={() => startEditingItem(item)} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
+            <Pencil size={15} />
+          </button>
+          <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
+            <Trash2 size={15} />
+          </button>
+        </span>
       </div>
     );
   };
@@ -275,6 +234,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
                           <span className="installment-badge-short">{item.installment_number}/{item.installment_count}</span>
                         </button>
                         {item.purchase_description || item.description}
+                        {item.category && <small className="category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</small>}
                       </span>
                       <strong>{formatMoney(item.amount)}</strong>
                       <span className="invoice-item-actions">

@@ -2,11 +2,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 from app.schemas.base import APIModel
+from app.schemas.categories import CategoryOut
 
 
 class InvoiceItemCreate(APIModel):
     description: str
     amount: Decimal
+    category_id: Optional[int] = None
 
 
 class InvoiceItemUpdate(InvoiceItemCreate):
@@ -16,6 +18,7 @@ class InvoiceItemUpdate(InvoiceItemCreate):
 class InvoiceItemOut(InvoiceItemCreate):
     id: int
     created_at: Optional[datetime] = None
+    category: Optional[CategoryOut] = None
 
 
 class InvoiceInstallmentItemOut(APIModel):
@@ -30,12 +33,15 @@ class InvoiceInstallmentItemOut(APIModel):
     purchase_total_amount: Decimal = Decimal("0.00")
     remaining_installments: int = 0
     created_at: Optional[datetime] = None
+    category_id: Optional[int] = None
+    category: Optional[CategoryOut] = None
 
 
 class InvoiceCreate(APIModel):
     template_id: int
     due_date: date
     initial_amount: Decimal = Decimal("0.00")
+    category_id: Optional[int] = None
 
 
 class InvoicePaidUpdate(APIModel):

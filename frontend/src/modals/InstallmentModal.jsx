@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, CreditCard, Trash2, X } from "lucide-react";
 import InvoiceSelector from "../components/InvoiceSelector.jsx";
+import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { addMonthsToDate, formatMonthShort, formatMonthSlash, invoiceAcceptsNewCharges, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InstallmentModal({ form, setForm, invoices, allowOverdueInvoiceEdits = false, onSubmit, onClose }) {
+export default function InstallmentModal({ form, setForm, invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
@@ -86,6 +87,7 @@ export default function InstallmentModal({ form, setForm, invoices, allowOverdue
       total_amount: confirmedTotal,
       installment_count: drafts.length,
       first_invoice_id: Number(form.first_invoice_id),
+      category_id: form.category_id ? Number(form.category_id) : null,
       items: drafts.map((draft) => ({
         invoice_id: draft.invoice_id ? Number(draft.invoice_id) : null,
         amount: parseTypedMoneyInput(draft.amount, language),
@@ -111,6 +113,7 @@ export default function InstallmentModal({ form, setForm, invoices, allowOverdue
           <>
             <div className="invoice-modal-body">
               <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
+              <label><span>Categoria</span><CategorySelect categories={categories} value={form.category_id} onChange={(value) => updateForm({ category_id: value })} onCreate={onCreateCategory} /></label>
               <div className="installment-form-row">
                 <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></label>
                 <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={form.installment_count ?? ""} onChange={(event) => updateForm({ installment_count: event.target.value })} onBlur={() => updateForm({ installment_count: count })} required /></label>

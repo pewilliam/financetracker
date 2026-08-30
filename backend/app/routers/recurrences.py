@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Recurrence, Transaction, User
 from app.schemas.recurrences import RecurrenceCreate, RecurrenceOut, RecurrenceUpdate
 from app.security import get_current_user
+from app.services.categories import get_user_category
 
 router = APIRouter(prefix="/api/recurrences", tags=["recurrences"])
 
@@ -55,6 +56,7 @@ def _sync_recurrence_transactions(
         transaction.description = recurrence.description
         transaction.type = recurrence.type
         transaction.amount = recurrence.amount
+        transaction.category_id = recurrence.category_id
 
         last_day = calendar.monthrange(transaction.date.year, transaction.date.month)[1]
         transaction.date = date(
@@ -84,6 +86,7 @@ def create_recurrence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    get_user_category(db, current_user.id, payload.category_id)
     recurrence = Recurrence(
         user_id=current_user.id,
         description=payload.description,
@@ -92,6 +95,7 @@ def create_recurrence(
         day_of_month=max(1, min(payload.day_of_month, 31)),
         recurrence_months=max(1, payload.recurrence_months),
         active=payload.active,
+        category_id=payload.category_id,
     )
     db.add(recurrence)
     db.flush()
@@ -117,6 +121,7 @@ def create_recurrence(
                 description=recurrence.description,
                 is_future=target_date > today,
                 recurrence_id=recurrence.id,
+                category_id=recurrence.category_id,
             )
         )
 
@@ -140,11 +145,14 @@ def update_recurrence(
     if not recurrence:
         raise HTTPException(status_code=404, detail="Recurrence not found")
 
+    get_user_category(db, current_user.id, payload.category_id)
+
     recurrence.description = payload.description
     recurrence.type = payload.type
     recurrence.amount = payload.amount
     recurrence.day_of_month = max(1, min(payload.day_of_month, 31))
     recurrence.active = payload.active
+    recurrence.category_id = payload.category_id
 
     _sync_recurrence_transactions(
         db,

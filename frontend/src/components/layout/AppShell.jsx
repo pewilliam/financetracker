@@ -25,7 +25,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -42,6 +42,8 @@ export default function AppShell() {
   const [invoices, setInvoices] = useState([]);
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [] });
   const [receivables, setReceivables] = useState([]);
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -124,12 +126,14 @@ export default function AppShell() {
     if (showLoading) setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
         listInvoiceTemplates(),
         listInstallments(),
+        listCategories(),
+        getCategoryBreakdown(year, month),
         listReceivables(),
         listReceivablePeople(),
         getMonthsSummary(),
@@ -144,6 +148,8 @@ export default function AppShell() {
       setInvoices(invoicesPayload);
       setInvoiceTemplates(templatesPayload);
       setInstallments(installmentsPayload);
+      setCategories(categoriesPayload);
+      setCategoryBreakdown(categoryBreakdownPayload);
       setReceivables(receivablesPayload);
       setReceivablePeople(peoplePayload);
       setMonthCards(monthCardsPayload);
@@ -180,9 +186,10 @@ export default function AppShell() {
 
   const syncMonthCollections = async () => {
     const offsets = [-5, -4, -3, -2, -1, 0];
-    const [monthPayload, summaryPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+    const [monthPayload, summaryPayload, categoryBreakdownPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
       getMonth(year, month),
       getMonthSummary(year, month),
+      getCategoryBreakdown(year, month),
       getMonthsSummary(),
       Promise.all(offsets.map(async (offset) => {
         const target = shiftMonth(year, month, offset);
@@ -192,6 +199,7 @@ export default function AppShell() {
     ]);
     setMonthData(monthPayload);
     setSummary(summaryPayload);
+    setCategoryBreakdown(categoryBreakdownPayload);
     setMonthCards(monthCardsPayload);
     setComparisons(comparisonPayload);
   };
@@ -224,7 +232,8 @@ export default function AppShell() {
             day_of_month: payload.recurrenceUpdate.day_of_month,
             active: true,
             apply_to: payload.recurrenceUpdate.apply_to,
-            effective_date: payload.recurrenceUpdate.effective_date
+            effective_date: payload.recurrenceUpdate.effective_date,
+            category_id: normalizedData.category_id
           });
         } else {
           await updateTransaction(editing.id, normalizedData);
@@ -242,7 +251,8 @@ export default function AppShell() {
             day_of_month: payload.recurrence.day_of_month,
             recurrence_months: payload.recurrence.recurrence_months,
             start_date: normalizedData.date,
-            active: true
+            active: true,
+            category_id: normalizedData.category_id
           });
         } else {
           await createTransaction(normalizedData);
@@ -272,7 +282,8 @@ export default function AppShell() {
       const createdInvoices = await Promise.all(drafts.map((draft) => createInvoice({
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
-        initial_amount: parseTypedMoneyInput(draft.initial_amount, language)
+        initial_amount: parseTypedMoneyInput(draft.initial_amount, language),
+        category_id: draft.category_id ? Number(draft.category_id) : null
       })));
       const createdIds = new Set(createdInvoices.map((invoice) => invoice.id));
       setInvoices((current) => sortInvoicesByDueDate([
@@ -423,6 +434,23 @@ export default function AppShell() {
       await syncMonthCollections();
     } catch {
       toast.error("Erro ao remover item");
+    }
+  };
+
+  const saveCategory = async (payload) => {
+    try {
+      const saved = await createCategory(payload);
+      setCategories((current) => {
+        const next = current.some((category) => category.id === saved.id)
+          ? current.map((category) => category.id === saved.id ? saved : category)
+          : [...current, saved];
+        return next.sort((left, right) => left.name.localeCompare(right.name, language));
+      });
+      toast.success("Categoria criada");
+      return saved;
+    } catch (error) {
+      toast.error("Erro ao criar categoria");
+      throw error;
     }
   };
 
@@ -587,9 +615,9 @@ export default function AppShell() {
 
           {loading ? <Skeleton /> : (
             <Routes>
-              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} />} />
+              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
@@ -602,9 +630,9 @@ export default function AppShell() {
         </div>
       </main>
 
-      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
-      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
-      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
+      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} onCreateCategory={saveCategory} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
+      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
+      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} />}
       {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}

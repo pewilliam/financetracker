@@ -14,7 +14,9 @@ class Recurrence(Base):
     day_of_month = Column(Integer, nullable=False)
     recurrence_months = Column(Integer, nullable=False, default=1)
     active = Column(Boolean, default=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
 
     user = relationship("User", back_populates="recurrences")
     transactions = relationship("Transaction", back_populates="recurrence")
+    category = relationship("Category", back_populates="recurrences")

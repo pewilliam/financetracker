@@ -21,3 +21,4 @@ class User(Base):
     receivables = relationship("Receivable", back_populates="user", cascade="all, delete-orphan")
     recurrences = relationship("Recurrence", back_populates="user", cascade="all, delete-orphan")
     simulations = relationship("Simulation", back_populates="user", cascade="all, delete-orphan")
+    categories = relationship("Category", back_populates="user", cascade="all, delete-orphan")
