@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, CircleDollarSign, LineChart as LineChartIcon, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, CircleDollarSign, CircleHelp, LineChart as LineChartIcon, Pencil, PiggyBank, Plus, Save, Trash2, X } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "react-hot-toast";
-import { createInstallment, createSimulation, createTransaction, deleteSimulation, getMonthSummary, getSimulation, listSimulations, updateSimulation } from "../api/api.js";
+import { createInstallment, createSimulation, createTransaction, deleteSimulation, getSimulation, listSimulations, previewSimulation, updateSimulation } from "../api/api.js";
 import { MonthField } from "../components/DateField.jsx";
 import { addMonthsToDate, invoiceAcceptsNewCharges, todayIsoDate } from "../app/helpers.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -30,7 +30,9 @@ function blankItem() {
     recurrenceCount: 6,
     valueMode: "equal",
     values: [],
-    month: currentMonthValue()
+    month: currentMonthValue(),
+    categoryId: "",
+    collapsedByDefault: false
   };
 }
 
@@ -75,7 +77,8 @@ function normalizeRestoredItems(items) {
       recurrenceCount: Math.max(1, Number(item.recurrenceCount) || 6),
       valueMode: item.valueMode === "different" ? "different" : "equal",
       values: Array.isArray(item.custom_values) ? item.custom_values : Array.isArray(item.values) ? item.values : [],
-      month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue()
+      month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue(),
+      categoryId: type === "expense" ? String(item.categoryId || item.category_id || "") : ""
     };
   });
 }
@@ -128,11 +131,14 @@ function savedItemToDraft(item, language) {
     recurrenceCount: item.recurrence_count || 1,
     valueMode: item.value_mode === "different" ? "different" : "equal",
     values: Array.isArray(item.custom_values) ? item.custom_values.map((value) => formatMoney(value || 0, language)) : [],
-    month: /^\d{4}-\d{2}$/.test(item.start_month || "") ? item.start_month : currentMonthValue()
+    month: /^\d{4}-\d{2}$/.test(item.start_month || "") ? item.start_month : currentMonthValue(),
+    categoryId: item.type === "expense" ? String(item.category_id || "") : "",
+    collapsedByDefault: true
   };
 }
 
-function draftItemToPayload(item, language) {
+function draftItemToPayload(item, language, categoryIds = null) {
+  const categoryId = item.type === "expense" ? String(item.categoryId || "") : "";
   return {
     description: item.description?.trim() || "",
     type: item.type,
@@ -142,37 +148,9 @@ function draftItemToPayload(item, language) {
     recurrence_count: Math.max(1, Number(item.recurrenceCount) || 1),
     value_mode: item.valueMode === "different" ? "different" : "equal",
     start_month: item.month,
-    custom_values: item.valueMode === "different" ? getItemValues(item, language) : []
+    custom_values: item.valueMode === "different" ? getItemValues(item, language) : [],
+    category_id: categoryId && (!categoryIds || categoryIds.has(categoryId)) ? categoryId : null
   };
-}
-
-function buildSimulatedImpacts(items, language) {
-  const impacts = new Map();
-
-  items.forEach((item) => {
-    const values = getItemValues(item, language);
-    if (!getItemTotal(item, language) || !item.month) return;
-    const description = item.description?.trim() || "Item simulado";
-
-    values.forEach((value, index) => {
-      if (!value) return;
-      const target = monthFromIndex(monthIndex(item.month) + index).value;
-      const entry = impacts.get(target) || { expense: 0, income: 0, items: [] };
-      if (item.type === "income") entry.income += value;
-      else entry.expense += value;
-      entry.items.push({
-        id: `${item.id}-${index}`,
-        description,
-        type: item.type,
-        amount: value,
-        installmentLabel: item.mode !== "cash" ? `${index + 1}/${values.length}` : null,
-        periodType: item.mode === "recurring" ? "mês" : "parcela"
-      });
-      impacts.set(target, entry);
-    });
-  });
-
-  return impacts;
 }
 
 function simulationEndIndex(items, language) {
@@ -185,35 +163,6 @@ function simulationEndIndex(items, language) {
   return Math.max(lastAffected + 1, start + 1);
 }
 
-function projectionRows({ baseBalance, includeReal, months, summaryByMonth, simulatedByMonth, language }) {
-  const startingBalance = Number(baseBalance || 0);
-  let simulatedCarry = 0;
-
-  return months.map((month, index) => {
-    const summary = summaryByMonth.get(month.value);
-    const realProjectedClosing = includeReal ? Number(summary?.projected_closing ?? startingBalance) : startingBalance;
-    const simulated = simulatedByMonth.get(month.value) || { income: 0, expense: 0, items: [] };
-    const initial = realProjectedClosing + simulatedCarry;
-    simulatedCarry += simulated.income - simulated.expense;
-    const withoutSimulation = realProjectedClosing;
-    const withSimulation = realProjectedClosing + simulatedCarry;
-
-    return {
-      ...month,
-      label: formatMonthLabel(month.year, month.month, language),
-      shortLabel: formatMonthLabel(month.year, month.month, language).slice(0, 3),
-      initial,
-      simulatedIncome: simulated.income,
-      simulatedExpense: simulated.expense,
-      simulatedItems: simulated.items,
-      withoutSimulation,
-      withSimulation,
-      difference: withSimulation - withoutSimulation,
-      isCurrent: index === 0
-    };
-  });
-}
-
 function ProjectionTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
@@ -221,14 +170,67 @@ function ProjectionTooltip({ active, payload, label }) {
     <div className="simulation-tooltip">
       <strong>{label}</strong>
       <span>Sem simulação: {formatMoney(row.withoutSimulation)}</span>
-      <span>Com simulação: {formatMoney(row.withSimulation)}</span>
+      <span>Com simulação: {formatMoney(row.finalBalance)}</span>
       <span className={row.difference < 0 ? "money-expense" : "money-income"}>Diferença: {formatMoney(row.difference)}</span>
     </div>
   );
 }
 
-function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
-  const [collapsed, setCollapsed] = useState(false);
+function blankAllocationCategory(name = "") {
+  return {
+    id: makeItemId(),
+    name,
+    mode: "fixed",
+    value: ""
+  };
+}
+
+function normalizeAllocationCategories(categories, language) {
+  if (!Array.isArray(categories)) return [];
+  return categories.map((category) => ({
+    id: category.id || makeItemId(),
+    name: category.name || "",
+    mode: category.mode === "percentage" ? "percentage" : "fixed",
+    value: category.mode === "percentage"
+      ? String(Number(category.value || 0))
+      : formatMoney(category.value || 0, language)
+  }));
+}
+
+function allocationCategoryToPayload(category, language) {
+  return {
+    id: category.id,
+    name: category.name.trim(),
+    mode: category.mode,
+    value: category.mode === "percentage"
+      ? Number(category.value || 0)
+      : parseTypedMoneyInput(category.value, language)
+  };
+}
+
+function reserveSourcePositions(draftItems, sourceItemIds) {
+  const selectedIds = new Set(sourceItemIds || []);
+  return draftItems.reduce((positions, item, position) => {
+    if (item.type === "income" && selectedIds.has(item.id)) positions.push(position);
+    return positions;
+  }, []);
+}
+
+function PlanningTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  return (
+    <div className="simulation-tooltip">
+      <strong>{label}</strong>
+      <span>Base da reserva: {formatMoney(row.reserveBaseIncome)}</span>
+      <span>Reserva acumulada: {formatMoney(row.reserveAccumulated)}</span>
+      <span className={row.freeMoney < 0 ? "money-expense" : "money-income"}>Dinheiro livre: {formatMoney(row.freeMoney)}</span>
+    </div>
+  );
+}
+
+function SimulatedItemCard({ item, index, categories, onChange, onRemove, language }) {
+  const [collapsed, setCollapsed] = useState(Boolean(item.collapsedByDefault));
   const count = Math.max(1, Number(item.installmentCount) || 1);
   const recurrenceCount = Math.max(1, Number(item.recurrenceCount) || 1);
   const itemCount = getItemCount(item);
@@ -244,6 +246,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   const normalizeCount = (field, value) => onChange({ [field]: Math.max(1, Number(value) || 1) });
   const setType = (type) => onChange({
     type,
+    categoryId: type === "expense" ? item.categoryId : "",
     mode: type === "income" && item.mode === "installment" ? "cash" : type === "expense" && item.mode === "recurring" ? "cash" : item.mode
   });
   const setValueMode = (different) => onChange({
@@ -263,6 +266,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   const typeLabel = item.type === "income" ? "Receita" : "Gasto";
   const modeLabel = item.mode === "installment" ? `${itemCount}x` : item.mode === "recurring" ? `${itemCount} meses` : "À vista";
   const itemTitle = item.description?.trim() || `Item ${index + 1}`;
+  const selectedCategory = categories.find((category) => category.id === item.categoryId);
 
   return (
     <article className={`simulation-item-card ${collapsed ? "collapsed" : ""}`}>
@@ -271,7 +275,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
           {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           <span>
             <strong>{itemTitle}</strong>
-            {collapsed && <small>{typeLabel} • {modeLabel} • {formatMoney(totalSimulated, language)}</small>}
+            {collapsed && <small>{typeLabel} • {modeLabel} • {formatMoney(totalSimulated, language)}{selectedCategory ? ` • ${selectedCategory.name}` : ""}</small>}
           </span>
         </button>
         <div className="simulation-item-actions">
@@ -333,6 +337,17 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
             </label>
           </div>
 
+          {item.type === "expense" && (
+            <label className="simulation-category-select">
+              <span>Categoria da compra</span>
+              <select value={item.categoryId || ""} onChange={(event) => onChange({ categoryId: event.target.value })}>
+                <option value="">Sem categoria</option>
+                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+              {!categories.length && <small>Cadastre uma categoria do dinheiro livre para vinculá-la à compra.</small>}
+            </label>
+          )}
+
           {item.mode !== "cash" && (
             <label className={`switch-row simulation-switch ${variableValuesEnabled ? "active" : ""}`}>
               <input type="checkbox" checked={variableValuesEnabled} onChange={(event) => setValueMode(event.target.checked)} />
@@ -360,7 +375,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   );
 }
 
-function ConfirmationModal({ items, invoices, allowOverdueInvoiceEdits = false, onClose, onConfirm, language }) {
+function ConfirmationModal({ items, categories, invoices, allowOverdueInvoiceEdits = false, onClose, onConfirm, language }) {
   const validItems = items.filter((item) => getItemTotal(item, language) > 0);
 
   return (
@@ -378,12 +393,14 @@ function ConfirmationModal({ items, invoices, allowOverdueInvoiceEdits = false, 
           {validItems.map((item) => {
             const firstInvoice = findInvoiceForMonth(invoices, item.month, allowOverdueInvoiceEdits);
             const modeLabel = item.mode === "installment" ? `${getItemCount(item)}x` : item.mode === "recurring" ? `${getItemCount(item)} meses` : "À vista";
+            const category = categories.find((entry) => entry.id === item.categoryId);
             return (
               <div className="simulation-confirm-row" key={item.id}>
                 <span className={`type-chip ${item.type}`}>{item.type === "income" ? "Receita" : "Gasto"}</span>
                 <strong>{item.description?.trim() || "Item simulado"}</strong>
                 <span>{modeLabel} em {formatMonthLabel(...item.month.split("-").map(Number), language)}</span>
                 <span>{formatMoney(getItemTotal(item, language), language)}</span>
+                {category && <small>Categoria: {category.name}</small>}
                 {item.mode === "installment" && item.type === "expense" && !firstInvoice && (
                   <small className="danger-text">Sem fatura elegível no mês inicial.</small>
                 )}
@@ -433,6 +450,7 @@ function SimulationNameModal({ mode, initialName, saving, onClose, onSubmit }) {
             <span>Nome da simulação</span>
             <input
               autoFocus
+              maxLength={255}
               value={name}
               onBlur={() => setTouched(true)}
               onChange={(event) => setName(event.target.value)}
@@ -490,15 +508,213 @@ function findInvoiceForMonth(invoices, monthValue, allowOverdueInvoiceEdits = fa
     .find((invoice) => String(invoice.due_date || "").slice(0, 7) === monthValue);
 }
 
+const SIMULATION_TUTORIAL_STEPS = [
+  {
+    target: "library",
+    eyebrow: "Boas-vindas",
+    title: "Seus cenários ficam organizados aqui",
+    description: "Crie cenários para testar decisões sem alterar suas finanças reais. Um rascunho fica somente neste aparelho; uma simulação salva permanece disponível na sua conta para continuar depois."
+  },
+  {
+    target: "create",
+    eyebrow: "Primeiro passo",
+    title: "Comece uma nova simulação",
+    description: "Use este card para começar do zero. Se já houver conteúdo, você também poderá continuar o rascunho local ou abrir uma das simulações salvas.",
+    nextLabel: "Abrir editor"
+  },
+  {
+    target: "balance",
+    eyebrow: "Ponto de partida",
+    title: "Confira o saldo atual",
+    description: "Este é o saldo usado como início da projeção. Ele vem dos seus dados financeiros e serve de referência para comparar o cenário com a sua situação atual."
+  },
+  {
+    target: "real-data",
+    eyebrow: "Dados existentes",
+    title: "Escolha o que entra na projeção",
+    description: "Mantenha esta opção ativa para considerar receitas, gastos e faturas já cadastrados. Desative-a quando quiser analisar somente os itens criados dentro da simulação."
+  },
+  {
+    target: "planning",
+    eyebrow: "Reserva mensal",
+    title: "Defina quanto pretende reservar",
+    description: "A reserva é opcional. Escolha percentual ou valor fixo, o mês inicial e, se desejar, um mês limite. Você também pode calculá-la sobre todas as receitas ou somente sobre receitas simuladas selecionadas."
+  },
+  {
+    target: "categories",
+    eyebrow: "Dinheiro livre",
+    title: "Organize o valor restante em categorias",
+    description: "Cadastre categorias mesmo sem criar uma reserva. Cada uma pode receber um valor fixo mensal ou um percentual do dinheiro livre. Compras simuladas vinculadas consomem primeiro a categoria escolhida, sem alterar novamente o saldo projetado."
+  },
+  {
+    target: "items",
+    eyebrow: "Itens simulados",
+    title: "Monte o cenário com receitas e gastos",
+    description: "Gastos podem ser à vista ou parcelados e vinculados a uma categoria já cadastrada; receitas podem ser únicas ou recorrentes. Informe descrição, valor e mês inicial. Em itens repetidos, também é possível definir valores diferentes por parcela ou mês e recolher cada card pelo nome."
+  },
+  {
+    target: "actions",
+    eyebrow: "Calcular cenário",
+    title: "Aplique as alterações com Simular",
+    description: "Adicione quantos itens precisar e clique em “Simular” para atualizar os resultados. “Limpar tudo” remove os itens do editor, mas uma simulação já salva só muda quando você salvar novamente. Nenhuma dessas ações cria lançamentos reais."
+  },
+  {
+    target: "results",
+    eyebrow: "Resumo",
+    title: "Leia os principais resultados",
+    description: "Compare o saldo projetado, a reserva planejada e o dinheiro livre do período. Abra os indicadores complementares para ver médias e extremos. Se alguma meta ou mês ficar negativo, o alerta indica onde revisar."
+  },
+  {
+    target: "projection-chart",
+    eyebrow: "Comparação visual",
+    title: "Compare os saldos ao longo do tempo",
+    description: "O gráfico coloca lado a lado a evolução sem a simulação e com a simulação. Passe o cursor sobre cada mês para conferir os valores e a diferença causada pelo cenário."
+  },
+  {
+    target: "category-results",
+    eyebrow: "Distribuição",
+    title: "Acompanhe suas categorias",
+    description: "Veja quanto cada categoria recebe no mês atual e em todo o período. “Dinheiro livre não planejado” mostra o que ainda restou depois dessa distribuição, sem realizar um novo desconto."
+  },
+  {
+    target: "planning-chart",
+    eyebrow: "Reserva e valor livre",
+    title: "Entenda a sustentabilidade do plano",
+    description: "Este gráfico mostra a reserva acumulada e o dinheiro livre de cada mês. Use-o para identificar quando a meta de reserva está consumindo mais do que o orçamento mensal comporta."
+  },
+  {
+    target: "monthly-table",
+    eyebrow: "Detalhamento mensal",
+    title: "Abra cada mês para conferir a composição",
+    description: "A tabela reúne receitas, despesas, reserva, dinheiro livre e saldo final. Clique em uma linha para separar valores cadastrados e simulados e consultar a reserva, as categorias e o dinheiro ainda não planejado daquele mês."
+  },
+  {
+    target: "save",
+    eyebrow: "Quando terminar",
+    title: "Salve ou efetive somente os itens",
+    description: "Clique no nome para renomear e em “Salvar” para guardar todo o cenário; “Excluir” remove a simulação salva. No fim da página, “Inserir itens no sistema” cria apenas as receitas e os gastos confirmados: reserva e categorias continuam sendo planejamento.",
+    nextLabel: "Concluir"
+  }
+];
+
+function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNext }) {
+  const [targetRect, setTargetRect] = useState(null);
+  const step = SIMULATION_TUTORIAL_STEPS[stepIndex];
+
+  useEffect(() => {
+    if (!open || !step) return undefined;
+    const selector = `[data-simulation-tour="${step.target}"]`;
+    const element = document.querySelector(selector);
+    let settleTimer;
+
+    const measure = () => {
+      const currentTarget = document.querySelector(selector);
+      if (!currentTarget) {
+        setTargetRect(null);
+        return;
+      }
+      const rect = currentTarget.getBoundingClientRect();
+      setTargetRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom });
+    };
+
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      const outsideViewport = rect.top < 12 || rect.bottom > window.innerHeight - 12;
+      if (outsideViewport) element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    measure();
+    settleTimer = window.setTimeout(measure, 320);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.clearTimeout(settleTimer);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, step]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open || !step) return null;
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const compact = viewportWidth <= 720;
+  const spotlightStyle = targetRect ? {
+    top: Math.max(8, targetRect.top - 6),
+    left: Math.max(8, targetRect.left - 6),
+    width: Math.min(viewportWidth - Math.max(8, targetRect.left - 6) - 8, targetRect.width + 12),
+    height: Math.min(viewportHeight - Math.max(8, targetRect.top - 6) - 8, targetRect.height + 12)
+  } : null;
+  let cardStyle = compact ? { left: 16, right: 16, bottom: 16 } : { left: "50%", top: "50%", transform: "translate(-50%, -50%)" };
+
+  if (!compact && targetRect) {
+    if (viewportWidth - targetRect.right >= 390) {
+      cardStyle = { left: targetRect.right + 18, top: Math.max(16, Math.min(targetRect.top, viewportHeight - 330)) };
+    } else if (targetRect.left >= 390) {
+      cardStyle = { right: viewportWidth - targetRect.left + 18, top: Math.max(16, Math.min(targetRect.top, viewportHeight - 330)) };
+    } else if (viewportHeight - targetRect.bottom >= 300) {
+      cardStyle = { left: Math.max(16, Math.min(targetRect.left, viewportWidth - 376)), top: targetRect.bottom + 18 };
+    } else {
+      cardStyle = { left: Math.max(16, Math.min(targetRect.left, viewportWidth - 376)), bottom: viewportHeight - targetRect.top + 18 };
+    }
+  }
+
+  const relativeStep = stepIndex - startStep + 1;
+  const totalSteps = SIMULATION_TUTORIAL_STEPS.length - startStep;
+
+  return (
+    <div className={`simulation-tutorial-layer ${targetRect ? "has-target" : ""}`} role="dialog" aria-modal="true" aria-labelledby="simulation-tutorial-title" aria-describedby="simulation-tutorial-description">
+      <button className="simulation-tutorial-backdrop" type="button" onClick={onClose} aria-label="Fechar tutorial" />
+      {spotlightStyle && <div className="simulation-tutorial-spotlight" style={spotlightStyle} />}
+      <div className="simulation-tutorial-card" style={cardStyle}>
+        <div className="simulation-tutorial-head">
+          <span>{step.eyebrow}</span>
+          <button className="icon-btn small" type="button" onClick={onClose} aria-label="Fechar tutorial"><X size={16} /></button>
+        </div>
+        <h2 id="simulation-tutorial-title">{step.title}</h2>
+        <p id="simulation-tutorial-description">{step.description}</p>
+        <div className="simulation-tutorial-progress" aria-label={`Etapa ${relativeStep} de ${totalSteps}`}>
+          <span>{relativeStep} de {totalSteps}</span>
+          <div>{Array.from({ length: totalSteps }, (_, index) => <i className={index < relativeStep ? "active" : ""} key={index} />)}</div>
+        </div>
+        <div className="simulation-tutorial-actions">
+          {stepIndex > startStep
+            ? <button className="btn btn-ghost" type="button" onClick={onBack}>Voltar</button>
+            : <button className="btn btn-ghost" type="button" onClick={onClose}>Pular tutorial</button>}
+          <button className="btn btn-primary" type="button" onClick={onNext}>{step.nextLabel || "Próximo"}<ChevronRight size={16} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits = false, monthCards = [], onInserted }) {
   const { user } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
+  const tutorialStorageKey = `kashy365_simulation_tutorial_v2_${user?.id || "local"}`;
   const [items, setItems] = useState([]);
   const [activeItems, setActiveItems] = useState([]);
   const [includeReal, setIncludeReal] = useState(true);
-  const [baseSummary, setBaseSummary] = useState(null);
-  const [monthSummaries, setMonthSummaries] = useState([]);
+  const [reserveMode, setReserveMode] = useState("percentage");
+  const [reserveValue, setReserveValue] = useState("");
+  const [reserveStartMonth, setReserveStartMonth] = useState(currentMonthValue());
+  const [reserveEndMonth, setReserveEndMonth] = useState("");
+  const [reserveSourceItemIds, setReserveSourceItemIds] = useState([]);
+  const [allocationCategories, setAllocationCategories] = useState([]);
+  const [planningCollapsed, setPlanningCollapsed] = useState(true);
+  const [categoriesCollapsed, setCategoriesCollapsed] = useState(true);
+  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState({});
+  const [itemsCollapsed, setItemsCollapsed] = useState(false);
+  const [planningResult, setPlanningResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [restored, setRestored] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -511,6 +727,17 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const [saveDialog, setSaveDialog] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [decisionDialog, setDecisionDialog] = useState(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialStartStep, setTutorialStartStep] = useState(0);
+
+  useEffect(() => {
+    if (!tutorialOpen || !editorOpen) return;
+    const target = SIMULATION_TUTORIAL_STEPS[tutorialStep]?.target;
+    if (target === "planning") setPlanningCollapsed(false);
+    if (target === "categories") setCategoriesCollapsed(false);
+    if (target === "items") setItemsCollapsed(false);
+  }, [editorOpen, tutorialOpen, tutorialStep]);
 
   const refreshSavedSimulations = async () => {
     try {
@@ -539,9 +766,34 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   useEffect(() => {
     setStorageReady(false);
     setLocalDraftEnabled(true);
+    setIncludeReal(true);
+    setReserveMode("percentage");
+    setReserveValue("");
+    setReserveStartMonth(currentMonthValue());
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     try {
-      const restoredItems = normalizeRestoredItems(JSON.parse(localStorage.getItem(storageKey) || "[]"));
-      if (restoredItems.length) {
+      const storedDraft = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      const restoredItems = normalizeRestoredItems(Array.isArray(storedDraft) ? storedDraft : storedDraft.items);
+      const storedCategories = !Array.isArray(storedDraft)
+        ? normalizeAllocationCategories(storedDraft.allocationCategories, language)
+        : [];
+      const hasStoredPlanning = storedCategories.length > 0 || (!Array.isArray(storedDraft) && Boolean(storedDraft.reserveValue));
+      if (!Array.isArray(storedDraft)) {
+        setIncludeReal(storedDraft.includeReal !== false);
+        setReserveMode(storedDraft.reserveMode === "fixed" ? "fixed" : "percentage");
+        setReserveValue(String(storedDraft.reserveValue || ""));
+        setReserveStartMonth(/^\d{4}-\d{2}$/.test(storedDraft.reserveStartMonth || "") ? storedDraft.reserveStartMonth : currentMonthValue());
+        setReserveEndMonth(/^\d{4}-\d{2}$/.test(storedDraft.reserveEndMonth || "") ? storedDraft.reserveEndMonth : "");
+        setReserveSourceItemIds(Array.isArray(storedDraft.reserveSourceItemIds)
+          ? storedDraft.reserveSourceItemIds
+          : storedDraft.reserveSourceItemId && storedDraft.reserveSourceItemId !== "all"
+            ? [storedDraft.reserveSourceItemId]
+            : []);
+        setAllocationCategories(storedCategories);
+      }
+      if (restoredItems.length || hasStoredPlanning) {
         setItems(restoredItems);
         setActiveItems(restoredItems);
         setRestored(true);
@@ -564,77 +816,147 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   }, []);
 
   useEffect(() => {
+    if (!user?.id) return;
+    try {
+      if (localStorage.getItem(tutorialStorageKey) === "1") return;
+    } catch {
+      // The tutorial can still be displayed when storage is unavailable.
+    }
+    setTutorialStartStep(0);
+    setTutorialStep(0);
+    setTutorialOpen(true);
+  }, [tutorialStorageKey, user?.id]);
+
+  useEffect(() => {
     if (!storageReady) return;
     try {
-      if (!localDraftEnabled || !items.length) {
+      if (!localDraftEnabled || (!items.length && !reserveValue && !allocationCategories.length)) {
         localStorage.removeItem(storageKey);
         return;
       }
-      localStorage.setItem(storageKey, JSON.stringify(items));
+      localStorage.setItem(storageKey, JSON.stringify({ items, includeReal, reserveMode, reserveValue, reserveStartMonth, reserveEndMonth, reserveSourceItemIds, allocationCategories }));
     } catch {
       // localStorage can be unavailable in private contexts.
     }
-  }, [items, localDraftEnabled, storageKey, storageReady]);
+  }, [allocationCategories, includeReal, items, localDraftEnabled, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, storageKey, storageReady]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setActiveItems(items), 500);
     return () => window.clearTimeout(timer);
   }, [items]);
 
+  useEffect(() => {
+    const validIds = new Set(items.filter((item) => item.type === "income").map((item) => item.id));
+    setReserveSourceItemIds((current) => {
+      const next = current.filter((itemId) => validIds.has(itemId));
+      return next.length === current.length && next.every((itemId, index) => itemId === current[index]) ? current : next;
+    });
+  }, [items]);
+
   const registeredEndIndex = useMemo(() => {
     const current = monthIndex(currentMonthValue());
     return monthCards.reduce((last, item) => Math.max(last, monthIndex(`${item.year}-${String(item.month).padStart(2, "0")}`)), current);
   }, [monthCards]);
-  const endIndex = useMemo(() => Math.max(simulationEndIndex(activeItems, language), registeredEndIndex), [activeItems, language, registeredEndIndex]);
+  const endIndex = useMemo(() => Math.max(
+    simulationEndIndex(activeItems, language),
+    registeredEndIndex,
+    monthIndex(reserveStartMonth) + 1,
+    reserveEndMonth ? monthIndex(reserveEndMonth) : registeredEndIndex
+  ), [activeItems, language, registeredEndIndex, reserveEndMonth, reserveStartMonth]);
   const months = useMemo(() => {
     const start = monthIndex(currentMonthValue());
     return Array.from({ length: endIndex - start + 1 }, (_, offset) => monthFromIndex(start + offset));
   }, [endIndex]);
+  const validAllocationCategories = useMemo(() => allocationCategories.filter((category) => category.name.trim()), [allocationCategories]);
+  const validAllocationCategoryIds = useMemo(() => new Set(validAllocationCategories.map((category) => category.id)), [validAllocationCategories]);
 
   useEffect(() => {
     let mounted = true;
-    async function loadProjectionBase() {
+    async function loadProjection() {
       setLoading(true);
       try {
-        const summaryPayloads = await Promise.all(months.map((item) => getMonthSummary(item.year, item.month)));
+        const result = await previewSimulation({
+          start_month: months[0].value,
+          end_month: months[months.length - 1].value,
+          include_real: includeReal,
+          reserve_mode: reserveMode,
+          reserve_value: reserveMode === "fixed" ? parseTypedMoneyInput(reserveValue, language) : Number(reserveValue || 0),
+          reserve_start_month: reserveStartMonth,
+          reserve_end_month: reserveEndMonth || null,
+          reserve_source_item_positions: reserveSourcePositions(activeItems, reserveSourceItemIds),
+          allocation_categories: validAllocationCategories.map((category) => allocationCategoryToPayload(category, language)),
+          items: activeItems.map((item) => draftItemToPayload(item, language, validAllocationCategoryIds))
+        });
         if (!mounted) return;
-        setBaseSummary(summaryPayloads[0] || null);
-        setMonthSummaries(summaryPayloads);
+        setPlanningResult(result);
       } catch {
+        if (mounted) setPlanningResult(null);
         toast.error("Erro ao carregar dados do simulador");
       } finally {
         if (mounted) setLoading(false);
       }
     }
-    loadProjectionBase();
+    loadProjection();
     return () => { mounted = false; };
-  }, [months]);
+  }, [activeItems, includeReal, language, months, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, validAllocationCategories, validAllocationCategoryIds]);
 
-  const simulatedByMonth = useMemo(() => buildSimulatedImpacts(activeItems, language), [activeItems, language]);
-  const summaryByMonth = useMemo(() => new Map(monthSummaries.map((summary) => [
-    `${summary.year}-${String(summary.month).padStart(2, "0")}`,
-    summary
-  ])), [monthSummaries]);
-
-  const rows = useMemo(() => projectionRows({
-    baseBalance: baseSummary?.current_balance,
-    includeReal,
-    months,
-    summaryByMonth,
-    simulatedByMonth,
-    language
-  }), [baseSummary, includeReal, language, months, summaryByMonth, simulatedByMonth]);
+  const rows = useMemo(() => (planningResult?.rows || []).map((row, index) => {
+    const [year, month] = row.month.split("-").map(Number);
+    return {
+      ...row,
+      value: row.month,
+      year,
+      monthNumber: month,
+      label: formatMonthLabel(year, month, language),
+      shortLabel: formatMonthLabel(year, month, language).slice(0, 3),
+      initial: Number(row.initial_balance || 0),
+      realIncome: Number(row.real_income || 0),
+      realExpenses: Number(row.real_expenses || 0),
+      simulatedIncome: Number(row.simulated_income || 0),
+      simulatedExpense: Number(row.simulated_expenses || 0),
+      simulatedItems: row.simulated_items || [],
+      withoutSimulation: Number(row.without_simulation || 0),
+      finalBalance: Number(row.final_balance || 0),
+      difference: Number(row.difference || 0),
+      income: Number(row.income || 0),
+      expenses: Number(row.expenses || 0),
+      plannedReserve: Number(row.planned_reserve || 0),
+      reserveAccumulated: Number(row.reserve_accumulated || 0),
+      reserveBaseIncome: Number(row.reserve_base_income || 0),
+      reserveRate: Number(row.reserve_rate || 0),
+      freeMoney: Number(row.free_money || 0),
+      reserveActive: Boolean(row.reserve_active),
+      categoryAllocations: row.category_allocations || [],
+      unplannedFreeMoney: Number(row.unplanned_free_money ?? row.free_money ?? 0),
+      isCurrent: index === 0
+    };
+  }), [language, planningResult]);
 
   const validItems = useMemo(() => activeItems.filter((item) => getItemTotal(item, language) > 0), [activeItems, language]);
-  const baseBalance = Number(baseSummary?.current_balance || 0);
-  const finalRow = rows[rows.length - 1];
-  const projectedBalance = finalRow?.withSimulation ?? baseBalance;
-  const baselineFinal = finalRow?.withoutSimulation ?? baseBalance;
-  const simulatedImpact = projectedBalance - baselineFinal;
-  const worstRow = rows.reduce((worst, row) => (!worst || row.withSimulation < worst.withSimulation ? row : worst), null);
-  const negativeRow = rows.find((row) => row.withSimulation < 0);
-  const axisWidth = moneyAxisWidth(rows.flatMap((row) => [row.withoutSimulation, row.withSimulation]), language);
-  const minBalance = Math.min(0, ...rows.flatMap((row) => [row.withoutSimulation, row.withSimulation]));
+  const summary = planningResult?.summary || {};
+  const baseBalance = Number(summary.current_balance || 0);
+  const projectedBalance = Number(summary.projected_balance ?? baseBalance);
+  const simulatedImpact = Number(summary.simulated_impact || 0);
+  const worstBalanceMonth = rows.find((row) => row.value === summary.worst_balance_month);
+  const worstFreeMonth = rows.find((row) => row.value === summary.worst_free_month);
+  const negativeBalanceRow = rows.find((row) => row.finalBalance < 0);
+  const negativeFreeRow = rows.find((row) => row.freeMoney < 0);
+  const simulationNegativeRow = rows.find((row) => row.simulation_caused_negative);
+  const axisWidth = moneyAxisWidth(rows.flatMap((row) => [row.withoutSimulation, row.finalBalance]), language);
+  const planningAxisWidth = moneyAxisWidth(rows.flatMap((row) => [row.reserveAccumulated, row.freeMoney]), language);
+  const minBalance = Math.min(0, ...rows.flatMap((row) => [row.withoutSimulation, row.finalBalance]));
+  const minPlanningValue = Math.min(0, ...rows.map((row) => row.freeMoney));
+  const simulatedIncomeItems = items.filter((item) => item.type === "income");
+  const selectedReserveSources = simulatedIncomeItems.filter((item) => reserveSourceItemIds.includes(item.id));
+  const reserveSourceLabel = !selectedReserveSources.length
+    ? "todas as receitas"
+    : selectedReserveSources.length === 1
+      ? selectedReserveSources[0].description?.trim() || "uma receita simulada"
+      : `${selectedReserveSources.length} receitas simuladas`;
+  const reservePeriodLabel = reserveEndMonth
+    ? `de ${formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)} até ${formatMonthLabel(...reserveEndMonth.split("-").map(Number), language)}`
+    : `a partir de ${formatMonthLabel(...reserveStartMonth.split("-").map(Number), language)}`;
+  const categorySummaries = summary.category_summaries || [];
 
   const updateItem = (id, patch) => {
     enableLocalDraft();
@@ -647,6 +969,28 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const addItem = () => {
     enableLocalDraft();
     setItems((current) => [...current, blankItem()]);
+    setItemsCollapsed(false);
+  };
+  const addAllocationCategory = () => {
+    enableLocalDraft();
+    setAllocationCategories((current) => [...current, blankAllocationCategory()]);
+  };
+  const updateAllocationCategory = (id, patch) => {
+    enableLocalDraft();
+    setAllocationCategories((current) => current.map((category) => category.id === id ? { ...category, ...patch } : category));
+  };
+  const removeAllocationCategory = (id) => {
+    enableLocalDraft();
+    setAllocationCategories((current) => current.filter((category) => category.id !== id));
+    setItems((current) => current.map((item) => item.categoryId === id ? { ...item, categoryId: "" } : item));
+    setCollapsedCategoryIds((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  };
+  const toggleAllocationCategory = (id) => {
+    setCollapsedCategoryIds((current) => ({ ...current, [id]: !current[id] }));
   };
   const clearItems = () => {
     if (!items.length) return;
@@ -668,6 +1012,13 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setItems([]);
     setActiveItems([]);
     setSelectedSimulationId("");
+    setIncludeReal(true);
+    setReserveMode("percentage");
+    setReserveValue("");
+    setReserveStartMonth(currentMonthValue());
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     setRestored(false);
     clearLocalDraft();
   };
@@ -675,15 +1026,41 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setItems([]);
     setActiveItems([]);
     setRestored(false);
+    setIncludeReal(true);
+    setReserveMode("percentage");
+    setReserveValue("");
+    setReserveStartMonth(currentMonthValue());
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     clearLocalDraft();
   };
   const simulateNow = () => setActiveItems(items);
   const toggleRow = (value) => setExpandedRows((current) => ({ ...current, [value]: !current[value] }));
+  const openMonthDetails = (value) => {
+    setExpandedRows((current) => ({ ...current, [value]: true }));
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-simulation-month="${value}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
   const selectedSimulation = savedSimulations.find((simulation) => String(simulation.id) === String(selectedSimulationId));
+  const hasLocalDraft = items.length > 0 || Boolean(reserveValue) || allocationCategories.length > 0;
+  const setPlanningMode = (mode) => {
+    if (mode === reserveMode) return;
+    enableLocalDraft();
+    setReserveMode(mode);
+    setReserveValue("");
+  };
   const buildSavedPayload = (name) => ({
     name,
     include_real: includeReal,
-    items: items.map((item) => draftItemToPayload(item, language))
+    reserve_mode: reserveMode,
+    reserve_value: reserveMode === "fixed" ? parseTypedMoneyInput(reserveValue, language) : Number(reserveValue || 0),
+    reserve_start_month: reserveStartMonth,
+    reserve_end_month: reserveEndMonth || null,
+    reserve_source_item_positions: reserveSourcePositions(items, reserveSourceItemIds),
+    allocation_categories: validAllocationCategories.map((category) => allocationCategoryToPayload(category, language)),
+    items: items.map((item) => draftItemToPayload(item, language, validAllocationCategoryIds))
   });
   const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
   const startNewSimulation = () => {
@@ -691,6 +1068,12 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setItems([]);
     setActiveItems([]);
     setIncludeReal(true);
+    setReserveMode("percentage");
+    setReserveValue("");
+    setReserveStartMonth(currentMonthValue());
+    setReserveEndMonth("");
+    setReserveSourceItemIds([]);
+    setAllocationCategories([]);
     setExpandedRows({});
     setRestored(false);
     setLocalDraftEnabled(true);
@@ -708,8 +1091,50 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setSaveDialog(null);
     setDecisionDialog(null);
   };
+  const markTutorialSeen = () => {
+    try {
+      localStorage.setItem(tutorialStorageKey, "1");
+    } catch {
+      // localStorage can be unavailable in private contexts.
+    }
+  };
+  const closeTutorial = () => {
+    markTutorialSeen();
+    setTutorialOpen(false);
+  };
+  const openTutorial = () => {
+    const firstStep = editorOpen ? 2 : 0;
+    setTutorialStartStep(firstStep);
+    setTutorialStep(firstStep);
+    setTutorialOpen(true);
+  };
+  const advanceTutorial = () => {
+    if (tutorialStep === 1 && !editorOpen) {
+      if (hasLocalDraft && localDraftEnabled) openDraftSimulation();
+      else startNewSimulation();
+      setTutorialStep(2);
+      return;
+    }
+    if (tutorialStep >= SIMULATION_TUTORIAL_STEPS.length - 1) {
+      closeTutorial();
+      return;
+    }
+    setTutorialStep((current) => current + 1);
+  };
+  const returnTutorial = () => {
+    if (tutorialStep === 2 && tutorialStartStep === 0) {
+      closeEditor();
+      setTutorialStep(1);
+      return;
+    }
+    setTutorialStep((current) => Math.max(tutorialStartStep, current - 1));
+  };
   const openCreateSimulationDialog = () => {
     setSaveDialog({ mode: "create", name: defaultSimulationName() });
+  };
+  const openRenameSimulationDialog = () => {
+    if (!selectedSimulation) return;
+    setSaveDialog({ mode: "update", name: selectedSimulation.name });
   };
   const persistNamedSimulation = async (name) => {
     if (!saveDialog) return;
@@ -760,6 +1185,18 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
       setItems(loadedItems);
       setActiveItems(loadedItems);
       setIncludeReal(Boolean(saved.include_real));
+      setReserveMode(saved.reserve_mode === "fixed" ? "fixed" : "percentage");
+      setReserveValue(saved.reserve_mode === "fixed"
+        ? formatMoney(saved.reserve_value || 0, language)
+        : String(Number(saved.reserve_value || 0)));
+      setReserveStartMonth(/^\d{4}-\d{2}$/.test(saved.reserve_start_month || "") ? saved.reserve_start_month : currentMonthValue());
+      setReserveEndMonth(/^\d{4}-\d{2}$/.test(saved.reserve_end_month || "") ? saved.reserve_end_month : "");
+      setReserveSourceItemIds((saved.reserve_source_item_positions || [])
+        .map((position) => loadedItems[position])
+        .filter((item) => item?.type === "income")
+        .map((item) => item.id));
+      const loadedCategories = normalizeAllocationCategories(saved.allocation_categories, language);
+      setAllocationCategories(loadedCategories);
       setSelectedSimulationId(String(saved.id));
       setLocalDraftEnabled(false);
       setRestored(false);
@@ -882,28 +1319,33 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     return (
       <section className="simulation-page">
         <div className="simulation-library">
-          <div className="simulation-library-head">
+          <div className="simulation-library-head" data-simulation-tour="library">
             <div>
               <p className="eyebrow">Simulador financeiro</p>
               <h2>Escolha uma simulação ou comece uma nova.</h2>
             </div>
-            <button className="btn btn-primary" type="button" onClick={startNewSimulation}>
-              <Plus size={16} /> Criar nova
-            </button>
+            <div className="simulation-library-actions">
+              <button className="icon-btn simulation-help-button" type="button" onClick={openTutorial} aria-label="Abrir tutorial do simulador" title="Como usar o simulador">
+                <CircleHelp size={19} />
+              </button>
+              <button className="btn btn-primary" type="button" onClick={startNewSimulation}>
+                <Plus size={16} /> Criar nova
+              </button>
+            </div>
           </div>
 
           <div className="simulation-library-grid">
-            <button className="simulation-create-card" type="button" onClick={startNewSimulation}>
+            <button className="simulation-create-card" type="button" onClick={startNewSimulation} data-simulation-tour="create">
               <span><Plus size={22} /></span>
               <strong>Nova simulação</strong>
               <small>Monte um cenário temporário sem alterar dados reais.</small>
             </button>
 
-            {items.length > 0 && localDraftEnabled && (
+            {hasLocalDraft && localDraftEnabled && (
               <button className="simulation-card simulation-draft-card" type="button" onClick={openDraftSimulation}>
                 <span className="simulation-card-kicker">Rascunho local</span>
                 <strong>Continuar simulação não salva</strong>
-                <small>{items.length} {items.length === 1 ? "item simulado" : "itens simulados"}</small>
+                <small>{items.length} {items.length === 1 ? "item simulado" : "itens simulados"} · {allocationCategories.length} {allocationCategories.length === 1 ? "categoria" : "categorias"}</small>
                 <em>Salvo apenas neste aparelho</em>
               </button>
             )}
@@ -912,13 +1354,13 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <button className="simulation-card" type="button" key={simulation.id} onClick={() => loadSavedSimulation(simulation.id)}>
                 <span className="simulation-card-kicker">Simulação salva</span>
                 <strong>{simulation.name}</strong>
-                <small>{simulation.items?.length || 0} {(simulation.items?.length || 0) === 1 ? "item" : "itens"} simulados</small>
+                <small>{simulation.items?.length || 0} {(simulation.items?.length || 0) === 1 ? "item" : "itens"} simulados · {simulation.allocation_categories?.length || 0} {(simulation.allocation_categories?.length || 0) === 1 ? "categoria" : "categorias"}</small>
                 <em>Atualizada em {formatSavedDate(simulation.updated_at || simulation.created_at, language)}</em>
               </button>
             ))}
           </div>
 
-          {!savedSimulations.length && !(items.length > 0 && localDraftEnabled) && (
+          {!savedSimulations.length && !(hasLocalDraft && localDraftEnabled) && (
             <div className="simulation-library-empty">
               <CircleDollarSign size={28} />
               <strong>Nenhuma simulação salva ainda.</strong>
@@ -926,6 +1368,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           )}
         </div>
+        <SimulationTutorial open={tutorialOpen} stepIndex={tutorialStep} startStep={tutorialStartStep} onBack={returnTutorial} onClose={closeTutorial} onNext={advanceTutorial} />
       </section>
     );
   }
@@ -933,11 +1376,28 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   return (
     <section className="simulation-page">
       <div className="simulation-editor-bar">
-        <button className="btn btn-ghost compact" type="button" onClick={closeEditor}>
-          <ArrowLeft size={16} /> Simulações
-        </button>
-        <div>
-          <button className="btn btn-ghost compact" type="button" onClick={saveCurrentSimulation} disabled={savingSimulation}>
+        <div className="simulation-editor-context">
+          <button className="btn btn-ghost compact" type="button" onClick={closeEditor}>
+            <ArrowLeft size={16} /> Simulações
+          </button>
+          {selectedSimulation && (
+            <button
+              className="simulation-editor-name"
+              type="button"
+              onClick={openRenameSimulationDialog}
+              aria-label={`Editar nome da simulação ${selectedSimulation.name}`}
+              title="Editar nome"
+            >
+              <span>{selectedSimulation.name}</span>
+              <Pencil size={14} />
+            </button>
+          )}
+        </div>
+        <div className="simulation-editor-actions">
+          <button className="icon-btn simulation-help-button" type="button" onClick={openTutorial} aria-label="Abrir tutorial do simulador" title="Como usar o simulador">
+            <CircleHelp size={19} />
+          </button>
+          <button className="btn btn-ghost compact" type="button" onClick={saveCurrentSimulation} disabled={savingSimulation} data-simulation-tour="save">
             <Save size={16} /> {savingSimulation ? "Salvando..." : "Salvar"}
           </button>
           <button className="btn btn-ghost compact danger-soft" type="button" onClick={deleteCurrentSimulation} disabled={savingSimulation}>
@@ -955,15 +1415,218 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             <LineChartIcon size={22} />
           </div>
 
-          <div className="simulation-balance-box">
+          <div className="simulation-balance-box" data-simulation-tour="balance">
             <span>Saldo atual</span>
             <strong>{loading ? "Carregando..." : formatMoney(baseBalance, language)}</strong>
           </div>
 
-          <label className={`switch-row simulation-switch ${includeReal ? "active" : ""}`}>
+          <label className={`switch-row simulation-switch ${includeReal ? "active" : ""}`} data-simulation-tour="real-data">
             <input type="checkbox" checked={includeReal} onChange={(event) => setIncludeReal(event.target.checked)} />
             <span><i /> Incluir lançamentos já cadastrados</span>
           </label>
+
+          <section className={`simulation-planning ${planningCollapsed ? "collapsed" : ""}`} data-simulation-tour="planning">
+            <div className="simulation-planning-head">
+              <div>
+                <span><PiggyBank size={18} /> Planejamento</span>
+                <small>
+                  {planningCollapsed
+                    ? `${reserveMode === "percentage"
+                      ? `${Number(reserveValue || 0).toLocaleString(language, { maximumFractionDigits: 2 })}%`
+                      : formatMoney(parseTypedMoneyInput(reserveValue, language), language)} · ${reserveSourceLabel} · ${reservePeriodLabel}`
+                    : "Defina quanto reservar por mês"}
+                </small>
+              </div>
+              <button
+                type="button"
+                className="simulation-planning-collapse"
+                onClick={() => setPlanningCollapsed((collapsed) => !collapsed)}
+                aria-expanded={!planningCollapsed}
+                aria-label={planningCollapsed ? "Expandir planejamento da reserva" : "Minimizar planejamento da reserva"}
+                title={planningCollapsed ? "Expandir" : "Minimizar"}
+              >
+                {planningCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
+            {!planningCollapsed && (
+              <>
+            <div className="segmented-control" aria-label="Modo da reserva mensal">
+              <button className={reserveMode === "percentage" ? "active" : ""} type="button" onClick={() => setPlanningMode("percentage")}>Percentual</button>
+              <button className={reserveMode === "fixed" ? "active" : ""} type="button" onClick={() => setPlanningMode("fixed")}>Valor fixo</button>
+            </div>
+            <div className="simulation-planning-fields">
+              <label className="simulation-reserve-field">
+                <span>Reserva mensal</span>
+                <div>
+                  {reserveMode === "percentage" && <b>%</b>}
+                  <input
+                    type={reserveMode === "percentage" ? "number" : "text"}
+                    min={reserveMode === "percentage" ? "0" : undefined}
+                    max={reserveMode === "percentage" ? "100" : undefined}
+                    step={reserveMode === "percentage" ? "1" : undefined}
+                    inputMode="decimal"
+                    placeholder={reserveMode === "percentage" ? "Ex.: 50" : "R$ 0,00"}
+                    value={reserveValue}
+                    onChange={(event) => {
+                      enableLocalDraft();
+                      if (reserveMode === "fixed") {
+                        setReserveValue(formatTypedMoneyForEditing(event.target.value, language));
+                        return;
+                      }
+                      const nextValue = event.target.value;
+                      setReserveValue(nextValue === "" ? "" : String(Math.min(100, Math.max(0, Number(nextValue)))));
+                    }}
+                    onBlur={() => setReserveValue(reserveMode === "fixed"
+                      ? formatTypedMoneyAsCurrency(reserveValue, language)
+                      : String(Math.min(100, Math.max(0, Number(reserveValue || 0)))))}
+                  />
+                </div>
+              </label>
+              <label className="simulation-reserve-start">
+                <span>Começar em</span>
+                <MonthField value={reserveStartMonth} onChange={(value) => {
+                  enableLocalDraft();
+                  setReserveStartMonth(value);
+                  setReserveEndMonth((current) => current && monthIndex(current) < monthIndex(value) ? value : current);
+                }} />
+              </label>
+              <div className="simulation-reserve-end">
+                <div>
+                  <span>Mês limite</span>
+                  <label className="simulation-limit-toggle">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(reserveEndMonth)}
+                      onChange={(event) => {
+                        enableLocalDraft();
+                        setReserveEndMonth(event.target.checked ? reserveStartMonth : "");
+                      }}
+                    />
+                    <span>{reserveEndMonth ? "Com limite" : "Sem limite"}</span>
+                  </label>
+                </div>
+                {reserveEndMonth
+                  ? <MonthField value={reserveEndMonth} onChange={(value) => {
+                    enableLocalDraft();
+                    setReserveEndMonth(monthIndex(value) < monthIndex(reserveStartMonth) ? reserveStartMonth : value);
+                  }} />
+                  : <small>A reserva continuará até o fim da projeção.</small>}
+              </div>
+              <div className="simulation-reserve-source">
+                <span>Calcular reserva sobre</span>
+                <details className="simulation-source-picker">
+                  <summary><span>{reserveSourceLabel}</span><ChevronDown size={15} /></summary>
+                  <div className="simulation-source-options">
+                    <label>
+                      <input type="checkbox" checked={!reserveSourceItemIds.length} onChange={() => { enableLocalDraft(); setReserveSourceItemIds([]); }} />
+                      <span>Todas as receitas</span>
+                    </label>
+                    {simulatedIncomeItems.map((item, index) => (
+                      <label key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={reserveSourceItemIds.includes(item.id)}
+                          onChange={() => {
+                            enableLocalDraft();
+                            setReserveSourceItemIds((current) => current.includes(item.id)
+                              ? current.filter((itemId) => itemId !== item.id)
+                              : [...current, item.id]);
+                          }}
+                        />
+                        <span>{item.description?.trim() || `Receita simulada ${index + 1}`}</span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                {!simulatedIncomeItems.length && <small>Adicione uma receita simulada para vinculá-la à reserva.</small>}
+              </div>
+            </div>
+            <div className="simulation-planning-hint">
+              <Check size={14} />
+              <span>A reserva será calculada sobre {reserveSourceLabel} {reservePeriodLabel}.</span>
+            </div>
+              </>
+            )}
+          </section>
+
+          <section className={`simulation-categories-panel ${categoriesCollapsed ? "collapsed" : ""}`} data-simulation-tour="categories">
+            <div className="simulation-categories-head">
+              <div>
+                <strong>Categorias do dinheiro livre</strong>
+                <small>Planeje o valor disponível sem descontá-lo novamente.</small>
+              </div>
+              <div className="simulation-categories-head-actions">
+                <span>{allocationCategories.length}</span>
+                <button
+                  type="button"
+                  className="simulation-planning-collapse"
+                  onClick={() => setCategoriesCollapsed((collapsed) => !collapsed)}
+                  aria-expanded={!categoriesCollapsed}
+                  aria-label={categoriesCollapsed ? "Expandir categorias do dinheiro livre" : "Minimizar categorias do dinheiro livre"}
+                >
+                  {categoriesCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                </button>
+              </div>
+            </div>
+            {!categoriesCollapsed && <div className="simulation-category-editor">
+              {allocationCategories.map((category, index) => (
+                <article className={`simulation-category-form ${collapsedCategoryIds[category.id] ? "collapsed" : ""}`} key={category.id}>
+                  <div className="simulation-category-form-head">
+                    <button
+                      className="simulation-category-collapse"
+                      type="button"
+                      onClick={() => toggleAllocationCategory(category.id)}
+                      aria-expanded={!collapsedCategoryIds[category.id]}
+                    >
+                      {collapsedCategoryIds[category.id] ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                      <strong>{category.name.trim() || `Categoria ${index + 1}`}</strong>
+                    </button>
+                    <button className="icon-btn small danger" type="button" onClick={() => removeAllocationCategory(category.id)} aria-label={`Remover categoria ${category.name || index + 1}`}><X size={14} /></button>
+                  </div>
+                  {!collapsedCategoryIds[category.id] && <>
+                  <label>
+                    <span>Nome</span>
+                    <input maxLength="80" value={category.name} onChange={(event) => updateAllocationCategory(category.id, { name: event.target.value })} placeholder="Ex.: Jogos" />
+                  </label>
+                  <div className="segmented-control" aria-label={`Modo da categoria ${category.name || index + 1}`}>
+                    <button className={category.mode === "percentage" ? "active" : ""} type="button" onClick={() => updateAllocationCategory(category.id, { mode: "percentage", value: "" })}>Percentual</button>
+                    <button className={category.mode === "fixed" ? "active" : ""} type="button" onClick={() => updateAllocationCategory(category.id, { mode: "fixed", value: "" })}>Valor fixo</button>
+                  </div>
+                  <label className="simulation-reserve-field">
+                    <span>{category.mode === "percentage" ? "Percentual do dinheiro livre" : "Valor planejado por mês"}</span>
+                    <div>
+                      {category.mode === "percentage" && <b>%</b>}
+                      <input
+                        type={category.mode === "percentage" ? "number" : "text"}
+                        min={category.mode === "percentage" ? "0" : undefined}
+                        max={category.mode === "percentage" ? "100" : undefined}
+                        step={category.mode === "percentage" ? "1" : undefined}
+                        inputMode="decimal"
+                        placeholder={category.mode === "percentage" ? "Ex.: 40" : "R$ 0,00"}
+                        value={category.value}
+                        onChange={(event) => {
+                          if (category.mode === "fixed") {
+                            updateAllocationCategory(category.id, { value: formatTypedMoneyForEditing(event.target.value, language) });
+                            return;
+                          }
+                          const nextValue = event.target.value;
+                          updateAllocationCategory(category.id, { value: nextValue === "" ? "" : String(Math.min(100, Math.max(0, Number(nextValue)))) });
+                        }}
+                        onBlur={() => updateAllocationCategory(category.id, {
+                          value: category.mode === "fixed"
+                            ? formatTypedMoneyAsCurrency(category.value, language)
+                            : String(Math.min(100, Math.max(0, Number(category.value || 0))))
+                        })}
+                      />
+                    </div>
+                  </label>
+                  </>}
+                </article>
+              ))}
+              {!allocationCategories.length && <p className="simulation-category-empty">Cadastre categorias para planejar o dinheiro livre, mesmo sem definir uma reserva.</p>}
+              <button className="btn btn-ghost simulation-add-category" type="button" onClick={addAllocationCategory}><Plus size={15} /> Nova categoria</button>
+            </div>}
+          </section>
 
           {restored && (
             <div className="simulation-restored">
@@ -972,13 +1635,25 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
             </div>
           )}
 
-          <div className="simulation-items">
+          <section className={`simulation-items-section ${itemsCollapsed ? "collapsed" : ""}`} data-simulation-tour="items">
+            <div className="simulation-config-section-head">
+              <div><strong>Itens simulados</strong><small>{items.length} {items.length === 1 ? "item" : "itens"}</small></div>
+              <button
+                type="button"
+                className="simulation-planning-collapse"
+                onClick={() => setItemsCollapsed((collapsed) => !collapsed)}
+                aria-expanded={!itemsCollapsed}
+                aria-label={itemsCollapsed ? "Expandir itens simulados" : "Minimizar itens simulados"}
+              >{itemsCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</button>
+            </div>
+            {!itemsCollapsed && <div className="simulation-items">
             {items.map((item, index) => (
               <SimulatedItemCard
                 key={item.id}
                 item={item}
                 index={index}
                 language={language}
+                categories={validAllocationCategories}
                 onChange={(patch) => updateItem(item.id, patch)}
                 onRemove={() => removeItem(item.id)}
               />
@@ -990,9 +1665,10 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                 <span>Adicione uma compra ou receita para ver o impacto mês a mês.</span>
               </div>
             )}
-          </div>
+            </div>}
+          </section>
 
-          <div className="simulation-actions">
+          <div className="simulation-actions" data-simulation-tour="actions">
             <button className="btn btn-ghost" type="button" onClick={addItem}>
               <Plus size={16} /> Adicionar item simulado
             </button>
@@ -1006,37 +1682,73 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
         </aside>
 
         <div className="simulation-results">
-          <section className="card simulation-summary-card">
-            <div className="simulation-summary-row">
-              <span>Saldo atual</span>
-              <strong>{formatMoney(baseBalance, language)}</strong>
+          <section className="card simulation-summary-card" data-simulation-tour="results">
+            <div className="simulation-summary-head">
+              <div>
+                <p className="eyebrow">Resumo</p>
+                <h2>Resultado da simulação</h2>
+              </div>
+              <span>{rows.length} {rows.length === 1 ? "mês" : "meses"}</span>
             </div>
-            <div className="simulation-summary-row">
-              <span>Impacto simulado</span>
-              <strong className={simulatedImpact < 0 ? "money-expense" : "money-income"}>{formatMoney(simulatedImpact, language)}</strong>
+            <div className="simulation-primary-summary">
+              <div className="projected">
+                <span>Saldo projetado</span>
+                <strong>{formatMoney(projectedBalance, language)}</strong>
+                <small>Ao final do período</small>
+              </div>
+              <div>
+                <span>Reserva planejada</span>
+                <strong>{formatMoney(summary.total_planned_reserve || 0, language)}</strong>
+                <small>No período</small>
+              </div>
+              <div className={Number(summary.total_free_money || 0) < 0 ? "negative free-highlight" : "free free-highlight"}>
+                <span>Dinheiro livre</span>
+                <strong>{formatMoney(summary.total_free_money || 0, language)}</strong>
+                <small>No período</small>
+              </div>
             </div>
-            <hr />
-            <div className="simulation-summary-row projected">
-              <span>Saldo projetado</span>
-              <strong>{formatMoney(projectedBalance, language)}</strong>
+            <div className="simulation-summary-rate">
+              <span>Taxa média de reserva</span>
+              <strong>{Number(summary.average_reserve_rate || 0).toLocaleString(language, { maximumFractionDigits: 2 })}%</strong>
+              <small>sobre a base selecionada</small>
             </div>
-            <div className="simulation-summary-row">
-              <span>Pior mês</span>
-              <strong>{worstRow?.label || "-"}</strong>
-            </div>
-            <div className="simulation-summary-row">
-              <span>Menor saldo</span>
-              <strong className={Number(worstRow?.withSimulation || 0) < 0 ? "money-expense" : ""}>{formatMoney(worstRow?.withSimulation || 0, language)}</strong>
-            </div>
-            {negativeRow && (
+            <p className="simulation-summary-note">Receitas menos despesas e reserva resultam no dinheiro livre. Compras vinculadas são abatidas da categoria escolhida; as categorias não alteram novamente o saldo projetado.</p>
+            <details className="simulation-secondary-details">
+              <summary>Indicadores complementares <ChevronDown size={15} /></summary>
+              <div className="simulation-indicators">
+                <div><span>Saldo atual</span><strong>{formatMoney(baseBalance, language)}</strong><small>Ponto de partida</small></div>
+                <div><span>Impacto simulado</span><strong className={simulatedImpact < 0 ? "money-expense" : "money-income"}>{formatMoney(simulatedImpact, language)}</strong><small>No saldo projetado</small></div>
+                <div><span>Maior livre</span><strong>{formatMoney(summary.maximum_free_money || 0, language)}</strong><small>{rows.find((row) => row.value === summary.best_free_month)?.label || "-"}</small></div>
+                <div><span>Menor livre</span><strong className={Number(summary.minimum_free_money || 0) < 0 ? "money-expense" : ""}>{formatMoney(summary.minimum_free_money || 0, language)}</strong><small>{worstFreeMonth?.label || "-"}</small></div>
+                <div><span>Média mensal livre</span><strong>{formatMoney(summary.average_free_money || 0, language)}</strong><small>No período</small></div>
+                <div><span>Pior saldo</span><strong className={Number(summary.minimum_balance || 0) < 0 ? "money-expense" : ""}>{formatMoney(summary.minimum_balance || 0, language)}</strong><small>{worstBalanceMonth?.label || "-"}</small></div>
+              </div>
+            </details>
+            {simulationNegativeRow && (
               <div className="simulation-alert">
                 <AlertTriangle size={18} />
-                <span>Saldo negativo em {negativeRow.label} ({formatMoney(negativeRow.withSimulation, language)}). Considere reduzir parcelas ou adiar a compra.</span>
+                <span>O cenário simulado torna o dinheiro livre negativo em {simulationNegativeRow.label}. Após despesas e reserva planejada, restarão {formatMoney(simulationNegativeRow.freeMoney, language)}.</span>
+                <button type="button" onClick={() => openMonthDetails(simulationNegativeRow.value)}>Ver mês</button>
+              </div>
+            )}
+            {!simulationNegativeRow && negativeFreeRow && (
+              <div className="simulation-alert">
+                <AlertTriangle size={18} />
+                <span>{negativeFreeRow.plannedReserve > 0
+                  ? `Meta de reserva não sustentável em ${negativeFreeRow.label}. Após despesas e reserva planejada, o dinheiro livre ficará em ${formatMoney(negativeFreeRow.freeMoney, language)}.`
+                  : `Os compromissos superam as receitas em ${negativeFreeRow.label}. O dinheiro livre ficará em ${formatMoney(negativeFreeRow.freeMoney, language)}.`}</span>
+                <button type="button" onClick={() => openMonthDetails(negativeFreeRow.value)}>Ver mês</button>
+              </div>
+            )}
+            {negativeBalanceRow && (
+              <div className="simulation-alert">
+                <AlertTriangle size={18} />
+                <span>Saldo projetado negativo em {negativeBalanceRow.label} ({formatMoney(negativeBalanceRow.finalBalance, language)}).</span>
               </div>
             )}
           </section>
 
-          <section className="card simulation-chart-card">
+          <section className="card simulation-chart-card" data-simulation-tour="projection-chart">
             <h2>Projeção de saldo</h2>
             <div className="simulation-chart-scroll">
               <div className="simulation-chart-inner">
@@ -1049,44 +1761,138 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                     <Tooltip content={<ProjectionTooltip />} />
                     <Legend />
                     <Line type="monotone" dataKey="withoutSimulation" name="Sem simulação" stroke="#94A3B8" strokeWidth={2} strokeDasharray="6 6" dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="withSimulation" name="Com simulação" stroke="#14A078" strokeWidth={3} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="finalBalance" name="Com simulação" stroke="#14A078" strokeWidth={3} dot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </section>
 
-          <section className="card simulation-table-card">
+          <section className="card simulation-category-card" data-simulation-tour="category-results">
+            <div className="simulation-summary-head">
+              <div>
+                <p className="eyebrow">Categorias</p>
+                <h2>Distribuição do dinheiro livre</h2>
+              </div>
+              <span>{categorySummaries.length} {categorySummaries.length === 1 ? "categoria" : "categorias"}</span>
+            </div>
+            {categorySummaries.length ? (
+              <div className="simulation-category-overview" role="table" aria-label="Distribuição do dinheiro livre">
+                <div className="simulation-category-overview-head" role="row">
+                  <span>Categoria</span><span>No mês atual</span><span>No período</span>
+                </div>
+                {categorySummaries.map((category) => (
+                  <article className="simulation-category-overview-row" role="row" key={category.id}>
+                    <div>
+                      <strong>{category.name}</strong>
+                      <small>{category.mode === "percentage"
+                        ? `${Number(category.value || 0).toLocaleString(language, { maximumFractionDigits: 2 })}% do dinheiro livre`
+                        : "Valor fixo"}</small>
+                    </div>
+                    <strong className={Number(category.current_month_allocated || 0) < 0 ? "money-expense" : ""}>{formatMoney(category.current_month_allocated || 0, language)}</strong>
+                    <strong className={Number(category.total_allocated || 0) < 0 ? "money-expense" : ""}>{formatMoney(category.total_allocated || 0, language)}</strong>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="simulation-category-card-empty">
+                <PiggyBank size={22} />
+                <span>Cadastre categorias no bloco separado para acompanhar o planejamento do dinheiro livre.</span>
+              </div>
+            )}
+            <div className="simulation-category-unassigned">
+              <span>Dinheiro livre não planejado</span>
+              <div>
+                <strong>{formatMoney(summary.current_unplanned_free_money || 0, language)} <small>No mês atual</small></strong>
+                <strong>{formatMoney(summary.total_unplanned_free_money || 0, language)} <small>No período</small></strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="card simulation-chart-card" data-simulation-tour="planning-chart">
+            <h2>Reserva e dinheiro livre</h2>
+            <div className="simulation-chart-scroll">
+              <div className="simulation-chart-inner planning-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={rows} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                    <CartesianGrid stroke="#E5E7EB" strokeDasharray="4 4" vertical={false} />
+                    {minPlanningValue < 0 && <ReferenceArea y1={minPlanningValue} y2={0} fill="#FF4D6A" fillOpacity={0.10} />}
+                    <XAxis dataKey="shortLabel" tickLine={false} axisLine={false} />
+                    <YAxis width={planningAxisWidth} tickFormatter={(value) => formatMoney(value, language)} tickLine={false} axisLine={false} tickMargin={8} />
+                    <Tooltip content={<PlanningTooltip />} />
+                    <Legend />
+                    <Line type="monotone" dataKey="reserveAccumulated" name="Reserva acumulada" stroke="#14A078" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="freeMoney" name="Dinheiro livre mensal" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </section>
+
+          <section className="card simulation-table-card" data-simulation-tour="monthly-table">
             <h2>Tabela mensal da projeção</h2>
             <div className="simulation-table-wrap">
               <div className="simulation-table">
                 <div className="simulation-table-row simulation-table-head">
                   <span>Mês</span>
-                  <span>Saldo inicial</span>
-                  <span>Gastos sim.</span>
-                  <span>Ganhos sim.</span>
+                  <span>Receitas</span>
+                  <span>Despesas</span>
+                  <span>Reserva</span>
+                  <span>Livre</span>
                   <span>Saldo final</span>
                 </div>
                 {rows.map((row) => {
                   const expanded = expandedRows[row.value];
                   return (
-                    <div className={`simulation-month-group ${row.isCurrent ? "current" : ""} ${row.withSimulation < 0 ? "negative" : ""}`} key={row.value}>
+                    <div
+                      className={`simulation-month-group ${row.isCurrent ? "current" : ""} ${expanded ? "expanded" : ""} ${row.freeMoney < 0 || row.finalBalance < 0 ? "negative" : ""}`}
+                      key={row.value}
+                      data-simulation-month={row.value}
+                    >
                       <button className="simulation-table-row simulation-table-button" type="button" onClick={() => toggleRow(row.value)}>
-                        <span>{row.simulatedItems.length ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <span className="simulation-row-spacer" />} {row.label}</span>
-                        <span>{formatMoney(row.initial, language)}</span>
-                        <span>{formatMoney(row.simulatedExpense, language)}</span>
-                        <span>{formatMoney(row.simulatedIncome, language)}</span>
-                        <strong>{formatMoney(row.withSimulation, language)}</strong>
+                        <span>{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {row.label}</span>
+                        <span>{formatMoney(row.income, language)}</span>
+                        <span>{formatMoney(row.expenses, language)}</span>
+                        <span className={!row.reserveActive ? "simulation-reserve-pending" : ""}>{row.reserveActive
+                          ? formatMoney(row.plannedReserve, language)
+                          : monthIndex(row.value) < monthIndex(reserveStartMonth) ? "Não iniciada" : "Encerrada"}</span>
+                        <span className={row.freeMoney < 0 ? "money-expense" : "money-income"}>{formatMoney(row.freeMoney, language)}</span>
+                        <strong>{formatMoney(row.finalBalance, language)}</strong>
                       </button>
-                      {expanded && row.simulatedItems.length > 0 && (
-                        <div className="simulation-expanded">
-                          {row.simulatedItems.map((entry) => (
-                            <div key={entry.id}>
-                              <span>{entry.type === "income" ? "Receita" : "Gasto"}</span>
-                              <strong>{entry.description}{entry.installmentLabel ? ` - ${entry.periodType} ${entry.installmentLabel}` : ""}</strong>
-                              <em className={entry.type === "income" ? "money-income" : "money-expense"}>{entry.type === "income" ? "+" : "-"}{formatMoney(entry.amount, language)}</em>
-                            </div>
-                          ))}
+                      {expanded && (
+                        <div className="simulation-month-details">
+                          <div className="simulation-month-detail-block">
+                            <strong>Receitas</strong>
+                            {row.realIncome > 0 && <span><i>Cadastradas</i><b>{formatMoney(row.realIncome, language)}</b></span>}
+                            {row.simulatedItems.filter((entry) => entry.type === "income").map((entry) => (
+                              <span key={entry.id}><i>{entry.description}{entry.installment_label ? ` · ${entry.period_type === "month" ? "mês" : "parcela"} ${entry.installment_label}` : ""}</i><b>{formatMoney(entry.amount, language)}</b></span>
+                            ))}
+                            {row.income === 0 && <small>Nenhuma receita no mês</small>}
+                          </div>
+                          <div className="simulation-month-detail-block">
+                            <strong>Despesas</strong>
+                            {row.realExpenses > 0 && <span><i>Cadastradas</i><b>{formatMoney(row.realExpenses, language)}</b></span>}
+                            {row.simulatedItems.filter((entry) => entry.type === "expense").map((entry) => (
+                              <span key={entry.id}><i>{entry.description}{entry.installment_label ? ` · parcela ${entry.installment_label}` : ""}{entry.category_id ? ` · ${validAllocationCategories.find((category) => category.id === entry.category_id)?.name || "Sem categoria"}` : ""}</i><b>{formatMoney(entry.amount, language)}</b></span>
+                            ))}
+                            {row.expenses === 0 && <small>Nenhuma despesa no mês</small>}
+                          </div>
+                          <div className="simulation-month-detail-block compact">
+                            <strong>Reserva</strong>
+                            <span><i>Meta planejada</i><b>{formatMoney(row.plannedReserve, language)}</b></span>
+                            <small>{row.reserveActive ? `${row.reserveRate.toLocaleString(language, { maximumFractionDigits: 2 })}% da base selecionada` : "Fora do período da reserva"}</small>
+                          </div>
+                          <div className="simulation-month-detail-block compact free">
+                            <strong>Dinheiro livre</strong>
+                            <span><i>No mês</i><b className={row.freeMoney < 0 ? "money-expense" : "money-income"}>{formatMoney(row.freeMoney, language)}</b></span>
+                          </div>
+                          <div className="simulation-month-detail-block categories">
+                            <strong>Categorias do dinheiro livre</strong>
+                            {row.categoryAllocations.map((category) => (
+                              <span key={category.id}><i>{category.name}</i><b className={Number(category.allocated || 0) < 0 ? "money-expense" : ""}>{formatMoney(category.allocated || 0, language)}</b></span>
+                            ))}
+                            <span className="unplanned"><i>Não planejado</i><b>{formatMoney(row.unplannedFreeMoney, language)}</b></span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1111,6 +1917,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
       {confirmOpen && (
         <ConfirmationModal
           items={validItems}
+          categories={validAllocationCategories}
           invoices={invoices}
           allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
           language={language}
@@ -1137,6 +1944,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           onConfirm={decisionDialog.onConfirm}
         />
       )}
+      <SimulationTutorial open={tutorialOpen} stepIndex={tutorialStep} startStep={tutorialStartStep} onBack={returnTutorial} onClose={closeTutorial} onNext={advanceTutorial} />
     </section>
   );
 }

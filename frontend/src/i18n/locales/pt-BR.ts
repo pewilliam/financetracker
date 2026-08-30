@@ -17,6 +17,7 @@ export const ptBR = {
     futureNet: "Futuro liquido {{value}}",
     expenses: "Gastos",
     income: "Ganhos",
+    balance: "Balanço",
     finalBalance: "Saldo final",
     noFutureInvoices: "Nenhuma fatura futura.",
     noExpenses: "Sem gastos registrados neste mês.",
