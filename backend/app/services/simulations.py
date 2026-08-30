@@ -78,10 +78,16 @@ def build_item_impacts(
                     "income": money(0),
                     "expense": money(0),
                     "reserve_source_income": money(0),
+                    "category_expenses": {},
                     "items": [],
                 },
             )
             impact[item.type] += amount
+            category_id = getattr(item, "category_id", None)
+            if item.type == "expense" and category_id:
+                impact["category_expenses"][category_id] = money(
+                    impact["category_expenses"].get(category_id, money(0)) + amount
+                )
             if item_index in source_positions and item.type == "income":
                 impact["reserve_source_income"] += amount
             impact["items"].append(
@@ -94,6 +100,7 @@ def build_item_impacts(
                         f"{value_index + 1}/{len(values)}" if item.mode != "cash" else None
                     ),
                     "period_type": "month" if item.mode == "recurring" else "installment",
+                    "category_id": category_id,
                 }
             )
     return impacts
@@ -120,7 +127,7 @@ def calculate_planning(
     reserve_source_item_positions: Iterable[int] | None = None,
     allocation_categories: Iterable | None = None,
 ) -> dict:
-    """Calculate balances and category allocations without treating them as expenses."""
+    """Calculate balances and category allocations, consuming the selected category first."""
     starting_balance = money(current_balance)
     reserve_setting = money(reserve_value)
     source_positions = set(reserve_source_item_positions or [])
@@ -149,6 +156,7 @@ def calculate_planning(
                 "income": money(0),
                 "expense": money(0),
                 "reserve_source_income": money(0),
+                "category_expenses": {},
                 "items": [],
             },
         )
@@ -190,15 +198,19 @@ def calculate_planning(
         reserve_accumulated = money(reserve_accumulated + planned_reserve)
 
         category_allocations = []
-        remaining_free_money = max(free_money, money(0))
+        category_expenses = impact.get("category_expenses", {})
+        total_category_expenses = money(sum(category_expenses.values(), Decimal("0")))
+        free_money_before_category_expenses = money(free_money + total_category_expenses)
+        remaining_free_money = max(free_money_before_category_expenses, money(0))
         for category in categories:
             requested = (
-                money(max(free_money, money(0)) * category["value"] / Decimal("100"))
+                money(max(free_money_before_category_expenses, money(0)) * category["value"] / Decimal("100"))
                 if category["mode"] == "percentage"
                 else category["value"]
             )
-            allocated = money(min(max(requested, money(0)), remaining_free_money))
-            remaining_free_money = money(remaining_free_money - allocated)
+            planned_allocation = money(min(max(requested, money(0)), remaining_free_money))
+            remaining_free_money = money(remaining_free_money - planned_allocation)
+            allocated = money(planned_allocation - category_expenses.get(category["id"], money(0)))
             category_accumulated[category["id"]] = money(category_accumulated[category["id"]] + allocated)
             category_allocations.append(
                 {

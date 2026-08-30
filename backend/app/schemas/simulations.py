@@ -22,6 +22,7 @@ class SimulationItemPayload(APIModel):
     value_mode: str = "equal"
     start_month: str
     custom_values: List[Decimal] = []
+    category_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class SimulationCreate(APIModel):
@@ -89,6 +90,7 @@ class SimulationImpactOut(APIModel):
     amount: Decimal
     installment_label: Optional[str] = None
     period_type: Literal["month", "installment"]
+    category_id: Optional[str] = None
 
 
 class SimulationCategoryAllocationOut(SimulationAllocationCategory):

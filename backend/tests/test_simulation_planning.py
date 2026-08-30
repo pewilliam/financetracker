@@ -15,6 +15,7 @@ def item(
     recurrences=1,
     value_mode="equal",
     custom_values=None,
+    category_id=None,
 ):
     return SimpleNamespace(
         description="Item de teste",
@@ -26,6 +27,7 @@ def item(
         value_mode=value_mode,
         start_month=start_month,
         custom_values=custom_values or [],
+        category_id=category_id,
     )
 
 
@@ -143,6 +145,61 @@ class SimulationPlanningTests(unittest.TestCase):
         self.assertEqual(row["unplanned_free_money"], Decimal("150.00"))
         self.assertEqual(result["summary"]["current_unplanned_free_money"], Decimal("150.00"))
 
+    def test_categorized_expense_is_deducted_from_selected_category(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[RealMonth(month="2026-09", total_income=1000, total_expenses=0, projected_closing=1000)],
+            items=[item(amount="150.76", category_id="dates")],
+            reserve_mode="fixed",
+            reserve_value=0,
+            allocation_categories=[
+                {"id": "games", "name": "Jogos", "mode": "fixed", "value": 200},
+                {"id": "dates", "name": "Saída com Namorada", "mode": "fixed", "value": 300},
+            ],
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["free_money"], Decimal("849.24"))
+        self.assertEqual(
+            [category["allocated"] for category in row["category_allocations"]],
+            [Decimal("200.00"), Decimal("149.24")],
+        )
+        self.assertEqual(row["unplanned_free_money"], Decimal("500.00"))
+
+    def test_percentage_category_uses_balance_before_its_expense(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[RealMonth(month="2026-09", total_income=1000, total_expenses=0, projected_closing=1000)],
+            items=[item(amount="100", category_id="games")],
+            reserve_mode="fixed",
+            reserve_value=0,
+            allocation_categories=[
+                {"id": "games", "name": "Jogos", "mode": "percentage", "value": 40},
+                {"id": "dates", "name": "Saída com Namorada", "mode": "percentage", "value": 60},
+            ],
+        )
+        row = result["rows"][0]
+        self.assertEqual(
+            [category["allocated"] for category in row["category_allocations"]],
+            [Decimal("300.00"), Decimal("600.00")],
+        )
+        self.assertEqual(row["unplanned_free_money"], Decimal("0.00"))
+
+    def test_category_can_show_overspending_without_reducing_unplanned_money(self):
+        result = calculate_planning(
+            current_balance=0,
+            include_real=True,
+            real_months=[RealMonth(month="2026-09", total_income=1000, total_expenses=0, projected_closing=1000)],
+            items=[item(amount="350", category_id="dates")],
+            reserve_mode="fixed",
+            reserve_value=0,
+            allocation_categories=[{"id": "dates", "name": "Saída com Namorada", "mode": "fixed", "value": 300}],
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["category_allocations"][0]["allocated"], Decimal("-50.00"))
+        self.assertEqual(row["unplanned_free_money"], Decimal("700.00"))
+
     def test_percentage_reserve(self):
         row = calculate()["rows"][0]
         self.assertEqual(row["planned_reserve"], Decimal("925.00"))
@@ -174,6 +231,10 @@ class SimulationPlanningTests(unittest.TestCase):
         self.assertEqual(row["simulated_expenses"], Decimal("230.00"))
         self.assertEqual(row["free_money"], Decimal("295.00"))
         self.assertEqual(row["final_balance"], Decimal("2220.00"))
+
+    def test_simulated_expense_keeps_its_category_in_month_details(self):
+        row = calculate(items=[item(amount="230", category_id="games")])["rows"][0]
+        self.assertEqual(row["simulated_items"][0]["category_id"], "games")
 
     def test_installment_is_distributed_across_months(self):
         result = calculate_planning(

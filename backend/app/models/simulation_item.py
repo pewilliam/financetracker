@@ -18,5 +18,6 @@ class SimulationItem(Base):
     value_mode = Column(String(20), nullable=False, default="equal")
     start_month = Column(String(7), nullable=False)
     custom_values = Column(JSON, nullable=True)
+    category_id = Column(String(64), nullable=True)
 
     simulation = relationship("Simulation", back_populates="items")

@@ -31,6 +31,7 @@ function blankItem() {
     valueMode: "equal",
     values: [],
     month: currentMonthValue(),
+    categoryId: "",
     collapsedByDefault: false
   };
 }
@@ -76,7 +77,8 @@ function normalizeRestoredItems(items) {
       recurrenceCount: Math.max(1, Number(item.recurrenceCount) || 6),
       valueMode: item.valueMode === "different" ? "different" : "equal",
       values: Array.isArray(item.custom_values) ? item.custom_values : Array.isArray(item.values) ? item.values : [],
-      month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue()
+      month: /^\d{4}-\d{2}$/.test(item.month || "") ? item.month : currentMonthValue(),
+      categoryId: type === "expense" ? String(item.categoryId || item.category_id || "") : ""
     };
   });
 }
@@ -130,11 +132,13 @@ function savedItemToDraft(item, language) {
     valueMode: item.value_mode === "different" ? "different" : "equal",
     values: Array.isArray(item.custom_values) ? item.custom_values.map((value) => formatMoney(value || 0, language)) : [],
     month: /^\d{4}-\d{2}$/.test(item.start_month || "") ? item.start_month : currentMonthValue(),
+    categoryId: item.type === "expense" ? String(item.category_id || "") : "",
     collapsedByDefault: true
   };
 }
 
-function draftItemToPayload(item, language) {
+function draftItemToPayload(item, language, categoryIds = null) {
+  const categoryId = item.type === "expense" ? String(item.categoryId || "") : "";
   return {
     description: item.description?.trim() || "",
     type: item.type,
@@ -144,7 +148,8 @@ function draftItemToPayload(item, language) {
     recurrence_count: Math.max(1, Number(item.recurrenceCount) || 1),
     value_mode: item.valueMode === "different" ? "different" : "equal",
     start_month: item.month,
-    custom_values: item.valueMode === "different" ? getItemValues(item, language) : []
+    custom_values: item.valueMode === "different" ? getItemValues(item, language) : [],
+    category_id: categoryId && (!categoryIds || categoryIds.has(categoryId)) ? categoryId : null
   };
 }
 
@@ -224,7 +229,7 @@ function PlanningTooltip({ active, payload, label }) {
   );
 }
 
-function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
+function SimulatedItemCard({ item, index, categories, onChange, onRemove, language }) {
   const [collapsed, setCollapsed] = useState(Boolean(item.collapsedByDefault));
   const count = Math.max(1, Number(item.installmentCount) || 1);
   const recurrenceCount = Math.max(1, Number(item.recurrenceCount) || 1);
@@ -241,6 +246,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   const normalizeCount = (field, value) => onChange({ [field]: Math.max(1, Number(value) || 1) });
   const setType = (type) => onChange({
     type,
+    categoryId: type === "expense" ? item.categoryId : "",
     mode: type === "income" && item.mode === "installment" ? "cash" : type === "expense" && item.mode === "recurring" ? "cash" : item.mode
   });
   const setValueMode = (different) => onChange({
@@ -260,6 +266,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   const typeLabel = item.type === "income" ? "Receita" : "Gasto";
   const modeLabel = item.mode === "installment" ? `${itemCount}x` : item.mode === "recurring" ? `${itemCount} meses` : "À vista";
   const itemTitle = item.description?.trim() || `Item ${index + 1}`;
+  const selectedCategory = categories.find((category) => category.id === item.categoryId);
 
   return (
     <article className={`simulation-item-card ${collapsed ? "collapsed" : ""}`}>
@@ -268,7 +275,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
           {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           <span>
             <strong>{itemTitle}</strong>
-            {collapsed && <small>{typeLabel} • {modeLabel} • {formatMoney(totalSimulated, language)}</small>}
+            {collapsed && <small>{typeLabel} • {modeLabel} • {formatMoney(totalSimulated, language)}{selectedCategory ? ` • ${selectedCategory.name}` : ""}</small>}
           </span>
         </button>
         <div className="simulation-item-actions">
@@ -330,6 +337,17 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
             </label>
           </div>
 
+          {item.type === "expense" && (
+            <label className="simulation-category-select">
+              <span>Categoria da compra</span>
+              <select value={item.categoryId || ""} onChange={(event) => onChange({ categoryId: event.target.value })}>
+                <option value="">Sem categoria</option>
+                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+              {!categories.length && <small>Cadastre uma categoria do dinheiro livre para vinculá-la à compra.</small>}
+            </label>
+          )}
+
           {item.mode !== "cash" && (
             <label className={`switch-row simulation-switch ${variableValuesEnabled ? "active" : ""}`}>
               <input type="checkbox" checked={variableValuesEnabled} onChange={(event) => setValueMode(event.target.checked)} />
@@ -357,7 +375,7 @@ function SimulatedItemCard({ item, index, onChange, onRemove, language }) {
   );
 }
 
-function ConfirmationModal({ items, invoices, allowOverdueInvoiceEdits = false, onClose, onConfirm, language }) {
+function ConfirmationModal({ items, categories, invoices, allowOverdueInvoiceEdits = false, onClose, onConfirm, language }) {
   const validItems = items.filter((item) => getItemTotal(item, language) > 0);
 
   return (
@@ -375,12 +393,14 @@ function ConfirmationModal({ items, invoices, allowOverdueInvoiceEdits = false, 
           {validItems.map((item) => {
             const firstInvoice = findInvoiceForMonth(invoices, item.month, allowOverdueInvoiceEdits);
             const modeLabel = item.mode === "installment" ? `${getItemCount(item)}x` : item.mode === "recurring" ? `${getItemCount(item)} meses` : "À vista";
+            const category = categories.find((entry) => entry.id === item.categoryId);
             return (
               <div className="simulation-confirm-row" key={item.id}>
                 <span className={`type-chip ${item.type}`}>{item.type === "income" ? "Receita" : "Gasto"}</span>
                 <strong>{item.description?.trim() || "Item simulado"}</strong>
                 <span>{modeLabel} em {formatMonthLabel(...item.month.split("-").map(Number), language)}</span>
                 <span>{formatMoney(getItemTotal(item, language), language)}</span>
+                {category && <small>Categoria: {category.name}</small>}
                 {item.mode === "installment" && item.type === "expense" && !firstInvoice && (
                   <small className="danger-text">Sem fatura elegível no mês inicial.</small>
                 )}
@@ -524,13 +544,13 @@ const SIMULATION_TUTORIAL_STEPS = [
     target: "categories",
     eyebrow: "Dinheiro livre",
     title: "Organize o valor restante em categorias",
-    description: "Cadastre categorias mesmo sem criar uma reserva. Cada uma pode receber um valor fixo mensal ou um percentual do dinheiro livre e pode ser recolhida pelo próprio nome. Elas apenas distribuem o disponível: não são descontadas novamente nem alteram o saldo projetado."
+    description: "Cadastre categorias mesmo sem criar uma reserva. Cada uma pode receber um valor fixo mensal ou um percentual do dinheiro livre. Compras simuladas vinculadas consomem primeiro a categoria escolhida, sem alterar novamente o saldo projetado."
   },
   {
     target: "items",
     eyebrow: "Itens simulados",
     title: "Monte o cenário com receitas e gastos",
-    description: "Gastos podem ser à vista ou parcelados; receitas podem ser únicas ou recorrentes. Informe descrição, valor e mês inicial. Em itens repetidos, também é possível definir valores diferentes por parcela ou mês e recolher cada card pelo nome."
+    description: "Gastos podem ser à vista ou parcelados e vinculados a uma categoria já cadastrada; receitas podem ser únicas ou recorrentes. Informe descrição, valor e mês inicial. Em itens repetidos, também é possível definir valores diferentes por parcela ou mês e recolher cada card pelo nome."
   },
   {
     target: "actions",
@@ -848,6 +868,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     return Array.from({ length: endIndex - start + 1 }, (_, offset) => monthFromIndex(start + offset));
   }, [endIndex]);
   const validAllocationCategories = useMemo(() => allocationCategories.filter((category) => category.name.trim()), [allocationCategories]);
+  const validAllocationCategoryIds = useMemo(() => new Set(validAllocationCategories.map((category) => category.id)), [validAllocationCategories]);
 
   useEffect(() => {
     let mounted = true;
@@ -864,7 +885,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
           reserve_end_month: reserveEndMonth || null,
           reserve_source_item_positions: reserveSourcePositions(activeItems, reserveSourceItemIds),
           allocation_categories: validAllocationCategories.map((category) => allocationCategoryToPayload(category, language)),
-          items: activeItems.map((item) => draftItemToPayload(item, language))
+          items: activeItems.map((item) => draftItemToPayload(item, language, validAllocationCategoryIds))
         });
         if (!mounted) return;
         setPlanningResult(result);
@@ -877,7 +898,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     }
     loadProjection();
     return () => { mounted = false; };
-  }, [activeItems, includeReal, language, months, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, validAllocationCategories]);
+  }, [activeItems, includeReal, language, months, reserveEndMonth, reserveMode, reserveSourceItemIds, reserveStartMonth, reserveValue, validAllocationCategories, validAllocationCategoryIds]);
 
   const rows = useMemo(() => (planningResult?.rows || []).map((row, index) => {
     const [year, month] = row.month.split("-").map(Number);
@@ -961,6 +982,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
   const removeAllocationCategory = (id) => {
     enableLocalDraft();
     setAllocationCategories((current) => current.filter((category) => category.id !== id));
+    setItems((current) => current.map((item) => item.categoryId === id ? { ...item, categoryId: "" } : item));
     setCollapsedCategoryIds((current) => {
       const next = { ...current };
       delete next[id];
@@ -1038,7 +1060,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     reserve_end_month: reserveEndMonth || null,
     reserve_source_item_positions: reserveSourcePositions(items, reserveSourceItemIds),
     allocation_categories: validAllocationCategories.map((category) => allocationCategoryToPayload(category, language)),
-    items: items.map((item) => draftItemToPayload(item, language))
+    items: items.map((item) => draftItemToPayload(item, language, validAllocationCategoryIds))
   });
   const defaultSimulationName = () => `Simulação ${new Date().toLocaleDateString(language)}`;
   const startNewSimulation = () => {
@@ -1631,6 +1653,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                 item={item}
                 index={index}
                 language={language}
+                categories={validAllocationCategories}
                 onChange={(patch) => updateItem(item.id, patch)}
                 onRemove={() => removeItem(item.id)}
               />
@@ -1689,7 +1712,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
               <strong>{Number(summary.average_reserve_rate || 0).toLocaleString(language, { maximumFractionDigits: 2 })}%</strong>
               <small>sobre a base selecionada</small>
             </div>
-            <p className="simulation-summary-note">Receitas menos despesas e reserva resultam no dinheiro livre. As categorias apenas planejam esse valor e não alteram o saldo projetado.</p>
+            <p className="simulation-summary-note">Receitas menos despesas e reserva resultam no dinheiro livre. Compras vinculadas são abatidas da categoria escolhida; as categorias não alteram novamente o saldo projetado.</p>
             <details className="simulation-secondary-details">
               <summary>Indicadores complementares <ChevronDown size={15} /></summary>
               <div className="simulation-indicators">
@@ -1766,8 +1789,8 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                         ? `${Number(category.value || 0).toLocaleString(language, { maximumFractionDigits: 2 })}% do dinheiro livre`
                         : "Valor fixo"}</small>
                     </div>
-                    <strong>{formatMoney(category.current_month_allocated || 0, language)}</strong>
-                    <strong>{formatMoney(category.total_allocated || 0, language)}</strong>
+                    <strong className={Number(category.current_month_allocated || 0) < 0 ? "money-expense" : ""}>{formatMoney(category.current_month_allocated || 0, language)}</strong>
+                    <strong className={Number(category.total_allocated || 0) < 0 ? "money-expense" : ""}>{formatMoney(category.total_allocated || 0, language)}</strong>
                   </article>
                 ))}
               </div>
@@ -1850,7 +1873,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                             <strong>Despesas</strong>
                             {row.realExpenses > 0 && <span><i>Cadastradas</i><b>{formatMoney(row.realExpenses, language)}</b></span>}
                             {row.simulatedItems.filter((entry) => entry.type === "expense").map((entry) => (
-                              <span key={entry.id}><i>{entry.description}{entry.installment_label ? ` · parcela ${entry.installment_label}` : ""}</i><b>{formatMoney(entry.amount, language)}</b></span>
+                              <span key={entry.id}><i>{entry.description}{entry.installment_label ? ` · parcela ${entry.installment_label}` : ""}{entry.category_id ? ` · ${validAllocationCategories.find((category) => category.id === entry.category_id)?.name || "Sem categoria"}` : ""}</i><b>{formatMoney(entry.amount, language)}</b></span>
                             ))}
                             {row.expenses === 0 && <small>Nenhuma despesa no mês</small>}
                           </div>
@@ -1866,7 +1889,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
                           <div className="simulation-month-detail-block categories">
                             <strong>Categorias do dinheiro livre</strong>
                             {row.categoryAllocations.map((category) => (
-                              <span key={category.id}><i>{category.name}</i><b>{formatMoney(category.allocated || 0, language)}</b></span>
+                              <span key={category.id}><i>{category.name}</i><b className={Number(category.allocated || 0) < 0 ? "money-expense" : ""}>{formatMoney(category.allocated || 0, language)}</b></span>
                             ))}
                             <span className="unplanned"><i>Não planejado</i><b>{formatMoney(row.unplannedFreeMoney, language)}</b></span>
                           </div>
@@ -1894,6 +1917,7 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
       {confirmOpen && (
         <ConfirmationModal
           items={validItems}
+          categories={validAllocationCategories}
           invoices={invoices}
           allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
           language={language}

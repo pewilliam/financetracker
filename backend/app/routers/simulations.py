@@ -55,6 +55,18 @@ def _validate_item(item: SimulationItemPayload) -> None:
         raise HTTPException(status_code=400, detail="Income simulations should use cash or recurring mode")
     if item.type == "expense" and item.mode == "recurring":
         raise HTTPException(status_code=400, detail="Expense simulations should use cash or installment mode")
+    if item.type != "expense" and item.category_id:
+        raise HTTPException(status_code=400, detail="Only simulated expenses can have a category")
+
+
+def _validate_item_categories(items, categories) -> None:
+    category_ids = {
+        str(category.get("id") if isinstance(category, dict) else category.id)
+        for category in (categories or [])
+    }
+    for item in items:
+        if item.category_id and item.category_id not in category_ids:
+            raise HTTPException(status_code=400, detail="Simulation item category does not exist")
 
 
 def _validate_reserve(mode: str, value: Decimal) -> None:
@@ -109,8 +121,9 @@ def _load_simulation(db: Session, simulation_id: int, user_id: int) -> Simulatio
     return simulation
 
 
-def _replace_items(simulation: Simulation, items: list[SimulationItemPayload]) -> None:
+def _replace_items(simulation: Simulation, items: list[SimulationItemPayload], categories) -> None:
     simulation.items = []
+    _validate_item_categories(items, categories)
     for index, item in enumerate(items):
         _validate_item(item)
         simulation.items.append(
@@ -125,6 +138,7 @@ def _replace_items(simulation: Simulation, items: list[SimulationItemPayload]) -
                 value_mode=item.value_mode,
                 start_month=item.start_month,
                 custom_values=[float(_money(value)) for value in item.custom_values],
+                category_id=item.category_id,
             )
         )
 
@@ -163,6 +177,7 @@ def preview_simulation(
     _serialize_allocation_categories(payload.allocation_categories)
     for item in payload.items:
         _validate_item(item)
+    _validate_item_categories(payload.items, payload.allocation_categories)
     _validate_reserve_sources(payload.reserve_source_item_positions, payload.items)
 
     real_months = []
@@ -229,7 +244,7 @@ def create_simulation(
         allocation_categories=allocation_categories,
     )
     db.add(simulation)
-    _replace_items(simulation, payload.items)
+    _replace_items(simulation, payload.items, allocation_categories)
     try:
         db.commit()
     except IntegrityError:
@@ -265,7 +280,7 @@ def update_simulation(
     _validate_reserve(simulation.reserve_mode, simulation.reserve_value)
     _validate_reserve_period(simulation.reserve_start_month, simulation.reserve_end_month)
     if payload.items is not None:
-        _replace_items(simulation, payload.items)
+        _replace_items(simulation, payload.items, simulation.allocation_categories)
     _validate_reserve_sources(simulation.reserve_source_item_positions, simulation.items)
     try:
         db.commit()

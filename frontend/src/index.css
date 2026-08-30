@@ -3916,7 +3916,8 @@ select {
   font-size: 12px;
   font-weight: 800;
 }
-.simulation-item-card input {
+.simulation-item-card input,
+.simulation-item-card select {
   width: 100%;
   min-width: 0;
   height: 42px;
@@ -4037,6 +4038,12 @@ select {
   grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   min-width: 0;
+}
+.simulation-category-select small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 .simulation-results > * {
   min-width: 0;
