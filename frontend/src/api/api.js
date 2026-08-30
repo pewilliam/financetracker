@@ -296,6 +296,13 @@ export function listSimulations() {
   return request("/simulations");
 }
 
+export function previewSimulation(payload) {
+  return request("/simulations/preview", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getSimulation(id) {
   return request(`/simulations/${id}`);
 }

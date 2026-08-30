@@ -180,6 +180,36 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
     )
 
 
+def _summarize_month_data(data: MonthResponse, today: date | None = None) -> MonthSummaryOut:
+    current_date = today or date.today()
+    start, end, _ = _month_bounds(data.year, data.month)
+
+    if end < current_date:
+        current_balance = data.closing_balance
+        future_net = Decimal("0.00")
+    elif start > current_date:
+        current_balance = data.opening_balance
+        future_net = data.total_income - data.total_expenses
+    else:
+        current_index = min(current_date.day, len(data.days)) - 1
+        current_balance = data.days[current_index].balance if data.days else data.opening_balance
+        future_net = sum(
+            (day.income - day.expenses for day in data.days[current_index + 1 :]),
+            Decimal("0.00"),
+        )
+
+    return MonthSummaryOut(
+        year=data.year,
+        month=data.month,
+        total_expenses=data.total_expenses,
+        total_income=data.total_income,
+        difference=data.total_expenses - data.total_income,
+        current_balance=current_balance,
+        projected_closing=current_balance + future_net,
+        future_net=future_net,
+    )
+
+
 @router.get("/{year}/{month}", response_model=MonthResponse)
 def get_month(
     year: int,
@@ -198,39 +228,7 @@ def get_month_summary(
     current_user: User = Depends(get_current_user),
 ):
     data = _build_month_data(db, year, month, current_user.id)
-    start, end, _ = _month_bounds(year, month)
-    today = date.today()
-
-    if end < today:
-        current_balance = data.closing_balance
-        future_net = Decimal("0.00")
-    elif start > today:
-        current_balance = data.opening_balance
-        future_net = data.total_income - data.total_expenses
-    else:
-        current_index = min(today.day, len(data.days)) - 1
-        current_balance = data.days[current_index].balance if data.days else data.opening_balance
-        future_net = sum(
-            (
-                day.income - day.expenses
-                for day in data.days[current_index + 1 :]
-            ),
-            Decimal("0.00"),
-        )
-
-    projected_closing = current_balance + future_net
-    difference = data.total_expenses - data.total_income
-
-    return MonthSummaryOut(
-        year=year,
-        month=month,
-        total_expenses=data.total_expenses,
-        total_income=data.total_income,
-        difference=difference,
-        current_balance=current_balance,
-        projected_closing=projected_closing,
-        future_net=future_net,
-    )
+    return _summarize_month_data(data)
 
 
 @router.get("/{year}/{month}/categories", response_model=CategoryBreakdownOut)

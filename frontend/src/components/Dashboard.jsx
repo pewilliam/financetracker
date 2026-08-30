@@ -122,7 +122,7 @@ export default function Dashboard({
             <XAxis dataKey="date" tickFormatter={(value) => value.slice(-2)} tickLine={false} axisLine={false} />
             <YAxis tickFormatter={(value) => formatMoney(value, language)} tickLine={false} axisLine={false} tickMargin={8} width={balanceAxisWidth} />
             <Tooltip formatter={(value) => formatMoney(value, language)} labelFormatter={(value) => formatDateShort(value, language)} />
-            <Area type="monotone" dataKey="balance" stroke="#14A078" strokeWidth={3} fill="url(#saldoFill)" />
+            <Area type="monotone" dataKey="balance" name={t("dashboard.balance")} stroke="#14A078" strokeWidth={3} fill="url(#saldoFill)" />
           </AreaChart>
         </ResponsiveContainer>
       </section>
