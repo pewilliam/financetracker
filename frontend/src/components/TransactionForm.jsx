@@ -62,7 +62,7 @@ export default function TransactionForm({
     description: "",
     category_id: "",
     recurrence: false,
-    recurrence_scope: "single",
+    recurrence_scope: initial?.recurrence_id ? "future" : "single",
     day_of_month: "",
     recurrence_months: "12"
   });
@@ -79,7 +79,7 @@ export default function TransactionForm({
         description: initial.description || "",
         category_id: initial.category_id ? String(initial.category_id) : "",
         recurrence: false,
-        recurrence_scope: "single",
+        recurrence_scope: initial.recurrence_id ? "future" : "single",
         day_of_month: "",
         recurrence_months: "12"
       });
