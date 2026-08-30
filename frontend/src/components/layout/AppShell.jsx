@@ -12,6 +12,7 @@ import InvoicesPage from "../../pages/InvoicesPage.jsx";
 import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
 import SimulationPage from "../../pages/SimulationPage.jsx";
 import ReceivablesPage from "../../pages/ReceivablesPage.jsx";
+import CategoriesPage from "../../pages/CategoriesPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
 import InvoiceModal from "../../modals/InvoiceModal.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
@@ -44,6 +45,7 @@ export default function AppShell() {
   const [installments, setInstallments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
+  const [previousCategoryBreakdown, setPreviousCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
   const [receivables, setReceivables] = useState([]);
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +96,7 @@ export default function AppShell() {
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
-  const showMonthHeader = location.pathname === "/" || location.pathname === "/meses";
+  const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
   const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
   const bodyLocked = overlayOpen;
 
@@ -127,7 +129,8 @@ export default function AppShell() {
     if (showLoading) setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const previousTarget = shiftMonth(year, month, -1);
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
@@ -135,6 +138,7 @@ export default function AppShell() {
         listInstallments(),
         listCategories(),
         getCategoryBreakdown(year, month),
+        getCategoryBreakdown(previousTarget.year, previousTarget.month),
         listReceivables(),
         listReceivablePeople(),
         getMonthsSummary(),
@@ -151,6 +155,7 @@ export default function AppShell() {
       setInstallments(installmentsPayload);
       setCategories(categoriesPayload);
       setCategoryBreakdown(categoryBreakdownPayload);
+      setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
       setReceivables(receivablesPayload);
       setReceivablePeople(peoplePayload);
       setMonthCards(monthCardsPayload);
@@ -187,10 +192,12 @@ export default function AppShell() {
 
   const syncMonthCollections = async () => {
     const offsets = [-5, -4, -3, -2, -1, 0];
-    const [monthPayload, summaryPayload, categoryBreakdownPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+    const previousTarget = shiftMonth(year, month, -1);
+    const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
       getMonth(year, month),
       getMonthSummary(year, month),
       getCategoryBreakdown(year, month),
+      getCategoryBreakdown(previousTarget.year, previousTarget.month),
       getMonthsSummary(),
       Promise.all(offsets.map(async (offset) => {
         const target = shiftMonth(year, month, offset);
@@ -201,6 +208,7 @@ export default function AppShell() {
     setMonthData(monthPayload);
     setSummary(summaryPayload);
     setCategoryBreakdown(categoryBreakdownPayload);
+    setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
     setMonthCards(monthCardsPayload);
     setComparisons(comparisonPayload);
   };
@@ -477,7 +485,9 @@ export default function AppShell() {
         .map((category) => category.id === saved.id ? saved : category)
         .sort((left, right) => left.name.localeCompare(right.name, language)));
       toast.success("Categoria atualizada");
-      await syncMonthCollections();
+      if (Object.hasOwn(payload, "name") || Object.hasOwn(payload, "color")) {
+        await syncMonthCollections();
+      }
       return saved;
     } catch (error) {
       toast.error(String(error?.message || "").includes("already exists") ? "Já existe uma categoria com esse nome" : "Erro ao atualizar categoria");
@@ -665,6 +675,7 @@ export default function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
+              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} onUpdateCategory={editCategory} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />

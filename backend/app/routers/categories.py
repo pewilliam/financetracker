@@ -47,6 +47,7 @@ def create_category(
         user_id=current_user.id,
         name=name,
         color=normalize_category_color(payload.color),
+        monthly_limit=payload.monthly_limit,
     )
     db.add(category)
     db.commit()
@@ -83,6 +84,9 @@ def update_category(
 
     if "color" in data:
         category.color = normalize_category_color(data["color"])
+
+    if "monthly_limit" in data:
+        category.monthly_limit = data["monthly_limit"]
 
     db.commit()
     db.refresh(category)

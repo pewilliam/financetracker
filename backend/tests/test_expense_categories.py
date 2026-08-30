@@ -232,13 +232,14 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
 
         result = update_category(
             category.id,
-            CategoryUpdate(name="  Alimentação   geral  ", color="#8b5cf6"),
+            CategoryUpdate(name="  Alimentação   geral  ", color="#8b5cf6", monthly_limit=Decimal("850.00")),
             self.db,
             self.user,
         )
 
         self.assertEqual(result.name, "Alimentação geral")
         self.assertEqual(result.color, "#8B5CF6")
+        self.assertEqual(result.monthly_limit, Decimal("850.00"))
         with self.assertRaises(HTTPException) as context:
             update_category(
                 category.id,
