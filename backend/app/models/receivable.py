@@ -20,11 +20,13 @@ class Receivable(Base):
     )
     paid_at = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="receivables")
     person = relationship("ReceivablePerson", back_populates="receivables")
+    category = relationship("Category", back_populates="receivables")
     payments = relationship(
         "ReceivablePayment",
         back_populates="receivable",

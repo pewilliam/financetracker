@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 from pydantic import Field
 from app.schemas.base import APIModel
+from app.schemas.categories import CategoryOut
 
 
 class ReceivablePersonCreate(APIModel):
@@ -19,10 +20,12 @@ class ReceivablePersonOut(APIModel):
 class ReceivablePaymentCreate(APIModel):
     amount: Decimal = Field(gt=0)
     paid_at: date
+    category_id: Optional[int] = None
 
 
 class ReceivablePaidPayload(APIModel):
     paid_at: date
+    category_id: Optional[int] = None
 
 
 class ReceivablePaymentOut(APIModel):
@@ -41,6 +44,7 @@ class ReceivableCreate(APIModel):
     total_amount: Decimal = Field(gt=0)
     due_date: date
     notes: Optional[str] = None
+    category_id: Optional[int] = None
 
 
 class ReceivableUpdate(APIModel):
@@ -50,6 +54,7 @@ class ReceivableUpdate(APIModel):
     total_amount: Optional[Decimal] = Field(default=None, gt=0)
     due_date: Optional[date] = None
     notes: Optional[str] = None
+    category_id: Optional[int] = None
 
 
 class ReceivableOut(APIModel):
@@ -65,6 +70,8 @@ class ReceivableOut(APIModel):
     status: str
     paid_at: Optional[date] = None
     notes: Optional[str] = None
+    category_id: Optional[int] = None
+    category: Optional[CategoryOut] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     payments: List[ReceivablePaymentOut] = []

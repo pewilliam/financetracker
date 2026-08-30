@@ -750,7 +750,29 @@ select {
   gap: 20px;
 }
 .category-spending-head h2 { margin: 2px 0 0; }
-.category-spending-head > strong { color: var(--expense); font-size: 22px; }
+.category-view-actions { display: grid; justify-items: end; gap: 8px; }
+.category-view-actions > strong { font-size: 22px; }
+.category-view-actions > strong.expense { color: var(--expense); }
+.category-view-actions > strong.income { color: var(--income); }
+.category-view-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--card) 92%, var(--border));
+}
+.category-view-toggle button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.category-view-toggle button.active { background: var(--card); color: var(--primary); box-shadow: 0 1px 5px rgba(0,0,0,.1); }
 .category-spending-content {
   display: grid;
   grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.2fr);
@@ -4997,6 +5019,21 @@ select {
   line-height: 1.5;
   font-size: 14px;
 }
+.transaction-delete-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--card) 94%, var(--border));
+}
+.transaction-delete-context > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.transaction-delete-context small { flex-basis: 100%; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.transaction-delete-context > div > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transaction-delete-context .transaction-category-pill { margin-right: 0; }
+.transaction-delete-context > strong { flex: 0 0 auto; font-size: 16px; white-space: nowrap; }
 .danger-action {
   background: var(--expense);
   border-color: var(--expense);
@@ -5665,7 +5702,9 @@ select {
   font-weight: 800;
   white-space: nowrap;
 }
+.transaction-category-pill { margin-right: 8px; }
 .category-badge { margin-left: 4px; }
+.receivable-category-badge { width: max-content; margin: -5px 0 0; }
 
 .category-select {
   position: relative;
@@ -5692,7 +5731,7 @@ select {
 @media (max-width: 767px) {
   .category-spending-content { grid-template-columns: 1fr; gap: 6px; }
   .category-spending-head { align-items: flex-end; }
-  .category-spending-head > strong { font-size: 18px; }
+  .category-view-actions > strong { font-size: 18px; }
   .invoice-card .inline-form,
   .invoice-item.editing { grid-template-columns: 1fr; }
   .invoice-item.editing .invoice-item-actions { justify-content: flex-start; }

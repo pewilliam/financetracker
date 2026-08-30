@@ -1,10 +1,11 @@
 import { Wallet, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
+import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { CREATE_RECEIVABLE_PERSON_VALUE } from "../app/constants.js";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function ReceivableModal({ form, setForm, editing, people, onSubmit, onClose }) {
+export default function ReceivableModal({ form, setForm, editing, people, categories = [], onCreateCategory, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const updateForm = (patch) => setForm({ ...form, ...patch });
@@ -50,6 +51,7 @@ export default function ReceivableModal({ form, setForm, editing, people, onSubm
             <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
             <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
           </div>
+          <label><span>Categoria do recebimento</span><CategorySelect categories={categories} value={form.category_id} onChange={(value) => updateForm({ category_id: value })} onCreate={onCreateCategory} /></label>
           <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
         </div>
         <div className="modal-actions">

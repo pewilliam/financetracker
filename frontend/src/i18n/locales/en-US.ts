@@ -138,7 +138,10 @@ export const enUS = {
     incomeChip: "INCOME",
     balanceChip: "BALANCE",
     noDescription: "No description",
-    recurring: "Recurring"
+    recurring: "Recurring",
+    entry: "Entry",
+    deleteEntry: "Delete entry",
+    deleteEntryMessage: "Do you really want to delete this entry? This action cannot be undone."
   },
   transactionModal: {
     newEntry: "New entry",

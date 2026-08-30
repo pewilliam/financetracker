@@ -27,6 +27,7 @@ export default function CategoryModal({ suggestedColor = CATEGORY_COLORS[0], onS
   const cleanName = name.trim();
   const submit = async (event) => {
     event.preventDefault();
+    event.stopPropagation();
     if (!cleanName || saving) return;
     setSaving(true);
     try {

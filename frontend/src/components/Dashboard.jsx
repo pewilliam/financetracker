@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Area,
   AreaChart,
@@ -37,10 +38,11 @@ export default function Dashboard({
   comparisons,
   invoices = [],
   monthData,
-  categoryBreakdown = { total_expenses: 0, categorized_total: 0, items: [] },
+  categoryBreakdown = { total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] },
   onOpenInvoice
 }) {
   const { t, language } = useI18n();
+  const [categoryView, setCategoryView] = useState("expenses");
   const previous = comparisons[comparisons.length - 2] || comparisons[0] || {};
   const expenseProgress = Math.min((Number(summary.total_expenses) / Math.max(Number(previous.total_expenses || 1), 1)) * 100, 140);
   const incomeProgress = Math.min((Number(summary.total_income) / Math.max(Number(previous.total_income || 1), 1)) * 100, 140);
@@ -61,8 +63,11 @@ export default function Dashboard({
     ]),
     language
   );
-  const categoryItems = categoryBreakdown.items || [];
+  const viewingIncome = categoryView === "income";
+  const categoryItems = viewingIncome ? (categoryBreakdown.income_items || []) : (categoryBreakdown.items || []);
   const categoryChartItems = categoryItems.filter((item) => Number(item.amount) > 0);
+  const categoryTotal = viewingIncome ? categoryBreakdown.total_income : categoryBreakdown.total_expenses;
+  const categoryGroupedTotal = viewingIncome ? categoryBreakdown.income_categorized_total : categoryBreakdown.categorized_total;
 
   const cards = [
     {
@@ -146,9 +151,15 @@ export default function Dashboard({
         <div className="category-spending-head">
           <div>
             <p className="eyebrow">Visão por categoria</p>
-            <h2>Para onde seu dinheiro está indo</h2>
+            <h2>{viewingIncome ? "De onde seu dinheiro está vindo" : "Para onde seu dinheiro está indo"}</h2>
           </div>
-          <strong>{formatMoney(categoryBreakdown.total_expenses, language)}</strong>
+          <div className="category-view-actions">
+            <div className="category-view-toggle">
+              <button className={!viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryView("expenses")}>Gastos</button>
+              <button className={viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryView("income")}>Receitas</button>
+            </div>
+            <strong className={viewingIncome ? "income" : "expense"}>{formatMoney(categoryTotal, language)}</strong>
+          </div>
         </div>
         {categoryChartItems.length ? (
           <div className="category-spending-content">
@@ -161,19 +172,19 @@ export default function Dashboard({
                   <Tooltip formatter={(value) => formatMoney(value, language)} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="category-donut-center"><small>Total</small><strong>{formatMoney(categoryBreakdown.categorized_total, language)}</strong></div>
+              <div className="category-donut-center"><small>Total</small><strong>{formatMoney(categoryGroupedTotal, language)}</strong></div>
             </div>
             <div className="category-breakdown-list">
               {categoryItems.map((item) => (
                 <div className="category-breakdown-row" key={item.category_id ?? "uncategorized"}>
                   <i style={{ "--category-color": item.color }} />
-                  <span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}% dos gastos</small></span>
+                  <span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}% {viewingIncome ? "das receitas" : "dos gastos"}</small></span>
                   <strong>{formatMoney(item.amount, language)}</strong>
                 </div>
               ))}
             </div>
           </div>
-        ) : <p className="muted category-empty">Categorize seus próximos gastos para visualizar a distribuição aqui.</p>}
+        ) : <p className="muted category-empty">Categorize suas próximas {viewingIncome ? "receitas" : "despesas"} para visualizar a distribuição aqui.</p>}
       </section>
 
       <section className="card">

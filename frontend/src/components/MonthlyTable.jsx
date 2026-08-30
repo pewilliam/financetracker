@@ -56,7 +56,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                         <button className="icon-btn small" onClick={() => onEdit(tx)} aria-label="Editar">
                           <Edit3 size={15} />
                         </button>
-                        <button className="icon-btn small danger" onClick={() => onDelete(tx.id)} aria-label="Excluir">
+                        <button className="icon-btn small danger" onClick={() => onDelete(tx)} aria-label="Excluir">
                           <Trash2 size={15} />
                         </button>
                       </div>

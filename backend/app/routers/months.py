@@ -240,6 +240,7 @@ def get_category_breakdown(
 ):
     start, end, _ = _month_bounds(year, month)
     totals: dict[int | None, Decimal] = {}
+    income_totals: dict[int | None, Decimal] = {}
     categories = {
         category.id: category
         for category in db.query(Category).filter(Category.user_id == current_user.id).all()
@@ -258,6 +259,19 @@ def get_category_breakdown(
     )
     for transaction in direct_transactions:
         totals[transaction.category_id] = totals.get(transaction.category_id, Decimal("0.00")) + transaction.amount
+
+    income_transactions = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.type == "income",
+            Transaction.date >= start,
+            Transaction.date <= end,
+        )
+        .all()
+    )
+    for transaction in income_transactions:
+        income_totals[transaction.category_id] = income_totals.get(transaction.category_id, Decimal("0.00")) + transaction.amount
 
     invoice_ids = [
         row.id
@@ -284,30 +298,38 @@ def get_category_breakdown(
             category_id = item.purchase.category_id if item.purchase else None
             totals[category_id] = totals.get(category_id, Decimal("0.00")) + item.amount
 
-    categorized_total = sum(totals.values(), Decimal("0.00"))
-    percentage_base = categorized_total if categorized_total > 0 else Decimal("0.00")
-    result = []
-    for category_id, amount in totals.items():
-        if amount == 0:
-            continue
-        category = categories.get(category_id)
-        percentage = (amount / percentage_base * Decimal("100")) if percentage_base else Decimal("0.00")
-        result.append(
-            CategoryExpenseOut(
-                category_id=category_id,
-                name=category.name if category else "Sem categoria",
-                color=category.color if category else "#94A3B8",
-                amount=amount,
-                percentage=percentage.quantize(Decimal("0.01")),
+    def build_items(source: dict[int | None, Decimal]):
+        source_total = sum(source.values(), Decimal("0.00"))
+        percentage_base = source_total if source_total > 0 else Decimal("0.00")
+        result = []
+        for category_id, amount in source.items():
+            if amount == 0:
+                continue
+            category = categories.get(category_id)
+            percentage = (amount / percentage_base * Decimal("100")) if percentage_base else Decimal("0.00")
+            result.append(
+                CategoryExpenseOut(
+                    category_id=category_id,
+                    name=category.name if category else "Sem categoria",
+                    color=category.color if category else "#94A3B8",
+                    amount=amount,
+                    percentage=percentage.quantize(Decimal("0.01")),
+                )
             )
-        )
-    result.sort(key=lambda item: item.amount, reverse=True)
+        result.sort(key=lambda item: item.amount, reverse=True)
+        return source_total, result
+
+    categorized_total, result = build_items(totals)
+    income_categorized_total, income_result = build_items(income_totals)
 
     month_data = _build_month_data(db, year, month, current_user.id)
     return CategoryBreakdownOut(
         total_expenses=month_data.total_expenses,
         categorized_total=categorized_total,
         items=result,
+        total_income=month_data.total_income,
+        income_categorized_total=income_categorized_total,
+        income_items=income_result,
     )
 
 

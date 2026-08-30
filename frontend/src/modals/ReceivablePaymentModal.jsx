@@ -1,9 +1,10 @@
 import { Wallet, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
+import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function ReceivablePaymentModal({ data, setData, onSubmit, onClose }) {
+export default function ReceivablePaymentModal({ data, setData, categories = [], onCreateCategory, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const updateData = (patch) => setData({ ...data, ...patch });
@@ -36,6 +37,7 @@ export default function ReceivablePaymentModal({ data, setData, onSubmit, onClos
           </div>
           <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
           <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
+          <label><span>Categoria do recebimento</span><CategorySelect categories={categories} value={data.category_id} onChange={(value) => updateData({ category_id: value })} onCreate={onCreateCategory} /></label>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>

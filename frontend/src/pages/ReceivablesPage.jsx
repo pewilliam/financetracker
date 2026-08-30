@@ -113,6 +113,7 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
                   </div>
                   <span className={`due-badge compact ${item.status === "overdue" ? "danger" : item.status === "paid" ? "paid" : ""}`}>{receivableStatusText(item.status, language)}</span>
                 </header>
+                {item.category && <span className="category-badge receivable-category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</span>}
                 <div className="receivable-money-grid">
                   <div className="metric-block"><span>{tt("receivables.total", "Total")}</span><strong>{formatMoney(item.total_amount, language)}</strong></div>
                   <div className="metric-block"><span>{tt("receivables.received", "Recebido")}</span><strong className="money-income">{formatMoney(item.received_amount, language)}</strong></div>

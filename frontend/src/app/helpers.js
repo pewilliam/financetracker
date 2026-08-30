@@ -45,7 +45,7 @@ export function defaultInstallmentForm(firstInvoiceId = "") {
 }
 
 export function defaultReceivableForm() {
-  return { person_id: "", person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), notes: "" };
+  return { person_id: "", person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), category_id: "", notes: "" };
 }
 
 export function todayIsoDate() {

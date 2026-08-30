@@ -6,10 +6,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Transaction, User
 from app.routers.installments import update_installment_category
 from app.routers.months import get_category_breakdown
+from app.routers.receivables import mark_receivable_paid
 from app.schemas.installments import InstallmentCategoryUpdate
+from app.schemas.receivables import ReceivablePaidPayload
 
 
 class ExpenseCategoryBreakdownTests(unittest.TestCase):
@@ -70,6 +72,23 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
             description="Outro",
         )
         self.db.add_all([linked, direct, uncategorized])
+        self.db.add_all([
+            Transaction(
+                user_id=self.user.id,
+                date=date(2026, 8, 7),
+                type="income",
+                amount=Decimal("300.00"),
+                description="Salário",
+                category_id=category.id,
+            ),
+            Transaction(
+                user_id=self.user.id,
+                date=date(2026, 8, 8),
+                type="income",
+                amount=Decimal("100.00"),
+                description="Outro ganho",
+            ),
+        ])
         self.db.flush()
         invoice.linked_transaction_id = linked.id
 
@@ -111,6 +130,11 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
             ("Sem categoria", Decimal("50.00")),
         ])
         self.assertEqual([item.percentage for item in result.items], [Decimal("80.00"), Decimal("20.00")])
+        self.assertEqual(result.total_income, Decimal("400.00"))
+        self.assertEqual([(item.name, item.amount) for item in result.income_items], [
+            ("Alimentação", Decimal("300.00")),
+            ("Sem categoria", Decimal("100.00")),
+        ])
 
     def test_installment_category_update_also_updates_existing_refund(self):
         category = Category(user_id=self.user.id, name="Assinaturas", color="#8B5CF6")
@@ -167,6 +191,34 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
         self.assertEqual(result.category_id, category.id)
         self.assertEqual(result.category.name, "Assinaturas")
         self.assertEqual(refund.category_id, category.id)
+
+    def test_receivable_payment_inherits_selected_category(self):
+        category = Category(user_id=self.user.id, name="Freelance", color="#3B82F6")
+        person = ReceivablePerson(user_id=self.user.id, name="Cliente")
+        self.db.add_all([category, person])
+        self.db.flush()
+        receivable = Receivable(
+            user_id=self.user.id,
+            person_id=person.id,
+            description="Projeto",
+            total_amount=Decimal("500.00"),
+            received_amount=Decimal("0.00"),
+            due_date=date.today(),
+            status="pending",
+        )
+        self.db.add(receivable)
+        self.db.commit()
+
+        result = mark_receivable_paid(
+            receivable.id,
+            ReceivablePaidPayload(paid_at=date.today(), category_id=category.id),
+            self.db,
+            self.user,
+        )
+
+        transaction = self.db.get(Transaction, result.payments[0].transaction_id)
+        self.assertEqual(result.category_id, category.id)
+        self.assertEqual(transaction.category_id, category.id)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from app.schemas.receivables import (
     ReceivableUpdate,
 )
 from app.security import get_current_user
+from app.services.categories import get_user_category
 
 router = APIRouter(prefix="/api/receivables", tags=["receivables"])
 
@@ -89,6 +90,17 @@ def _person_for_payload(db: Session, user_id: int, person_id: int | None, person
     return person
 
 
+def _set_receivable_category(db: Session, user_id: int, receivable: Receivable, category_id: int | None) -> None:
+    get_user_category(db, user_id, category_id)
+    receivable.category_id = category_id
+    transaction_ids = [payment.transaction_id for payment in receivable.payments if payment.transaction_id]
+    if transaction_ids:
+        db.query(Transaction).filter(
+            Transaction.id.in_(transaction_ids),
+            Transaction.user_id == user_id,
+        ).update({Transaction.category_id: category_id}, synchronize_session=False)
+
+
 def _create_income_transaction(db: Session, user_id: int, receivable: Receivable, amount: Decimal, paid_at: date) -> Transaction:
     transaction = Transaction(
         user_id=user_id,
@@ -97,6 +109,7 @@ def _create_income_transaction(db: Session, user_id: int, receivable: Receivable
         amount=amount,
         description=f"Recebimento - {receivable.person_name}: {receivable.description}",
         is_future=False,
+        category_id=receivable.category_id,
     )
     db.add(transaction)
     db.flush()
@@ -109,6 +122,7 @@ def _register_payment(
     receivable: Receivable,
     amount: Decimal,
     paid_at: date,
+    category_id: int | None,
 ) -> Receivable:
     if paid_at > date.today():
         raise HTTPException(status_code=400, detail="Payment date cannot be in the future")
@@ -123,6 +137,8 @@ def _register_payment(
         raise HTTPException(status_code=400, detail="Payment amount must be greater than zero")
     if payment_amount > remaining:
         raise HTTPException(status_code=400, detail="Payment amount exceeds remaining amount")
+
+    _set_receivable_category(db, user_id, receivable, category_id)
 
     transaction = _create_income_transaction(db, user_id, receivable, payment_amount, paid_at)
     payment = ReceivablePayment(
@@ -211,6 +227,7 @@ def create_receivable(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    get_user_category(db, current_user.id, payload.category_id)
     person = _person_for_payload(db, current_user.id, payload.person_id, payload.person_name)
     receivable = Receivable(
         user_id=current_user.id,
@@ -220,6 +237,7 @@ def create_receivable(
         received_amount=Decimal("0.00"),
         due_date=payload.due_date,
         notes=payload.notes.strip() if payload.notes else None,
+        category_id=payload.category_id,
     )
     if not receivable.description:
         raise HTTPException(status_code=400, detail="Description is required")
@@ -254,6 +272,8 @@ def update_receivable(
         receivable.due_date = data["due_date"]
     if "notes" in data:
         receivable.notes = data["notes"].strip() if data["notes"] else None
+    if "category_id" in data:
+        _set_receivable_category(db, current_user.id, receivable, data["category_id"])
 
     if not receivable.description:
         raise HTTPException(status_code=400, detail="Description is required")
@@ -272,7 +292,8 @@ def mark_receivable_paid(
 ):
     receivable = _load_receivable(db, receivable_id, current_user.id)
     remaining = _money(receivable.total_amount) - _money(receivable.received_amount)
-    return _register_payment(db, current_user.id, receivable, remaining, payload.paid_at)
+    category_id = payload.category_id if "category_id" in payload.model_fields_set else receivable.category_id
+    return _register_payment(db, current_user.id, receivable, remaining, payload.paid_at, category_id)
 
 
 @router.post("/{receivable_id}/payments", response_model=ReceivableOut)
@@ -283,7 +304,8 @@ def create_receivable_payment(
     current_user: User = Depends(get_current_user),
 ):
     receivable = _load_receivable(db, receivable_id, current_user.id)
-    return _register_payment(db, current_user.id, receivable, payload.amount, payload.paid_at)
+    category_id = payload.category_id if "category_id" in payload.model_fields_set else receivable.category_id
+    return _register_payment(db, current_user.id, receivable, payload.amount, payload.paid_at, category_id)
 
 
 @router.delete("/{receivable_id}/payments/{payment_id}", response_model=ReceivableOut)

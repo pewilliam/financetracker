@@ -187,7 +187,7 @@ export default function TransactionForm({
           type: form.type,
           amount,
           description: form.description,
-          category_id: form.type === "expense" && form.category_id ? Number(form.category_id) : null
+          category_id: form.category_id ? Number(form.category_id) : null
         },
         recurrence: form.recurrence
           ? {
@@ -267,12 +267,10 @@ export default function TransactionForm({
             <input placeholder={tt("transactionModal.descriptionPlaceholder", "Ex: mercado, salário, aluguel")} value={form.description} onChange={(event) => setField("description", event.target.value)} />
           </label>
 
-          {isExpense && (
-            <label>
-              <span>Categoria</span>
-              <CategorySelect categories={categories} value={form.category_id} onChange={(value) => setField("category_id", value)} onCreate={onCreateCategory} />
-            </label>
-          )}
+          <label>
+            <span>Categoria</span>
+            <CategorySelect categories={categories} value={form.category_id} onChange={(value) => setField("category_id", value)} onCreate={onCreateCategory} />
+          </label>
 
           {initial?.recurrence_id && (
             <section className="conditional-section recurrence-edit-scope">

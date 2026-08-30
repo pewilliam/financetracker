@@ -21,6 +21,7 @@ import ReceivableModal from "../../modals/ReceivableModal.jsx";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
+import DeleteTransactionModal from "../../modals/DeleteTransactionModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
@@ -43,7 +44,7 @@ export default function AppShell() {
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [] });
+  const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
   const [receivables, setReceivables] = useState([]);
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,11 +91,12 @@ export default function AppShell() {
   const [receivablePayment, setReceivablePayment] = useState(null);
   const [paymentToCancel, setPaymentToCancel] = useState(null);
   const [receivableToDelete, setReceivableToDelete] = useState(null);
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses";
-  const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete;
+  const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
   const bodyLocked = overlayOpen;
 
   useEffect(() => {
@@ -271,6 +273,7 @@ export default function AppShell() {
     try {
       await deleteTransaction(id);
       toast.success("Item removido");
+      setTransactionToDelete(null);
       await syncMonthCollections();
     } catch {
       toast.error("Erro ao remover item");
@@ -500,6 +503,7 @@ export default function AppShell() {
         description: receivable.description,
         total_amount: formatMoney(receivable.total_amount, language),
         due_date: receivable.due_date,
+        category_id: receivable.category_id ? String(receivable.category_id) : "",
         notes: receivable.notes || ""
       });
     } else {
@@ -521,6 +525,7 @@ export default function AppShell() {
         description: payload.description.trim(),
         total_amount: parseTypedMoneyInput(payload.total_amount, language),
         due_date: payload.due_date,
+        category_id: payload.category_id ? Number(payload.category_id) : null,
         notes: payload.notes?.trim() || null
       };
       if (editingReceivable) await updateReceivable(editingReceivable.id, data);
@@ -540,7 +545,8 @@ export default function AppShell() {
       mode: "paid",
       receivable,
       amount: formatMoney(receivable.remaining_amount, language),
-      paid_at: todayIsoDate()
+      paid_at: todayIsoDate(),
+      category_id: receivable.category_id ? String(receivable.category_id) : ""
     });
   };
 
@@ -549,18 +555,20 @@ export default function AppShell() {
       mode: "partial",
       receivable,
       amount: "",
-      paid_at: todayIsoDate()
+      paid_at: todayIsoDate(),
+      category_id: receivable.category_id ? String(receivable.category_id) : ""
     });
   };
 
   const saveReceivablePayment = async (payload) => {
     try {
       if (payload.mode === "paid") {
-        await markReceivablePaid(payload.receivable.id, { paid_at: payload.paid_at });
+        await markReceivablePaid(payload.receivable.id, { paid_at: payload.paid_at, category_id: payload.category_id ? Number(payload.category_id) : null });
       } else {
         await createReceivablePayment(payload.receivable.id, {
           amount: parseTypedMoneyInput(payload.amount, language),
-          paid_at: payload.paid_at
+          paid_at: payload.paid_at,
+          category_id: payload.category_id ? Number(payload.category_id) : null
         });
       }
       setReceivablePayment(null);
@@ -630,7 +638,7 @@ export default function AppShell() {
           {loading ? <Skeleton /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={removeTransaction} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<InvoiceTemplatesPage templates={invoiceTemplates} onSave={saveInvoiceTemplate} onToggle={toggleTemplate} onDelete={removeTemplate} />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
@@ -648,10 +656,11 @@ export default function AppShell() {
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
-      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
-      {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
+      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} categories={categories} onCreateCategory={saveCategory} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
+      {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} categories={categories} onCreateCategory={saveCategory} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
       {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}
       {receivableToDelete && <DeleteReceivableModal receivable={receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={() => removeReceivable(receivableToDelete)} />}
+      {transactionToDelete && <DeleteTransactionModal transaction={transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => removeTransaction(transactionToDelete.id)} />}
     </div>
   );
 }

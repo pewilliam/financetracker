@@ -19,3 +19,4 @@ class Category(Base):
     invoice_items = relationship("InvoiceItem", back_populates="category")
     installment_purchases = relationship("InstallmentPurchase", back_populates="category")
     recurrences = relationship("Recurrence", back_populates="category")
+    receivables = relationship("Receivable", back_populates="category")
