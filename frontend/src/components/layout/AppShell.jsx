@@ -26,7 +26,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -46,6 +46,7 @@ export default function AppShell() {
   const [categories, setCategories] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
   const [previousCategoryBreakdown, setPreviousCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
+  const [budgetPlan, setBudgetPlan] = useState(null);
   const [receivables, setReceivables] = useState([]);
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +131,7 @@ export default function AppShell() {
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, peoplePayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
@@ -139,6 +140,7 @@ export default function AppShell() {
         listCategories(),
         getCategoryBreakdown(year, month),
         getCategoryBreakdown(previousTarget.year, previousTarget.month),
+        getMonthlyBudgetPlan(year, month),
         listReceivables(),
         listReceivablePeople(),
         getMonthsSummary(),
@@ -156,6 +158,7 @@ export default function AppShell() {
       setCategories(categoriesPayload);
       setCategoryBreakdown(categoryBreakdownPayload);
       setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
+      setBudgetPlan(budgetPlanPayload);
       setReceivables(receivablesPayload);
       setReceivablePeople(peoplePayload);
       setMonthCards(monthCardsPayload);
@@ -193,11 +196,12 @@ export default function AppShell() {
   const syncMonthCollections = async () => {
     const offsets = [-5, -4, -3, -2, -1, 0];
     const previousTarget = shiftMonth(year, month, -1);
-    const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+    const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
       getMonth(year, month),
       getMonthSummary(year, month),
       getCategoryBreakdown(year, month),
       getCategoryBreakdown(previousTarget.year, previousTarget.month),
+      getMonthlyBudgetPlan(year, month),
       getMonthsSummary(),
       Promise.all(offsets.map(async (offset) => {
         const target = shiftMonth(year, month, offset);
@@ -209,6 +213,7 @@ export default function AppShell() {
     setSummary(summaryPayload);
     setCategoryBreakdown(categoryBreakdownPayload);
     setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
+    setBudgetPlan(budgetPlanPayload);
     setMonthCards(monthCardsPayload);
     setComparisons(comparisonPayload);
   };
@@ -507,6 +512,22 @@ export default function AppShell() {
     }
   };
 
+  const saveBudgetPlanning = async (planPayload, reservePayload) => {
+    try {
+      await Promise.all([
+        updateMonthlyBudgetPlan(year, month, planPayload),
+        updateBudgetReserveRule(year, month, reservePayload),
+      ]);
+      const saved = await getMonthlyBudgetPlan(year, month);
+      setBudgetPlan(saved);
+      toast.success(t("categories.planningSaved"));
+      return saved;
+    } catch (error) {
+      toast.error(t("categories.planningSaveError"));
+      throw error;
+    }
+  };
+
   const saveInvoiceDueDate = async (invoiceId, dueDate) => {
     try {
       const updated = await updateInvoice(invoiceId, { due_date: dueDate });
@@ -675,7 +696,7 @@ export default function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
-              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} onUpdateCategory={editCategory} />} />
+              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />

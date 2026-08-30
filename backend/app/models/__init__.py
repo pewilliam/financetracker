@@ -13,6 +13,7 @@ from app.models.monthly_balance import MonthlyBalance
 from app.models.simulation import Simulation
 from app.models.simulation_item import SimulationItem
 from app.models.category import Category
+from app.models.budget import BudgetReserveRule, MonthlyBudgetIncome, MonthlyBudgetPlan
 
 __all__ = [
     "User",
@@ -30,4 +31,7 @@ __all__ = [
     "Simulation",
     "SimulationItem",
     "Category",
+    "MonthlyBudgetPlan",
+    "MonthlyBudgetIncome",
+    "BudgetReserveRule",
 ]

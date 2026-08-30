@@ -22,3 +22,5 @@ class User(Base):
     recurrences = relationship("Recurrence", back_populates="user", cascade="all, delete-orphan")
     simulations = relationship("Simulation", back_populates="user", cascade="all, delete-orphan")
     categories = relationship("Category", back_populates="user", cascade="all, delete-orphan")
+    monthly_budget_plans = relationship("MonthlyBudgetPlan", back_populates="user", cascade="all, delete-orphan")
+    budget_reserve_rules = relationship("BudgetReserveRule", back_populates="user", cascade="all, delete-orphan")

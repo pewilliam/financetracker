@@ -148,6 +148,24 @@ export function getCategoryBreakdown(year, month) {
   return request(`/months/${year}/${month}/categories`);
 }
 
+export function getMonthlyBudgetPlan(year, month) {
+  return request(`/budget-plans/${year}/${month}`);
+}
+
+export function updateMonthlyBudgetPlan(year, month, payload) {
+  return request(`/budget-plans/${year}/${month}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateBudgetReserveRule(year, month, payload) {
+  return request(`/budget-plans/${year}/${month}/reserve-rule`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function listCategories() {
   return request("/categories");
 }
