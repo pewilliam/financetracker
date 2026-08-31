@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CircleMinus, Loader2, Pencil, ShoppingBag, X } from "lucide-react";
+import { CircleMinus, Link2, Loader2, Pencil, ShoppingBag, X } from "lucide-react";
 
 import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 
-export default function InvoiceItemModal({ invoice, item, categories = [], onCreateCategory, onSave, onClose }) {
+export default function InvoiceItemModal({ invoice, item, categories = [], expenseOption, onManageReceivable, onCreateCategory, onSave, onClose }) {
   const { language } = useI18n();
   const [form, setForm] = useState(() => ({
     description: item.description || "",
@@ -94,6 +94,17 @@ export default function InvoiceItemModal({ invoice, item, categories = [], onCre
               />
             </div>
           </label>
+          {Number(item.amount) > 0 && expenseOption && (
+            <section className="expense-receivable-action">
+              <div>
+                <strong><Link2 size={16} /> Recebimento associado</strong>
+                <small>{expenseOption.receivable_ids?.length ? `${formatMoney(expenseOption.linked_amount, language)} já associado` : "Outra pessoa pagará todo ou parte deste gasto?"}</small>
+              </div>
+              <button className="btn btn-ghost compact" type="button" onClick={() => onManageReceivable?.(expenseOption)}>
+                {expenseOption.receivable_ids?.length ? "Editar recebível" : "Associar recebível"}
+              </button>
+            </section>
+          )}
         </div>
 
         <div className="invoice-item-modal-footer">

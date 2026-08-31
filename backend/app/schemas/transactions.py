@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from app.schemas.base import APIModel
 from app.schemas.categories import CategoryOut
+from app.schemas.receivables import LinkedExpenseOut, ReceivableExpenseLinkIn
 
 
 class TransactionBase(APIModel):
@@ -17,7 +18,7 @@ class TransactionBase(APIModel):
 
 
 class TransactionCreate(TransactionBase):
-    pass
+    expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
 class TransactionUpdate(APIModel):
@@ -29,9 +30,11 @@ class TransactionUpdate(APIModel):
     invoice_id: Optional[int] = None
     recurrence_id: Optional[int] = None
     category_id: Optional[int] = None
+    expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
 class TransactionOut(TransactionBase):
     id: int
     created_at: Optional[datetime] = None
     category: Optional[CategoryOut] = None
+    linked_expense: Optional[LinkedExpenseOut] = None

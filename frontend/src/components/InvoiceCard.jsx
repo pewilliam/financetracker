@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -15,7 +15,7 @@ function normalizeName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
-export default function InvoiceCard({ invoice, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onAddItem, onEditItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
+export default function InvoiceCard({ invoice, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, allowOverdueInvoiceEdits = false, onAddItem, onEditItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [addMode, setAddMode] = useState(null);
@@ -238,6 +238,9 @@ export default function InvoiceCard({ invoice, categories = [], onCreateCategory
                       </span>
                       <strong>{formatMoney(item.amount)}</strong>
                       <span className="invoice-item-actions">
+                        <button className="icon-btn small" type="button" onClick={() => onManageReceivable?.(expenseOptions.find((option) => option.source_type === "installment_item" && option.source_id === item.id))} aria-label="Associar recebível" title="Associar recebível">
+                          <CircleDollarSign size={15} />
+                        </button>
                         <button className="icon-btn small danger" type="button" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
                           <Trash2 size={15} />
                         </button>

@@ -1,21 +1,43 @@
 import { useState } from "react";
-import { Check, Filter, Plus, Trash2, X } from "lucide-react";
+import { Check, Filter, Link2, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney, formatMonthLabel } from "../utils/format.js";
 import { receivableStatusText, todayIsoDate } from "../app/helpers.js";
 
-export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, onPayment, onDelete, onDeletePayment }) {
+export default function ReceivablesPage({ receivables, linkedTransactions = [], onNew, onEdit, onEditLinkedTransaction, onPaid, onPayment, onDelete, onDeletePayment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", status: "all" });
   const [filterOpen, setFilterOpen] = useState(false);
   const today = todayIsoDate();
   const currentMonth = today.slice(0, 7);
+  const linkedReceivables = linkedTransactions.map((transaction) => {
+    const realized = transaction.date <= today;
+    return {
+      id: transaction.id,
+      record_kind: "linked_transaction",
+      transaction,
+      person_name: tt("receivables.linkedEntry", "Lançamento associado"),
+      description: transaction.description || tt("monthlyTable.noDescription", "Sem descrição"),
+      total_amount: transaction.amount,
+      received_amount: realized ? transaction.amount : 0,
+      remaining_amount: realized ? 0 : transaction.amount,
+      due_date: transaction.date,
+      status: realized ? "paid" : "pending",
+      category: transaction.category,
+      linked_expense: transaction.linked_expense,
+      payments: []
+    };
+  });
+  const allReceivables = [
+    ...receivables.map((item) => ({ ...item, record_kind: "receivable" })),
+    ...linkedReceivables
+  ].sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || left.id - right.id);
 
-  const openReceivables = receivables.filter((item) => item.status !== "paid");
+  const openReceivables = allReceivables.filter((item) => item.status !== "paid");
   const summaries = {
     totalOpen: openReceivables.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
-    overdue: receivables.filter((item) => item.status === "overdue").reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
+    overdue: allReceivables.filter((item) => item.status === "overdue").reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
     dueThisMonth: openReceivables
       .filter((item) => item.due_date?.slice(0, 7) === currentMonth && item.due_date >= today)
       .reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
@@ -23,6 +45,9 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
       .flatMap((item) => item.payments || [])
       .filter((payment) => payment.paid_at?.slice(0, 7) === currentMonth)
       .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+      + linkedReceivables
+        .filter((item) => item.status === "paid" && item.due_date?.slice(0, 7) === currentMonth)
+        .reduce((sum, item) => sum + Number(item.total_amount || 0), 0)
   };
 
   const statusOptions = [
@@ -33,7 +58,7 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
     ["paid", tt("receivables.paid", "Pagas")]
   ];
 
-  const filtered = receivables.filter((item) => {
+  const filtered = allReceivables.filter((item) => {
     const search = filters.search.trim().toLowerCase();
     const matchesSearch = !search || `${item.person_name} ${item.description} ${item.due_date}`.toLowerCase().includes(search);
     const matchesStatus = filters.status === "all" || item.status === filters.status;
@@ -62,7 +87,7 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
         <article className="card stat-card stat-card-expense">
           <p className="stat-label">{tt("receivables.totalOverdue", "Total vencido")}</p>
           <p className="stat-value">{formatMoney(summaries.overdue, language)}</p>
-          <p className="stat-meta">{receivables.filter((item) => item.status === "overdue").length} {tt("receivables.overdue", "atrasadas")}</p>
+          <p className="stat-meta">{allReceivables.filter((item) => item.status === "overdue").length} {tt("receivables.overdue", "atrasadas")}</p>
         </article>
         <article className="card stat-card">
           <p className="stat-label">{tt("receivables.dueThisMonth", "A vencer este mês")}</p>
@@ -79,7 +104,7 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
       {filterOpen && <div className="invoice-filter receivable-filter">
         <div className="invoice-filter-head">
           <span><Filter size={15} /> {tt("receivables.filter", "Filtrar recebíveis")}</span>
-          <small>{filtered.length} de {receivables.length}</small>
+          <small>{filtered.length} de {allReceivables.length}</small>
         </div>
         <div className="invoice-filter-grid receivable-filter-grid">
           <label className="invoice-filter-search">
@@ -105,7 +130,7 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
           {filtered.map((item) => {
             const progress = Math.min((Number(item.received_amount || 0) / Math.max(Number(item.total_amount || 1), 1)) * 100, 100);
             return (
-              <article className={`receivable-card card ${item.status}`} key={item.id}>
+              <article className={`receivable-card card ${item.status} ${item.record_kind === "linked_transaction" ? "linked-transaction" : ""}`} key={`${item.record_kind}-${item.id}`}>
                 <header>
                   <div>
                     <h3>{item.person_name}</h3>
@@ -113,7 +138,19 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
                   </div>
                   <span className={`due-badge compact ${item.status === "overdue" ? "danger" : item.status === "paid" ? "paid" : ""}`}>{receivableStatusText(item.status, language)}</span>
                 </header>
+                {item.record_kind === "linked_transaction" && <span className="receivable-origin-badge"><Link2 size={12} /> {tt("receivables.linkedEntryBadge", "Vinculado por um lançamento")}</span>}
                 {item.category && <span className="category-badge receivable-category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</span>}
+                {item.linked_expense && (
+                  <div className="receivable-linked-expense">
+                    <Link2 size={14} />
+                    <span>
+                      {item.linked_expense.origin === "months" ? "Meses" : item.linked_expense.invoice_name || "Fatura"}
+                      {item.linked_expense.installment_number ? ` · parcela ${item.linked_expense.installment_number}/${item.linked_expense.installment_count}` : ""}
+                    </span>
+                    <strong>{item.linked_expense.description}</strong>
+                  </div>
+                )}
+                {item.series_installment_count > 1 && <span className="receivable-series-badge">Recebível {item.series_installment_number}/{item.series_installment_count}</span>}
                 <div className="receivable-money-grid">
                   <div className="metric-block"><span>{tt("receivables.total", "Total")}</span><strong>{formatMoney(item.total_amount, language)}</strong></div>
                   <div className="metric-block"><span>{tt("receivables.received", "Recebido")}</span><strong className="money-income">{formatMoney(item.received_amount, language)}</strong></div>
@@ -133,9 +170,13 @@ export default function ReceivablesPage({ receivables, onNew, onEdit, onPaid, on
                   </div>
                 )}
                 <footer>
-                  <button className="btn btn-ghost compact" onClick={() => onEdit(item)}>{tt("actions.edit", "Editar")}</button>
-                  <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(item)}><Trash2 size={15} /> {tt("actions.delete", "Excluir")}</button>
-                  {item.status !== "paid" && (
+                  {item.record_kind === "linked_transaction" ? (
+                    <button className="btn btn-ghost compact" onClick={() => onEditLinkedTransaction(item.transaction)}>{tt("receivables.editLinkedEntry", "Editar lançamento")}</button>
+                  ) : <>
+                    <button className="btn btn-ghost compact" onClick={() => onEdit(item)}>{tt("actions.edit", "Editar")}</button>
+                    <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(item)}><Trash2 size={15} /> {tt("actions.delete", "Excluir")}</button>
+                  </>}
+                  {item.record_kind === "receivable" && item.status !== "paid" && (
                     <>
                       <button className="btn btn-ghost compact" onClick={() => onPayment(item)}>{tt("receivables.partialPayment", "Pagamento parcial")}</button>
                       <button className="btn btn-primary compact" onClick={() => onPaid(item)}><Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}</button>

@@ -289,8 +289,12 @@ export const enUS = {
     confirmCancelPayment: "Cancel payment",
     deleteReceivable: "Delete receivable",
     deleteReceivableMessage: "Do you really want to delete this receivable? This action cannot be undone.",
+    linkedEntry: "Linked entry",
+    linkedEntryBadge: "Linked through an entry",
+    editLinkedEntry: "Edit entry",
     empty: "No receivables found.",
-    emptyHint: "Create a new receivable or adjust the filters."
+    emptyHint: "Create a new receivable or adjust the filters.",
+    linkedExpense: "Linked expense"
   },
   monthlyTable: {
     openingBalance: "Opening balance",

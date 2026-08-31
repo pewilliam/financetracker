@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Loader2, Repeat2, X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Link2, Loader2, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
+import ExpensePicker from "./ExpensePicker.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -44,11 +45,18 @@ function todayIsoDate() {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
+function normalizedCategoryName(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+
 export default function TransactionForm({
   open,
   initial,
   date,
   categories = [],
+  expenseOption,
+  expenseOptions = [],
+  onManageReceivable,
   onCreateCategory,
   onClose,
   onSave
@@ -64,7 +72,8 @@ export default function TransactionForm({
     recurrence: false,
     recurrence_scope: initial?.recurrence_id ? "future" : "single",
     day_of_month: "",
-    recurrence_months: "12"
+    recurrence_months: "12",
+    expense_source_key: ""
   });
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -72,6 +81,8 @@ export default function TransactionForm({
 
   useEffect(() => {
     if (initial) {
+      const initialCategory = categories.find((item) => String(item.id) === String(initial.category_id));
+      const initialIsReceivable = ["recebivel", "receivable"].includes(normalizedCategoryName(initialCategory?.name));
       setForm({
         date: initial.date,
         type: initial.type,
@@ -79,9 +90,10 @@ export default function TransactionForm({
         description: initial.description || "",
         category_id: initial.category_id ? String(initial.category_id) : "",
         recurrence: false,
-        recurrence_scope: initial.recurrence_id ? "future" : "single",
+        recurrence_scope: initial.recurrence_id && !initialIsReceivable ? "future" : "single",
         day_of_month: "",
-        recurrence_months: "12"
+        recurrence_months: "12",
+        expense_source_key: initial.linked_expense ? `${initial.linked_expense.source_type}:${initial.linked_expense.source_id}` : ""
       });
     } else {
       setForm({
@@ -93,13 +105,14 @@ export default function TransactionForm({
         recurrence: false,
         recurrence_scope: "single",
         day_of_month: "",
-        recurrence_months: "12"
+        recurrence_months: "12",
+        expense_source_key: ""
       });
     }
     setErrors({});
     setTouched({});
     setSaving(false);
-  }, [initial, date, open]);
+  }, [initial, date, open, categories]);
 
   const handleAmount = (value) => {
     const formatted = formatAmountForEditing(value);
@@ -112,8 +125,21 @@ export default function TransactionForm({
     if (field === "date" && form.recurrence && !touched.day_of_month) {
       nextForm.day_of_month = getDayFromDate(value);
     }
+    if (field === "category_id") {
+      const category = categories.find((item) => String(item.id) === String(value));
+      const receivableCategory = ["recebivel", "receivable"].includes(normalizedCategoryName(category?.name));
+      if (!receivableCategory) nextForm.expense_source_key = "";
+      else {
+        nextForm.recurrence = false;
+        nextForm.recurrence_scope = "single";
+      }
+    }
     setForm(nextForm);
     if (touched[field]) validateField(field, value, nextForm);
+  };
+
+  const setTransactionType = (type) => {
+    setForm({ ...form, type, expense_source_key: type === "income" ? form.expense_source_key : "" });
   };
 
   const validateField = (field, value = form[field], source = form) => {
@@ -145,6 +171,12 @@ export default function TransactionForm({
     if (form.recurrence) {
       const day = Number(form.day_of_month);
       if (!form.day_of_month || day < 1 || day > 31) nextErrors.day_of_month = "Informe o dia do mês";
+    }
+    if (form.expense_source_key) {
+      const linkedOption = expenseOptions.find((option) => `${option.source_type}:${option.source_id}` === form.expense_source_key);
+      const ownAmount = linkedOption?.transaction_ids?.includes(initial?.id) ? Number(initial?.amount || 0) : 0;
+      const available = Number(linkedOption?.available_amount || 0) + ownAmount;
+      if (!linkedOption || amount > available) nextErrors.expense_link = "O valor excede o disponível neste gasto";
     }
     setTouched({ amount: true, date: true, day_of_month: true });
     setErrors(nextErrors);
@@ -181,13 +213,20 @@ export default function TransactionForm({
 
     setSaving(true);
     try {
+      const [sourceType, sourceId] = form.expense_source_key ? form.expense_source_key.split(":") : [];
       await onSave({
         data: {
           date: form.date,
           type: form.type,
           amount,
           description: form.description,
-          category_id: form.category_id ? Number(form.category_id) : null
+          category_id: form.category_id ? Number(form.category_id) : null,
+          expense_link: sourceType ? {
+            source_type: sourceType,
+            source_id: Number(sourceId),
+            installment_scope: "single",
+            allocation_mode: "total"
+          } : null
         },
         recurrence: form.recurrence
           ? {
@@ -212,6 +251,8 @@ export default function TransactionForm({
   };
 
   const isExpense = form.type === "expense";
+  const selectedCategory = categories.find((category) => String(category.id) === String(form.category_id));
+  const isReceivableCategory = !isExpense && ["recebivel", "receivable"].includes(normalizedCategoryName(selectedCategory?.name));
   const recurrenceMonths = clampNumber(form.recurrence_months, 1, 60, 12);
   const recurrenceDay = clampNumber(form.day_of_month || getDayFromDate(form.date), 1, 31, 1);
   const recurrenceEnd = form.date ? formatMonthShort(addMonths(form.date, recurrenceMonths)) : "";
@@ -232,10 +273,10 @@ export default function TransactionForm({
 
         <div className="transaction-modal-body">
           <div className="transaction-kind" aria-label="Tipo do lançamento">
-            <button type="button" className={isExpense ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}>
+            <button type="button" className={isExpense ? "active danger" : ""} onClick={() => setTransactionType("expense")}>
                 <ArrowDownCircle size={16} /> {tt("transactionModal.expense", "GASTO")}
             </button>
-            <button type="button" className={!isExpense ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}>
+            <button type="button" className={!isExpense ? "active success" : ""} onClick={() => setTransactionType("income")}>
                 <ArrowUpCircle size={16} /> {tt("transactionModal.income", "GANHO")}
             </button>
           </div>
@@ -272,7 +313,47 @@ export default function TransactionForm({
             <CategorySelect categories={categories} value={form.category_id} onChange={(value) => setField("category_id", value)} onCreate={onCreateCategory} />
           </label>
 
-          {initial?.recurrence_id && (
+          {isReceivableCategory && (
+            <section className={`transaction-expense-link ${errors.expense_link ? "has-error" : ""}`}>
+              <div className="receivable-link-heading">
+                <span><Link2 size={16} /> Associar este recebimento a um gasto</span>
+                <small>Encontre a compra pela descrição, fatura, mês ou valor.</small>
+              </div>
+              <ExpensePicker
+                options={expenseOptions}
+                value={form.expense_source_key || ""}
+                onChange={(key) => {
+                  setForm({ ...form, expense_source_key: key });
+                  if (errors.expense_link) setErrors({ ...errors, expense_link: null });
+                }}
+                mode="transaction"
+                autoOpen={!initial}
+                currentAmount={initial?.amount || 0}
+                currentTransactionId={initial?.id || null}
+              />
+              {errors.expense_link && <small className="field-error">{errors.expense_link}</small>}
+            </section>
+          )}
+
+          {initial?.type === "expense" && expenseOption && (
+            <section className="expense-receivable-action">
+              <div>
+                <strong><Link2 size={16} /> Recebimento deste gasto</strong>
+                <small>
+                  {Number(expenseOption.linked_amount || 0) > 0
+                    ? `${formatMoney(expenseOption.linked_amount, language)} já associado`
+                    : "Associe o valor que outra pessoa devolverá a você."}
+                </small>
+              </div>
+              {(expenseOption.receivable_ids?.length > 0 || Number(expenseOption.available_amount || 0) > 0) && (
+                <button className="btn btn-ghost compact" type="button" onClick={() => onManageReceivable?.(expenseOption)}>
+                  {expenseOption.receivable_ids?.length ? "Editar recebível" : "Associar recebível"}
+                </button>
+              )}
+            </section>
+          )}
+
+          {initial?.recurrence_id && !isReceivableCategory && (
             <section className="conditional-section recurrence-edit-scope">
               <div className="scope-heading">
                 <span><Repeat2 size={16} /> {tt("transactionModal.applyRecurringEdit", "Como aplicar?")}</span>
@@ -304,7 +385,7 @@ export default function TransactionForm({
             </section>
           )}
 
-          {!initial && (
+          {!initial && !isReceivableCategory && (
             <section className="conditional-section">
               <button className={`switch-row ${form.recurrence ? "active" : ""}`} type="button" onClick={toggleRecurrence}>
                 <span><Repeat2 size={16} /> {tt("transactionModal.recurringEntry", "Lançamento recorrente?")}</span>

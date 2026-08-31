@@ -1,4 +1,4 @@
-import { Clock3, Edit3, Plus, Repeat2, Trash2 } from "lucide-react";
+import { Clock3, Edit3, Link2, Plus, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 
@@ -49,6 +49,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                       </strong>
                       <span className="tx-description">
                         {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
+                        {tx.linked_expense && <span className="transaction-expense-pill" title={`Associado a ${tx.linked_expense.description}`}><Link2 size={12} /> {tt("receivables.linkedExpense", "Gasto associado")}</span>}
                         {tx.category && <span className="transaction-category-pill" style={{ "--category-color": tx.category.color }}>{tx.category.name}</span>}
                         {tx.description || tt("monthlyTable.noDescription", "Sem descrição")}
                       </span>

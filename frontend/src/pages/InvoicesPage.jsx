@@ -5,7 +5,7 @@ import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 
-export default function InvoicesPage({ invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, addInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, openInstallmentModal, openDuplicateInvoiceModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
@@ -109,6 +109,11 @@ export default function InvoicesPage({ invoices, categories = [], onCreateCatego
     setEditingItem(null);
   };
 
+  const manageReceivable = (option) => {
+    setEditingItem(null);
+    onManageReceivable?.(option);
+  };
+
   return (
     <section>
       <div className="section-head">
@@ -207,7 +212,7 @@ export default function InvoicesPage({ invoices, categories = [], onCreateCatego
                     </button>
                     {expanded && (
                       group.items.length ? (
-                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} categories={categories} onCreateCategory={onCreateCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddItem={addItem} onEditItem={(targetInvoice, item) => setEditingItem({ invoice: targetInvoice, item })} onUpdateDueDate={updateDueDate} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} categories={categories} expenseOptions={expenseOptions} onManageReceivable={manageReceivable} onCreateCategory={onCreateCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddItem={addItem} onEditItem={(targetInvoice, item) => setEditingItem({ invoice: targetInvoice, item })} onUpdateDueDate={updateDueDate} onAddInstallment={addInstallment} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onDuplicateNext={openDuplicateInvoiceModal} onViewInstallment={onViewInstallment} />)}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
                     )}
                   </section>
@@ -223,6 +228,8 @@ export default function InvoicesPage({ invoices, categories = [], onCreateCatego
           invoice={editingItem.invoice}
           item={editingItem.item}
           categories={categories}
+          expenseOption={expenseOptions.find((option) => option.source_type === "invoice_item" && option.source_id === editingItem.item.id)}
+          onManageReceivable={manageReceivable}
           onCreateCategory={onCreateCategory}
           onSave={saveEditedItem}
           onClose={() => setEditingItem(null)}

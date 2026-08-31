@@ -230,6 +230,14 @@ export function listReceivables() {
   return request("/receivables");
 }
 
+export function listReceivableExpenseOptions() {
+  return request("/receivables/expense-options");
+}
+
+export function listLinkedReceivableTransactions() {
+  return request("/receivables/linked-transactions");
+}
+
 export function listReceivablePeople() {
   return request("/receivables/people");
 }

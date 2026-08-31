@@ -45,7 +45,18 @@ export function defaultInstallmentForm(firstInvoiceId = "") {
 }
 
 export function defaultReceivableForm() {
-  return { person_id: "", person_name: "", description: "", total_amount: "", due_date: todayIsoDate(), category_id: "", notes: "" };
+  return {
+    person_id: "",
+    person_name: "",
+    description: "",
+    total_amount: "",
+    due_date: todayIsoDate(),
+    category_id: "",
+    notes: "",
+    expense_source_key: "",
+    installment_scope: "all",
+    allocation_mode: "total"
+  };
 }
 
 export function todayIsoDate() {
@@ -68,6 +79,7 @@ export function normalizeTransactionPayload(data) {
     is_future: Boolean(data?.is_future)
   };
   normalized.category_id = data?.category_id ? Number(data.category_id) : null;
+  normalized.expense_link = data?.expense_link || null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized.date)) normalized.date = "";
   return normalized;
 }

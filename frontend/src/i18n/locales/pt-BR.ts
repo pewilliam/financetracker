@@ -250,7 +250,8 @@ export const ptBR = {
     deleteReceivable: "Excluir recebível",
     deleteReceivableMessage: "Deseja realmente excluir este recebível? Esta ação não pode ser desfeita.",
     empty: "Nenhuma conta a receber encontrada.",
-    emptyHint: "Cadastre uma nova conta ou ajuste os filtros."
+    emptyHint: "Cadastre uma nova conta ou ajuste os filtros.",
+    linkedExpense: "Gasto associado"
   },
   dates: {
     overdue: "Vencida",
