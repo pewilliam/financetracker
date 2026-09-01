@@ -968,6 +968,7 @@ select {
 .categories-donut { position: relative; width: min(390px, 100%); margin: 4px auto 0; }
 .categories-donut > div:last-child {
   position: absolute;
+  z-index: 1;
   inset: 50% auto auto 50%;
   display: grid;
   justify-items: center;
@@ -975,6 +976,7 @@ select {
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+.categories-donut .recharts-tooltip-wrapper { z-index: 5 !important; }
 .categories-donut > div:last-child span { color: var(--muted); font-size: 10px; font-weight: 800; }
 .categories-donut > div:last-child strong { font-size: 15px; }
 .categories-chart-card .recharts-default-tooltip { border: 1px solid var(--border) !important; border-radius: 8px; background: var(--card) !important; box-shadow: var(--shadow); }
