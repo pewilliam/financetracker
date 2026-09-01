@@ -12,7 +12,7 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
   const [form, setForm] = useState(() => ({
     description: item.description || "",
     amount: formatMoney(Math.abs(Number(item.amount || 0)), language),
-    category_id: item.category_id ? String(item.category_id) : "",
+    category_ids: (item.category_ids?.length ? item.category_ids : item.category_id ? [item.category_id] : []).map(String),
     kind: Number(item.amount) < 0 ? "refund" : "expense",
   }));
   const [saving, setSaving] = useState(false);
@@ -42,7 +42,7 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
       await onSave({
         description: form.description.trim(),
         amount: form.kind === "refund" ? -Math.abs(amount) : Math.abs(amount),
-        category_id: form.category_id ? Number(form.category_id) : null,
+        category_ids: form.category_ids.map(Number),
       });
     } finally {
       setSaving(false);
@@ -79,7 +79,7 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
 
           <label>
             <span>Categoria</span>
-            <CategorySelect categories={categories} value={form.category_id} onChange={(value) => setForm({ ...form, category_id: value })} onCreate={onCreateCategory} />
+            <CategorySelect categories={categories} values={form.category_ids} onChange={(value) => setForm({ ...form, category_ids: value })} onCreate={onCreateCategory} />
           </label>
 
           <label>

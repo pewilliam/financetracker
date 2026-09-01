@@ -9,6 +9,7 @@ class InvoiceItemCreate(APIModel):
     description: str
     amount: Decimal
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class InvoiceItemUpdate(InvoiceItemCreate):
@@ -19,6 +20,7 @@ class InvoiceItemOut(InvoiceItemCreate):
     id: int
     created_at: Optional[datetime] = None
     category: Optional[CategoryOut] = None
+    categories: List[CategoryOut] = []
 
 
 class InvoiceInstallmentItemOut(APIModel):
@@ -34,7 +36,9 @@ class InvoiceInstallmentItemOut(APIModel):
     remaining_installments: int = 0
     created_at: Optional[datetime] = None
     category_id: Optional[int] = None
+    category_ids: List[int] = []
     category: Optional[CategoryOut] = None
+    categories: List[CategoryOut] = []
 
 
 class InvoiceCreate(APIModel):
@@ -42,6 +46,7 @@ class InvoiceCreate(APIModel):
     due_date: date
     initial_amount: Decimal = Decimal("0.00")
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class InvoicePaidUpdate(APIModel):

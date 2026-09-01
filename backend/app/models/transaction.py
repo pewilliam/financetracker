@@ -1,6 +1,7 @@
 from sqlalchemy import Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.category_links import transaction_categories
 
 
 class Transaction(Base):
@@ -25,9 +26,14 @@ class Transaction(Base):
     invoice = relationship("Invoice", foreign_keys=[invoice_id], back_populates="transactions")
     recurrence = relationship("Recurrence", foreign_keys=[recurrence_id], back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
+    categories = relationship("Category", secondary=transaction_categories, order_by="Category.name")
     linked_expense_transaction = relationship("Transaction", foreign_keys=[linked_expense_transaction_id], remote_side=[id])
     linked_expense_invoice_item = relationship("InvoiceItem", foreign_keys=[linked_expense_invoice_item_id])
     linked_expense_installment_item = relationship("InstallmentItem", foreign_keys=[linked_expense_installment_item_id])
+
+    @property
+    def category_ids(self):
+        return [category.id for category in self.categories]
 
     @property
     def linked_expense(self):
@@ -40,6 +46,8 @@ class Transaction(Base):
                 "date": self.linked_expense_transaction.date,
                 "origin": "months",
                 "category_id": self.linked_expense_transaction.category_id,
+                "category_ids": self.linked_expense_transaction.category_ids,
+                "categories": self.linked_expense_transaction.categories,
             }
         if self.linked_expense_invoice_item:
             item = self.linked_expense_invoice_item
@@ -53,6 +61,8 @@ class Transaction(Base):
                 "origin": "invoice",
                 "invoice_name": invoice.name if invoice else None,
                 "category_id": item.category_id,
+                "category_ids": item.category_ids,
+                "categories": item.categories,
             }
         if self.linked_expense_installment_item:
             item = self.linked_expense_installment_item
@@ -69,5 +79,7 @@ class Transaction(Base):
                 "installment_number": item.installment_number,
                 "installment_count": item.installment_count,
                 "category_id": item.category_id,
+                "category_ids": item.category_ids,
+                "categories": item.categories,
             }
         return None

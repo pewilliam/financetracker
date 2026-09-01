@@ -1,6 +1,7 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.category_links import invoice_item_categories
 
 
 class InvoiceItem(Base):
@@ -15,3 +16,8 @@ class InvoiceItem(Base):
 
     invoice = relationship("Invoice", back_populates="items")
     category = relationship("Category", back_populates="invoice_items")
+    categories = relationship("Category", secondary=invoice_item_categories, order_by="Category.name")
+
+    @property
+    def category_ids(self):
+        return [category.id for category in self.categories]

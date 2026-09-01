@@ -1,6 +1,7 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.category_links import installment_purchase_categories
 
 
 class InstallmentPurchase(Base):
@@ -19,9 +20,14 @@ class InstallmentPurchase(Base):
     user = relationship("User", back_populates="installment_purchases")
     first_invoice = relationship("Invoice", foreign_keys=[first_invoice_id])
     category = relationship("Category", back_populates="installment_purchases")
+    categories = relationship("Category", secondary=installment_purchase_categories, order_by="Category.name")
     items = relationship(
         "InstallmentItem",
         back_populates="purchase",
         cascade="all, delete-orphan",
         order_by="InstallmentItem.installment_number",
     )
+
+    @property
+    def category_ids(self):
+        return [category.id for category in self.categories]

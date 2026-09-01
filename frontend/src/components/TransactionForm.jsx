@@ -68,7 +68,7 @@ export default function TransactionForm({
     type: "expense",
     amount: "",
     description: "",
-    category_id: "",
+    category_ids: [],
     recurrence: false,
     recurrence_scope: initial?.recurrence_id ? "future" : "single",
     day_of_month: "",
@@ -81,14 +81,14 @@ export default function TransactionForm({
 
   useEffect(() => {
     if (initial) {
-      const initialCategory = categories.find((item) => String(item.id) === String(initial.category_id));
-      const initialIsReceivable = ["recebivel", "receivable"].includes(normalizedCategoryName(initialCategory?.name));
+      const initialCategoryIds = (initial.category_ids?.length ? initial.category_ids : initial.category_id ? [initial.category_id] : []).map(String);
+      const initialIsReceivable = categories.some((item) => initialCategoryIds.includes(String(item.id)) && ["recebivel", "receivable"].includes(normalizedCategoryName(item.name)));
       setForm({
         date: initial.date,
         type: initial.type,
         amount: formatMoney(initial.amount),
         description: initial.description || "",
-        category_id: initial.category_id ? String(initial.category_id) : "",
+        category_ids: initialCategoryIds,
         recurrence: false,
         recurrence_scope: initial.recurrence_id && !initialIsReceivable ? "future" : "single",
         day_of_month: "",
@@ -101,7 +101,7 @@ export default function TransactionForm({
         type: "expense",
         amount: "",
         description: "",
-        category_id: "",
+        category_ids: [],
         recurrence: false,
         recurrence_scope: "single",
         day_of_month: "",
@@ -125,9 +125,8 @@ export default function TransactionForm({
     if (field === "date" && form.recurrence && !touched.day_of_month) {
       nextForm.day_of_month = getDayFromDate(value);
     }
-    if (field === "category_id") {
-      const category = categories.find((item) => String(item.id) === String(value));
-      const receivableCategory = ["recebivel", "receivable"].includes(normalizedCategoryName(category?.name));
+    if (field === "category_ids") {
+      const receivableCategory = categories.some((item) => value.map(String).includes(String(item.id)) && ["recebivel", "receivable"].includes(normalizedCategoryName(item.name)));
       if (!receivableCategory) nextForm.expense_source_key = "";
       else {
         nextForm.recurrence = false;
@@ -220,7 +219,7 @@ export default function TransactionForm({
           type: form.type,
           amount,
           description: form.description,
-          category_id: form.category_id ? Number(form.category_id) : null,
+          category_ids: form.category_ids.map(Number),
           expense_link: sourceType ? {
             source_type: sourceType,
             source_id: Number(sourceId),
@@ -251,8 +250,7 @@ export default function TransactionForm({
   };
 
   const isExpense = form.type === "expense";
-  const selectedCategory = categories.find((category) => String(category.id) === String(form.category_id));
-  const isReceivableCategory = !isExpense && ["recebivel", "receivable"].includes(normalizedCategoryName(selectedCategory?.name));
+  const isReceivableCategory = !isExpense && categories.some((category) => form.category_ids.includes(String(category.id)) && ["recebivel", "receivable"].includes(normalizedCategoryName(category.name)));
   const recurrenceMonths = clampNumber(form.recurrence_months, 1, 60, 12);
   const recurrenceDay = clampNumber(form.day_of_month || getDayFromDate(form.date), 1, 31, 1);
   const recurrenceEnd = form.date ? formatMonthShort(addMonths(form.date, recurrenceMonths)) : "";
@@ -310,7 +308,7 @@ export default function TransactionForm({
 
           <label>
             <span>Categoria</span>
-            <CategorySelect categories={categories} value={form.category_id} onChange={(value) => setField("category_id", value)} onCreate={onCreateCategory} />
+            <CategorySelect categories={categories} values={form.category_ids} onChange={(value) => setField("category_ids", value)} onCreate={onCreateCategory} />
           </label>
 
           {isReceivableCategory && (

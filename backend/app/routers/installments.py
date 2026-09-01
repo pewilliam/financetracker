@@ -9,7 +9,7 @@ from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceIte
 from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
-from app.services.categories import get_user_category
+from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
 router = APIRouter(prefix="/api/installments", tags=["installments"])
 
@@ -66,7 +66,7 @@ def _sync_refund_invoice_item(db: Session, item: InstallmentItem) -> set[int]:
         refund_item.invoice_id = item.invoice_id
         refund_item.description = description
         refund_item.amount = refund_amount
-        refund_item.category_id = item.purchase.category_id
+        set_item_categories(refund_item, list(item.purchase.categories))
     else:
         refund_item = InvoiceItem(
             invoice_id=item.invoice_id,
@@ -74,6 +74,7 @@ def _sync_refund_invoice_item(db: Session, item: InstallmentItem) -> set[int]:
             amount=refund_amount,
             category_id=item.purchase.category_id,
         )
+        set_item_categories(refund_item, list(item.purchase.categories))
         db.add(refund_item)
         db.flush()
         item.refund_invoice_item_id = refund_item.id
@@ -142,7 +143,9 @@ def _purchase_summary(purchase: InstallmentPurchase) -> InstallmentPurchaseOut:
         next_installment=next_item,
         items=items,
         category_id=purchase.category_id,
+        category_ids=purchase.category_ids,
         category=purchase.category,
+        categories=purchase.categories,
     )
 
 
@@ -198,7 +201,7 @@ def create_installment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_user_category(db, current_user.id, payload.category_id)
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
     first_invoice = (
         db.query(Invoice)
         .options(selectinload(Invoice.template))
@@ -255,6 +258,7 @@ def create_installment(
         first_invoice_id=first_invoice.id,
         category_id=payload.category_id,
     )
+    set_item_categories(purchase, selected_categories)
     db.add(purchase)
     db.flush()
 
@@ -307,7 +311,7 @@ def update_installment_category(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_user_category(db, current_user.id, payload.category_id)
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
     purchase = (
         db.query(InstallmentPurchase)
         .options(selectinload(InstallmentPurchase.items))
@@ -317,13 +321,11 @@ def update_installment_category(
     if not purchase:
         raise HTTPException(status_code=404, detail="Installment purchase not found")
 
-    purchase.category_id = payload.category_id
+    set_item_categories(purchase, selected_categories)
     refund_item_ids = [item.refund_invoice_item_id for item in purchase.items if item.refund_invoice_item_id]
     if refund_item_ids:
-        db.query(InvoiceItem).filter(InvoiceItem.id.in_(refund_item_ids)).update(
-            {InvoiceItem.category_id: payload.category_id},
-            synchronize_session=False,
-        )
+        for refund_item in db.query(InvoiceItem).filter(InvoiceItem.id.in_(refund_item_ids)).all():
+            set_item_categories(refund_item, selected_categories)
     db.commit()
 
     purchase = (

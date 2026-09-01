@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import Recurrence, Transaction, User
 from app.schemas.recurrences import RecurrenceCreate, RecurrenceOut, RecurrenceUpdate
 from app.security import get_current_user
-from app.services.categories import get_user_category
+from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
 router = APIRouter(prefix="/api/recurrences", tags=["recurrences"])
 
@@ -56,7 +56,7 @@ def _sync_recurrence_transactions(
         transaction.description = recurrence.description
         transaction.type = recurrence.type
         transaction.amount = recurrence.amount
-        transaction.category_id = recurrence.category_id
+        set_item_categories(transaction, list(recurrence.categories))
 
         last_day = calendar.monthrange(transaction.date.year, transaction.date.month)[1]
         transaction.date = date(
@@ -86,7 +86,7 @@ def create_recurrence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_user_category(db, current_user.id, payload.category_id)
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
     recurrence = Recurrence(
         user_id=current_user.id,
         description=payload.description,
@@ -98,6 +98,7 @@ def create_recurrence(
         category_id=payload.category_id,
     )
     db.add(recurrence)
+    set_item_categories(recurrence, selected_categories)
     db.flush()
 
     start = payload.start_date or date.today()
@@ -112,8 +113,7 @@ def create_recurrence(
         if _transaction_exists(db, recurrence.id, current_user.id, target_date):
             continue
 
-        db.add(
-            Transaction(
+        transaction = Transaction(
                 user_id=current_user.id,
                 date=target_date,
                 type=recurrence.type,
@@ -123,7 +123,8 @@ def create_recurrence(
                 recurrence_id=recurrence.id,
                 category_id=recurrence.category_id,
             )
-        )
+        set_item_categories(transaction, list(recurrence.categories))
+        db.add(transaction)
 
     db.commit()
     db.refresh(recurrence)
@@ -145,14 +146,14 @@ def update_recurrence(
     if not recurrence:
         raise HTTPException(status_code=404, detail="Recurrence not found")
 
-    get_user_category(db, current_user.id, payload.category_id)
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
 
     recurrence.description = payload.description
     recurrence.type = payload.type
     recurrence.amount = payload.amount
     recurrence.day_of_month = max(1, min(payload.day_of_month, 31))
     recurrence.active = payload.active
-    recurrence.category_id = payload.category_id
+    set_item_categories(recurrence, selected_categories)
 
     _sync_recurrence_transactions(
         db,

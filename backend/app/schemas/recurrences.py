@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 from app.schemas.base import APIModel
+from app.schemas.categories import CategoryOut
 
 
 class RecurrenceCreate(APIModel):
@@ -13,6 +14,7 @@ class RecurrenceCreate(APIModel):
     start_date: Optional[date] = None
     active: bool = True
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class RecurrenceUpdate(APIModel):
@@ -24,6 +26,7 @@ class RecurrenceUpdate(APIModel):
     apply_to: Literal["all", "future"] = "future"
     effective_date: Optional[date] = None
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class RecurrenceOut(APIModel):
@@ -36,3 +39,5 @@ class RecurrenceOut(APIModel):
     active: bool = True
     created_at: Optional[datetime] = None
     category_id: Optional[int] = None
+    category_ids: List[int] = []
+    categories: List[CategoryOut] = []

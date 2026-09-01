@@ -25,6 +25,7 @@ export default function ReceivablesPage({ receivables, linkedTransactions = [], 
       due_date: transaction.date,
       status: realized ? "paid" : "pending",
       category: transaction.category,
+      categories: transaction.categories || [],
       linked_expense: transaction.linked_expense,
       payments: []
     };
@@ -139,7 +140,9 @@ export default function ReceivablesPage({ receivables, linkedTransactions = [], 
                   <span className={`due-badge compact ${item.status === "overdue" ? "danger" : item.status === "paid" ? "paid" : ""}`}>{receivableStatusText(item.status, language)}</span>
                 </header>
                 {item.record_kind === "linked_transaction" && <span className="receivable-origin-badge"><Link2 size={12} /> {tt("receivables.linkedEntryBadge", "Vinculado por um lançamento")}</span>}
-                {item.category && <span className="category-badge receivable-category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</span>}
+                {(item.categories?.length ? item.categories : item.category ? [item.category] : []).map((category) => (
+                  <span className="category-badge receivable-category-badge" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
+                ))}
                 {item.linked_expense && (
                   <div className="receivable-linked-expense">
                     <Link2 size={14} />

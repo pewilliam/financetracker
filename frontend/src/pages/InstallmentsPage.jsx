@@ -22,7 +22,9 @@ export default function InstallmentsPage({ installments, onNew, onDetails }) {
                   <h3><CreditCard size={18} /> {purchase.description}</h3>
                   {purchase.paid_installments === purchase.installment_count && <span className="paid-pill">QUITADA</span>}
                 </header>
-                {purchase.category && <span className="category-badge" style={{ "--category-color": purchase.category.color }}>{purchase.category.name}</span>}
+                {(purchase.categories?.length ? purchase.categories : purchase.category ? [purchase.category] : []).map((category) => (
+                  <span className="category-badge" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
+                ))}
                 <p>{formatMoney(purchase.total_amount)} • {purchase.installment_count}x {formatMoney(purchase.installment_value)}</p>
                 <div className="installment-progress"><span style={{ width: `${pct}%` }} /></div>
                 <strong>{tt("installments.progress", "Progresso:")} {purchase.paid_installments} / {purchase.installment_count}</strong>

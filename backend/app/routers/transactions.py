@@ -7,7 +7,7 @@ from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceIte
 from app.schemas.receivables import ReceivableExpenseLinkIn
 from app.schemas.transactions import TransactionCreate, TransactionOut, TransactionUpdate
 from app.security import get_current_user
-from app.services.categories import get_user_category
+from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -130,7 +130,7 @@ def create_transaction(
         if not recurrence:
             raise HTTPException(status_code=404, detail="Recurrence not found")
 
-    get_user_category(db, current_user.id, payload.category_id)
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
 
     transaction = Transaction(
         user_id=current_user.id,
@@ -143,6 +143,7 @@ def create_transaction(
         recurrence_id=payload.recurrence_id,
         category_id=payload.category_id,
     )
+    set_item_categories(transaction, selected_categories)
     db.add(transaction)
     db.flush()
     if payload.expense_link is not None:
@@ -170,6 +171,9 @@ def update_transaction(
     data = payload.model_dump(exclude_unset=True)
     expense_link_set = "expense_link" in data
     data.pop("expense_link", None)
+    selected_category_ids = category_ids_from_payload(payload)
+    data.pop("category_ids", None)
+    data.pop("category_id", None)
     for field, value in data.items():
         setattr(transaction, field, value)
 
@@ -194,8 +198,11 @@ def update_transaction(
         if not recurrence:
             raise HTTPException(status_code=404, detail="Recurrence not found")
 
-    if "category_id" in payload.model_fields_set:
-        get_user_category(db, current_user.id, payload.category_id)
+    if selected_category_ids is not None:
+        set_item_categories(
+            transaction,
+            get_user_categories(db, current_user.id, selected_category_ids),
+        )
 
     if payload.date and transaction.is_future is False and payload.date > date.today():
         transaction.is_future = True

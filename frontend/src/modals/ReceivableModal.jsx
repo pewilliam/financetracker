@@ -50,7 +50,9 @@ export default function ReceivableModal({ form, setForm, editing, people, catego
       total_amount: formatMoney(available || option.amount, language),
       due_date: option.date || form.due_date,
       description: form.description.trim() ? form.description : option.description,
-      category_id: form.category_id || (option.category_id ? String(option.category_id) : "")
+      category_ids: form.category_ids?.length
+        ? form.category_ids
+        : (option.category_ids?.length ? option.category_ids : option.category_id ? [option.category_id] : []).map(String)
     });
   };
 
@@ -144,7 +146,7 @@ export default function ReceivableModal({ form, setForm, editing, people, catego
             <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
             <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
           </div>
-          <label><span>Categoria do recebimento</span><CategorySelect categories={categories} value={form.category_id} onChange={(value) => updateForm({ category_id: value })} onCreate={onCreateCategory} /></label>
+          <label><span>Categorias do recebimento</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
           <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
         </div>
         <div className="modal-actions">

@@ -19,7 +19,7 @@ from app.schemas.receivables import (
 )
 from app.schemas.transactions import TransactionOut
 from app.security import get_current_user
-from app.services.categories import get_user_category
+from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
 router = APIRouter(prefix="/api/receivables", tags=["receivables"])
 
@@ -68,6 +68,7 @@ def _load_receivable(db: Session, receivable_id: int, user_id: int) -> Receivabl
 def _receivable_load_options():
     return (
         selectinload(Receivable.person),
+        selectinload(Receivable.categories),
         selectinload(Receivable.payments),
         selectinload(Receivable.source_transaction),
         selectinload(Receivable.source_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.template),
@@ -280,6 +281,7 @@ def _apply_expense_link(
             series_installment_count=count,
             source_installment_item_id=item.id,
         )
+        set_item_categories(sibling, list(receivable.categories))
         _sync_status(sibling)
         db.add(sibling)
         created.append(sibling)
@@ -323,15 +325,17 @@ def _person_for_payload(db: Session, user_id: int, person_id: int | None, person
     return person
 
 
-def _set_receivable_category(db: Session, user_id: int, receivable: Receivable, category_id: int | None) -> None:
-    get_user_category(db, user_id, category_id)
-    receivable.category_id = category_id
+def _set_receivable_categories(db: Session, user_id: int, receivable: Receivable, category_ids: list[int]) -> None:
+    categories = get_user_categories(db, user_id, category_ids)
+    set_item_categories(receivable, categories)
     transaction_ids = [payment.transaction_id for payment in receivable.payments if payment.transaction_id]
     if transaction_ids:
-        db.query(Transaction).filter(
+        transactions = db.query(Transaction).filter(
             Transaction.id.in_(transaction_ids),
             Transaction.user_id == user_id,
-        ).update({Transaction.category_id: category_id}, synchronize_session=False)
+        ).all()
+        for transaction in transactions:
+            set_item_categories(transaction, categories)
 
 
 def _create_income_transaction(db: Session, user_id: int, receivable: Receivable, amount: Decimal, paid_at: date) -> Transaction:
@@ -344,6 +348,7 @@ def _create_income_transaction(db: Session, user_id: int, receivable: Receivable
         is_future=False,
         category_id=receivable.category_id,
     )
+    set_item_categories(transaction, list(receivable.categories))
     db.add(transaction)
     db.flush()
     return transaction
@@ -355,7 +360,7 @@ def _register_payment(
     receivable: Receivable,
     amount: Decimal,
     paid_at: date,
-    category_id: int | None,
+    category_ids: list[int],
 ) -> Receivable:
     if paid_at > date.today():
         raise HTTPException(status_code=400, detail="Payment date cannot be in the future")
@@ -371,7 +376,7 @@ def _register_payment(
     if payment_amount > remaining:
         raise HTTPException(status_code=400, detail="Payment amount exceeds remaining amount")
 
-    _set_receivable_category(db, user_id, receivable, category_id)
+    _set_receivable_categories(db, user_id, receivable, category_ids)
 
     transaction = _create_income_transaction(db, user_id, receivable, payment_amount, paid_at)
     payment = ReceivablePayment(
@@ -460,6 +465,8 @@ def list_receivable_expense_options(
             date=item.date,
             origin="months",
             category_id=item.category_id,
+            category_ids=item.category_ids,
+            categories=item.categories,
         ))
 
     invoice_items = (
@@ -485,6 +492,8 @@ def list_receivable_expense_options(
             origin="invoice",
             invoice_name=item.invoice.name,
             category_id=item.category_id,
+            category_ids=item.category_ids,
+            categories=item.categories,
         ))
 
     purchases = (
@@ -528,6 +537,8 @@ def list_receivable_expense_options(
                 installment_number=item.installment_number,
                 installment_count=purchase.installment_count,
                 category_id=purchase.category_id,
+                category_ids=purchase.category_ids,
+                categories=purchase.categories,
             ))
         result.append(ExpenseOptionOut(
             source_type="installment_purchase",
@@ -544,6 +555,8 @@ def list_receivable_expense_options(
             purchase_id=purchase.id,
             installment_count=len(items),
             category_id=purchase.category_id,
+            category_ids=purchase.category_ids,
+            categories=purchase.categories,
         ))
     return result
 
@@ -609,7 +622,7 @@ def create_receivable(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_user_category(db, current_user.id, payload.category_id)
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
     person = _person_for_payload(db, current_user.id, payload.person_id, payload.person_name)
     receivable = Receivable(
         user_id=current_user.id,
@@ -621,6 +634,7 @@ def create_receivable(
         notes=payload.notes.strip() if payload.notes else None,
         category_id=payload.category_id,
     )
+    set_item_categories(receivable, selected_categories)
     if not receivable.description:
         raise HTTPException(status_code=400, detail="Description is required")
 
@@ -657,8 +671,9 @@ def update_receivable(
         receivable.due_date = data["due_date"]
     if "notes" in data:
         receivable.notes = data["notes"].strip() if data["notes"] else None
-    if "category_id" in data:
-        _set_receivable_category(db, current_user.id, receivable, data["category_id"])
+    selected_category_ids = category_ids_from_payload(payload)
+    if selected_category_ids is not None:
+        _set_receivable_categories(db, current_user.id, receivable, selected_category_ids)
     if "expense_link" in data:
         _apply_expense_link(db, current_user.id, receivable, payload.expense_link)
 
@@ -679,8 +694,10 @@ def mark_receivable_paid(
 ):
     receivable = _load_receivable(db, receivable_id, current_user.id)
     remaining = _money(receivable.total_amount) - _money(receivable.received_amount)
-    category_id = payload.category_id if "category_id" in payload.model_fields_set else receivable.category_id
-    return _register_payment(db, current_user.id, receivable, remaining, payload.paid_at, category_id)
+    category_ids = category_ids_from_payload(payload)
+    if category_ids is None:
+        category_ids = receivable.category_ids
+    return _register_payment(db, current_user.id, receivable, remaining, payload.paid_at, category_ids)
 
 
 @router.post("/{receivable_id}/payments", response_model=ReceivableOut)
@@ -691,8 +708,10 @@ def create_receivable_payment(
     current_user: User = Depends(get_current_user),
 ):
     receivable = _load_receivable(db, receivable_id, current_user.id)
-    category_id = payload.category_id if "category_id" in payload.model_fields_set else receivable.category_id
-    return _register_payment(db, current_user.id, receivable, payload.amount, payload.paid_at, category_id)
+    category_ids = category_ids_from_payload(payload)
+    if category_ids is None:
+        category_ids = receivable.category_ids
+    return _register_payment(db, current_user.id, receivable, payload.amount, payload.paid_at, category_ids)
 
 
 @router.delete("/{receivable_id}/payments/{payment_id}", response_model=ReceivableOut)

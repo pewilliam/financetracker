@@ -21,11 +21,13 @@ class ReceivablePaymentCreate(APIModel):
     amount: Decimal = Field(gt=0)
     paid_at: date
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class ReceivablePaidPayload(APIModel):
     paid_at: date
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class ReceivablePaymentOut(APIModel):
@@ -56,6 +58,8 @@ class LinkedExpenseOut(APIModel):
     installment_number: Optional[int] = None
     installment_count: Optional[int] = None
     category_id: Optional[int] = None
+    category_ids: List[int] = []
+    categories: List[CategoryOut] = []
 
 
 class ExpenseOptionOut(LinkedExpenseOut):
@@ -73,6 +77,7 @@ class ReceivableCreate(APIModel):
     due_date: date
     notes: Optional[str] = None
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
@@ -84,6 +89,7 @@ class ReceivableUpdate(APIModel):
     due_date: Optional[date] = None
     notes: Optional[str] = None
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
@@ -101,7 +107,9 @@ class ReceivableOut(APIModel):
     paid_at: Optional[date] = None
     notes: Optional[str] = None
     category_id: Optional[int] = None
+    category_ids: List[int] = []
     category: Optional[CategoryOut] = None
+    categories: List[CategoryOut] = []
     series_id: Optional[str] = None
     series_installment_number: Optional[int] = None
     series_installment_count: Optional[int] = None

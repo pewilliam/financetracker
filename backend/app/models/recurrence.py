@@ -1,6 +1,7 @@
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.category_links import recurrence_categories
 
 
 class Recurrence(Base):
@@ -20,3 +21,8 @@ class Recurrence(Base):
     user = relationship("User", back_populates="recurrences")
     transactions = relationship("Transaction", back_populates="recurrence")
     category = relationship("Category", back_populates="recurrences")
+    categories = relationship("Category", secondary=recurrence_categories, order_by="Category.name")
+
+    @property
+    def category_ids(self):
+        return [category.id for category in self.categories]

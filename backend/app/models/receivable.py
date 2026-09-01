@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.category_links import receivable_categories
 
 
 class Receivable(Base):
@@ -33,6 +34,7 @@ class Receivable(Base):
     user = relationship("User", back_populates="receivables")
     person = relationship("ReceivablePerson", back_populates="receivables")
     category = relationship("Category", back_populates="receivables")
+    categories = relationship("Category", secondary=receivable_categories, order_by="Category.name")
     source_transaction = relationship("Transaction", foreign_keys=[source_transaction_id])
     source_invoice_item = relationship("InvoiceItem", foreign_keys=[source_invoice_item_id])
     source_installment_item = relationship("InstallmentItem", foreign_keys=[source_installment_item_id])
@@ -42,6 +44,10 @@ class Receivable(Base):
         cascade="all, delete-orphan",
         order_by="ReceivablePayment.paid_at",
     )
+
+    @property
+    def category_ids(self):
+        return [category.id for category in self.categories]
 
     @property
     def remaining_amount(self):

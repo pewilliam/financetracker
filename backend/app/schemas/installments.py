@@ -21,6 +21,7 @@ class InstallmentCreate(APIModel):
     custom_values: Optional[List[Decimal]] = None
     items: Optional[List[InstallmentDraftIn]] = None
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class InstallmentItemUpdate(APIModel):
@@ -31,6 +32,7 @@ class InstallmentItemUpdate(APIModel):
 
 class InstallmentCategoryUpdate(APIModel):
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class InstallmentItemOut(APIModel):
@@ -61,4 +63,6 @@ class InstallmentPurchaseOut(APIModel):
     next_installment: Optional[InstallmentItemOut] = None
     items: List[InstallmentItemOut] = []
     category_id: Optional[int] = None
+    category_ids: List[int] = []
     category: Optional[CategoryOut] = None
+    categories: List[CategoryOut] = []

@@ -58,14 +58,16 @@ def _income_candidates(db: Session, user_id: int, year: int, month: int) -> list
     start, end = _month_bounds(year, month)
     return (
         db.query(Transaction)
-        .join(Category, Transaction.category_id == Category.id)
         .filter(
             Transaction.user_id == user_id,
             Transaction.type == "income",
             Transaction.amount > 0,
             Transaction.date >= start,
             Transaction.date <= end,
-            func.lower(Category.name) == "renda",
+            or_(
+                Transaction.category.has(func.lower(Category.name) == "renda"),
+                Transaction.categories.any(func.lower(Category.name) == "renda"),
+            ),
         )
         .order_by(Transaction.date, Transaction.id)
         .all()

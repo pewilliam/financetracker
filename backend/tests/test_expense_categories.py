@@ -13,9 +13,11 @@ from app.routers.categories import delete_category, update_category
 from app.routers.installments import update_installment_category
 from app.routers.months import get_category_breakdown
 from app.routers.receivables import mark_receivable_paid
+from app.routers.transactions import create_transaction
 from app.schemas.categories import CategoryUpdate
 from app.schemas.installments import InstallmentCategoryUpdate
 from app.schemas.receivables import ReceivablePaidPayload
+from app.schemas.transactions import TransactionCreate
 
 
 class ExpenseCategoryBreakdownTests(unittest.TestCase):
@@ -139,6 +141,35 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
             ("Alimentação", Decimal("300.00")),
             ("Sem categoria", Decimal("100.00")),
         ])
+
+    def test_transaction_accepts_multiple_categories_and_splits_dashboard_amount(self):
+        food = Category(user_id=self.user.id, name="Alimentação", color="#14A078")
+        dating = Category(user_id=self.user.id, name="Saída com Namorada", color="#EC4899")
+        self.db.add_all([food, dating])
+        self.db.flush()
+
+        transaction = create_transaction(
+            TransactionCreate(
+                date=date(2026, 8, 15),
+                type="expense",
+                amount=Decimal("100.00"),
+                description="Jantar",
+                category_ids=[food.id, dating.id],
+            ),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(transaction.category_id, food.id)
+        self.assertEqual(set(transaction.category_ids), {food.id, dating.id})
+
+        result = get_category_breakdown(2026, 8, self.db, self.user)
+        self.assertEqual(result.total_expenses, Decimal("100.00"))
+        self.assertEqual(result.categorized_total, Decimal("100.00"))
+        self.assertEqual(
+            {(item.name, item.amount) for item in result.items},
+            {("Alimentação", Decimal("50.00")), ("Saída com Namorada", Decimal("50.00"))},
+        )
 
     def test_installment_category_update_also_updates_existing_refund(self):
         category = Category(user_id=self.user.id, name="Assinaturas", color="#8B5CF6")

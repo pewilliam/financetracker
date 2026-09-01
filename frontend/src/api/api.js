@@ -296,10 +296,10 @@ export function createInstallment(payload) {
   });
 }
 
-export function updateInstallmentCategory(id, categoryId) {
+export function updateInstallmentCategory(id, categoryIds) {
   return request(`/installments/${id}/category`, {
     method: "PATCH",
-    body: JSON.stringify({ category_id: categoryId })
+    body: JSON.stringify({ category_ids: (categoryIds || []).map(Number) })
   });
 }
 

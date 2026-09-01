@@ -87,7 +87,7 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
       total_amount: confirmedTotal,
       installment_count: drafts.length,
       first_invoice_id: Number(form.first_invoice_id),
-      category_id: form.category_id ? Number(form.category_id) : null,
+      category_ids: (form.category_ids || []).map(Number),
       items: drafts.map((draft) => ({
         invoice_id: draft.invoice_id ? Number(draft.invoice_id) : null,
         amount: parseTypedMoneyInput(draft.amount, language),
@@ -113,7 +113,7 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
           <>
             <div className="invoice-modal-body">
               <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
-              <label><span>Categoria</span><CategorySelect categories={categories} value={form.category_id} onChange={(value) => updateForm({ category_id: value })} onCreate={onCreateCategory} /></label>
+              <label><span>Categorias</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
               <div className="installment-form-row">
                 <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></label>
                 <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={form.installment_count ?? ""} onChange={(event) => updateForm({ installment_count: event.target.value })} onBlur={() => updateForm({ installment_count: count })} required /></label>

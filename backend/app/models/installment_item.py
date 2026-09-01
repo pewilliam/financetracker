@@ -44,3 +44,11 @@ class InstallmentItem(Base):
     @property
     def category(self):
         return self.purchase.category if self.purchase else None
+
+    @property
+    def category_ids(self):
+        return self.purchase.category_ids if self.purchase else []
+
+    @property
+    def categories(self):
+        return self.purchase.categories if self.purchase else []

@@ -246,6 +246,17 @@ def get_category_breakdown(
         for category in db.query(Category).filter(Category.user_id == current_user.id).all()
     }
 
+    def add_categorized_amount(target: dict[int | None, Decimal], item, amount: Decimal) -> None:
+        selected_ids = [category.id for category in getattr(item, "categories", [])]
+        if not selected_ids and getattr(item, "category_id", None) is not None:
+            selected_ids = [item.category_id]
+        if not selected_ids:
+            target[None] = target.get(None, Decimal("0.00")) + amount
+            return
+        share = amount / Decimal(len(selected_ids))
+        for category_id in selected_ids:
+            target[category_id] = target.get(category_id, Decimal("0.00")) + share
+
     direct_transactions = (
         db.query(Transaction)
         .filter(
@@ -258,7 +269,7 @@ def get_category_breakdown(
         .all()
     )
     for transaction in direct_transactions:
-        totals[transaction.category_id] = totals.get(transaction.category_id, Decimal("0.00")) + transaction.amount
+        add_categorized_amount(totals, transaction, transaction.amount)
 
     income_transactions = (
         db.query(Transaction)
@@ -271,7 +282,7 @@ def get_category_breakdown(
         .all()
     )
     for transaction in income_transactions:
-        income_totals[transaction.category_id] = income_totals.get(transaction.category_id, Decimal("0.00")) + transaction.amount
+        add_categorized_amount(income_totals, transaction, transaction.amount)
 
     invoice_ids = [
         row.id
@@ -284,7 +295,7 @@ def get_category_breakdown(
     if invoice_ids:
         invoice_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id.in_(invoice_ids)).all()
         for item in invoice_items:
-            totals[item.category_id] = totals.get(item.category_id, Decimal("0.00")) + item.amount
+            add_categorized_amount(totals, item, item.amount)
 
         installment_items = (
             db.query(InstallmentItem)
@@ -295,8 +306,7 @@ def get_category_breakdown(
             .all()
         )
         for item in installment_items:
-            category_id = item.purchase.category_id if item.purchase else None
-            totals[category_id] = totals.get(category_id, Decimal("0.00")) + item.amount
+            add_categorized_amount(totals, item.purchase if item.purchase else item, item.amount)
 
     def build_items(source: dict[int | None, Decimal]):
         source_total = sum(source.values(), Decimal("0.00"))

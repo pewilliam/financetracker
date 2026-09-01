@@ -1,6 +1,6 @@
 from datetime import date as Date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from app.schemas.base import APIModel
 from app.schemas.categories import CategoryOut
 from app.schemas.receivables import LinkedExpenseOut, ReceivableExpenseLinkIn
@@ -15,6 +15,7 @@ class TransactionBase(APIModel):
     invoice_id: Optional[int] = None
     recurrence_id: Optional[int] = None
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class TransactionCreate(TransactionBase):
@@ -30,6 +31,7 @@ class TransactionUpdate(APIModel):
     invoice_id: Optional[int] = None
     recurrence_id: Optional[int] = None
     category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
@@ -37,4 +39,5 @@ class TransactionOut(TransactionBase):
     id: int
     created_at: Optional[datetime] = None
     category: Optional[CategoryOut] = None
+    categories: List[CategoryOut] = []
     linked_expense: Optional[LinkedExpenseOut] = None

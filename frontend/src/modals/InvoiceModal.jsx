@@ -57,7 +57,7 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
     template_color: normalizeInvoiceColor(selectedTemplate?.color),
     due_date: addMonthsToDate(form.due_date, index),
     initial_amount: form.initial_amount,
-    category_id: form.category_id || ""
+    category_ids: form.category_ids || []
   }));
 
   const goToReview = (event) => {
@@ -150,7 +150,7 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
               </label>
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>{tt("invoiceModal.initialAmount", "Valor inicial")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
-              <label><span>Categoria do valor inicial</span><CategorySelect categories={categories} value={form.category_id} onChange={(value) => updateForm({ category_id: value })} onCreate={onCreateCategory} /></label>
+              <label><span>Categorias do valor inicial</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input

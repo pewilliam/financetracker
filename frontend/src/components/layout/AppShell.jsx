@@ -257,7 +257,7 @@ export default function AppShell() {
             active: true,
             apply_to: payload.recurrenceUpdate.apply_to,
             effective_date: payload.recurrenceUpdate.effective_date,
-            category_id: normalizedData.category_id
+            category_ids: normalizedData.category_ids
           });
         } else {
           await updateTransaction(editing.id, normalizedData);
@@ -276,7 +276,7 @@ export default function AppShell() {
             recurrence_months: payload.recurrence.recurrence_months,
             start_date: normalizedData.date,
             active: true,
-            category_id: normalizedData.category_id
+            category_ids: normalizedData.category_ids
           });
         } else {
           await createTransaction(normalizedData);
@@ -314,7 +314,7 @@ export default function AppShell() {
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
         initial_amount: parseTypedMoneyInput(draft.initial_amount, language),
-        category_id: draft.category_id ? Number(draft.category_id) : null
+        category_ids: (draft.category_ids || []).map(Number)
       })));
       const createdIds = new Set(createdInvoices.map((invoice) => invoice.id));
       setInvoices((current) => sortInvoicesByDueDate([
@@ -426,12 +426,12 @@ export default function AppShell() {
     }
   };
 
-  const saveInstallmentCategory = async (id, categoryId) => {
+  const saveInstallmentCategory = async (id, categoryIds) => {
     try {
-      const updated = await updateInstallmentCategory(id, categoryId);
+      const updated = await updateInstallmentCategory(id, categoryIds);
       setInstallmentDetails(updated);
       setInstallments((current) => current.map((purchase) => purchase.id === updated.id ? updated : purchase));
-      toast.success(categoryId ? "Categoria da compra atualizada" : "Categoria removida da compra");
+      toast.success(categoryIds?.length ? "Categorias da compra atualizadas" : "Categorias removidas da compra");
       await syncInvoiceAndMonthCollections();
       return updated;
     } catch (error) {
@@ -576,7 +576,7 @@ export default function AppShell() {
         description: receivable.description,
         total_amount: formatMoney(receivable.total_amount, language),
         due_date: receivable.due_date,
-        category_id: receivable.category_id ? String(receivable.category_id) : "",
+        category_ids: (receivable.category_ids?.length ? receivable.category_ids : receivable.category_id ? [receivable.category_id] : []).map(String),
         notes: receivable.notes || "",
         expense_source_key: receivable.linked_expense ? `${receivable.linked_expense.source_type}:${receivable.linked_expense.source_id}` : "",
         installment_scope: "single",
@@ -594,7 +594,7 @@ export default function AppShell() {
         initial.description = expenseOption.description || "";
         initial.total_amount = formatMoney(installmentRemainder || expenseOption.available_amount || expenseOption.amount, language);
         initial.due_date = expenseOption.date || initial.due_date;
-        initial.category_id = expenseOption.category_id ? String(expenseOption.category_id) : "";
+        initial.category_ids = (expenseOption.category_ids?.length ? expenseOption.category_ids : expenseOption.category_id ? [expenseOption.category_id] : []).map(String);
         initial.expense_source_key = `${expenseOption.source_type}:${expenseOption.source_id}`;
         initial.installment_scope = expenseOption.source_type === "installment_item" ? "remaining" : expenseOption.source_type === "installment_purchase" ? "all" : "single";
       }
@@ -630,7 +630,7 @@ export default function AppShell() {
         description: payload.description.trim(),
         total_amount: parseTypedMoneyInput(payload.total_amount, language),
         due_date: payload.due_date,
-        category_id: payload.category_id ? Number(payload.category_id) : null,
+        category_ids: (payload.category_ids || []).map(Number),
         notes: payload.notes?.trim() || null,
         expense_link: payload.expense_source_key ? (() => {
           const [sourceType, sourceId] = payload.expense_source_key.split(":");
@@ -660,7 +660,7 @@ export default function AppShell() {
       receivable,
       amount: formatMoney(receivable.remaining_amount, language),
       paid_at: todayIsoDate(),
-      category_id: receivable.category_id ? String(receivable.category_id) : ""
+      category_ids: (receivable.category_ids?.length ? receivable.category_ids : receivable.category_id ? [receivable.category_id] : []).map(String)
     });
   };
 
@@ -670,19 +670,19 @@ export default function AppShell() {
       receivable,
       amount: "",
       paid_at: todayIsoDate(),
-      category_id: receivable.category_id ? String(receivable.category_id) : ""
+      category_ids: (receivable.category_ids?.length ? receivable.category_ids : receivable.category_id ? [receivable.category_id] : []).map(String)
     });
   };
 
   const saveReceivablePayment = async (payload) => {
     try {
       if (payload.mode === "paid") {
-        await markReceivablePaid(payload.receivable.id, { paid_at: payload.paid_at, category_id: payload.category_id ? Number(payload.category_id) : null });
+        await markReceivablePaid(payload.receivable.id, { paid_at: payload.paid_at, category_ids: (payload.category_ids || []).map(Number) });
       } else {
         await createReceivablePayment(payload.receivable.id, {
           amount: parseTypedMoneyInput(payload.amount, language),
           paid_at: payload.paid_at,
-          category_id: payload.category_id ? Number(payload.category_id) : null
+          category_ids: (payload.category_ids || []).map(Number)
         });
       }
       setReceivablePayment(null);

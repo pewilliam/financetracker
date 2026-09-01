@@ -26,7 +26,7 @@ export function normalizeInvoiceColor(color) {
 }
 
 export function defaultInvoiceForm() {
-  return { template_id: "", due_date: "", initial_amount: "", category_id: "", duplicate_next_month: false, duplicate_months: 1 };
+  return { template_id: "", due_date: "", initial_amount: "", category_ids: [], duplicate_next_month: false, duplicate_months: 1 };
 }
 
 export function defaultTemplateForm() {
@@ -39,7 +39,7 @@ export function defaultInstallmentForm(firstInvoiceId = "") {
     total_amount: "",
     installment_count: 1,
     first_invoice_id: firstInvoiceId,
-    category_id: "",
+    category_ids: [],
     different_values: false
   };
 }
@@ -51,7 +51,7 @@ export function defaultReceivableForm() {
     description: "",
     total_amount: "",
     due_date: todayIsoDate(),
-    category_id: "",
+    category_ids: [],
     notes: "",
     expense_source_key: "",
     installment_scope: "all",
@@ -78,7 +78,7 @@ export function normalizeTransactionPayload(data) {
     description: data?.description ? String(data.description).trim() : "",
     is_future: Boolean(data?.is_future)
   };
-  normalized.category_id = data?.category_id ? Number(data.category_id) : null;
+  normalized.category_ids = (data?.category_ids || (data?.category_id ? [data.category_id] : [])).map(Number);
   normalized.expense_link = data?.expense_link || null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized.date)) normalized.date = "";
   return normalized;

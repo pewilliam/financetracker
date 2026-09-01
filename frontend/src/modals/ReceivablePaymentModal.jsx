@@ -37,7 +37,7 @@ export default function ReceivablePaymentModal({ data, setData, categories = [],
           </div>
           <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
           <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
-          <label><span>Categoria do recebimento</span><CategorySelect categories={categories} value={data.category_id} onChange={(value) => updateData({ category_id: value })} onCreate={onCreateCategory} /></label>
+          <label><span>Categorias do recebimento</span><CategorySelect categories={categories} values={data.category_ids || []} onChange={(value) => updateData({ category_ids: value })} onCreate={onCreateCategory} /></label>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>

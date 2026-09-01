@@ -11,22 +11,22 @@ export default function InstallmentDetailsModal({ purchase, invoices, categories
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({ amount: "", invoice_id: "", status: "pending" });
   const [savingId, setSavingId] = useState(null);
-  const [categoryId, setCategoryId] = useState(purchase.category_id ? String(purchase.category_id) : "");
+  const [categoryIds, setCategoryIds] = useState((purchase.category_ids?.length ? purchase.category_ids : purchase.category_id ? [purchase.category_id] : []).map(String));
   const [savingCategory, setSavingCategory] = useState(false);
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
 
   useEffect(() => {
-    setCategoryId(purchase.category_id ? String(purchase.category_id) : "");
-  }, [purchase.category_id]);
+    setCategoryIds((purchase.category_ids?.length ? purchase.category_ids : purchase.category_id ? [purchase.category_id] : []).map(String));
+  }, [purchase.category_id, purchase.category_ids]);
 
   const saveCategory = async (value) => {
-    const previous = categoryId;
-    setCategoryId(value);
+    const previous = categoryIds;
+    setCategoryIds(value);
     setSavingCategory(true);
     try {
-      await onSaveCategory(purchase.id, value ? Number(value) : null);
+      await onSaveCategory(purchase.id, value);
     } catch (error) {
-      setCategoryId(previous);
+      setCategoryIds(previous);
     } finally {
       setSavingCategory(false);
     }
@@ -86,7 +86,7 @@ export default function InstallmentDetailsModal({ purchase, invoices, categories
           <div className="installment-category-control">
             <span>Categoria da compra</span>
             <div>
-              <CategorySelect className="compact" categories={categories} value={categoryId} onChange={saveCategory} onCreate={onCreateCategory} />
+              <CategorySelect className="compact" categories={categories} values={categoryIds} onChange={saveCategory} onCreate={onCreateCategory} />
               {savingCategory && <Loader2 className="spin" size={15} />}
             </div>
           </div>

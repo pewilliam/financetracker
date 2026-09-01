@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Tag, Trash2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -15,6 +16,105 @@ function normalizeName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
+function InvoiceCategoryIcons({ categories = [] }) {
+  const [tooltip, setTooltip] = useState(null);
+
+  const showTooltip = (event, category) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const below = rect.top < 70;
+    setTooltip({
+      category,
+      below,
+      left: Math.min(window.innerWidth - 110, Math.max(110, rect.left + rect.width / 2)),
+      top: below ? rect.bottom + 9 : rect.top - 9,
+    });
+  };
+
+  return (
+    <>
+      <span className="invoice-item-category-icons">
+        {categories.map((category) => (
+          <span
+            className="invoice-category-icon"
+            style={{ "--category-color": category.color }}
+            onMouseEnter={(event) => showTooltip(event, category)}
+            onMouseLeave={() => setTooltip(null)}
+            onFocus={(event) => showTooltip(event, category)}
+            onBlur={() => setTooltip(null)}
+            aria-label={`Categoria: ${category.name}`}
+            tabIndex="0"
+            key={category.id}
+          >
+            <Tag size={12} />
+          </span>
+        ))}
+      </span>
+      {tooltip && createPortal(
+        <span
+          className={`invoice-category-tooltip ${tooltip.below ? "below" : "above"}`}
+          style={{ "--category-color": tooltip.category.color, left: tooltip.left, top: tooltip.top }}
+          role="tooltip"
+        >
+          <Tag size={13} />
+          <strong>{tooltip.category.name}</strong>
+        </span>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function InstallmentBadge({ item, language, onView }) {
+  const [tooltip, setTooltip] = useState(null);
+
+  const showTooltip = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const below = rect.top < 110;
+    setTooltip({
+      below,
+      left: Math.min(window.innerWidth - 120, Math.max(120, rect.left + rect.width / 2)),
+      top: below ? rect.bottom + 9 : rect.top - 9,
+    });
+  };
+
+  return (
+    <>
+      <button
+        className="installment-badge"
+        type="button"
+        onClick={() => { setTooltip(null); onView?.(item.purchase_id); }}
+        onMouseEnter={showTooltip}
+        onMouseLeave={() => setTooltip(null)}
+        onFocus={showTooltip}
+        onBlur={() => setTooltip(null)}
+        aria-label={`Parcela ${item.installment_number} de ${item.installment_count}`}
+      >
+        <span className="installment-badge-full">{item.installment_number}/{item.installment_count}</span>
+        <span className="installment-badge-short">{item.installment_number}/{item.installment_count}</span>
+      </button>
+      {tooltip && createPortal(
+        <span
+          className={`installment-detail-tooltip ${tooltip.below ? "below" : "above"}`}
+          style={{ left: tooltip.left, top: tooltip.top }}
+          role="tooltip"
+        >
+          <span className="installment-detail-tooltip-icon"><CreditCard size={15} /></span>
+          <span>
+            <small>{language === "en-US" ? "INSTALLMENT PURCHASE" : "COMPRA PARCELADA"}</small>
+            <strong>{language === "en-US" ? `Installment ${item.installment_number} of ${item.installment_count}` : `Parcela ${item.installment_number} de ${item.installment_count}`}</strong>
+            <em>
+              {language === "en-US"
+                ? `${item.remaining_installments} remaining · Total ${formatMoney(item.purchase_total_amount, language)}`
+                : `${item.remaining_installments} restantes · Total ${formatMoney(item.purchase_total_amount, language)}`}
+            </em>
+          </span>
+        </span>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 export default function InvoiceCard({ invoice, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, allowOverdueInvoiceEdits = false, onAddItem, onEditItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -22,7 +122,7 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
   const [itemsOpen, setItemsOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryIds, setCategoryIds] = useState([]);
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateDraft, setDueDateDraft] = useState(invoice.due_date);
   const [savingDueDate, setSavingDueDate] = useState(false);
@@ -90,11 +190,11 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
     onAddItem(invoice.id, {
       description: cleanDescription || refundLabel,
       amount: addingRefund ? -Math.abs(parsed) : parsed,
-      category_id: categoryId ? Number(categoryId) : null
+      category_ids: categoryIds.map(Number)
     });
     setDescription("");
     setAmount("");
-    setCategoryId("");
+    setCategoryIds([]);
     setAddMode(null);
   };
 
@@ -107,7 +207,7 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
   const cancelAdding = () => {
     setDescription("");
     setAmount("");
-    setCategoryId("");
+    setCategoryIds([]);
     setAddMode(null);
   };
 
@@ -132,7 +232,7 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
   const renderAddForm = () => (
     <form className={`inline-form ${addingRefund ? "refund-form" : ""}`} onSubmit={handleSubmit}>
       <input placeholder={addingRefund ? refundDescriptionLabel : tt("invoices.description", "Descrição")} value={description} onChange={(event) => setDescription(event.target.value)} />
-      <CategorySelect className="compact" categories={categories} value={categoryId} onChange={setCategoryId} onCreate={onCreateCategory} />
+      <CategorySelect className="compact" categories={categories} values={categoryIds} onChange={setCategoryIds} onCreate={onCreateCategory} />
       <input inputMode="decimal" placeholder={amountPlaceholder} value={amount} onChange={(event) => setAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setAmount(formatTypedMoneyAsCurrency(amount, language))} />
       <div className="inline-form-actions">
         <button className="btn btn-primary compact inline-add-submit" type="submit">
@@ -149,13 +249,16 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
 
   const renderRegularItem = (item) => {
     const refund = Number(item.amount) < 0;
+    const itemCategories = item.categories?.length ? item.categories : item.category ? [item.category] : [];
     return (
       <div className={`invoice-item ${refund ? "refund-line" : ""}`} key={`item-${item.id}`}>
-        <span>
-          {refund && <em className="refund-badge">{refundLabel}</em>}
-          {item.description}
-          {item.category && <small className="category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</small>}
-        </span>
+        <div className="invoice-item-main">
+          <span className="invoice-item-description">
+            {refund && <em className="refund-badge">{refundLabel}</em>}
+            <span className="invoice-item-name">{item.description}</span>
+            <InvoiceCategoryIcons categories={itemCategories} />
+          </span>
+        </div>
         <strong>{formatMoney(item.amount)}</strong>
         <span className="invoice-item-actions">
           <button className="icon-btn small" type="button" onClick={() => startEditingItem(item)} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
@@ -226,16 +329,14 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
                     <div
                       className="invoice-item installment-line"
                       key={`installment-${item.id}`}
-                      title={`Compra: ${formatMoney(item.purchase_total_amount)} em ${item.installment_count}x - parcelas restantes: ${item.remaining_installments}`}
                     >
-                      <span>
-                        <button className="installment-badge" type="button" onClick={() => onViewInstallment(item.purchase_id)}>
-                          <span className="installment-badge-full">{item.installment_number}/{item.installment_count}</span>
-                          <span className="installment-badge-short">{item.installment_number}/{item.installment_count}</span>
-                        </button>
-                        {item.purchase_description || item.description}
-                        {item.category && <small className="category-badge" style={{ "--category-color": item.category.color }}>{item.category.name}</small>}
-                      </span>
+                      <div className="invoice-item-main">
+                        <span className="invoice-item-description">
+                          <InstallmentBadge item={item} language={language} onView={onViewInstallment} />
+                          <span className="invoice-item-name">{item.purchase_description || item.description}</span>
+                          <InvoiceCategoryIcons categories={item.categories?.length ? item.categories : item.category ? [item.category] : []} />
+                        </span>
+                      </div>
                       <strong>{formatMoney(item.amount)}</strong>
                       <span className="invoice-item-actions">
                         <button className="icon-btn small" type="button" onClick={() => onManageReceivable?.(expenseOptions.find((option) => option.source_type === "installment_item" && option.source_id === item.id))} aria-label="Associar recebível" title="Associar recebível">
