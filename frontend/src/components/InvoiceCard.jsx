@@ -105,7 +105,7 @@ function InstallmentBadge({ item, language, onView }) {
             <em>
               {language === "en-US"
                 ? `${item.remaining_installments} remaining · Total ${formatMoney(item.purchase_total_amount, language)}`
-                : `${item.remaining_installments} restantes · Total ${formatMoney(item.purchase_total_amount, language)}`}
+                : `${item.remaining_installments} restante(s) · Total ${formatMoney(item.purchase_total_amount, language)}`}
             </em>
           </span>
         </span>,
