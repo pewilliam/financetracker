@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { CreditCard, Download, Edit3, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDollarSign, CreditCard, Download, Edit3, EyeOff, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { setOpeningBalance, updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -35,6 +35,8 @@ export default function SettingsPage({
   const [openingBalance, setOpeningBalanceInput] = useState("");
   const [categoryEditor, setCategoryEditor] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [savingCategoryPreference, setSavingCategoryPreference] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const validSections = new Set(["conta", "preferencias", "financeiro", "modelos", "dados"]);
   const requestedSection = searchParams.get("secao") || "conta";
@@ -115,6 +117,18 @@ export default function SettingsPage({
   const removeManagedCategory = async () => {
     await onDeleteCategory(categoryToDelete.id);
     setCategoryToDelete(null);
+  };
+
+  const saveCategoryPreference = async (category, field, value) => {
+    const preferenceKey = `${category.id}:${field}`;
+    setSavingCategoryPreference(preferenceKey);
+    try {
+      await onUpdateCategory(category.id, { [field]: value });
+    } catch {
+      // AppShell already reports the API error to the user.
+    } finally {
+      setSavingCategoryPreference(null);
+    }
   };
 
   return (
@@ -230,25 +244,55 @@ export default function SettingsPage({
             <span className="settings-section-icon"><Tags size={18} /></span>
             <div>
               <h3>{tt("settings.categories", "Categorias")}</h3>
-              <p>{tt("settings.categoriesDescription", "Edite nomes e cores ou remova categorias que não utiliza mais.")}</p>
+              <p>{tt("settings.categoriesDescription", "Edite categorias e defina como elas participam das análises e do planejamento.")}</p>
             </div>
           </div>
-          <button className="btn btn-primary" type="button" onClick={() => setCategoryEditor({})}><Plus size={16} /> {tt("settings.newCategory", "Nova categoria")}</button>
+          <div className="settings-category-head-actions">
+            <button className="btn btn-ghost" type="button" aria-expanded={categoriesOpen} onClick={() => setCategoriesOpen((open) => !open)}>
+              {categoriesOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {categoriesOpen ? t("settings.collapseCategories") : t("settings.expandCategories")} ({categories.length})
+            </button>
+            <button className="btn btn-primary" type="button" onClick={() => setCategoryEditor({})}><Plus size={16} /> {tt("settings.newCategory", "Nova categoria")}</button>
+          </div>
         </div>
 
-        {categories.length ? (
+        {categoriesOpen && (categories.length ? (
           <div className="settings-category-list">
             {categories.map((category) => (
               <div className="settings-category-row" key={category.id}>
-                <span className="category-badge" style={{ "--category-color": category.color }}>{category.name}</span>
-                <div className="settings-category-actions">
-                  <button className="icon-btn small" type="button" onClick={() => setCategoryEditor(category)} aria-label={`Editar ${category.name}`}><Edit3 size={15} /></button>
-                  <button className="icon-btn small danger" type="button" onClick={() => setCategoryToDelete(category)} aria-label={`Excluir ${category.name}`}><Trash2 size={15} /></button>
+                <div className="settings-category-row-main">
+                  <span className="category-badge" style={{ "--category-color": category.color }}>{category.name}</span>
+                  <div className="settings-category-actions">
+                    <button className="icon-btn small" type="button" onClick={() => setCategoryEditor(category)} aria-label={`Editar ${category.name}`}><Edit3 size={15} /></button>
+                    <button className="icon-btn small danger" type="button" onClick={() => setCategoryToDelete(category)} aria-label={`Excluir ${category.name}`}><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                <div className="settings-category-preferences">
+                  <label className={category.ignore_in_category_analysis ? "active" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(category.ignore_in_category_analysis)}
+                      disabled={savingCategoryPreference?.startsWith(`${category.id}:`)}
+                      onChange={(event) => saveCategoryPreference(category, "ignore_in_category_analysis", event.target.checked)}
+                    />
+                    <EyeOff size={15} />
+                    <span><strong>{t("settings.ignoreInCategoryAnalysis")}</strong><small>{t("settings.ignoreInCategoryAnalysisHint")}</small></span>
+                  </label>
+                  <label className={category.include_in_income_planning ? "active income" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(category.include_in_income_planning)}
+                      disabled={savingCategoryPreference?.startsWith(`${category.id}:`)}
+                      onChange={(event) => saveCategoryPreference(category, "include_in_income_planning", event.target.checked)}
+                    />
+                    <CircleDollarSign size={15} />
+                    <span><strong>{t("settings.includeInIncomePlanning")}</strong><small>{t("settings.includeInIncomePlanningHint")}</small></span>
+                  </label>
                 </div>
               </div>
             ))}
           </div>
-        ) : <p className="settings-category-empty">{tt("settings.noCategories", "Nenhuma categoria cadastrada.")}</p>}
+        ) : <p className="settings-category-empty">{tt("settings.noCategories", "Nenhuma categoria cadastrada.")}</p>)}
         </div>
       </section>}
 

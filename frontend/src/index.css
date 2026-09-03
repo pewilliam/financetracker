@@ -6287,6 +6287,7 @@ select {
 .settings-category-head > div { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .settings-category-head h3 { margin: 0 0 4px; font-size: 16px; }
 .settings-category-head p { margin: 0; }
+.settings-category-head > .settings-category-head-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 .settings-section-icon {
   display: inline-flex;
   align-items: center;
@@ -6304,9 +6305,7 @@ select {
   gap: 10px;
 }
 .settings-category-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 12px;
   min-width: 0;
   border: 1px solid var(--border);
@@ -6314,8 +6313,30 @@ select {
   padding: 10px 12px;
   background: color-mix(in srgb, var(--card) 94%, var(--border));
 }
+.settings-category-row-main { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
 .settings-category-row .category-badge { min-width: 0; margin-left: 0; padding: 5px 9px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .settings-category-actions { display: flex; flex: 0 0 auto; gap: 5px; }
+.settings-category-preferences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.settings-category-preferences label {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--muted);
+  background: var(--card);
+  cursor: pointer;
+}
+.settings-category-preferences label.active { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
+.settings-category-preferences label.active.income { border-color: color-mix(in srgb, var(--income) 35%, var(--border)); color: var(--income); background: color-mix(in srgb, var(--income) 6%, var(--card)); }
+.settings-category-preferences input { width: 15px; height: 15px; margin: 0; accent-color: currentColor; }
+.settings-category-preferences label > svg { margin-top: 1px; }
+.settings-category-preferences label > span { display: grid; gap: 2px; min-width: 0; }
+.settings-category-preferences strong { color: var(--text); font-size: 10px; line-height: 1.25; }
+.settings-category-preferences small { color: var(--muted); font-size: 9px; line-height: 1.35; }
 .settings-category-empty { margin: 0; border: 1px dashed var(--border); border-radius: 10px; padding: 20px; color: var(--muted); text-align: center; }
 .category-delete-context {
   display: flex;
@@ -6344,8 +6365,10 @@ select {
   .settings-models-toolbar { align-items: stretch; flex-direction: column; }
   .settings-models-toolbar .btn { width: 100%; }
   .settings-category-head { align-items: stretch; flex-direction: column; }
-  .settings-category-head > .btn { width: 100%; }
+  .settings-category-head > .settings-category-head-actions { align-items: stretch; flex-direction: column; width: 100%; }
+  .settings-category-head-actions .btn { width: 100%; }
   .settings-category-list { grid-template-columns: 1fr; }
+  .settings-category-preferences { grid-template-columns: 1fr; }
 }
 .transaction-category-pill { margin-right: 8px; }
 .category-badge { margin-left: 4px; }

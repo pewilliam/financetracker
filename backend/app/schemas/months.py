@@ -54,6 +54,7 @@ class OpeningBalancePayload(APIModel):
 
 class CategoryExpenseOut(APIModel):
     category_id: Optional[int] = None
+    category_ids: List[int] = []
     name: str
     color: str
     amount: Decimal
@@ -64,6 +65,7 @@ class CategoryBreakdownOut(APIModel):
     total_expenses: Decimal
     categorized_total: Decimal
     items: List[CategoryExpenseOut] = []
+    chart_items: List[CategoryExpenseOut] = []
     total_income: Decimal = Decimal("0.00")
     income_categorized_total: Decimal = Decimal("0.00")
     income_items: List[CategoryExpenseOut] = []

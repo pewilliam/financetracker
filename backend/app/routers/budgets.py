@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -65,8 +65,8 @@ def _income_candidates(db: Session, user_id: int, year: int, month: int) -> list
             Transaction.date >= start,
             Transaction.date <= end,
             or_(
-                Transaction.category.has(func.lower(Category.name) == "renda"),
-                Transaction.categories.any(func.lower(Category.name) == "renda"),
+                Transaction.category.has(Category.include_in_income_planning.is_(True)),
+                Transaction.categories.any(Category.include_in_income_planning.is_(True)),
             ),
         )
         .order_by(Transaction.date, Transaction.id)
@@ -197,7 +197,7 @@ def update_monthly_budget_plan(
         candidate_ids = {transaction.id for transaction in _income_candidates(db, current_user.id, year, month)}
         invalid_ids = requested_ids - candidate_ids
         if invalid_ids:
-            raise HTTPException(status_code=422, detail="Only income transactions from category Renda in the selected month can be selected")
+            raise HTTPException(status_code=422, detail="Only income transactions from configured income categories in the selected month can be selected")
         db.query(MonthlyBudgetIncome).filter(MonthlyBudgetIncome.plan_id == plan.id).delete(synchronize_session=False)
         db.add_all([
             MonthlyBudgetIncome(plan_id=plan.id, transaction_id=transaction_id)

@@ -240,16 +240,32 @@ def get_category_breakdown(
 ):
     start, end, _ = _month_bounds(year, month)
     totals: dict[int | None, Decimal] = {}
+    expense_groups: dict[tuple[int, ...], Decimal] = {}
     income_totals: dict[int | None, Decimal] = {}
     categories = {
         category.id: category
         for category in db.query(Category).filter(Category.user_id == current_user.id).all()
     }
 
-    def add_categorized_amount(target: dict[int | None, Decimal], item, amount: Decimal) -> None:
-        selected_ids = [category.id for category in getattr(item, "categories", [])]
+    def selected_category_ids(item) -> list[int]:
+        selected_ids = list(dict.fromkeys(category.id for category in getattr(item, "categories", [])))
         if not selected_ids and getattr(item, "category_id", None) is not None:
             selected_ids = [item.category_id]
+        return selected_ids
+
+    def add_expense_amount(item, amount: Decimal) -> None:
+        selected_ids = selected_category_ids(item)
+        if not selected_ids:
+            totals[None] = totals.get(None, Decimal("0.00")) + amount
+            expense_groups[()] = expense_groups.get((), Decimal("0.00")) + amount
+            return
+        for category_id in selected_ids:
+            totals[category_id] = totals.get(category_id, Decimal("0.00")) + amount
+        group_key = tuple(sorted(selected_ids))
+        expense_groups[group_key] = expense_groups.get(group_key, Decimal("0.00")) + amount
+
+    def add_categorized_amount(target: dict[int | None, Decimal], item, amount: Decimal) -> None:
+        selected_ids = selected_category_ids(item)
         if not selected_ids:
             target[None] = target.get(None, Decimal("0.00")) + amount
             return
@@ -269,7 +285,7 @@ def get_category_breakdown(
         .all()
     )
     for transaction in direct_transactions:
-        add_categorized_amount(totals, transaction, transaction.amount)
+        add_expense_amount(transaction, transaction.amount)
 
     income_transactions = (
         db.query(Transaction)
@@ -295,7 +311,7 @@ def get_category_breakdown(
     if invoice_ids:
         invoice_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id.in_(invoice_ids)).all()
         for item in invoice_items:
-            add_categorized_amount(totals, item, item.amount)
+            add_expense_amount(item, item.amount)
 
         installment_items = (
             db.query(InstallmentItem)
@@ -306,11 +322,13 @@ def get_category_breakdown(
             .all()
         )
         for item in installment_items:
-            add_categorized_amount(totals, item.purchase if item.purchase else item, item.amount)
+            add_expense_amount(item.purchase if item.purchase else item, item.amount)
 
-    def build_items(source: dict[int | None, Decimal]):
+    def build_items(source: dict[int | None, Decimal], total_override: Decimal | None = None):
         source_total = sum(source.values(), Decimal("0.00"))
-        percentage_base = source_total if source_total > 0 else Decimal("0.00")
+        percentage_base = total_override if total_override is not None else source_total
+        if percentage_base <= 0:
+            percentage_base = Decimal("0.00")
         result = []
         for category_id, amount in source.items():
             if amount == 0:
@@ -320,6 +338,7 @@ def get_category_breakdown(
             result.append(
                 CategoryExpenseOut(
                     category_id=category_id,
+                    category_ids=[category_id] if category_id is not None else [],
                     name=category.name if category else "Sem categoria",
                     color=category.color if category else "#94A3B8",
                     amount=amount,
@@ -329,7 +348,33 @@ def get_category_breakdown(
         result.sort(key=lambda item: item.amount, reverse=True)
         return source_total, result
 
-    categorized_total, result = build_items(totals)
+    def build_expense_groups():
+        source_total = sum(expense_groups.values(), Decimal("0.00"))
+        percentage_base = source_total if source_total > 0 else Decimal("0.00")
+        result = []
+        for category_ids, amount in expense_groups.items():
+            if amount == 0:
+                continue
+            group_categories = sorted(
+                (categories[category_id] for category_id in category_ids if category_id in categories),
+                key=lambda category: category.name.lower(),
+            )
+            percentage = (amount / percentage_base * Decimal("100")) if percentage_base else Decimal("0.00")
+            result.append(
+                CategoryExpenseOut(
+                    category_id=category_ids[0] if len(category_ids) == 1 else None,
+                    category_ids=[category.id for category in group_categories],
+                    name=" + ".join(category.name for category in group_categories) if group_categories else "Sem categoria",
+                    color=group_categories[0].color if group_categories else "#94A3B8",
+                    amount=amount,
+                    percentage=percentage.quantize(Decimal("0.01")),
+                )
+            )
+        result.sort(key=lambda item: item.amount, reverse=True)
+        return source_total, result
+
+    categorized_total, chart_result = build_expense_groups()
+    _, result = build_items(totals, categorized_total)
     income_categorized_total, income_result = build_items(income_totals)
 
     month_data = _build_month_data(db, year, month, current_user.id)
@@ -337,6 +382,7 @@ def get_category_breakdown(
         total_expenses=month_data.total_expenses,
         categorized_total=categorized_total,
         items=result,
+        chart_items=chart_result,
         total_income=month_data.total_income,
         income_categorized_total=income_categorized_total,
         income_items=income_result,

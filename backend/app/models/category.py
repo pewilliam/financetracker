@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -13,6 +13,8 @@ class Category(Base):
     name = Column(String(80), nullable=False)
     color = Column(String(7), nullable=False, default="#64748B")
     monthly_limit = Column(Numeric(12, 2), nullable=True)
+    ignore_in_category_analysis = Column(Boolean, nullable=False, default=False)
+    include_in_income_planning = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now())
 
     user = relationship("User", back_populates="categories")

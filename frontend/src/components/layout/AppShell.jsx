@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { Menu, Plus } from "lucide-react";
@@ -44,8 +44,8 @@ export default function AppShell() {
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
-  const [previousCategoryBreakdown, setPreviousCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
+  const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
+  const [previousCategoryBreakdown, setPreviousCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
   const [budgetPlan, setBudgetPlan] = useState(null);
   const [receivables, setReceivables] = useState([]);
   const [linkedReceivableTransactions, setLinkedReceivableTransactions] = useState([]);
@@ -96,6 +96,9 @@ export default function AppShell() {
   const [paymentToCancel, setPaymentToCancel] = useState(null);
   const [receivableToDelete, setReceivableToDelete] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const monthLoadSequence = useRef(0);
+  const selectedPeriodRef = useRef({ year, month, language });
+  selectedPeriodRef.current = { year, month, language };
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
@@ -129,6 +132,21 @@ export default function AppShell() {
   }, [bodyLocked]);
 
   async function refresh({ showLoading = true } = {}) {
+    const requestedPeriod = { year, month, language };
+    const selectedAtStart = selectedPeriodRef.current;
+    if (
+      requestedPeriod.year !== selectedAtStart.year
+      || requestedPeriod.month !== selectedAtStart.month
+      || requestedPeriod.language !== selectedAtStart.language
+    ) return;
+    const loadSequence = ++monthLoadSequence.current;
+    const isCurrentPeriod = () => {
+      const selectedPeriod = selectedPeriodRef.current;
+      return loadSequence === monthLoadSequence.current
+        && requestedPeriod.year === selectedPeriod.year
+        && requestedPeriod.month === selectedPeriod.month
+        && requestedPeriod.language === selectedPeriod.language;
+    };
     if (showLoading) setLoading(true);
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
@@ -154,6 +172,7 @@ export default function AppShell() {
           return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
         }))
       ]);
+      if (!isCurrentPeriod()) return;
       setMonthData(monthPayload);
       setSummary(summaryPayload);
       setInvoices(invoicesPayload);
@@ -170,9 +189,9 @@ export default function AppShell() {
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
-      toast.error(t("toasts.loadDataError"));
+      if (isCurrentPeriod()) toast.error(t("toasts.loadDataError"));
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading && isCurrentPeriod()) setLoading(false);
     }
   }
 
@@ -200,6 +219,14 @@ export default function AppShell() {
   };
 
   const syncMonthCollections = async () => {
+    const requestedPeriod = { year, month, language };
+    const selectedAtStart = selectedPeriodRef.current;
+    if (
+      requestedPeriod.year !== selectedAtStart.year
+      || requestedPeriod.month !== selectedAtStart.month
+      || requestedPeriod.language !== selectedAtStart.language
+    ) return;
+    const loadSequence = ++monthLoadSequence.current;
     const offsets = [-5, -4, -3, -2, -1, 0];
     const previousTarget = shiftMonth(year, month, -1);
     const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, linkedReceivablesPayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
@@ -217,6 +244,13 @@ export default function AppShell() {
         return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
       }))
     ]);
+    const selectedPeriod = selectedPeriodRef.current;
+    if (
+      loadSequence !== monthLoadSequence.current
+      || requestedPeriod.year !== selectedPeriod.year
+      || requestedPeriod.month !== selectedPeriod.month
+      || requestedPeriod.language !== selectedPeriod.language
+    ) return;
     setMonthData(monthPayload);
     setSummary(summaryPayload);
     setCategoryBreakdown(categoryBreakdownPayload);
@@ -506,7 +540,12 @@ export default function AppShell() {
         .map((category) => category.id === saved.id ? saved : category)
         .sort((left, right) => left.name.localeCompare(right.name, language)));
       toast.success("Categoria atualizada");
-      if (Object.hasOwn(payload, "name") || Object.hasOwn(payload, "color")) {
+      if (
+        Object.hasOwn(payload, "name")
+        || Object.hasOwn(payload, "color")
+        || Object.hasOwn(payload, "ignore_in_category_analysis")
+        || Object.hasOwn(payload, "include_in_income_planning")
+      ) {
         await syncMonthCollections();
       }
       return saved;

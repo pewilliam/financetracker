@@ -38,7 +38,7 @@ export default function Dashboard({
   comparisons,
   invoices = [],
   monthData,
-  categoryBreakdown = { total_expenses: 0, categorized_total: 0, items: [], total_income: 0, income_categorized_total: 0, income_items: [] },
+  categoryBreakdown = { total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [] },
   onOpenInvoice
 }) {
   const { t, language } = useI18n();
@@ -64,7 +64,7 @@ export default function Dashboard({
     language
   );
   const viewingIncome = categoryView === "income";
-  const categoryItems = viewingIncome ? (categoryBreakdown.income_items || []) : (categoryBreakdown.items || []);
+  const categoryItems = viewingIncome ? (categoryBreakdown.income_items || []) : (categoryBreakdown.chart_items || categoryBreakdown.items || []);
   const categoryChartItems = categoryItems.filter((item) => Number(item.amount) > 0);
   const categoryTotal = viewingIncome ? categoryBreakdown.total_income : categoryBreakdown.total_expenses;
   const categoryGroupedTotal = viewingIncome ? categoryBreakdown.income_categorized_total : categoryBreakdown.categorized_total;
@@ -167,7 +167,7 @@ export default function Dashboard({
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie data={categoryChartItems} dataKey="amount" nameKey="name" innerRadius={66} outerRadius={96} paddingAngle={2} stroke="none">
-                    {categoryChartItems.map((item) => <Cell key={item.category_id ?? "uncategorized"} fill={item.color} />)}
+                    {categoryChartItems.map((item) => <Cell key={item.category_ids?.join("-") || item.category_id || "uncategorized"} fill={item.color} />)}
                   </Pie>
                   <Tooltip formatter={(value) => formatMoney(value, language)} />
                 </PieChart>
@@ -176,7 +176,7 @@ export default function Dashboard({
             </div>
             <div className="category-breakdown-list">
               {categoryItems.map((item) => (
-                <div className="category-breakdown-row" key={item.category_id ?? "uncategorized"}>
+                <div className="category-breakdown-row" key={item.category_ids?.join("-") || item.category_id || "uncategorized"}>
                   <i style={{ "--category-color": item.color }} />
                   <span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}% {viewingIncome ? "das receitas" : "dos gastos"}</small></span>
                   <strong>{formatMoney(item.amount, language)}</strong>

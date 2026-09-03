@@ -48,6 +48,8 @@ def create_category(
         name=name,
         color=normalize_category_color(payload.color),
         monthly_limit=payload.monthly_limit,
+        ignore_in_category_analysis=payload.ignore_in_category_analysis,
+        include_in_income_planning=payload.include_in_income_planning,
     )
     db.add(category)
     db.commit()
@@ -87,6 +89,12 @@ def update_category(
 
     if "monthly_limit" in data:
         category.monthly_limit = data["monthly_limit"]
+
+    if "ignore_in_category_analysis" in data:
+        category.ignore_in_category_analysis = data["ignore_in_category_analysis"]
+
+    if "include_in_income_planning" in data:
+        category.include_in_income_planning = data["include_in_income_planning"]
 
     db.commit()
     db.refresh(category)

@@ -21,7 +21,12 @@ class MonthlyBudgetPlanningTests(unittest.TestCase):
         Base.metadata.create_all(self.engine)
         self.db = sessionmaker(bind=self.engine)()
         self.user = User(name="Planejamento", email="planning@example.com", password_hash="hash")
-        self.income_category = Category(user=self.user, name="Renda", color="#14A078")
+        self.income_category = Category(
+            user=self.user,
+            name="Renda",
+            color="#14A078",
+            include_in_income_planning=True,
+        )
         self.other_category = Category(user=self.user, name="Reembolsos", color="#3B82F6")
         self.db.add_all([self.user, self.income_category, self.other_category])
         self.db.flush()
@@ -76,6 +81,15 @@ class MonthlyBudgetPlanningTests(unittest.TestCase):
         self.assertEqual(result.selected_income_count, 2)
         self.assertTrue(result.has_actual_income)
         self.assertFalse(result.is_estimated)
+
+    def test_income_candidates_follow_category_preference_instead_of_name(self):
+        self.income_category.include_in_income_planning = False
+        self.other_category.include_in_income_planning = True
+        self.db.commit()
+
+        result = get_monthly_budget_plan(self.year, self.month, self.db, self.user)
+
+        self.assertEqual([item.description for item in result.income_candidates], ["Reembolso"])
 
     def test_switching_manual_and_transaction_modes_preserves_both_sources(self):
         update_monthly_budget_plan(

@@ -19,6 +19,39 @@ function safePercent(value, total) {
   return Math.max(0, (value / total) * 100);
 }
 
+function buildVisibleExpenseGroups(items, categories, ignoredCategoryIds) {
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const grouped = new Map();
+  for (const item of items || []) {
+    const sourceIds = item.category_ids?.length
+      ? item.category_ids
+      : item.category_id !== null && item.category_id !== undefined
+        ? [item.category_id]
+        : [];
+    const visibleIds = sourceIds.filter((categoryId) => !ignoredCategoryIds.has(categoryId));
+    if (sourceIds.length && !visibleIds.length) continue;
+    const key = visibleIds.length ? [...visibleIds].sort((left, right) => left - right).join("-") : "uncategorized";
+    const groupCategories = visibleIds.map((categoryId) => categoriesById.get(categoryId)).filter(Boolean).sort((left, right) => left.name.localeCompare(right.name));
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.amount += Number(item.amount || 0);
+    } else {
+      grouped.set(key, {
+        category_id: visibleIds.length === 1 ? visibleIds[0] : null,
+        category_ids: groupCategories.map((category) => category.id),
+        name: groupCategories.length ? groupCategories.map((category) => category.name).join(" + ") : item.name,
+        color: groupCategories[0]?.color || item.color,
+        amount: Number(item.amount || 0),
+      });
+    }
+  }
+  const result = [...grouped.values()].filter((item) => item.amount !== 0);
+  const total = result.reduce((sum, item) => sum + item.amount, 0);
+  return result
+    .map((item) => ({ ...item, percentage: total > 0 ? (item.amount / total) * 100 : 0 }))
+    .sort((left, right) => right.amount - left.amount);
+}
+
 function CategoryChartTooltip({ active, payload, language }) {
   if (!active || !payload?.length) return null;
   const item = payload[0]?.payload;
@@ -34,8 +67,8 @@ function CategoryChartTooltip({ active, payload, language }) {
 
 export default function CategoriesPage({
   categories = [],
-  categoryBreakdown = { total_expenses: 0, items: [] },
-  previousCategoryBreakdown = { total_expenses: 0, items: [] },
+  categoryBreakdown = { total_expenses: 0, items: [], chart_items: [] },
+  previousCategoryBreakdown = { total_expenses: 0, items: [], chart_items: [] },
   budgetPlan = null,
   onUpdateCategory,
   onSavePlanning,
@@ -69,17 +102,23 @@ export default function CategoriesPage({
     setReserveValue(moneyDraft(budgetPlan.reserve_rule?.value ?? 0, language));
   }, [budgetPlan, language]);
 
-  const currentById = useMemo(() => new Map((categoryBreakdown.items || []).map((item) => [item.category_id, Number(item.amount || 0)])), [categoryBreakdown.items]);
-  const previousById = useMemo(() => new Map((previousCategoryBreakdown.items || []).map((item) => [item.category_id, Number(item.amount || 0)])), [previousCategoryBreakdown.items]);
-  const rows = useMemo(() => categories.map((category) => {
+  const ignoredCategoryIds = useMemo(() => new Set(categories.filter((category) => category.ignore_in_category_analysis).map((category) => category.id)), [categories]);
+  const visibleCategories = useMemo(() => categories.filter((category) => !ignoredCategoryIds.has(category.id)), [categories, ignoredCategoryIds]);
+  const currentItems = useMemo(() => (categoryBreakdown.items || []).filter((item) => !ignoredCategoryIds.has(item.category_id)), [categoryBreakdown.items, ignoredCategoryIds]);
+  const previousItems = useMemo(() => (previousCategoryBreakdown.items || []).filter((item) => !ignoredCategoryIds.has(item.category_id)), [previousCategoryBreakdown.items, ignoredCategoryIds]);
+  const currentChartItems = useMemo(() => buildVisibleExpenseGroups(categoryBreakdown.chart_items || categoryBreakdown.items, categories, ignoredCategoryIds), [categoryBreakdown.chart_items, categoryBreakdown.items, categories, ignoredCategoryIds]);
+  const previousChartItems = useMemo(() => buildVisibleExpenseGroups(previousCategoryBreakdown.chart_items || previousCategoryBreakdown.items, categories, ignoredCategoryIds), [previousCategoryBreakdown.chart_items, previousCategoryBreakdown.items, categories, ignoredCategoryIds]);
+  const currentById = useMemo(() => new Map(currentItems.map((item) => [item.category_id, Number(item.amount || 0)])), [currentItems]);
+  const previousById = useMemo(() => new Map(previousItems.map((item) => [item.category_id, Number(item.amount || 0)])), [previousItems]);
+  const rows = useMemo(() => visibleCategories.map((category) => {
     const spent = currentById.get(category.id) || 0;
     const previous = previousById.get(category.id) || 0;
     const limit = category.monthly_limit === null || category.monthly_limit === undefined ? null : Number(category.monthly_limit);
     return { ...category, spent, previous, limit, usage: limit > 0 ? (spent / limit) * 100 : null };
-  }).sort((left, right) => right.spent - left.spent || left.name.localeCompare(right.name, language)), [categories, currentById, previousById, language]);
+  }).sort((left, right) => right.spent - left.spent || left.name.localeCompare(right.name, language)), [visibleCategories, currentById, previousById, language]);
 
-  const totalExpenses = Number(categoryBreakdown.total_expenses || 0);
-  const previousExpenses = Number(previousCategoryBreakdown.total_expenses || 0);
+  const totalExpenses = Math.max(currentChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
+  const previousExpenses = Math.max(previousChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
   const uncategorized = currentById.get(null) || 0;
   const categorizedAmount = Math.max(totalExpenses - uncategorized, 0);
   const coverage = totalExpenses ? (categorizedAmount / totalExpenses) * 100 : 0;
@@ -90,7 +129,7 @@ export default function CategoriesPage({
   const nearCategoryLimit = budgetedRows.filter((row) => row.spent <= row.limit && row.usage >= 80);
   const topCategory = rows.find((row) => row.spent > 0);
   const monthChange = changePercentage(totalExpenses, previousExpenses);
-  const chartItems = (categoryBreakdown.items || []).filter((item) => Number(item.amount) > 0);
+  const chartItems = currentChartItems.filter((item) => Number(item.amount) > 0);
 
   const hasActualIncome = Boolean(budgetPlan?.has_actual_income);
   const isEstimated = Boolean(budgetPlan?.is_estimated);
@@ -229,7 +268,7 @@ export default function CategoriesPage({
       </section>
 
       <section className="categories-main-grid">
-        <article className="card categories-chart-card"><div className="categories-card-heading"><div><p className="eyebrow">{t("categories.distributionEyebrow")}</p><h2>{t("categories.distribution")}</h2></div><div className="categories-analysis-meta"><span>{t("categories.classified")}</span><strong>{coverage.toFixed(0)}%</strong></div></div>{chartItems.length ? <><div className="categories-donut"><ResponsiveContainer width="100%" height={260}><PieChart><Pie data={chartItems} dataKey="amount" nameKey="name" innerRadius={72} outerRadius={105} paddingAngle={2} stroke="none">{chartItems.map((item) => <Cell key={item.category_id ?? "uncategorized"} fill={item.color} />)}</Pie><Tooltip content={<CategoryChartTooltip language={language} />} /></PieChart></ResponsiveContainer><div><span>{t("categories.total")}</span><strong>{formatMoney(totalExpenses, language)}</strong></div></div><div className="categories-legend">{chartItems.map((item) => <div key={item.category_id ?? "uncategorized"}><i style={{ "--category-color": item.color }} /><span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}%</small></span><strong>{formatMoney(item.amount, language)}</strong></div>)}</div>{topCategory && <div className="categories-top-category"><TrendingUp size={15} /><span>{t("categories.biggestExpense")}: <strong>{topCategory.name}</strong></span><strong>{formatMoney(topCategory.spent, language)}</strong></div>}</> : <div className="categories-empty"><PieChartIcon size={30} /><p>{t("categories.empty")}</p></div>}</article>
+        <article className="card categories-chart-card"><div className="categories-card-heading"><div><p className="eyebrow">{t("categories.distributionEyebrow")}</p><h2>{t("categories.distribution")}</h2></div><div className="categories-analysis-meta"><span>{t("categories.classified")}</span><strong>{coverage.toFixed(0)}%</strong></div></div>{chartItems.length ? <><div className="categories-donut"><ResponsiveContainer width="100%" height={260}><PieChart><Pie data={chartItems} dataKey="amount" nameKey="name" innerRadius={72} outerRadius={105} paddingAngle={2} stroke="none">{chartItems.map((item) => <Cell key={item.category_ids?.join("-") || "uncategorized"} fill={item.color} />)}</Pie><Tooltip content={<CategoryChartTooltip language={language} />} /></PieChart></ResponsiveContainer><div><span>{t("categories.total")}</span><strong>{formatMoney(totalExpenses, language)}</strong></div></div><div className="categories-legend">{chartItems.map((item) => <div key={item.category_ids?.join("-") || "uncategorized"}><i style={{ "--category-color": item.color }} /><span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}%</small></span><strong>{formatMoney(item.amount, language)}</strong></div>)}</div>{topCategory && <div className="categories-top-category"><TrendingUp size={15} /><span>{t("categories.biggestExpense")}: <strong>{topCategory.name}</strong></span><strong>{formatMoney(topCategory.spent, language)}</strong></div>}</> : <div className="categories-empty"><PieChartIcon size={30} /><p>{t("categories.empty")}</p></div>}</article>
         <article className="card categories-insights-card"><div className="categories-card-heading"><div><p className="eyebrow">{t("categories.insightsEyebrow")}</p><h2>{t("categories.insights")}</h2></div></div><div className="categories-insights-list">{overCategoryLimit.length > 0 && <div className="categories-insight danger"><AlertTriangle size={19} /><span><strong>{t("categories.overLimitCount", { count: overCategoryLimit.length })}</strong><small>{overCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}{nearCategoryLimit.length > 0 && <div className="categories-insight warning"><Target size={19} /><span><strong>{t("categories.nearLimitCount", { count: nearCategoryLimit.length })}</strong><small>{nearCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}{uncategorized > 0 && <div className="categories-insight neutral"><Tags size={19} /><span><strong>{t("categories.uncategorizedValue", { value: formatMoney(uncategorized, language) })}</strong><small>{t("categories.uncategorizedHint")}</small></span></div>}{monthChange !== 0 && <div className={`categories-insight ${monthChange > 0 ? "warning" : "success"}`}>{monthChange > 0 ? <TrendingUp size={19} /> : <TrendingDown size={19} />}<span><strong>{monthChange > 0 ? t("categories.spendingIncreased", { value: Math.abs(monthChange).toFixed(1) }) : t("categories.spendingDecreased", { value: Math.abs(monthChange).toFixed(1) })}</strong><small>{t("categories.previousTotal", { value: formatMoney(previousExpenses, language) })}</small></span></div>}{!hasPlannedIncome && totalExpenses > 0 && <div className="categories-insight neutral"><WalletCards size={19} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}{!overCategoryLimit.length && !nearCategoryLimit.length && !uncategorized && monthChange === 0 && <div className="categories-insight success"><CheckCircle2 size={19} /><span><strong>{t("categories.allGood")}</strong><small>{t("categories.allGoodHint")}</small></span></div>}</div></article>
       </section>
     </div>

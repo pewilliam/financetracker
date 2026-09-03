@@ -193,7 +193,13 @@ export const ptBR = {
     saveBalance: "Salvar saldo",
     export: "Exportação",
     exportDescription: "Baixe os lançamentos do mês selecionado.",
-    exportCsv: "Exportar CSV"
+    exportCsv: "Exportar CSV",
+    expandCategories: "Exibir categorias",
+    collapseCategories: "Recolher categorias",
+    ignoreInCategoryAnalysis: "Ignorar na tela de Categorias",
+    ignoreInCategoryAnalysisHint: "Não entra nos totais, limites, gráfico ou alertas dessa tela.",
+    includeInIncomePlanning: "Considerar como renda",
+    includeInIncomePlanningHint: "Seus recebimentos poderão compor o planejamento mensal."
   },
   actions: {
     new: "Novo",
