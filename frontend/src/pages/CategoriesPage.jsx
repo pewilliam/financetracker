@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, ArrowRight, Banknote, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Clock3, CreditCard, Loader2, PieChart as PieChartIcon, Plus, ReceiptText, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
@@ -18,6 +18,12 @@ function moneyDraft(value, language) {
 function safePercent(value, total) {
   if (!total || total <= 0) return 0;
   return Math.max(0, (value / total) * 100);
+}
+
+function expenseGroupKey(item) {
+  return item?.category_ids?.length
+    ? [...item.category_ids].sort((left, right) => left - right).join("-")
+    : "uncategorized";
 }
 
 function buildVisibleExpenseGroups(items, categories, ignoredCategoryIds) {
@@ -62,13 +68,13 @@ function buildVisibleExpenseGroups(items, categories, ignoredCategoryIds) {
     .sort((left, right) => right.amount - left.amount);
 }
 
-function CategoryExpenseDetails({ group, categories, language, onClose }) {
+function CategoryExpenseDetails({ group, categories, language, loading, error, onClose }) {
   const details = group.details || [];
   const groupCategories = (group.category_ids || []).map((categoryId) => categories.find((category) => category.id === categoryId)).filter(Boolean);
   const average = details.length ? Number(group.amount || 0) / details.length : 0;
   const text = language === "en-US"
-    ? { eyebrow: "Expense details", total: "Group total", entries: "entries", average: "Average expense", empty: "No expense details available.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
-    : { eyebrow: "Detalhes dos gastos", total: "Total do grupo", entries: "lançamentos", average: "Gasto médio", empty: "Nenhum detalhe disponível para este grupo.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" };
+    ? { eyebrow: "Expense details", total: "Group total", entries: "entries", average: "Average expense", empty: "No expense details available.", loading: "Loading expenses…", error: "Could not load the expense details.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
+    : { eyebrow: "Detalhes dos gastos", total: "Total do grupo", entries: "lançamentos", average: "Gasto médio", empty: "Nenhum detalhe disponível para este grupo.", loading: "Carregando lançamentos…", error: "Não foi possível carregar os detalhes dos gastos.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" };
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -95,12 +101,12 @@ function CategoryExpenseDetails({ group, categories, language, onClose }) {
 
         <div className="categories-detail-summary">
           <div><small>{text.total}</small><strong>{formatMoney(group.amount, language)}</strong><span>{Number(group.percentage || 0).toFixed(1)}% {language === "en-US" ? "of the month" : "do mês"}</span></div>
-          <div><small>{language === "en-US" ? "Composition" : "Composição"}</small><strong>{details.length}</strong><span>{text.entries}</span></div>
-          <div><small>{text.average}</small><strong>{formatMoney(average, language)}</strong><span>{language === "en-US" ? "per entry" : "por lançamento"}</span></div>
+          <div><small>{language === "en-US" ? "Composition" : "Composição"}</small><strong>{loading ? "—" : details.length}</strong><span>{text.entries}</span></div>
+          <div><small>{text.average}</small><strong>{loading ? "—" : formatMoney(average, language)}</strong><span>{language === "en-US" ? "per entry" : "por lançamento"}</span></div>
         </div>
 
         <div className="categories-detail-list">
-          {details.length ? details.map((detail) => {
+          {loading ? <div className="categories-detail-status"><Loader2 className="spin" size={22} /><span>{text.loading}</span></div> : error ? <div className="categories-detail-status error"><AlertTriangle size={22} /><span>{text.error}</span></div> : details.length ? details.map((detail) => {
             const installment = detail.source_type === "installment_item";
             const invoice = detail.source_type === "invoice_item";
             const SourceIcon = installment || invoice ? CreditCard : ReceiptText;
@@ -142,6 +148,7 @@ export default function CategoriesPage({
   categoryBreakdown = { total_expenses: 0, items: [], chart_items: [] },
   previousCategoryBreakdown = { total_expenses: 0, items: [], chart_items: [] },
   budgetPlan = null,
+  onLoadExpenseDetails,
   onUpdateCategory,
   onSavePlanning,
 }) {
@@ -160,6 +167,11 @@ export default function CategoriesPage({
   const [reserveType, setReserveType] = useState("percentage");
   const [reserveValue, setReserveValue] = useState("0");
   const [selectedExpenseGroup, setSelectedExpenseGroup] = useState(null);
+  const [detailedExpenseGroups, setDetailedExpenseGroups] = useState(null);
+  const [expenseDetailsLoading, setExpenseDetailsLoading] = useState(false);
+  const [expenseDetailsError, setExpenseDetailsError] = useState(false);
+  const detailsRequestRef = useRef(null);
+  const detailsGenerationRef = useRef(0);
 
   useEffect(() => {
     setDrafts(Object.fromEntries(categories.map((category) => [category.id, moneyDraft(category.monthly_limit, language)])));
@@ -175,7 +187,14 @@ export default function CategoriesPage({
     setReserveValue(moneyDraft(budgetPlan.reserve_rule?.value ?? 0, language));
   }, [budgetPlan, language]);
 
-  useEffect(() => { setSelectedExpenseGroup(null); }, [categoryBreakdown]);
+  useEffect(() => {
+    detailsGenerationRef.current += 1;
+    setSelectedExpenseGroup(null);
+    setDetailedExpenseGroups(null);
+    setExpenseDetailsLoading(false);
+    setExpenseDetailsError(false);
+    detailsRequestRef.current = null;
+  }, [categoryBreakdown]);
 
   const ignoredCategoryIds = useMemo(() => new Set(categories.filter((category) => category.ignore_in_category_analysis).map((category) => category.id)), [categories]);
   const visibleCategories = useMemo(() => categories.filter((category) => !ignoredCategoryIds.has(category.id)), [categories, ignoredCategoryIds]);
@@ -191,6 +210,35 @@ export default function CategoriesPage({
     const limit = category.monthly_limit === null || category.monthly_limit === undefined ? null : Number(category.monthly_limit);
     return { ...category, spent, previous, limit, usage: limit > 0 ? (spent / limit) * 100 : null };
   }).sort((left, right) => right.spent - left.spent || left.name.localeCompare(right.name, language)), [visibleCategories, currentById, previousById, language]);
+
+  const openExpenseDetails = async (group) => {
+    const generation = detailsGenerationRef.current;
+    const key = expenseGroupKey(group);
+    const cachedGroup = detailedExpenseGroups?.find((item) => expenseGroupKey(item) === key);
+    setSelectedExpenseGroup(cachedGroup || group);
+    setExpenseDetailsError(false);
+    if (cachedGroup || !onLoadExpenseDetails) return;
+
+    setExpenseDetailsLoading(true);
+    try {
+      const request = detailsRequestRef.current || onLoadExpenseDetails();
+      detailsRequestRef.current = request;
+      const breakdown = await request;
+      if (generation !== detailsGenerationRef.current) return;
+      const loadedGroups = buildVisibleExpenseGroups(breakdown.chart_items || breakdown.items, categories, ignoredCategoryIds);
+      setDetailedExpenseGroups(loadedGroups);
+      setSelectedExpenseGroup((current) => {
+        if (!current) return null;
+        return loadedGroups.find((item) => expenseGroupKey(item) === expenseGroupKey(current)) || current;
+      });
+    } catch {
+      if (generation !== detailsGenerationRef.current) return;
+      detailsRequestRef.current = null;
+      setExpenseDetailsError(true);
+    } finally {
+      if (generation === detailsGenerationRef.current) setExpenseDetailsLoading(false);
+    }
+  };
 
   const totalExpenses = Math.max(currentChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
   const previousExpenses = Math.max(previousChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
@@ -349,7 +397,7 @@ export default function CategoriesPage({
             <div className="categories-donut">
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
-                  <Pie className="categories-clickable-pie" data={chartItems} dataKey="amount" nameKey="name" innerRadius={72} outerRadius={105} paddingAngle={2} stroke="none" onClick={(entry) => setSelectedExpenseGroup(entry?.payload || entry)}>
+                  <Pie className="categories-clickable-pie" data={chartItems} dataKey="amount" nameKey="name" innerRadius={72} outerRadius={105} paddingAngle={2} stroke="none" onClick={(entry) => openExpenseDetails(entry?.payload || entry)}>
                     {chartItems.map((item) => <Cell key={item.category_ids?.join("-") || "uncategorized"} fill={item.color} />)}
                   </Pie>
                   <Tooltip content={<CategoryChartTooltip language={language} />} />
@@ -359,7 +407,7 @@ export default function CategoriesPage({
             </div>
             <div className="categories-legend">
               {chartItems.map((item) => (
-                <button type="button" key={item.category_ids?.join("-") || "uncategorized"} onClick={() => setSelectedExpenseGroup(item)}>
+                <button type="button" key={item.category_ids?.join("-") || "uncategorized"} onClick={() => openExpenseDetails(item)}>
                   <i style={{ "--category-color": item.color }} />
                   <span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}%</small></span>
                   <strong>{formatMoney(item.amount, language)}</strong>
@@ -371,7 +419,7 @@ export default function CategoriesPage({
         </article>
         <article className="card categories-insights-card"><div className="categories-card-heading"><div><p className="eyebrow">{t("categories.insightsEyebrow")}</p><h2>{t("categories.insights")}</h2></div></div><div className="categories-insights-list">{overCategoryLimit.length > 0 && <div className="categories-insight danger"><AlertTriangle size={19} /><span><strong>{t("categories.overLimitCount", { count: overCategoryLimit.length })}</strong><small>{overCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}{nearCategoryLimit.length > 0 && <div className="categories-insight warning"><Target size={19} /><span><strong>{t("categories.nearLimitCount", { count: nearCategoryLimit.length })}</strong><small>{nearCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}{uncategorized > 0 && <div className="categories-insight neutral"><Tags size={19} /><span><strong>{t("categories.uncategorizedValue", { value: formatMoney(uncategorized, language) })}</strong><small>{t("categories.uncategorizedHint")}</small></span></div>}{monthChange !== 0 && <div className={`categories-insight ${monthChange > 0 ? "warning" : "success"}`}>{monthChange > 0 ? <TrendingUp size={19} /> : <TrendingDown size={19} />}<span><strong>{monthChange > 0 ? t("categories.spendingIncreased", { value: Math.abs(monthChange).toFixed(1) }) : t("categories.spendingDecreased", { value: Math.abs(monthChange).toFixed(1) })}</strong><small>{t("categories.previousTotal", { value: formatMoney(previousExpenses, language) })}</small></span></div>}{!hasPlannedIncome && totalExpenses > 0 && <div className="categories-insight neutral"><WalletCards size={19} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}{!overCategoryLimit.length && !nearCategoryLimit.length && !uncategorized && monthChange === 0 && <div className="categories-insight success"><CheckCircle2 size={19} /><span><strong>{t("categories.allGood")}</strong><small>{t("categories.allGoodHint")}</small></span></div>}</div></article>
       </section>
-      {selectedExpenseGroup && <CategoryExpenseDetails group={selectedExpenseGroup} categories={categories} language={language} onClose={() => setSelectedExpenseGroup(null)} />}
+      {selectedExpenseGroup && <CategoryExpenseDetails group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} onClose={() => setSelectedExpenseGroup(null)} />}
     </div>
   );
 }

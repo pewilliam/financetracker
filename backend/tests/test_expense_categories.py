@@ -127,7 +127,10 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
         ])
         self.db.commit()
 
-        result = get_category_breakdown(2026, 8, self.db, self.user)
+        summary_result = get_category_breakdown(2026, 8, self.db, self.user)
+        self.assertTrue(all(not item.details for item in summary_result.chart_items))
+
+        result = get_category_breakdown(2026, 8, self.db, self.user, include_details=True)
 
         self.assertEqual(result.total_expenses, Decimal("250.00"))
         self.assertEqual(result.categorized_total, Decimal("250.00"))
@@ -187,7 +190,7 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
             self.user,
         )
 
-        result = get_category_breakdown(2026, 8, self.db, self.user)
+        result = get_category_breakdown(2026, 8, self.db, self.user, include_details=True)
         self.assertEqual(result.total_expenses, Decimal("140.00"))
         self.assertEqual(result.categorized_total, Decimal("140.00"))
         self.assertEqual(

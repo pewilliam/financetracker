@@ -151,16 +151,31 @@ export default function AppShell() {
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
+      let categoryEssentials = null;
+      if (showLoading && location.pathname === "/categorias") {
+        categoryEssentials = await Promise.all([
+          listCategories(),
+          getCategoryBreakdown(year, month),
+          getCategoryBreakdown(previousTarget.year, previousTarget.month),
+          getMonthlyBudgetPlan(year, month),
+        ]);
+        if (!isCurrentPeriod()) return;
+        setCategories(categoryEssentials[0]);
+        setCategoryBreakdown(categoryEssentials[1]);
+        setPreviousCategoryBreakdown(categoryEssentials[2]);
+        setBudgetPlan(categoryEssentials[3]);
+        setLoading(false);
+      }
       const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
         getMonth(year, month),
         getMonthSummary(year, month),
         listInvoices(),
         listInvoiceTemplates(),
         listInstallments(),
-        listCategories(),
-        getCategoryBreakdown(year, month),
-        getCategoryBreakdown(previousTarget.year, previousTarget.month),
-        getMonthlyBudgetPlan(year, month),
+        categoryEssentials ? Promise.resolve(categoryEssentials[0]) : listCategories(),
+        categoryEssentials ? Promise.resolve(categoryEssentials[1]) : getCategoryBreakdown(year, month),
+        categoryEssentials ? Promise.resolve(categoryEssentials[2]) : getCategoryBreakdown(previousTarget.year, previousTarget.month),
+        categoryEssentials ? Promise.resolve(categoryEssentials[3]) : getMonthlyBudgetPlan(year, month),
         listReceivables(),
         listLinkedReceivableTransactions(),
         listReceivablePeople(),
@@ -270,6 +285,8 @@ export default function AppShell() {
   };
 
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
+
+  const loadCategoryExpenseDetails = () => getCategoryBreakdown(year, month, { includeDetails: true });
 
   const openAddForm = (dateString = todayIsoDate()) => {
     setSelectedDate(dateString);
@@ -792,7 +809,7 @@ export default function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
-              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
+              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />

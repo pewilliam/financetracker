@@ -3,9 +3,9 @@ from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import extract, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import Category, InstallmentItem, Invoice, InvoiceItem, MonthlyBalance, Transaction, User
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Transaction, User
 from app.schemas.months import CategoryBreakdownOut, CategoryExpenseOut, MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
 from app.security import get_current_user
 
@@ -237,6 +237,7 @@ def get_category_breakdown(
     month: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    include_details: bool = False,
 ):
     start, end, _ = _month_bounds(year, month)
     totals: dict[int | None, Decimal] = {}
@@ -254,18 +255,20 @@ def get_category_breakdown(
             selected_ids = [item.category_id]
         return selected_ids
 
-    def add_expense_amount(item, amount: Decimal, detail: dict) -> None:
+    def add_expense_amount(item, amount: Decimal, detail: dict | None = None) -> None:
         selected_ids = selected_category_ids(item)
         if not selected_ids:
             totals[None] = totals.get(None, Decimal("0.00")) + amount
             expense_groups[()] = expense_groups.get((), Decimal("0.00")) + amount
-            expense_group_details.setdefault((), []).append(detail)
+            if detail is not None:
+                expense_group_details.setdefault((), []).append(detail)
             return
         for category_id in selected_ids:
             totals[category_id] = totals.get(category_id, Decimal("0.00")) + amount
         group_key = tuple(sorted(selected_ids))
         expense_groups[group_key] = expense_groups.get(group_key, Decimal("0.00")) + amount
-        expense_group_details.setdefault(group_key, []).append(detail)
+        if detail is not None:
+            expense_group_details.setdefault(group_key, []).append(detail)
 
     def add_categorized_amount(target: dict[int | None, Decimal], item, amount: Decimal) -> None:
         selected_ids = selected_category_ids(item)
@@ -278,6 +281,7 @@ def get_category_breakdown(
 
     direct_transactions = (
         db.query(Transaction)
+        .options(selectinload(Transaction.categories))
         .filter(
             Transaction.user_id == current_user.id,
             Transaction.type == "expense",
@@ -297,11 +301,12 @@ def get_category_breakdown(
                 "description": transaction.description or "Gasto sem descrição",
                 "amount": transaction.amount,
                 "date": transaction.date,
-            },
+            } if include_details else None,
         )
 
     income_transactions = (
         db.query(Transaction)
+        .options(selectinload(Transaction.categories))
         .filter(
             Transaction.user_id == current_user.id,
             Transaction.type == "income",
@@ -313,16 +318,25 @@ def get_category_breakdown(
     for transaction in income_transactions:
         add_categorized_amount(income_totals, transaction, transaction.amount)
 
-    invoice_ids = [
-        row.id
-        for row in db.query(Invoice.id).filter(
+    invoice_rows = (
+        db.query(Invoice.id, Invoice.due_date, InvoiceTemplate.name.label("invoice_name"))
+        .join(InvoiceTemplate, Invoice.template_id == InvoiceTemplate.id)
+        .filter(
             Invoice.user_id == current_user.id,
             Invoice.due_date >= start,
             Invoice.due_date <= end,
-        ).all()
-    ]
+        )
+        .all()
+    )
+    invoices_by_id = {row.id: row for row in invoice_rows}
+    invoice_ids = list(invoices_by_id)
     if invoice_ids:
-        invoice_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id.in_(invoice_ids)).all()
+        invoice_items = (
+            db.query(InvoiceItem)
+            .options(selectinload(InvoiceItem.categories))
+            .filter(InvoiceItem.invoice_id.in_(invoice_ids))
+            .all()
+        )
         for item in invoice_items:
             add_expense_amount(
                 item,
@@ -332,13 +346,16 @@ def get_category_breakdown(
                     "source_id": item.id,
                     "description": item.description,
                     "amount": item.amount,
-                    "date": item.invoice.due_date,
-                    "invoice_name": item.invoice.name,
-                },
+                    "date": invoices_by_id[item.invoice_id].due_date,
+                    "invoice_name": invoices_by_id[item.invoice_id].invoice_name,
+                } if include_details else None,
             )
 
         installment_items = (
             db.query(InstallmentItem)
+            .options(
+                selectinload(InstallmentItem.purchase).selectinload(InstallmentPurchase.categories),
+            )
             .filter(
                 InstallmentItem.invoice_id.in_(invoice_ids),
                 InstallmentItem.status != "canceled",
@@ -354,11 +371,11 @@ def get_category_breakdown(
                     "source_id": item.id,
                     "description": item.purchase_description or item.description,
                     "amount": item.amount,
-                    "date": item.invoice.due_date,
-                    "invoice_name": item.invoice.name,
+                    "date": invoices_by_id[item.invoice_id].due_date,
+                    "invoice_name": invoices_by_id[item.invoice_id].invoice_name,
                     "installment_number": item.installment_number,
                     "installment_count": item.installment_count,
-                },
+                } if include_details else None,
             )
 
     def build_items(source: dict[int | None, Decimal], total_override: Decimal | None = None):
@@ -405,10 +422,14 @@ def get_category_breakdown(
                     color=group_categories[0].color if group_categories else "#94A3B8",
                     amount=amount,
                     percentage=percentage.quantize(Decimal("0.01")),
-                    details=sorted(
-                        expense_group_details.get(category_ids, []),
-                        key=lambda detail: (detail["date"], detail["source_id"]),
-                        reverse=True,
+                    details=(
+                        sorted(
+                            expense_group_details.get(category_ids, []),
+                            key=lambda detail: (detail["date"], detail["source_id"]),
+                            reverse=True,
+                        )
+                        if include_details
+                        else []
                     ),
                 )
             )
@@ -419,13 +440,12 @@ def get_category_breakdown(
     _, result = build_items(totals, categorized_total)
     income_categorized_total, income_result = build_items(income_totals)
 
-    month_data = _build_month_data(db, year, month, current_user.id)
     return CategoryBreakdownOut(
-        total_expenses=month_data.total_expenses,
+        total_expenses=categorized_total,
         categorized_total=categorized_total,
         items=result,
         chart_items=chart_result,
-        total_income=month_data.total_income,
+        total_income=income_categorized_total,
         income_categorized_total=income_categorized_total,
         income_items=income_result,
     )

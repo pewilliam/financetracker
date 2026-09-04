@@ -144,8 +144,9 @@ export function createInvoice(payload) {
   });
 }
 
-export function getCategoryBreakdown(year, month) {
-  return request(`/months/${year}/${month}/categories`);
+export function getCategoryBreakdown(year, month, { includeDetails = false } = {}) {
+  const query = includeDetails ? "?include_details=true" : "";
+  return request(`/months/${year}/${month}/categories${query}`);
 }
 
 export function getMonthlyBudgetPlan(year, month) {

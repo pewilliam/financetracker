@@ -1079,6 +1079,9 @@ select {
 .categories-detail-item > strong { color: var(--text); font-size: 13px; white-space: nowrap; }
 .categories-detail-item > strong.refund { color: var(--income); }
 .categories-detail-empty { display: grid; place-items: center; gap: 8px; min-height: 150px; border: 1px dashed var(--border); border-radius: 11px; color: var(--muted); font-size: 12px; }
+.categories-detail-status { display: grid; place-items: center; align-content: center; gap: 9px; min-height: 170px; color: var(--muted); font-size: 12px; }
+.categories-detail-status > svg { color: var(--primary); }
+.categories-detail-status.error > svg { color: var(--expense); }
 .categories-insights-list { display: grid; gap: 10px; margin-top: 20px; }
 .categories-insight { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 11px; border: 1px solid var(--border); border-radius: 10px; padding: 13px; background: color-mix(in srgb, var(--card) 94%, var(--border)); }
 .categories-insight > svg { color: var(--muted); }
