@@ -996,13 +996,89 @@ select {
 .categories-chart-tooltip > div strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .categories-chart-tooltip > span { color: var(--text); font-size: 15px; font-weight: 900; }
 .categories-chart-tooltip > small { color: var(--muted); font-size: 10px; font-weight: 700; }
+.categories-clickable-pie .recharts-sector { cursor: pointer; transition: opacity .16s ease, filter .16s ease; }
+.categories-clickable-pie .recharts-sector:hover { opacity: .84; filter: brightness(1.08); }
 .categories-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 18px; }
-.categories-legend > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; min-width: 0; border-top: 1px solid var(--border); padding-top: 9px; }
+.categories-legend > button {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px 5px 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+.categories-legend > button:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); background: color-mix(in srgb, var(--primary) 7%, transparent); transform: translateY(-1px); }
+.categories-legend > button:focus-visible { outline: 2px solid color-mix(in srgb, var(--primary) 72%, transparent); outline-offset: 2px; }
 .categories-legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--category-color); }
 .categories-legend span { display: grid; min-width: 0; }
 .categories-legend span strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .categories-legend span small { color: var(--muted); font-size: 10px; }
-.categories-legend > div > strong { font-size: 12px; white-space: nowrap; }
+.categories-legend > button > strong { font-size: 12px; white-space: nowrap; }
+.categories-detail-layer { z-index: 75; }
+.categories-detail-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, calc(100% - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .42);
+  animation: modal-pop .2s ease both;
+}
+.categories-detail-header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 22px 14px;
+  background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--category-color) 21%, transparent), transparent 52%);
+}
+.categories-detail-header > i {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--category-color) 35%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--category-color) 12%, var(--card));
+  color: var(--category-color);
+  font-style: normal;
+}
+.categories-detail-header .eyebrow { margin: 0 0 3px; }
+.categories-detail-header h2 { overflow: hidden; margin: 0; font-size: 21px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.categories-detail-tags { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 22px 15px; }
+.categories-detail-tags span { display: inline-flex; align-items: center; gap: 6px; border: 1px solid color-mix(in srgb, var(--category-color) 30%, var(--border)); border-radius: 999px; padding: 5px 9px; background: color-mix(in srgb, var(--category-color) 7%, transparent); color: var(--text); font-size: 10px; font-weight: 800; }
+.categories-detail-tags i { width: 7px; height: 7px; border-radius: 50%; background: var(--category-color); }
+.categories-detail-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 15px 22px; background: color-mix(in srgb, var(--card) 94%, var(--primary)); }
+.categories-detail-summary > div { display: grid; gap: 2px; min-width: 0; padding: 0 16px; }
+.categories-detail-summary > div:first-child { padding-left: 0; }
+.categories-detail-summary > div + div { border-left: 1px solid var(--border); }
+.categories-detail-summary small { color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.categories-detail-summary strong { overflow: hidden; font-size: 19px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.categories-detail-summary span { color: var(--muted); font-size: 10px; }
+.categories-detail-list { display: grid; gap: 8px; padding: 16px 22px 22px; overflow-y: auto; overscroll-behavior: contain; }
+.categories-detail-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; background: color-mix(in srgb, var(--card) 96%, var(--border)); transition: border-color .16s ease, background .16s ease; }
+.categories-detail-item:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); background: color-mix(in srgb, var(--primary) 4%, var(--card)); }
+.categories-detail-item > i { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); font-style: normal; }
+.categories-detail-item > span { display: grid; gap: 4px; min-width: 0; }
+.categories-detail-item > span > strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.categories-detail-item small { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.categories-detail-item small svg { flex: 0 0 auto; }
+.categories-detail-item small em { color: color-mix(in srgb, var(--muted) 52%, transparent); font-style: normal; }
+.categories-detail-item > strong { color: var(--text); font-size: 13px; white-space: nowrap; }
+.categories-detail-item > strong.refund { color: var(--income); }
+.categories-detail-empty { display: grid; place-items: center; gap: 8px; min-height: 150px; border: 1px dashed var(--border); border-radius: 11px; color: var(--muted); font-size: 12px; }
 .categories-insights-list { display: grid; gap: 10px; margin-top: 20px; }
 .categories-insight { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 11px; border: 1px solid var(--border); border-radius: 10px; padding: 13px; background: color-mix(in srgb, var(--card) 94%, var(--border)); }
 .categories-insight > svg { color: var(--muted); }
@@ -1135,6 +1211,19 @@ select {
   .categories-stat { min-height: 112px; }
   .categories-main-grid { gap: 10px; }
   .categories-legend { grid-template-columns: 1fr; }
+  .categories-detail-modal { max-height: 92dvh; border-radius: 16px 16px 0 0; }
+  .categories-detail-header { grid-template-columns: 40px minmax(0, 1fr) 34px; padding: 15px 16px 12px; }
+  .categories-detail-header > i { width: 40px; height: 40px; }
+  .categories-detail-header h2 { font-size: 18px; }
+  .categories-detail-tags { padding: 0 16px 13px; }
+  .categories-detail-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 0; padding: 14px 16px; }
+  .categories-detail-summary > div { padding: 0 12px; }
+  .categories-detail-summary > div:first-child { grid-column: 1 / -1; border-bottom: 1px solid var(--border); padding: 0 0 12px; }
+  .categories-detail-summary > div:nth-child(2) { border-left: 0; padding-left: 0; }
+  .categories-detail-list { padding: 13px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .categories-detail-item { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; padding: 10px; }
+  .categories-detail-item > i { width: 36px; height: 36px; }
+  .categories-detail-item > strong { grid-column: 2; justify-self: start; }
   .categories-budget-card { padding: 18px; }
   .categories-budget-heading { align-items: flex-start; flex-direction: column; }
   .categories-budget-heading-actions { width: 100%; justify-content: space-between; }

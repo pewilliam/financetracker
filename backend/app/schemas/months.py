@@ -52,6 +52,17 @@ class OpeningBalancePayload(APIModel):
     opening_balance: Decimal
 
 
+class CategoryExpenseDetailOut(APIModel):
+    source_type: str
+    source_id: int
+    description: str
+    amount: Decimal
+    date: date
+    invoice_name: Optional[str] = None
+    installment_number: Optional[int] = None
+    installment_count: Optional[int] = None
+
+
 class CategoryExpenseOut(APIModel):
     category_id: Optional[int] = None
     category_ids: List[int] = []
@@ -59,6 +70,7 @@ class CategoryExpenseOut(APIModel):
     color: str
     amount: Decimal
     percentage: Decimal
+    details: List[CategoryExpenseDetailOut] = []
 
 
 class CategoryBreakdownOut(APIModel):

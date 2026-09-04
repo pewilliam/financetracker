@@ -136,6 +136,18 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
             ("Sem categoria", Decimal("50.00")),
         ])
         self.assertEqual([item.percentage for item in result.items], [Decimal("80.00"), Decimal("20.00")])
+        food_group = next(item for item in result.chart_items if item.name == "Alimentação")
+        self.assertEqual(
+            [(detail.source_type, detail.description, detail.amount, detail.date) for detail in food_group.details],
+            [
+                ("invoice_item", "Restaurante", Decimal("40.00"), date(2026, 8, 10)),
+                ("installment_item", "Compra", Decimal("60.00"), date(2026, 8, 10)),
+                ("transaction", "Mercado", Decimal("100.00"), date(2026, 8, 5)),
+            ],
+        )
+        self.assertEqual(food_group.details[1].invoice_name, "Cartão")
+        self.assertEqual(food_group.details[1].installment_number, 1)
+        self.assertEqual(food_group.details[1].installment_count, 1)
         self.assertEqual(result.total_income, Decimal("400.00"))
         self.assertEqual([(item.name, item.amount) for item in result.income_items], [
             ("Alimentação", Decimal("300.00")),
@@ -189,6 +201,11 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
                 ("Alimentação", Decimal("40.00")),
             },
         )
+        combined_group = next(item for item in result.chart_items if len(item.category_ids) == 2)
+        self.assertEqual(len(combined_group.details), 1)
+        self.assertEqual(combined_group.details[0].description, "Jantar")
+        self.assertEqual(combined_group.details[0].amount, Decimal("100.00"))
+        self.assertEqual(combined_group.details[0].date, date(2026, 8, 15))
 
     def test_installment_category_update_also_updates_existing_refund(self):
         category = Category(user_id=self.user.id, name="Assinaturas", color="#8B5CF6")

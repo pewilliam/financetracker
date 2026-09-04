@@ -241,6 +241,7 @@ def get_category_breakdown(
     start, end, _ = _month_bounds(year, month)
     totals: dict[int | None, Decimal] = {}
     expense_groups: dict[tuple[int, ...], Decimal] = {}
+    expense_group_details: dict[tuple[int, ...], list[dict]] = {}
     income_totals: dict[int | None, Decimal] = {}
     categories = {
         category.id: category
@@ -253,16 +254,18 @@ def get_category_breakdown(
             selected_ids = [item.category_id]
         return selected_ids
 
-    def add_expense_amount(item, amount: Decimal) -> None:
+    def add_expense_amount(item, amount: Decimal, detail: dict) -> None:
         selected_ids = selected_category_ids(item)
         if not selected_ids:
             totals[None] = totals.get(None, Decimal("0.00")) + amount
             expense_groups[()] = expense_groups.get((), Decimal("0.00")) + amount
+            expense_group_details.setdefault((), []).append(detail)
             return
         for category_id in selected_ids:
             totals[category_id] = totals.get(category_id, Decimal("0.00")) + amount
         group_key = tuple(sorted(selected_ids))
         expense_groups[group_key] = expense_groups.get(group_key, Decimal("0.00")) + amount
+        expense_group_details.setdefault(group_key, []).append(detail)
 
     def add_categorized_amount(target: dict[int | None, Decimal], item, amount: Decimal) -> None:
         selected_ids = selected_category_ids(item)
@@ -285,7 +288,17 @@ def get_category_breakdown(
         .all()
     )
     for transaction in direct_transactions:
-        add_expense_amount(transaction, transaction.amount)
+        add_expense_amount(
+            transaction,
+            transaction.amount,
+            {
+                "source_type": "transaction",
+                "source_id": transaction.id,
+                "description": transaction.description or "Gasto sem descrição",
+                "amount": transaction.amount,
+                "date": transaction.date,
+            },
+        )
 
     income_transactions = (
         db.query(Transaction)
@@ -311,7 +324,18 @@ def get_category_breakdown(
     if invoice_ids:
         invoice_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id.in_(invoice_ids)).all()
         for item in invoice_items:
-            add_expense_amount(item, item.amount)
+            add_expense_amount(
+                item,
+                item.amount,
+                {
+                    "source_type": "invoice_item",
+                    "source_id": item.id,
+                    "description": item.description,
+                    "amount": item.amount,
+                    "date": item.invoice.due_date,
+                    "invoice_name": item.invoice.name,
+                },
+            )
 
         installment_items = (
             db.query(InstallmentItem)
@@ -322,7 +346,20 @@ def get_category_breakdown(
             .all()
         )
         for item in installment_items:
-            add_expense_amount(item.purchase if item.purchase else item, item.amount)
+            add_expense_amount(
+                item.purchase if item.purchase else item,
+                item.amount,
+                {
+                    "source_type": "installment_item",
+                    "source_id": item.id,
+                    "description": item.purchase_description or item.description,
+                    "amount": item.amount,
+                    "date": item.invoice.due_date,
+                    "invoice_name": item.invoice.name,
+                    "installment_number": item.installment_number,
+                    "installment_count": item.installment_count,
+                },
+            )
 
     def build_items(source: dict[int | None, Decimal], total_override: Decimal | None = None):
         source_total = sum(source.values(), Decimal("0.00"))
@@ -368,6 +405,11 @@ def get_category_breakdown(
                     color=group_categories[0].color if group_categories else "#94A3B8",
                     amount=amount,
                     percentage=percentage.quantize(Decimal("0.01")),
+                    details=sorted(
+                        expense_group_details.get(category_ids, []),
+                        key=lambda detail: (detail["date"], detail["source_id"]),
+                        reverse=True,
+                    ),
                 )
             )
         result.sort(key=lambda item: item.amount, reverse=True)
