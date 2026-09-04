@@ -1,8 +1,9 @@
 import calendar
+from bisect import bisect_left
 from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import extract, func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Transaction, User
@@ -43,83 +44,49 @@ def _month_bounds(year: int, month: int):
 
 
 def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
-    configured_for_month = (
-        db.query(MonthlyBalance)
-        .filter(
-            MonthlyBalance.user_id == user_id,
-            MonthlyBalance.year == start.year,
-            MonthlyBalance.month == start.month,
-        )
-        .first()
-    )
-    if configured_for_month:
-        return _to_decimal(configured_for_month.opening_balance)
-
     anchor = (
         db.query(MonthlyBalance)
         .filter(
             MonthlyBalance.user_id == user_id,
             or_(
                 MonthlyBalance.year < start.year,
-                (MonthlyBalance.year == start.year) & (MonthlyBalance.month < start.month),
+                (MonthlyBalance.year == start.year) & (MonthlyBalance.month <= start.month),
             ),
         )
         .order_by(MonthlyBalance.year.desc(), MonthlyBalance.month.desc())
         .first()
     )
-    if anchor:
-        anchor_start = date(anchor.year, anchor.month, 1)
-        income_since_anchor = (
-            db.query(func.coalesce(func.sum(Transaction.amount), 0))
-            .filter(
-                Transaction.user_id == user_id,
-                Transaction.type == "income",
-                Transaction.date >= anchor_start,
-                Transaction.date < start,
-            )
-            .scalar()
-        )
-        expenses_since_anchor = (
-            db.query(func.coalesce(func.sum(Transaction.amount), 0))
-            .filter(
-                Transaction.user_id == user_id,
-                Transaction.type == "expense",
-                Transaction.date >= anchor_start,
-                Transaction.date < start,
-            )
-            .scalar()
-        )
-        return (
-            _to_decimal(anchor.opening_balance)
-            + _to_decimal(income_since_anchor)
-            - _to_decimal(expenses_since_anchor)
-        )
+    if anchor and anchor.year == start.year and anchor.month == start.month:
+        return _to_decimal(anchor.opening_balance)
 
-    income_before = (
-        db.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(
-            Transaction.user_id == user_id,
-            Transaction.type == "income",
-            Transaction.date < start,
-        )
-        .scalar()
+    signed_amount = case(
+        (Transaction.type == "income", Transaction.amount),
+        (Transaction.type == "expense", -Transaction.amount),
+        else_=0,
     )
-    expenses_before = (
-        db.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(
-            Transaction.user_id == user_id,
-            Transaction.type == "expense",
-            Transaction.date < start,
-        )
-        .scalar()
+    net_query = db.query(func.coalesce(func.sum(signed_amount), 0)).filter(
+        Transaction.user_id == user_id,
+        Transaction.date < start,
     )
-    return _to_decimal(income_before) - _to_decimal(expenses_before)
+    if anchor:
+        net_query = net_query.filter(Transaction.date >= date(anchor.year, anchor.month, 1))
+    net_since_anchor = _to_decimal(net_query.scalar())
+    return (_to_decimal(anchor.opening_balance) if anchor else Decimal("0.00")) + net_since_anchor
 
 
 def _build_month_data(db: Session, year: int, month: int, user_id: int) -> MonthResponse:
     start, end, last_day = _month_bounds(year, month)
     transactions = (
         db.query(Transaction)
+        .options(
+            selectinload(Transaction.category),
+            selectinload(Transaction.categories),
+            selectinload(Transaction.linked_expense_transaction).selectinload(Transaction.categories),
+            selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.categories),
+            selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.template),
+            selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.purchase).selectinload(InstallmentPurchase.categories),
+            selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.template),
+        )
         .filter(
             Transaction.user_id == user_id,
             Transaction.date >= start,
@@ -210,6 +177,60 @@ def _summarize_month_data(data: MonthResponse, today: date | None = None) -> Mon
     )
 
 
+def _build_month_summary(
+    db: Session,
+    year: int,
+    month: int,
+    user_id: int,
+    today: date | None = None,
+) -> MonthSummaryOut:
+    start, end, _ = _month_bounds(year, month)
+    current_date = today or date.today()
+    opening_balance = _opening_balance(db, start, user_id)
+    transaction_rows = (
+        db.query(Transaction.date, Transaction.type, Transaction.amount)
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.date >= start,
+            Transaction.date <= end,
+        )
+        .all()
+    )
+
+    total_income = sum((row.amount for row in transaction_rows if row.type == "income"), Decimal("0.00"))
+    total_expenses = sum((row.amount for row in transaction_rows if row.type == "expense"), Decimal("0.00"))
+    total_net = total_income - total_expenses
+
+    if end < current_date:
+        current_balance = opening_balance + total_net
+        future_net = Decimal("0.00")
+    elif start > current_date:
+        current_balance = opening_balance
+        future_net = total_net
+    else:
+        current_net = sum(
+            (
+                row.amount if row.type == "income" else -row.amount
+                for row in transaction_rows
+                if row.date <= current_date
+            ),
+            Decimal("0.00"),
+        )
+        future_net = total_net - current_net
+        current_balance = opening_balance + current_net
+
+    return MonthSummaryOut(
+        year=year,
+        month=month,
+        total_expenses=total_expenses,
+        total_income=total_income,
+        difference=total_expenses - total_income,
+        current_balance=current_balance,
+        projected_closing=current_balance + future_net,
+        future_net=future_net,
+    )
+
+
 @router.get("/{year}/{month}", response_model=MonthResponse)
 def get_month(
     year: int,
@@ -227,8 +248,7 @@ def get_month_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    data = _build_month_data(db, year, month, current_user.id)
-    return _summarize_month_data(data)
+    return _build_month_summary(db, year, month, current_user.id)
 
 
 @router.get("/{year}/{month}/categories", response_model=CategoryBreakdownOut)
@@ -456,28 +476,68 @@ def list_month_summaries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    year_expr = extract("year", Transaction.date)
-    month_expr = extract("month", Transaction.date)
-    month_rows = (
-        db.query(
-            year_expr.label("year"),
-            month_expr.label("month"),
-        )
+    transaction_rows = (
+        db.query(Transaction.date, Transaction.type, Transaction.amount)
         .filter(Transaction.user_id == current_user.id)
-        .group_by(year_expr, month_expr)
-        .order_by(year_expr.desc(), month_expr.desc())
+        .order_by(Transaction.date, Transaction.id)
+        .all()
+    )
+    if not transaction_rows:
+        return []
+
+    balance_rows = (
+        db.query(MonthlyBalance.year, MonthlyBalance.month, MonthlyBalance.opening_balance)
+        .filter(MonthlyBalance.user_id == current_user.id)
+        .order_by(MonthlyBalance.year, MonthlyBalance.month)
         .all()
     )
 
+    month_totals: dict[tuple[int, int], dict[str, Decimal | int]] = {}
+    for row in transaction_rows:
+        period = (row.date.year, row.date.month)
+        totals = month_totals.setdefault(
+            period,
+            {"income": Decimal("0.00"), "expenses": Decimal("0.00"), "count": 0},
+        )
+        totals["count"] += 1
+        if row.type == "income":
+            totals["income"] += row.amount
+        elif row.type == "expense":
+            totals["expenses"] += row.amount
+
+    periods = sorted(month_totals)
+    cumulative_net = [Decimal("0.00")]
+    for period in periods:
+        totals = month_totals[period]
+        cumulative_net.append(cumulative_net[-1] + totals["income"] - totals["expenses"])
+
+    def net_before(period: tuple[int, int]) -> Decimal:
+        return cumulative_net[bisect_left(periods, period)]
+
+    configured_balances = {
+        (int(row.year), int(row.month)): _to_decimal(row.opening_balance)
+        for row in balance_rows
+    }
+    balance_periods = sorted(configured_balances)
+
     summaries: list[MonthCardSummaryOut] = []
-    for row in month_rows:
-        row_year = int(row.year)
-        row_month = int(row.month)
-        data = _build_month_data(db, row_year, row_month, current_user.id)
-        opening = data.opening_balance
+    for row_year, row_month in reversed(periods):
+        period = (row_year, row_month)
+        totals = month_totals[period]
+        if period in configured_balances:
+            opening = configured_balances[period]
+        else:
+            anchor_index = bisect_left(balance_periods, period) - 1
+            if anchor_index >= 0:
+                anchor_period = balance_periods[anchor_index]
+                opening = configured_balances[anchor_period] + net_before(period) - net_before(anchor_period)
+            else:
+                opening = net_before(period)
+
+        closing = opening + totals["income"] - totals["expenses"]
         difference_pct = Decimal("0.00")
         if opening:
-            difference_pct = ((data.closing_balance - opening) / abs(opening)) * Decimal("100")
+            difference_pct = ((closing - opening) / abs(opening)) * Decimal("100")
 
         summaries.append(
             MonthCardSummaryOut(
@@ -485,11 +545,11 @@ def list_month_summaries(
                 month=row_month,
                 label=f"{MONTH_NAMES[row_month]} de {row_year}",
                 opening_balance=opening,
-                total_expenses=data.total_expenses,
-                total_income=data.total_income,
-                closing_balance=data.closing_balance,
+                total_expenses=totals["expenses"],
+                total_income=totals["income"],
+                closing_balance=closing,
                 difference_pct=difference_pct,
-                transaction_count=sum(len(day.transactions) for day in data.days),
+                transaction_count=totals["count"],
             )
         )
 

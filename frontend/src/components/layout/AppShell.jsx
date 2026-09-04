@@ -152,6 +152,7 @@ export default function AppShell() {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
       let categoryEssentials = null;
+      let monthEssentials = null;
       if (showLoading && location.pathname === "/categorias") {
         categoryEssentials = await Promise.all([
           listCategories(),
@@ -166,9 +167,21 @@ export default function AppShell() {
         setBudgetPlan(categoryEssentials[3]);
         setLoading(false);
       }
+      if (showLoading && location.pathname === "/meses") {
+        monthEssentials = await Promise.all([
+          getMonth(year, month),
+          getMonthSummary(year, month),
+          getMonthsSummary(),
+        ]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(monthEssentials[0]);
+        setSummary(monthEssentials[1]);
+        setMonthCards(monthEssentials[2]);
+        setLoading(false);
+      }
       const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
-        getMonth(year, month),
-        getMonthSummary(year, month),
+        monthEssentials ? Promise.resolve(monthEssentials[0]) : getMonth(year, month),
+        monthEssentials ? Promise.resolve(monthEssentials[1]) : getMonthSummary(year, month),
         listInvoices(),
         listInvoiceTemplates(),
         listInstallments(),
@@ -180,7 +193,7 @@ export default function AppShell() {
         listLinkedReceivableTransactions(),
         listReceivablePeople(),
         listReceivableExpenseOptions(),
-        getMonthsSummary(),
+        monthEssentials ? Promise.resolve(monthEssentials[2]) : getMonthsSummary(),
         Promise.all(offsets.map(async (offset) => {
           const target = shiftMonth(year, month, offset);
           const data = await getMonthSummary(target.year, target.month);
