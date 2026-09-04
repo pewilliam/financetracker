@@ -3527,6 +3527,98 @@ select {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
 }
+.installment-list {
+  display: grid;
+  gap: 18px;
+}
+.installment-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.installment-sort-control {
+  width: min(100%, 260px);
+  display: grid;
+  gap: 6px;
+}
+.installment-sort-control > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.installment-sort-control select {
+  min-height: 40px;
+}
+.installment-sort-direction {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+.installment-groups {
+  display: grid;
+  gap: 18px;
+}
+.installment-group {
+  display: grid;
+  gap: 12px;
+}
+.installment-group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: rgba(20,160,120,0.06);
+  color: var(--text);
+  text-align: left;
+}
+.installment-group-toggle:hover {
+  background: rgba(20,160,120,0.10);
+}
+.installment-group-toggle > svg {
+  color: var(--muted);
+  transition: transform .2s ease;
+}
+.installment-group.expanded .installment-group-toggle > svg {
+  transform: rotate(180deg);
+}
+.installment-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.installment-group-head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.installment-group-head small {
+  min-width: 30px;
+  height: 24px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.installment-group-empty {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .installment-card {
   display: grid;
   gap: 14px;
@@ -6206,6 +6298,12 @@ select {
 }
 
 @media (max-width: 640px) {
+  .installment-toolbar {
+    align-items: stretch;
+  }
+  .installment-sort-control {
+    width: 100%;
+  }
   .invoice-grid,
   .installment-grid,
   .receivable-list {

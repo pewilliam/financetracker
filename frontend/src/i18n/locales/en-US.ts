@@ -433,7 +433,19 @@ export const enUS = {
     remaining: "Remaining:",
     nextInstallment: "Next installment:",
     due: "due",
-    details: "Details"
+    details: "Details",
+    inProgress: "In progress",
+    paidOff: "Paid off",
+    paidOffSingle: "PAID OFF",
+    noInProgress: "No installment purchases in progress.",
+    noPaidOff: "No paid-off installment purchases.",
+    sortBy: "Sort by",
+    registrationDate: "Registration date",
+    amount: "Amount",
+    sortProgress: "Progress",
+    sortDescending: "Descending order",
+    sortAscending: "Ascending order",
+    removedInvoice: "Invoice removed — reassign"
   },
   installmentModal: {
     addInstallmentPurchase: "Add installment purchase",
