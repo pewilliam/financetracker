@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, CalendarRange, Layers3, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, CalendarRange, Layers3, Loader2, Plus, ReceiptText, Trash2, X } from "lucide-react";
 import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -75,7 +75,7 @@ function buildEntries(form) {
   return entries;
 }
 
-export default function BatchTransactionModal({ open, year, month, categories = [], onCreateCategory, onClose, onSave }) {
+export default function BatchTransactionModal({ open, year, month, categories = [], onCreateCategory, onOpenSingle, onClose, onSave }) {
   const { language } = useI18n();
   const english = language === "en-US";
   const copy = (pt, en) => english ? en : pt;
@@ -168,6 +168,10 @@ export default function BatchTransactionModal({ open, year, month, categories = 
           <div>
             <p>{copy("PLANEJAMENTO RÁPIDO", "QUICK PLANNING")}</p>
             <h2>{copy("Adicionar transações em lote", "Add transactions in bulk")}</h2>
+          </div>
+          <div className="transaction-mode-switch" aria-label={copy("Modo de lançamento", "Entry mode")}>
+            <button type="button" aria-pressed="false" onClick={onOpenSingle}><ReceiptText size={15} /> {copy("Individual", "Single")}</button>
+            <button className="active" type="button" aria-pressed="true"><Layers3 size={15} /> {copy("Em lote", "Bulk")}</button>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label={copy("Fechar", "Close")}><X size={18} /></button>
         </header>

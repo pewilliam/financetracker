@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
-import { Menu, Plus } from "lucide-react";
+import { CalendarClock, Menu, Plus } from "lucide-react";
 import Dashboard from "../Dashboard.jsx";
 import { MonthField } from "../DateField.jsx";
 import TransactionForm from "../TransactionForm.jsx";
@@ -103,6 +103,7 @@ export default function AppShell() {
   selectedPeriodRef.current = { year, month, language };
 
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
+  const viewingCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
   const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
@@ -830,7 +831,12 @@ export default function AppShell() {
                 <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
                 <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
                 <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
-                <button className="btn btn-primary header-new-btn" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
+                {!viewingCurrentMonth && (
+                  <button className="btn month-current-btn" type="button" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}>
+                    <CalendarClock size={16} /> {t("actions.currentMonth")}
+                  </button>
+                )}
+                <button className="btn btn-primary header-new-btn" type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
           )}
@@ -838,7 +844,7 @@ export default function AppShell() {
           {loading ? <Skeleton /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} openBatchForm={() => setBatchModalOpen(true)} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
@@ -853,8 +859,8 @@ export default function AppShell() {
         </div>
       </main>
 
-      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
-      <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} onCreateCategory={saveCategory} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
+      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
+      <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}

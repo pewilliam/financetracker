@@ -271,8 +271,12 @@ export const enUS = {
   },
   actions: {
     new: "New",
+    entryMode: "Entry mode",
+    singleEntry: "Single",
+    batchEntry: "Bulk",
     previous: "Previous",
     next: "Next",
+    currentMonth: "Current month",
     cancel: "Cancel",
     save: "Save",
     edit: "Edit",

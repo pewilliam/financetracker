@@ -234,8 +234,12 @@ export const ptBR = {
   },
   actions: {
     new: "Novo",
+    entryMode: "Modo de lançamento",
+    singleEntry: "Individual",
+    batchEntry: "Em lote",
     previous: "Anterior",
     next: "Próximo",
+    currentMonth: "Mês atual",
     cancel: "Cancelar",
     save: "Salvar",
     edit: "Editar"

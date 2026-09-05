@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Link2, Loader2, Repeat2, X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Layers3, Link2, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
 import ExpensePicker from "./ExpensePicker.jsx";
@@ -58,6 +58,7 @@ export default function TransactionForm({
   expenseOptions = [],
   onManageReceivable,
   onCreateCategory,
+  onOpenBatch,
   onClose,
   onSave
 }) {
@@ -264,6 +265,12 @@ export default function TransactionForm({
       <form className="modal-card transaction-modal" onSubmit={handleSubmit}>
         <div className="modal-titlebar">
           <h2>{initial ? tt("transactionModal.editEntry", "Editar lançamento") : tt("transactionModal.newEntry", "Novo lançamento")}</h2>
+          {!initial && (
+            <div className="transaction-mode-switch" aria-label={tt("actions.entryMode", "Modo de lançamento")}>
+              <button className="active" type="button" aria-pressed="true"><ReceiptText size={15} /> {tt("actions.singleEntry", "Individual")}</button>
+              <button type="button" aria-pressed="false" onClick={onOpenBatch}><Layers3 size={15} /> {tt("actions.batchEntry", "Em lote")}</button>
+            </div>
+          )}
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar">
             <X size={18} />
           </button>

@@ -41,6 +41,7 @@ class MonthCardSummaryOut(APIModel):
     month: int
     label: str
     opening_balance: Decimal
+    current_balance: Decimal
     total_expenses: Decimal
     total_income: Decimal
     closing_balance: Decimal

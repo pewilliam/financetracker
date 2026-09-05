@@ -498,6 +498,8 @@ def list_month_summaries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    current_date = date.today()
+    current_period = (current_date.year, current_date.month)
     transaction_rows = (
         db.query(Transaction.date, Transaction.type, Transaction.amount)
         .filter(Transaction.user_id == current_user.id)
@@ -519,13 +521,17 @@ def list_month_summaries(
         period = (row.date.year, row.date.month)
         totals = month_totals.setdefault(
             period,
-            {"income": Decimal("0.00"), "expenses": Decimal("0.00"), "count": 0},
+            {"income": Decimal("0.00"), "expenses": Decimal("0.00"), "realized_net": Decimal("0.00"), "count": 0},
         )
         totals["count"] += 1
         if row.type == "income":
             totals["income"] += row.amount
+            if row.date <= current_date:
+                totals["realized_net"] += row.amount
         elif row.type == "expense":
             totals["expenses"] += row.amount
+            if row.date <= current_date:
+                totals["realized_net"] -= row.amount
 
     periods = sorted(month_totals)
     cumulative_net = [Decimal("0.00")]
@@ -557,6 +563,12 @@ def list_month_summaries(
                 opening = net_before(period)
 
         closing = opening + totals["income"] - totals["expenses"]
+        if period < current_period:
+            current_balance = closing
+        elif period > current_period:
+            current_balance = opening
+        else:
+            current_balance = opening + totals["realized_net"]
         difference_pct = Decimal("0.00")
         if opening:
             difference_pct = ((closing - opening) / abs(opening)) * Decimal("100")
@@ -567,6 +579,7 @@ def list_month_summaries(
                 month=row_month,
                 label=f"{MONTH_NAMES[row_month]} de {row_year}",
                 opening_balance=opening,
+                current_balance=current_balance,
                 total_expenses=totals["expenses"],
                 total_income=totals["income"],
                 closing_balance=closing,

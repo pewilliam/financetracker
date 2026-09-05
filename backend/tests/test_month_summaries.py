@@ -1,6 +1,7 @@
 import unittest
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -65,6 +66,27 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
                 _build_month_summary(self.db, 2026, target_month, current_user.id, today=comparison_date),
                 _summarize_month_data(month_data, today=comparison_date),
             )
+
+    def test_current_month_card_uses_only_realized_transactions_for_current_balance(self):
+        class FixedDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 2, 15)
+
+        self.db.add_all([
+            MonthlyBalance(user_id=self.user.id, year=2026, month=2, opening_balance=Decimal("500.00")),
+            Transaction(user_id=self.user.id, date=date(2026, 2, 10), type="income", amount=Decimal("200.00"), description="Recebido"),
+            Transaction(user_id=self.user.id, date=date(2026, 2, 20), type="expense", amount=Decimal("75.00"), description="Previsto"),
+        ])
+        self.db.commit()
+        current_user = type("CurrentUser", (), {"id": self.user.id})()
+
+        with patch("app.routers.months.date", FixedDate):
+            result = list_month_summaries(self.db, current_user)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].current_balance, Decimal("700.00"))
+        self.assertEqual(result[0].closing_balance, Decimal("625.00"))
 
 
 if __name__ == "__main__":
