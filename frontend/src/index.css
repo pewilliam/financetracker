@@ -872,7 +872,14 @@ select {
 .categories-editor-heading small { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .categories-editor-heading .category-view-toggle { flex: 0 0 auto; }
 .categories-income-candidates { display: grid; gap: 7px; }
-.categories-income-candidates > span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.categories-selection-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.categories-selection-heading > span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.categories-selection-heading > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.categories-bulk-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 5px; }
+.categories-bulk-actions button { border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; color: var(--muted); background: color-mix(in srgb, var(--card) 96%, var(--border)); font-size: 9px; font-weight: 800; line-height: 1.2; cursor: pointer; }
+.categories-bulk-actions button:last-child { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); color: var(--primary); background: color-mix(in srgb, var(--primary) 5%, var(--card)); }
+.categories-bulk-actions button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); color: var(--primary); }
+.categories-bulk-actions button:disabled { opacity: .42; cursor: default; }
 .categories-income-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; border: 1px solid var(--border); border-radius: 8px; padding: 10px 11px; background: color-mix(in srgb, var(--card) 96%, var(--border)); cursor: pointer; }
 .categories-income-candidate:has(input:checked) { border-color: color-mix(in srgb, var(--primary) 36%, var(--border)); background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
 .categories-income-candidate.awaiting { border-style: dashed; background: color-mix(in srgb, #F59E0B 4%, var(--card)); }
@@ -924,9 +931,8 @@ select {
 .categories-reserve-input > p strong { color: var(--text); }
 .categories-reserve-input .field-error { color: var(--expense); font-size: 10px; }
 .categories-reserve-sources { display: grid; gap: 9px; border-top: 1px solid var(--border); margin-top: 15px; padding-top: 14px; }
-.categories-reserve-sources > div:first-child { display: grid; gap: 3px; }
-.categories-reserve-sources > div:first-child strong { font-size: 11px; }
-.categories-reserve-sources > div:first-child small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.categories-reserve-sources > .categories-selection-heading strong { font-size: 11px; }
+.categories-reserve-sources > .categories-selection-heading small { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .categories-reserve-source-list { display: grid; gap: 6px; }
 .categories-reserve-source-list label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 9px; background: color-mix(in srgb, var(--card) 96%, var(--border)); cursor: pointer; }
 .categories-reserve-source-list label:has(input:checked) { border-color: color-mix(in srgb, #8B5CF6 36%, var(--border)); background: color-mix(in srgb, #8B5CF6 6%, var(--card)); }

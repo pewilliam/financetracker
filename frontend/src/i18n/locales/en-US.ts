@@ -123,6 +123,8 @@ export const enUS = {
     useTransactions: "Use transactions",
     enterManually: "Enter manually",
     incomeFound: "Income found this month",
+    clearSelection: "Clear selection",
+    selectAll: "Select all",
     incomeWithoutDescription: "Income without description",
     noIncomeTransactions: "No income found this month",
     noIncomeTransactionsHint: "Positive entries in the Renda category appear here for the selected month.",

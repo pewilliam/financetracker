@@ -299,6 +299,10 @@ export default function CategoriesPage({
   const selectedMonthEnded = budgetPlan ? new Date(budgetPlan.year, budgetPlan.month, 1) <= new Date() : false;
 
   const selectedCandidates = (budgetPlan?.income_candidates || []).filter((item) => selectedIncomeIds.includes(item.transaction_id));
+  const incomeCandidateIds = (budgetPlan?.income_candidates || []).map((item) => item.transaction_id);
+  const allIncomeCandidatesSelected = incomeCandidateIds.length > 0 && incomeCandidateIds.every((id) => selectedIncomeIds.includes(id));
+  const hasReserveCandidateSelected = selectedCandidates.some((item) => reserveIncomeIds.includes(item.transaction_id));
+  const allReserveCandidatesSelected = selectedCandidates.length > 0 && selectedCandidates.every((item) => reserveIncomeIds.includes(item.transaction_id));
   const incomeCandidateGroups = useMemo(() => {
     const grouped = new Map();
     for (const item of budgetPlan?.income_candidates || []) {
@@ -367,7 +371,18 @@ export default function CategoriesPage({
       setReserveIncomeIds((current) => current.includes(id) ? current : [...current, id]);
     }
   };
+  const clearIncomeSelection = () => {
+    setSelectedIncomeIds([]);
+    setReserveIncomeIds([]);
+  };
+  const selectAllIncome = () => {
+    const newlySelectedIds = incomeCandidateIds.filter((id) => !selectedIncomeIds.includes(id));
+    setSelectedIncomeIds([...new Set(incomeCandidateIds)]);
+    setReserveIncomeIds((current) => [...new Set([...current, ...newlySelectedIds])]);
+  };
   const toggleReserveIncome = (id) => setReserveIncomeIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const clearReserveIncomeSelection = () => setReserveIncomeIds([]);
+  const selectAllReserveIncome = () => setReserveIncomeIds(selectedCandidates.map((item) => item.transaction_id));
   const toggleIncomeGroup = (items) => {
     const ids = items.map((item) => item.transaction_id);
     const allSelected = ids.every((id) => selectedIncomeIds.includes(id));
@@ -426,7 +441,13 @@ export default function CategoriesPage({
               <div className="categories-editor-heading"><div><strong>{t("categories.incomeSource")}</strong><small>{t("categories.incomeSourceHint")}</small></div><div className="category-view-toggle"><button className={incomeMode === "transactions" ? "active" : ""} type="button" onClick={() => setIncomeMode("transactions")}>{t("categories.useTransactions")}</button><button className={incomeMode === "manual" ? "active" : ""} type="button" onClick={() => setIncomeMode("manual")}>{t("categories.enterManually")}</button></div></div>
               {incomeMode === "transactions" ? (
                 <div className="categories-income-candidates">
-                  <span>{t("categories.incomeFound")}</span>
+                  <div className="categories-selection-heading">
+                    <span>{t("categories.incomeFound")}</span>
+                    {incomeCandidateIds.length > 0 && <div className="categories-bulk-actions">
+                      <button type="button" disabled={!selectedCandidates.length} onClick={clearIncomeSelection}>{t("categories.clearSelection")}</button>
+                      <button type="button" disabled={allIncomeCandidatesSelected} onClick={selectAllIncome}>{t("categories.selectAll")}</button>
+                    </div>}
+                  </div>
                   {incomeCandidateGroups.length ? incomeCandidateGroups.map((group) => {
                     if (group.items.length === 1) {
                       const item = group.items[0];
@@ -491,7 +512,13 @@ export default function CategoriesPage({
                 {draftPlanningIncome > 0 ? draftReserveBaseIncome > 0 ? <p>{draftActualIncome <= 0 ? t("categories.estimatedCalculation") : t("categories.currentIncomeCalculation")} <strong>{formatMoney(draftReserveAmount, language)}</strong>{reserveType === "fixed" && draftActualIncome > 0 ? ` · ${safePercent(draftReserveAmount, draftReserveBaseIncome).toFixed(1)}%` : ""}</p> : <p>{t("categories.reserveWithoutSource")}</p> : <p>{t("categories.reserveWithoutIncome")}</p>}
               </div>
               <div className="categories-reserve-sources">
-                <div><strong>{t("categories.reserveSources")}</strong><small>{t("categories.reserveSourcesHint")}</small></div>
+                <div className="categories-selection-heading">
+                  <div><strong>{t("categories.reserveSources")}</strong><small>{t("categories.reserveSourcesHint")}</small></div>
+                  {incomeMode === "transactions" && selectedCandidates.length > 0 && <div className="categories-bulk-actions">
+                    <button type="button" disabled={!hasReserveCandidateSelected} onClick={clearReserveIncomeSelection}>{t("categories.clearSelection")}</button>
+                    <button type="button" disabled={allReserveCandidatesSelected} onClick={selectAllReserveIncome}>{t("categories.selectAll")}</button>
+                  </div>}
+                </div>
                 {incomeMode === "transactions" ? selectedCandidates.length ? (
                   <div className="categories-reserve-source-list">
                     {reserveIncomeCandidateGroups.map((group) => {

@@ -123,6 +123,8 @@ export const ptBR = {
     useTransactions: "Usar lançamentos",
     enterManually: "Informar manualmente",
     incomeFound: "Rendas encontradas neste mês",
+    clearSelection: "Limpar seleção",
+    selectAll: "Selecionar todos",
     incomeWithoutDescription: "Renda sem descrição",
     noIncomeTransactions: "Nenhuma renda encontrada neste mês",
     noIncomeTransactionsHint: "Entradas positivas da categoria Renda aparecerão aqui de acordo com o mês selecionado.",
