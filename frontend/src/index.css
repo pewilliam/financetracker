@@ -6253,11 +6253,135 @@ select {
 .skeleton { height: 132px; background: linear-gradient(90deg, var(--card), rgba(20,160,120,.08), var(--card)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
+.period-loading {
+  display: grid;
+  gap: 14px;
+  min-height: 420px;
+  animation: period-loading-enter .16s ease-out;
+}
+.period-loading-status {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  color: var(--text);
+}
+.period-loading-status > span {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+.period-loading-status > div { min-width: 0; display: grid; gap: 2px; }
+.period-loading-status strong { font-size: 12px; font-weight: 900; }
+.period-loading-status small { color: var(--muted); font-size: 10px; font-weight: 600; }
+.period-skeleton-summary-grid,
+.period-skeleton-month-grid,
+.period-skeleton-split {
+  display: grid;
+  gap: 14px;
+}
+.period-skeleton-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.period-skeleton-month-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.period-skeleton-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.period-skeleton-card,
+.period-skeleton-heading,
+.period-skeleton-year {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.period-skeleton-card::after,
+.period-skeleton-heading::after,
+.period-skeleton-year::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--primary) 9%, transparent) 48%, transparent 76%);
+  animation: period-skeleton-wave 1.25s ease-in-out infinite;
+}
+.period-skeleton-card {
+  min-height: 132px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 18px;
+}
+.period-skeleton-card.month { min-height: 250px; border-radius: 15px; }
+.period-skeleton-card.hero { min-height: 146px; }
+.period-skeleton-card.chart { min-height: 280px; }
+.period-skeleton-card.chart.wide { min-height: 300px; }
+.period-skeleton-line {
+  width: 72%;
+  height: 10px;
+  display: block;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 66%, var(--card));
+}
+.period-skeleton-line.short { width: 34%; height: 8px; }
+.period-skeleton-line.title { width: min(360px, 64%); height: 20px; }
+.period-skeleton-line.value { width: 58%; height: 26px; }
+.period-skeleton-heading {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-color: transparent;
+  padding: 10px 2px;
+  background: transparent;
+}
+.period-skeleton-heading > div { width: min(620px, 70%); display: grid; gap: 10px; }
+.period-skeleton-control {
+  width: 180px;
+  height: 40px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 62%, var(--card));
+}
+.period-skeleton-year {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-width: 0 0 1px;
+  padding: 0 2px 10px;
+  background: transparent;
+}
+.period-skeleton-year i { width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--border) 66%, var(--card)); }
+.period-skeleton-year span { width: 90px; height: 18px; border-radius: 999px; background: color-mix(in srgb, var(--border) 66%, var(--card)); }
+@keyframes period-skeleton-wave { to { transform: translateX(100%); } }
+@keyframes period-loading-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .period-loading,
+  .period-skeleton-card::after,
+  .period-skeleton-heading::after,
+  .period-skeleton-year::after { animation: none; }
+}
+
 @media (max-width: 767px) {
   .app-layout {
     --sidebar-expanded: min(286px, 88vw);
     --sidebar-collapsed: 0px;
   }
+  .period-skeleton-summary-grid,
+  .period-skeleton-month-grid,
+  .period-skeleton-split { grid-template-columns: 1fr; }
+  .period-skeleton-month-grid .period-skeleton-card:nth-child(n + 4) { display: none; }
+  .period-skeleton-heading { align-items: stretch; flex-direction: column; gap: 14px; }
+  .period-skeleton-heading > div { width: 100%; }
+  .period-skeleton-control { width: 100%; }
+  .period-skeleton-card.month { min-height: 210px; }
   /* Desktop sidebar oculta no mobile */
   .sidebar { display: none !important; }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { CalendarClock, Menu, Plus } from "lucide-react";
@@ -106,6 +106,11 @@ export default function AppShell() {
   const viewingCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
+  const loadingVariant = location.pathname === "/meses" ? "months" : location.pathname === "/categorias" ? "categories" : "dashboard";
+  const loadingLabel = language === "en-US"
+    ? `Loading ${formatMonthLabel(year, month, language)}`
+    : `Carregando dados de ${formatMonthLabel(year, month, language)}`;
+  const loadingHint = language === "en-US" ? "Please wait while the values are updated." : "Aguarde enquanto atualizamos os valores.";
   const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
   const bodyLocked = overlayOpen;
 
@@ -154,55 +159,72 @@ export default function AppShell() {
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
-      let categoryEssentials = null;
-      let monthEssentials = null;
-      if (showLoading && location.pathname === "/categorias") {
-        categoryEssentials = await Promise.all([
-          listCategories(),
-          getCategoryBreakdown(year, month),
-          getCategoryBreakdown(previousTarget.year, previousTarget.month),
-          getMonthlyBudgetPlan(year, month),
-        ]);
-        if (!isCurrentPeriod()) return;
-        setCategories(categoryEssentials[0]);
-        setCategoryBreakdown(categoryEssentials[1]);
-        setPreviousCategoryBreakdown(categoryEssentials[2]);
-        setBudgetPlan(categoryEssentials[3]);
-        setLoading(false);
-      }
-      if (showLoading && location.pathname === "/meses") {
-        monthEssentials = await Promise.all([
-          getMonth(year, month),
-          getMonthSummary(year, month),
-          getMonthsSummary(),
-        ]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(monthEssentials[0]);
-        setSummary(monthEssentials[1]);
-        setMonthCards(monthEssentials[2]);
-        setLoading(false);
-      }
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
-        monthEssentials ? Promise.resolve(monthEssentials[0]) : getMonth(year, month),
-        monthEssentials ? Promise.resolve(monthEssentials[1]) : getMonthSummary(year, month),
-        listInvoices(),
-        listInvoiceTemplates(),
-        listInstallments(),
-        categoryEssentials ? Promise.resolve(categoryEssentials[0]) : listCategories(),
-        categoryEssentials ? Promise.resolve(categoryEssentials[1]) : getCategoryBreakdown(year, month),
-        categoryEssentials ? Promise.resolve(categoryEssentials[2]) : getCategoryBreakdown(previousTarget.year, previousTarget.month),
-        categoryEssentials ? Promise.resolve(categoryEssentials[3]) : getMonthlyBudgetPlan(year, month),
-        listReceivables(),
-        listLinkedReceivableTransactions(),
-        listReceivablePeople(),
-        listReceivableExpenseOptions(),
-        monthEssentials ? Promise.resolve(monthEssentials[2]) : getMonthsSummary(),
-        Promise.all(offsets.map(async (offset) => {
-          const target = shiftMonth(year, month, offset);
-          const data = await getMonthSummary(target.year, target.month);
-          return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-        }))
+      const monthRequest = getMonth(year, month);
+      const summaryRequest = getMonthSummary(year, month);
+      const invoicesRequest = listInvoices();
+      const templatesRequest = listInvoiceTemplates();
+      const installmentsRequest = listInstallments();
+      const categoriesRequest = listCategories();
+      const categoryBreakdownRequest = getCategoryBreakdown(year, month);
+      const previousCategoryBreakdownRequest = getCategoryBreakdown(previousTarget.year, previousTarget.month);
+      const budgetPlanRequest = getMonthlyBudgetPlan(year, month);
+      const receivablesRequest = listReceivables();
+      const linkedReceivablesRequest = listLinkedReceivableTransactions();
+      const peopleRequest = listReceivablePeople();
+      const expenseOptionsRequest = listReceivableExpenseOptions();
+      const monthCardsRequest = getMonthsSummary();
+      const comparisonRequest = Promise.all(offsets.map(async (offset) => {
+        const target = shiftMonth(year, month, offset);
+        const data = await getMonthSummary(target.year, target.month);
+        return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
+      }));
+
+      const allPayloadsRequest = Promise.all([
+        monthRequest,
+        summaryRequest,
+        invoicesRequest,
+        templatesRequest,
+        installmentsRequest,
+        categoriesRequest,
+        categoryBreakdownRequest,
+        previousCategoryBreakdownRequest,
+        budgetPlanRequest,
+        receivablesRequest,
+        linkedReceivablesRequest,
+        peopleRequest,
+        expenseOptionsRequest,
+        monthCardsRequest,
+        comparisonRequest
       ]);
+      void allPayloadsRequest.catch(() => undefined);
+
+      if (showLoading && location.pathname === "/meses") {
+        const [monthPayload, summaryPayload, monthCardsPayload] = await Promise.all([monthRequest, summaryRequest, monthCardsRequest]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(monthPayload);
+        setSummary(summaryPayload);
+        setMonthCards(monthCardsPayload);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/categorias") {
+        const [categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload] = await Promise.all([categoriesRequest, categoryBreakdownRequest, previousCategoryBreakdownRequest, budgetPlanRequest]);
+        if (!isCurrentPeriod()) return;
+        setCategories(categoriesPayload);
+        setCategoryBreakdown(categoryBreakdownPayload);
+        setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
+        setBudgetPlan(budgetPlanPayload);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/") {
+        const [monthPayload, summaryPayload, invoicesPayload, categoryBreakdownPayload, comparisonPayload] = await Promise.all([monthRequest, summaryRequest, invoicesRequest, categoryBreakdownRequest, comparisonRequest]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(monthPayload);
+        setSummary(summaryPayload);
+        setInvoices(invoicesPayload);
+        setCategoryBreakdown(categoryBreakdownPayload);
+        setComparisons(comparisonPayload);
+        setLoading(false);
+      }
+
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await allPayloadsRequest;
       if (!isCurrentPeriod()) return;
       setMonthData(monthPayload);
       setSummary(summaryPayload);
@@ -225,6 +247,10 @@ export default function AppShell() {
       if (showLoading && isCurrentPeriod()) setLoading(false);
     }
   }
+
+  useLayoutEffect(() => {
+    setLoading(true);
+  }, [year, month, language]);
 
   useEffect(() => { refresh(); }, [year, month, language]);
 
@@ -828,20 +854,20 @@ export default function AppShell() {
                 <h1>{t("app.title")}</h1>
               </div>
               <div className="toolbar">
-                <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
-                <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-                <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
                 {!viewingCurrentMonth && (
                   <button className="btn month-current-btn" type="button" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}>
                     <CalendarClock size={16} /> {t("actions.currentMonth")}
                   </button>
                 )}
+                <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
+                <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
+                <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
                 <button className="btn btn-primary header-new-btn" type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
           )}
 
-          {loading ? <Skeleton /> : (
+          {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
