@@ -163,6 +163,8 @@ export default function CategoriesPage({
   const [incomeMode, setIncomeMode] = useState("transactions");
   const [selectedIncomeIds, setSelectedIncomeIds] = useState([]);
   const [reserveIncomeIds, setReserveIncomeIds] = useState([]);
+  const [expandedIncomeGroups, setExpandedIncomeGroups] = useState([]);
+  const [expandedReserveIncomeGroups, setExpandedReserveIncomeGroups] = useState([]);
   const [manualIncome, setManualIncome] = useState("");
   const [expectedIncome, setExpectedIncome] = useState("");
   const [reserveType, setReserveType] = useState("percentage");
@@ -183,6 +185,8 @@ export default function CategoriesPage({
     setIncomeMode(budgetPlan.income_mode || "transactions");
     setSelectedIncomeIds((budgetPlan.income_candidates || []).filter((item) => item.selected).map((item) => item.transaction_id));
     setReserveIncomeIds((budgetPlan.income_candidates || []).filter((item) => item.selected && item.included_in_reserve !== false).map((item) => item.transaction_id));
+    setExpandedIncomeGroups([]);
+    setExpandedReserveIncomeGroups([]);
     setManualIncome(moneyDraft(budgetPlan.manual_income, language));
     setExpectedIncome(moneyDraft(budgetPlan.expected_income, language));
     setReserveType(budgetPlan.reserve_rule?.rule_type || "percentage");
@@ -274,6 +278,27 @@ export default function CategoriesPage({
   const selectedMonthEnded = budgetPlan ? new Date(budgetPlan.year, budgetPlan.month, 1) <= new Date() : false;
 
   const selectedCandidates = (budgetPlan?.income_candidates || []).filter((item) => selectedIncomeIds.includes(item.transaction_id));
+  const incomeCandidateGroups = useMemo(() => {
+    const grouped = new Map();
+    for (const item of budgetPlan?.income_candidates || []) {
+      const key = (item.description || "").trim().toLocaleLowerCase(language) || "__without_description__";
+      const group = grouped.get(key);
+      if (group) group.items.push(item);
+      else grouped.set(key, { key, description: item.description, items: [item] });
+    }
+    return [...grouped.values()];
+  }, [budgetPlan?.income_candidates, language]);
+  const reserveIncomeCandidateGroups = useMemo(() => {
+    const grouped = new Map();
+    for (const item of budgetPlan?.income_candidates || []) {
+      if (!selectedIncomeIds.includes(item.transaction_id)) continue;
+      const key = (item.description || "").trim().toLocaleLowerCase(language) || "__without_description__";
+      const group = grouped.get(key);
+      if (group) group.items.push(item);
+      else grouped.set(key, { key, description: item.description, items: [item] });
+    }
+    return [...grouped.values()];
+  }, [budgetPlan?.income_candidates, selectedIncomeIds, language]);
   const draftTransactionIncome = selectedCandidates.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const draftReserveTransactionIncome = selectedCandidates.filter((item) => reserveIncomeIds.includes(item.transaction_id)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const draftManualIncome = parseTypedMoneyInput(manualIncome, language);
@@ -322,6 +347,27 @@ export default function CategoriesPage({
     }
   };
   const toggleReserveIncome = (id) => setReserveIncomeIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleIncomeGroup = (items) => {
+    const ids = items.map((item) => item.transaction_id);
+    const allSelected = ids.every((id) => selectedIncomeIds.includes(id));
+    if (allSelected) {
+      setSelectedIncomeIds((current) => current.filter((id) => !ids.includes(id)));
+      setReserveIncomeIds((current) => current.filter((id) => !ids.includes(id)));
+    } else {
+      const newlySelectedIds = ids.filter((id) => !selectedIncomeIds.includes(id));
+      setSelectedIncomeIds((current) => [...new Set([...current, ...ids])]);
+      setReserveIncomeIds((current) => [...new Set([...current, ...newlySelectedIds])]);
+    }
+  };
+  const toggleIncomeGroupExpanded = (key) => setExpandedIncomeGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  const toggleReserveIncomeGroup = (items) => {
+    const ids = items.map((item) => item.transaction_id);
+    const allIncluded = ids.every((id) => reserveIncomeIds.includes(id));
+    setReserveIncomeIds((current) => allIncluded
+      ? current.filter((id) => !ids.includes(id))
+      : [...new Set([...current, ...ids])]);
+  };
+  const toggleReserveIncomeGroupExpanded = (key) => setExpandedReserveIncomeGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
   const savePlanning = async () => {
     if (!reserveInputValid || planningSaving) return;
     setPlanningSaving(true);
@@ -360,16 +406,57 @@ export default function CategoriesPage({
               {incomeMode === "transactions" ? (
                 <div className="categories-income-candidates">
                   <span>{t("categories.incomeFound")}</span>
-                  {(budgetPlan?.income_candidates || []).length ? budgetPlan.income_candidates.map((item) => (
-                    <label key={item.transaction_id} className={`categories-income-candidate ${item.received ? "" : "awaiting"}`}>
-                      <input type="checkbox" checked={selectedIncomeIds.includes(item.transaction_id)} onChange={() => toggleIncome(item.transaction_id)} />
-                      <span>
-                        <strong>{item.description || t("categories.incomeWithoutDescription")}</strong>
-                        <small>{formatDateShort(item.date, language)} · {item.received ? t("categories.receivedStatus") : t("categories.awaitingReceipt")}</small>
-                      </span>
-                      <strong>{formatMoney(item.amount, language)}</strong>
-                    </label>
-                  )) : <div className="categories-income-empty"><Clock3 size={18} /><span><strong>{t("categories.noIncomeTransactions")}</strong><small>{t("categories.noIncomeTransactionsHint")}</small></span></div>}
+                  {incomeCandidateGroups.length ? incomeCandidateGroups.map((group) => {
+                    if (group.items.length === 1) {
+                      const item = group.items[0];
+                      return (
+                        <label key={item.transaction_id} className={`categories-income-candidate ${item.received ? "" : "awaiting"}`}>
+                          <input type="checkbox" checked={selectedIncomeIds.includes(item.transaction_id)} onChange={() => toggleIncome(item.transaction_id)} />
+                          <span>
+                            <strong>{item.description || t("categories.incomeWithoutDescription")}</strong>
+                            <small>{formatDateShort(item.date, language)} · {item.received ? t("categories.receivedStatus") : t("categories.awaitingReceipt")}</small>
+                          </span>
+                          <strong>{formatMoney(item.amount, language)}</strong>
+                        </label>
+                      );
+                    }
+                    const selectedCount = group.items.filter((item) => selectedIncomeIds.includes(item.transaction_id)).length;
+                    const fullySelected = selectedCount === group.items.length;
+                    const partiallySelected = selectedCount > 0 && !fullySelected;
+                    const expanded = expandedIncomeGroups.includes(group.key);
+                    const total = group.items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+                    return (
+                      <div key={group.key} className={`categories-income-group ${selectedCount ? "selected" : ""} ${partiallySelected ? "partial" : ""} ${group.items.some((item) => !item.received) ? "awaiting" : ""}`}>
+                        <div className="categories-income-group-summary">
+                          <input
+                            type="checkbox"
+                            checked={fullySelected}
+                            ref={(checkbox) => { if (checkbox) checkbox.indeterminate = partiallySelected; }}
+                            onChange={() => toggleIncomeGroup(group.items)}
+                            aria-label={t("categories.selectIncomeGroup", { description: group.description || t("categories.incomeWithoutDescription") })}
+                          />
+                          <button type="button" className="categories-income-group-copy" onClick={() => toggleIncomeGroup(group.items)}>
+                            <strong>{group.description || t("categories.incomeWithoutDescription")}</strong>
+                            <small>{t("categories.incomeGroupEntries", { count: group.items.length })}</small>
+                          </button>
+                          <strong>{formatMoney(total, language)}</strong>
+                          <button className="icon-btn small categories-income-group-expand" type="button" onClick={() => toggleIncomeGroupExpanded(group.key)} aria-label={expanded ? t("categories.collapseIncomeGroup") : t("categories.expandIncomeGroup")}>
+                            {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                          </button>
+                        </div>
+                        {expanded && <div className="categories-income-group-items">{group.items.map((item) => (
+                          <label key={item.transaction_id} className={`categories-income-candidate ${item.received ? "" : "awaiting"}`}>
+                            <input type="checkbox" checked={selectedIncomeIds.includes(item.transaction_id)} onChange={() => toggleIncome(item.transaction_id)} />
+                            <span>
+                              <strong>{item.description || t("categories.incomeWithoutDescription")}</strong>
+                              <small>{formatDateShort(item.date, language)} · {item.received ? t("categories.receivedStatus") : t("categories.awaitingReceipt")}</small>
+                            </span>
+                            <strong>{formatMoney(item.amount, language)}</strong>
+                          </label>
+                        ))}</div>}
+                      </div>
+                    );
+                  }) : <div className="categories-income-empty"><Clock3 size={18} /><span><strong>{t("categories.noIncomeTransactions")}</strong><small>{t("categories.noIncomeTransactionsHint")}</small></span></div>}
                   <div className="categories-income-total"><span>{t("categories.consideredTotal")}</span><strong>{formatMoney(draftTransactionIncome, language)}</strong></div>
                 </div>
               ) : <div className="categories-manual-income"><label><span>{t("categories.manualAvailableIncome")}</span><span className="categories-money-field"><span>R$</span><input inputMode="decimal" placeholder="0,00" value={manualIncome} onChange={(event) => setManualIncome(event.target.value)} /></span><small>{t("categories.manualIncomeHint")}</small></label></div>}
@@ -386,13 +473,51 @@ export default function CategoriesPage({
                 <div><strong>{t("categories.reserveSources")}</strong><small>{t("categories.reserveSourcesHint")}</small></div>
                 {incomeMode === "transactions" ? selectedCandidates.length ? (
                   <div className="categories-reserve-source-list">
-                    {selectedCandidates.map((item) => (
-                      <label key={item.transaction_id}>
-                        <input type="checkbox" checked={reserveIncomeIds.includes(item.transaction_id)} onChange={() => toggleReserveIncome(item.transaction_id)} />
-                        <span>{item.description || t("categories.incomeWithoutDescription")}</span>
-                        <strong>{formatMoney(item.amount, language)}</strong>
-                      </label>
-                    ))}
+                    {reserveIncomeCandidateGroups.map((group) => {
+                      if (group.items.length === 1) {
+                        const item = group.items[0];
+                        return (
+                          <label key={item.transaction_id}>
+                            <input type="checkbox" checked={reserveIncomeIds.includes(item.transaction_id)} onChange={() => toggleReserveIncome(item.transaction_id)} />
+                            <span>{item.description || t("categories.incomeWithoutDescription")}</span>
+                            <strong>{formatMoney(item.amount, language)}</strong>
+                          </label>
+                        );
+                      }
+                      const includedCount = group.items.filter((item) => reserveIncomeIds.includes(item.transaction_id)).length;
+                      const fullyIncluded = includedCount === group.items.length;
+                      const partiallyIncluded = includedCount > 0 && !fullyIncluded;
+                      const expanded = expandedReserveIncomeGroups.includes(group.key);
+                      const total = group.items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+                      return (
+                        <div key={group.key} className={`categories-income-group reserve ${includedCount ? "selected" : ""} ${partiallyIncluded ? "partial" : ""}`}>
+                          <div className="categories-income-group-summary">
+                            <input
+                              type="checkbox"
+                              checked={fullyIncluded}
+                              ref={(checkbox) => { if (checkbox) checkbox.indeterminate = partiallyIncluded; }}
+                              onChange={() => toggleReserveIncomeGroup(group.items)}
+                              aria-label={t("categories.selectReserveIncomeGroup", { description: group.description || t("categories.incomeWithoutDescription") })}
+                            />
+                            <button type="button" className="categories-income-group-copy" onClick={() => toggleReserveIncomeGroup(group.items)}>
+                              <strong>{group.description || t("categories.incomeWithoutDescription")}</strong>
+                              <small>{t("categories.incomeGroupEntries", { count: group.items.length })}</small>
+                            </button>
+                            <strong>{formatMoney(total, language)}</strong>
+                            <button className="icon-btn small categories-income-group-expand" type="button" onClick={() => toggleReserveIncomeGroupExpanded(group.key)} aria-label={expanded ? t("categories.collapseReserveIncomeGroup") : t("categories.expandReserveIncomeGroup")}>
+                              {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                            </button>
+                          </div>
+                          {expanded && <div className="categories-income-group-items">{group.items.map((item) => (
+                            <label key={item.transaction_id}>
+                              <input type="checkbox" checked={reserveIncomeIds.includes(item.transaction_id)} onChange={() => toggleReserveIncome(item.transaction_id)} />
+                              <span>{item.description || t("categories.incomeWithoutDescription")}</span>
+                              <strong>{formatMoney(item.amount, language)}</strong>
+                            </label>
+                          ))}</div>}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : <small className="categories-reserve-source-empty">{t("categories.noReserveSources")}</small> : <small className="categories-reserve-source-empty">{t("categories.manualReserveSource")}</small>}
                 <div className="categories-reserve-source-total"><span>{t("categories.reserveBase")}</span><strong>{formatMoney(draftReserveBaseIncome, language)}</strong></div>

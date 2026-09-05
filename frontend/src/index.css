@@ -883,6 +883,22 @@ select {
 .categories-income-candidate > span strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .categories-income-candidate > span small { color: var(--muted); font-size: 10px; }
 .categories-income-candidate > strong { font-size: 12px; white-space: nowrap; }
+.categories-income-group { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--card) 96%, var(--border)); }
+.categories-income-group.selected, .categories-income-group.partial { border-color: color-mix(in srgb, var(--primary) 36%, var(--border)); background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
+.categories-income-group.awaiting { border-style: dashed; }
+.categories-income-group-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 8px 10px 11px; }
+.categories-income-group-summary > input { width: 16px; height: 16px; accent-color: var(--primary); }
+.categories-income-group-copy { display: grid; min-width: 0; border: 0; padding: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.categories-income-group-copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.categories-income-group-copy small { color: var(--muted); font-size: 10px; }
+.categories-income-group-summary > strong { font-size: 12px; white-space: nowrap; }
+.categories-income-group.awaiting .categories-income-group-copy small, .categories-income-group.awaiting .categories-income-group-summary > strong { color: #D97706; }
+.categories-income-group-expand { flex: 0 0 auto; }
+.categories-income-group-items { display: grid; gap: 6px; border-top: 1px solid var(--border); padding: 7px; background: color-mix(in srgb, var(--card) 65%, transparent); }
+.categories-income-group-items .categories-income-candidate { padding: 8px 9px; }
+.categories-income-group.reserve.selected, .categories-income-group.reserve.partial { border-color: color-mix(in srgb, #8B5CF6 36%, var(--border)); background: color-mix(in srgb, #8B5CF6 6%, var(--card)); }
+.categories-income-group.reserve .categories-income-group-summary > input { accent-color: #8B5CF6; }
+.categories-income-group.reserve .categories-income-group-items { padding: 6px; }
 .categories-income-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border); margin-top: 3px; padding-top: 10px; }
 .categories-income-total span { color: var(--muted); font-size: 10px; font-weight: 800; }
 .categories-income-total strong { color: var(--primary); font-size: 15px; }
