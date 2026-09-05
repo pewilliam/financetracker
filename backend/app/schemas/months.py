@@ -81,3 +81,4 @@ class CategoryBreakdownOut(APIModel):
     total_income: Decimal = Decimal("0.00")
     income_categorized_total: Decimal = Decimal("0.00")
     income_items: List[CategoryExpenseOut] = []
+    income_chart_items: List[CategoryExpenseOut] = []

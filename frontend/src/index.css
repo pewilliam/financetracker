@@ -995,6 +995,8 @@ select {
 .categories-chart-card, .categories-insights-card, .categories-budget-card { min-width: 0; }
 .categories-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .categories-card-heading h2 { margin: 3px 0 0; font-size: 19px; }
+.categories-analysis-heading-actions { display: flex; align-items: flex-start; gap: 11px; }
+.categories-analysis-heading-actions .category-view-toggle { flex: 0 0 auto; }
 .categories-donut { position: relative; width: min(390px, 100%); margin: 4px auto 0; }
 .categories-donut > div:last-child {
   position: absolute;
@@ -1108,6 +1110,7 @@ select {
 .categories-detail-item small em { color: color-mix(in srgb, var(--muted) 52%, transparent); font-style: normal; }
 .categories-detail-item > strong { color: var(--text); font-size: 13px; white-space: nowrap; }
 .categories-detail-item > strong.refund { color: var(--income); }
+.categories-detail-item > strong.income { color: var(--income); }
 .categories-detail-empty { display: grid; place-items: center; gap: 8px; min-height: 150px; border: 1px dashed var(--border); border-radius: 11px; color: var(--muted); font-size: 12px; }
 .categories-detail-status { display: grid; place-items: center; align-content: center; gap: 9px; min-height: 170px; color: var(--muted); font-size: 12px; }
 .categories-detail-status > svg { color: var(--primary); }
@@ -1243,6 +1246,8 @@ select {
   .categories-summary-grid { grid-template-columns: 1fr; gap: 10px; }
   .categories-stat { min-height: 112px; }
   .categories-main-grid { gap: 10px; }
+  .categories-chart-card > .categories-card-heading { flex-direction: column; }
+  .categories-analysis-heading-actions { justify-content: space-between; width: 100%; }
   .categories-legend { grid-template-columns: 1fr; }
   .categories-detail-modal { max-height: 92dvh; border-radius: 16px 16px 0 0; }
   .categories-detail-header { grid-template-columns: 40px minmax(0, 1fr) 34px; padding: 15px 16px 12px; }

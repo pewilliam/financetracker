@@ -68,13 +68,17 @@ function buildVisibleExpenseGroups(items, categories, ignoredCategoryIds) {
     .sort((left, right) => right.amount - left.amount);
 }
 
-function CategoryExpenseDetails({ group, categories, language, loading, error, onClose }) {
+function CategoryExpenseDetails({ group, categories, language, loading, error, income = false, onClose }) {
   const details = group.details || [];
   const groupCategories = (group.category_ids || []).map((categoryId) => categories.find((category) => category.id === categoryId)).filter(Boolean);
   const average = details.length ? Number(group.amount || 0) / details.length : 0;
   const text = language === "en-US"
-    ? { eyebrow: "Expense details", total: "Group total", entries: "entries", average: "Average expense", empty: "No expense details available.", loading: "Loading expenses…", error: "Could not load the expense details.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
-    : { eyebrow: "Detalhes dos gastos", total: "Total do grupo", entries: "lançamentos", average: "Gasto médio", empty: "Nenhum detalhe disponível para este grupo.", loading: "Carregando lançamentos…", error: "Não foi possível carregar os detalhes dos gastos.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" };
+    ? income
+      ? { eyebrow: "Income details", total: "Group total", entries: "entries", average: "Average income", empty: "No income details available.", loading: "Loading income…", error: "Could not load the income details.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
+      : { eyebrow: "Expense details", total: "Group total", entries: "entries", average: "Average expense", empty: "No expense details available.", loading: "Loading expenses…", error: "Could not load the expense details.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
+    : income
+      ? { eyebrow: "Detalhes dos ganhos", total: "Total do grupo", entries: "lançamentos", average: "Ganho médio", empty: "Nenhum ganho disponível neste grupo.", loading: "Carregando ganhos…", error: "Não foi possível carregar os detalhes dos ganhos.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" }
+      : { eyebrow: "Detalhes dos gastos", total: "Total do grupo", entries: "lançamentos", average: "Gasto médio", empty: "Nenhum detalhe disponível para este grupo.", loading: "Carregando lançamentos…", error: "Não foi possível carregar os detalhes dos gastos.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" };
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -119,7 +123,7 @@ function CategoryExpenseDetails({ group, categories, language, loading, error, o
               <article className="categories-detail-item" key={`${detail.source_type}-${detail.source_id}`}>
                 <i><SourceIcon size={17} /></i>
                 <span><strong>{detail.description}</strong><small><CalendarDays size={12} /> {formatDateShort(detail.date, language)}<em>·</em>{origin}</small></span>
-                <strong className={Number(detail.amount) < 0 ? "refund" : ""}>{formatMoney(detail.amount, language)}</strong>
+                <strong className={income ? "income" : Number(detail.amount) < 0 ? "refund" : ""}>{formatMoney(detail.amount, language)}</strong>
               </article>
             );
           }) : <div className="categories-detail-empty"><ReceiptText size={22} /><span>{text.empty}</span></div>}
@@ -145,8 +149,8 @@ function CategoryChartTooltip({ active, payload, language }) {
 
 export default function CategoriesPage({
   categories = [],
-  categoryBreakdown = { total_expenses: 0, items: [], chart_items: [] },
-  previousCategoryBreakdown = { total_expenses: 0, items: [], chart_items: [] },
+  categoryBreakdown = { total_expenses: 0, items: [], chart_items: [], total_income: 0, income_items: [], income_chart_items: [] },
+  previousCategoryBreakdown = { total_expenses: 0, items: [], chart_items: [], total_income: 0, income_items: [], income_chart_items: [] },
   budgetPlan = null,
   onLoadExpenseDetails,
   onUpdateCategory,
@@ -169,6 +173,7 @@ export default function CategoriesPage({
   const [expectedIncome, setExpectedIncome] = useState("");
   const [reserveType, setReserveType] = useState("percentage");
   const [reserveValue, setReserveValue] = useState("0");
+  const [categoryAnalysisView, setCategoryAnalysisView] = useState("expenses");
   const [selectedExpenseGroup, setSelectedExpenseGroup] = useState(null);
   const [detailedExpenseGroups, setDetailedExpenseGroups] = useState(null);
   const [expenseDetailsLoading, setExpenseDetailsLoading] = useState(false);
@@ -200,7 +205,7 @@ export default function CategoriesPage({
     setExpenseDetailsLoading(false);
     setExpenseDetailsError(false);
     detailsRequestRef.current = null;
-  }, [categoryBreakdown]);
+  }, [categoryBreakdown, categoryAnalysisView]);
 
   const ignoredCategoryIds = useMemo(() => new Set(categories.filter((category) => category.ignore_in_category_analysis).map((category) => category.id)), [categories]);
   const visibleCategories = useMemo(() => categories.filter((category) => !ignoredCategoryIds.has(category.id)), [categories, ignoredCategoryIds]);
@@ -208,6 +213,8 @@ export default function CategoriesPage({
   const previousItems = useMemo(() => (previousCategoryBreakdown.items || []).filter((item) => !ignoredCategoryIds.has(item.category_id)), [previousCategoryBreakdown.items, ignoredCategoryIds]);
   const currentChartItems = useMemo(() => buildVisibleExpenseGroups(categoryBreakdown.chart_items || categoryBreakdown.items, categories, ignoredCategoryIds), [categoryBreakdown.chart_items, categoryBreakdown.items, categories, ignoredCategoryIds]);
   const previousChartItems = useMemo(() => buildVisibleExpenseGroups(previousCategoryBreakdown.chart_items || previousCategoryBreakdown.items, categories, ignoredCategoryIds), [previousCategoryBreakdown.chart_items, previousCategoryBreakdown.items, categories, ignoredCategoryIds]);
+  const currentIncomeChartItems = useMemo(() => buildVisibleExpenseGroups(categoryBreakdown.income_chart_items || categoryBreakdown.income_items, categories, ignoredCategoryIds), [categoryBreakdown.income_chart_items, categoryBreakdown.income_items, categories, ignoredCategoryIds]);
+  const previousIncomeChartItems = useMemo(() => buildVisibleExpenseGroups(previousCategoryBreakdown.income_chart_items || previousCategoryBreakdown.income_items, categories, ignoredCategoryIds), [previousCategoryBreakdown.income_chart_items, previousCategoryBreakdown.income_items, categories, ignoredCategoryIds]);
   const currentById = useMemo(() => new Map(currentItems.map((item) => [item.category_id, Number(item.amount || 0)])), [currentItems]);
   const previousById = useMemo(() => new Map(previousItems.map((item) => [item.category_id, Number(item.amount || 0)])), [previousItems]);
   const rows = useMemo(() => visibleCategories.map((category) => {
@@ -217,7 +224,7 @@ export default function CategoriesPage({
     return { ...category, spent, previous, limit, usage: limit > 0 ? (spent / limit) * 100 : null };
   }).sort((left, right) => right.spent - left.spent || left.name.localeCompare(right.name, language)), [visibleCategories, currentById, previousById, language]);
 
-  const openExpenseDetails = async (group) => {
+  const openCategoryDetails = async (group) => {
     const generation = detailsGenerationRef.current;
     const key = expenseGroupKey(group);
     const cachedGroup = detailedExpenseGroups?.find((item) => expenseGroupKey(item) === key);
@@ -231,7 +238,7 @@ export default function CategoriesPage({
       detailsRequestRef.current = request;
       const breakdown = await request;
       if (generation !== detailsGenerationRef.current) return;
-      const loadedGroups = buildVisibleExpenseGroups(breakdown.chart_items || breakdown.items, categories, ignoredCategoryIds);
+      const loadedGroups = buildVisibleExpenseGroups(categoryAnalysisView === "income" ? breakdown.income_chart_items || breakdown.income_items : breakdown.chart_items || breakdown.items, categories, ignoredCategoryIds);
       setDetailedExpenseGroups(loadedGroups);
       setSelectedExpenseGroup((current) => {
         if (!current) return null;
@@ -248,17 +255,31 @@ export default function CategoriesPage({
 
   const totalExpenses = Math.max(currentChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
   const previousExpenses = Math.max(previousChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
+  const totalIncome = Math.max(currentIncomeChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
+  const previousIncome = Math.max(previousIncomeChartItems.reduce((sum, item) => sum + item.amount, 0), 0);
   const uncategorized = currentById.get(null) || 0;
+  const uncategorizedIncome = currentIncomeChartItems.filter((item) => !(item.category_ids || []).length).reduce((sum, item) => sum + item.amount, 0);
   const categorizedAmount = Math.max(totalExpenses - uncategorized, 0);
+  const categorizedIncome = Math.max(totalIncome - uncategorizedIncome, 0);
   const coverage = totalExpenses ? (categorizedAmount / totalExpenses) * 100 : 0;
+  const incomeCoverage = totalIncome ? (categorizedIncome / totalIncome) * 100 : 0;
   const budgetedRows = rows.filter((row) => row.limit > 0);
   const availableRows = rows.filter((row) => !row.limit || row.limit <= 0);
   const totalLimits = budgetedRows.reduce((sum, row) => sum + row.limit, 0);
   const overCategoryLimit = budgetedRows.filter((row) => row.spent > row.limit);
   const nearCategoryLimit = budgetedRows.filter((row) => row.spent <= row.limit && row.usage >= 80);
   const topCategory = rows.find((row) => row.spent > 0);
+  const topIncomeCategory = currentIncomeChartItems.find((item) => Number(item.amount) > 0);
   const monthChange = changePercentage(totalExpenses, previousExpenses);
-  const chartItems = currentChartItems.filter((item) => Number(item.amount) > 0);
+  const incomeMonthChange = changePercentage(totalIncome, previousIncome);
+  const expenseChartItems = currentChartItems.filter((item) => Number(item.amount) > 0);
+  const incomeChartItems = currentIncomeChartItems.filter((item) => Number(item.amount) > 0);
+  const viewingIncome = categoryAnalysisView === "income";
+  const analysisChartItems = viewingIncome ? incomeChartItems : expenseChartItems;
+  const analysisTotal = viewingIncome ? totalIncome : totalExpenses;
+  const analysisCoverage = viewingIncome ? incomeCoverage : coverage;
+  const analysisTopCategory = viewingIncome ? topIncomeCategory : topCategory;
+  const analysisTopAmount = viewingIncome ? Number(topIncomeCategory?.amount || 0) : Number(topCategory?.spent || 0);
 
   const hasActualIncome = Boolean(budgetPlan?.has_actual_income);
   const isEstimated = Boolean(budgetPlan?.is_estimated);
@@ -545,34 +566,60 @@ export default function CategoriesPage({
 
       <section className="categories-main-grid">
         <article className="card categories-chart-card">
-          <div className="categories-card-heading"><div><p className="eyebrow">{t("categories.distributionEyebrow")}</p><h2>{t("categories.distribution")}</h2></div><div className="categories-analysis-meta"><span>{t("categories.classified")}</span><strong>{coverage.toFixed(0)}%</strong></div></div>
-          {chartItems.length ? <>
+          <div className="categories-card-heading">
+            <div><p className="eyebrow">{t("categories.distributionEyebrow")}</p><h2>{viewingIncome ? t("categories.incomeDistribution") : t("categories.distribution")}</h2></div>
+            <div className="categories-analysis-heading-actions">
+              <div className="category-view-toggle">
+                <button className={!viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryAnalysisView("expenses")}>{t("categories.analysisExpenses")}</button>
+                <button className={viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryAnalysisView("income")}>{t("categories.analysisIncome")}</button>
+              </div>
+              <div className="categories-analysis-meta"><span>{viewingIncome ? t("categories.classifiedIncome") : t("categories.classified")}</span><strong>{analysisCoverage.toFixed(0)}%</strong></div>
+            </div>
+          </div>
+          {analysisChartItems.length ? <>
             <div className="categories-donut">
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
-                  <Pie className="categories-clickable-pie" data={chartItems} dataKey="amount" nameKey="name" innerRadius={72} outerRadius={105} paddingAngle={2} stroke="none" onClick={(entry) => openExpenseDetails(entry?.payload || entry)}>
-                    {chartItems.map((item) => <Cell key={item.category_ids?.join("-") || "uncategorized"} fill={item.color} />)}
+                  <Pie className="categories-clickable-pie" data={analysisChartItems} dataKey="amount" nameKey="name" innerRadius={72} outerRadius={105} paddingAngle={2} stroke="none" onClick={(entry) => openCategoryDetails(entry?.payload || entry)}>
+                    {analysisChartItems.map((item) => <Cell key={item.category_ids?.join("-") || "uncategorized"} fill={item.color} />)}
                   </Pie>
                   <Tooltip content={<CategoryChartTooltip language={language} />} />
                 </PieChart>
               </ResponsiveContainer>
-              <div><span>{t("categories.total")}</span><strong>{formatMoney(totalExpenses, language)}</strong></div>
+              <div><span>{t("categories.total")}</span><strong>{formatMoney(analysisTotal, language)}</strong></div>
             </div>
             <div className="categories-legend">
-              {chartItems.map((item) => (
-                <button type="button" key={item.category_ids?.join("-") || "uncategorized"} onClick={() => openExpenseDetails(item)}>
+              {analysisChartItems.map((item) => (
+                <button type="button" key={item.category_ids?.join("-") || "uncategorized"} onClick={() => openCategoryDetails(item)}>
                   <i style={{ "--category-color": item.color }} />
                   <span><strong>{item.name}</strong><small>{Number(item.percentage).toFixed(1)}%</small></span>
                   <strong>{formatMoney(item.amount, language)}</strong>
                 </button>
               ))}
             </div>
-            {topCategory && <div className="categories-top-category"><TrendingUp size={15} /><span>{t("categories.biggestExpense")}: <strong>{topCategory.name}</strong></span><strong>{formatMoney(topCategory.spent, language)}</strong></div>}
-          </> : <div className="categories-empty"><PieChartIcon size={30} /><p>{t("categories.empty")}</p></div>}
+            {analysisTopCategory && <div className="categories-top-category"><TrendingUp size={15} /><span>{viewingIncome ? t("categories.biggestIncome") : t("categories.biggestExpense")}: <strong>{analysisTopCategory.name}</strong></span><strong>{formatMoney(analysisTopAmount, language)}</strong></div>}
+          </> : <div className="categories-empty"><PieChartIcon size={30} /><p>{viewingIncome ? t("categories.emptyIncome") : t("categories.empty")}</p></div>}
         </article>
-        <article className="card categories-insights-card"><div className="categories-card-heading"><div><p className="eyebrow">{t("categories.insightsEyebrow")}</p><h2>{t("categories.insights")}</h2></div></div><div className="categories-insights-list">{overCategoryLimit.length > 0 && <div className="categories-insight danger"><AlertTriangle size={19} /><span><strong>{t("categories.overLimitCount", { count: overCategoryLimit.length })}</strong><small>{overCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}{nearCategoryLimit.length > 0 && <div className="categories-insight warning"><Target size={19} /><span><strong>{t("categories.nearLimitCount", { count: nearCategoryLimit.length })}</strong><small>{nearCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}{uncategorized > 0 && <div className="categories-insight neutral"><Tags size={19} /><span><strong>{t("categories.uncategorizedValue", { value: formatMoney(uncategorized, language) })}</strong><small>{t("categories.uncategorizedHint")}</small></span></div>}{monthChange !== 0 && <div className={`categories-insight ${monthChange > 0 ? "warning" : "success"}`}>{monthChange > 0 ? <TrendingUp size={19} /> : <TrendingDown size={19} />}<span><strong>{monthChange > 0 ? t("categories.spendingIncreased", { value: Math.abs(monthChange).toFixed(1) }) : t("categories.spendingDecreased", { value: Math.abs(monthChange).toFixed(1) })}</strong><small>{t("categories.previousTotal", { value: formatMoney(previousExpenses, language) })}</small></span></div>}{!hasPlannedIncome && totalExpenses > 0 && <div className="categories-insight neutral"><WalletCards size={19} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}{!overCategoryLimit.length && !nearCategoryLimit.length && !uncategorized && monthChange === 0 && <div className="categories-insight success"><CheckCircle2 size={19} /><span><strong>{t("categories.allGood")}</strong><small>{t("categories.allGoodHint")}</small></span></div>}</div></article>
+        <article className="card categories-insights-card">
+          <div className="categories-card-heading"><div><p className="eyebrow">{t("categories.insightsEyebrow")}</p><h2>{viewingIncome ? t("categories.incomeInsights") : t("categories.insights")}</h2></div></div>
+          <div className="categories-insights-list">
+            {viewingIncome ? <>
+              {uncategorizedIncome > 0 && <div className="categories-insight neutral"><Tags size={19} /><span><strong>{t("categories.uncategorizedIncomeValue", { value: formatMoney(uncategorizedIncome, language) })}</strong><small>{t("categories.uncategorizedIncomeHint")}</small></span></div>}
+              {incomeMonthChange !== 0 && <div className={`categories-insight ${incomeMonthChange > 0 ? "success" : "warning"}`}>{incomeMonthChange > 0 ? <TrendingUp size={19} /> : <TrendingDown size={19} />}<span><strong>{incomeMonthChange > 0 ? t("categories.incomeIncreased", { value: Math.abs(incomeMonthChange).toFixed(1) }) : t("categories.incomeDecreased", { value: Math.abs(incomeMonthChange).toFixed(1) })}</strong><small>{t("categories.previousIncomeTotal", { value: formatMoney(previousIncome, language) })}</small></span></div>}
+              {totalIncome <= 0 && <div className="categories-insight neutral"><Banknote size={19} /><span><strong>{t("categories.noIncomeInsights")}</strong><small>{t("categories.noIncomeInsightsHint")}</small></span></div>}
+              {totalIncome > 0 && !uncategorizedIncome && incomeMonthChange === 0 && <div className="categories-insight success"><CheckCircle2 size={19} /><span><strong>{t("categories.incomeAllGood")}</strong><small>{t("categories.incomeAllGoodHint")}</small></span></div>}
+            </> : <>
+              {overCategoryLimit.length > 0 && <div className="categories-insight danger"><AlertTriangle size={19} /><span><strong>{t("categories.overLimitCount", { count: overCategoryLimit.length })}</strong><small>{overCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}
+              {nearCategoryLimit.length > 0 && <div className="categories-insight warning"><Target size={19} /><span><strong>{t("categories.nearLimitCount", { count: nearCategoryLimit.length })}</strong><small>{nearCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}
+              {uncategorized > 0 && <div className="categories-insight neutral"><Tags size={19} /><span><strong>{t("categories.uncategorizedValue", { value: formatMoney(uncategorized, language) })}</strong><small>{t("categories.uncategorizedHint")}</small></span></div>}
+              {monthChange !== 0 && <div className={`categories-insight ${monthChange > 0 ? "warning" : "success"}`}>{monthChange > 0 ? <TrendingUp size={19} /> : <TrendingDown size={19} />}<span><strong>{monthChange > 0 ? t("categories.spendingIncreased", { value: Math.abs(monthChange).toFixed(1) }) : t("categories.spendingDecreased", { value: Math.abs(monthChange).toFixed(1) })}</strong><small>{t("categories.previousTotal", { value: formatMoney(previousExpenses, language) })}</small></span></div>}
+              {!hasPlannedIncome && totalExpenses > 0 && <div className="categories-insight neutral"><WalletCards size={19} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}
+              {!overCategoryLimit.length && !nearCategoryLimit.length && !uncategorized && monthChange === 0 && <div className="categories-insight success"><CheckCircle2 size={19} /><span><strong>{t("categories.allGood")}</strong><small>{t("categories.allGoodHint")}</small></span></div>}
+            </>}
+          </div>
+        </article>
       </section>
-      {selectedExpenseGroup && <CategoryExpenseDetails group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} onClose={() => setSelectedExpenseGroup(null)} />}
+      {selectedExpenseGroup && <CategoryExpenseDetails group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
     </div>
   );
 }

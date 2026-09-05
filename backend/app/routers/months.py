@@ -264,6 +264,8 @@ def get_category_breakdown(
     expense_groups: dict[tuple[int, ...], Decimal] = {}
     expense_group_details: dict[tuple[int, ...], list[dict]] = {}
     income_totals: dict[int | None, Decimal] = {}
+    income_groups: dict[tuple[int, ...], Decimal] = {}
+    income_group_details: dict[tuple[int, ...], list[dict]] = {}
     categories = {
         category.id: category
         for category in db.query(Category).filter(Category.user_id == current_user.id).all()
@@ -289,6 +291,13 @@ def get_category_breakdown(
         expense_groups[group_key] = expense_groups.get(group_key, Decimal("0.00")) + amount
         if detail is not None:
             expense_group_details.setdefault(group_key, []).append(detail)
+
+    def add_income_amount(item, amount: Decimal, detail: dict | None = None) -> None:
+        selected_ids = selected_category_ids(item)
+        group_key = tuple(sorted(selected_ids))
+        income_groups[group_key] = income_groups.get(group_key, Decimal("0.00")) + amount
+        if detail is not None:
+            income_group_details.setdefault(group_key, []).append(detail)
 
     def add_categorized_amount(target: dict[int | None, Decimal], item, amount: Decimal) -> None:
         selected_ids = selected_category_ids(item)
@@ -337,6 +346,17 @@ def get_category_breakdown(
     )
     for transaction in income_transactions:
         add_categorized_amount(income_totals, transaction, transaction.amount)
+        add_income_amount(
+            transaction,
+            transaction.amount,
+            {
+                "source_type": "transaction",
+                "source_id": transaction.id,
+                "description": transaction.description or "Renda sem descrição",
+                "amount": transaction.amount,
+                "date": transaction.date,
+            } if include_details else None,
+        )
 
     invoice_rows = (
         db.query(Invoice.id, Invoice.due_date, InvoiceTemplate.name.label("invoice_name"))
@@ -422,11 +442,11 @@ def get_category_breakdown(
         result.sort(key=lambda item: item.amount, reverse=True)
         return source_total, result
 
-    def build_expense_groups():
-        source_total = sum(expense_groups.values(), Decimal("0.00"))
+    def build_groups(source_groups, source_group_details):
+        source_total = sum(source_groups.values(), Decimal("0.00"))
         percentage_base = source_total if source_total > 0 else Decimal("0.00")
         result = []
-        for category_ids, amount in expense_groups.items():
+        for category_ids, amount in source_groups.items():
             if amount == 0:
                 continue
             group_categories = sorted(
@@ -444,7 +464,7 @@ def get_category_breakdown(
                     percentage=percentage.quantize(Decimal("0.01")),
                     details=(
                         sorted(
-                            expense_group_details.get(category_ids, []),
+                            source_group_details.get(category_ids, []),
                             key=lambda detail: (detail["date"], detail["source_id"]),
                             reverse=True,
                         )
@@ -456,18 +476,20 @@ def get_category_breakdown(
         result.sort(key=lambda item: item.amount, reverse=True)
         return source_total, result
 
-    categorized_total, chart_result = build_expense_groups()
+    categorized_total, chart_result = build_groups(expense_groups, expense_group_details)
     _, result = build_items(totals, categorized_total)
     income_categorized_total, income_result = build_items(income_totals)
+    income_total, income_chart_result = build_groups(income_groups, income_group_details)
 
     return CategoryBreakdownOut(
         total_expenses=categorized_total,
         categorized_total=categorized_total,
         items=result,
         chart_items=chart_result,
-        total_income=income_categorized_total,
+        total_income=income_total,
         income_categorized_total=income_categorized_total,
         income_items=income_result,
+        income_chart_items=income_chart_result,
     )
 
 

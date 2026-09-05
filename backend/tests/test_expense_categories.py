@@ -129,6 +129,7 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
 
         summary_result = get_category_breakdown(2026, 8, self.db, self.user)
         self.assertTrue(all(not item.details for item in summary_result.chart_items))
+        self.assertTrue(all(not item.details for item in summary_result.income_chart_items))
 
         result = get_category_breakdown(2026, 8, self.db, self.user, include_details=True)
 
@@ -156,6 +157,17 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
             ("Alimentação", Decimal("300.00")),
             ("Sem categoria", Decimal("100.00")),
         ])
+        self.assertEqual([(item.name, item.amount) for item in result.income_chart_items], [
+            ("Alimentação", Decimal("300.00")),
+            ("Sem categoria", Decimal("100.00")),
+        ])
+        income_group = next(item for item in result.income_chart_items if item.name == "Alimentação")
+        self.assertEqual(
+            [(detail.source_type, detail.description, detail.amount, detail.date) for detail in income_group.details],
+            [("transaction", "Salário", Decimal("300.00"), date(2026, 8, 7))],
+        )
+        uncategorized_income = next(item for item in result.income_chart_items if item.name == "Sem categoria")
+        self.assertEqual(uncategorized_income.details[0].description, "Outro ganho")
 
     def test_multiple_categories_use_full_limits_and_combined_chart_group(self):
         food = Category(user_id=self.user.id, name="Alimentação", color="#14A078")
