@@ -95,6 +95,13 @@ export function createTransaction(payload) {
   });
 }
 
+export function createTransactionBatch(payload) {
+  return request("/transactions/batch", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function updateTransaction(id, payload) {
   return request(`/transactions/${id}`, {
     method: "PUT",

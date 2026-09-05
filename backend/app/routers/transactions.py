@@ -1,11 +1,11 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Receivable, Recurrence, Transaction, User
 from app.schemas.receivables import ReceivableExpenseLinkIn
-from app.schemas.transactions import TransactionCreate, TransactionOut, TransactionUpdate
+from app.schemas.transactions import TransactionBatchCreate, TransactionBatchOut, TransactionCreate, TransactionOut, TransactionUpdate
 from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
@@ -151,6 +151,66 @@ def create_transaction(
     db.commit()
     db.refresh(transaction)
     return transaction
+
+
+@router.post("/batch", response_model=TransactionBatchOut)
+def create_transaction_batch(
+    payload: TransactionBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=400, detail="End date must be on or after start date")
+    if (payload.end_date - payload.start_date).days >= 366:
+        raise HTTPException(status_code=400, detail="Batch period cannot exceed 366 days")
+
+    normalized_rules = []
+    expected_count = 0
+    for rule in payload.rules:
+        weekdays = set(rule.weekdays)
+        if any(weekday < 0 or weekday > 6 for weekday in weekdays):
+            raise HTTPException(status_code=400, detail="Weekdays must be between 0 and 6")
+        normalized_rules.append((rule, weekdays))
+
+    cursor = payload.start_date
+    while cursor <= payload.end_date:
+        expected_count += sum(cursor.weekday() in weekdays for _, weekdays in normalized_rules)
+        cursor += timedelta(days=1)
+    if expected_count == 0:
+        raise HTTPException(status_code=400, detail="The selected rules do not generate any transactions")
+    if expected_count > 1000:
+        raise HTTPException(status_code=400, detail="A batch can create at most 1000 transactions")
+
+    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
+    today = date.today()
+    transactions = []
+    cursor = payload.start_date
+    while cursor <= payload.end_date:
+        for rule, weekdays in normalized_rules:
+            if cursor.weekday() not in weekdays:
+                continue
+            transaction = Transaction(
+                user_id=current_user.id,
+                date=cursor,
+                type=payload.type,
+                amount=rule.amount,
+                description=(rule.description or "").strip() or None,
+                is_future=cursor > today,
+                category_id=selected_categories[0].id if selected_categories else None,
+            )
+            set_item_categories(transaction, selected_categories)
+            db.add(transaction)
+            transactions.append(transaction)
+        cursor += timedelta(days=1)
+
+    try:
+        db.commit()
+        for transaction in transactions:
+            db.refresh(transaction)
+    except Exception:
+        db.rollback()
+        raise
+    return TransactionBatchOut(created_count=len(transactions), transactions=transactions)
 
 
 @router.put("/{transaction_id}", response_model=TransactionOut)

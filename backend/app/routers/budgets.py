@@ -212,23 +212,30 @@ def update_monthly_budget_plan(
         invalid_ids = requested_ids - candidate_ids
         if invalid_ids:
             raise HTTPException(status_code=422, detail="Only income transactions from configured income categories in the selected month can be selected")
-        previous_ids = {row.transaction_id for row in plan.selected_incomes}
-        previous_reserve_ids = {row.transaction_id for row in plan.selected_incomes if row.include_in_reserve}
+        selected_rows = list(plan.selected_incomes)
+        rows_by_transaction_id = {row.transaction_id: row for row in selected_rows}
+        previous_ids = set(rows_by_transaction_id)
+        previous_reserve_ids = {row.transaction_id for row in selected_rows if row.include_in_reserve}
         if "reserve_transaction_ids" in data:
             reserve_ids = set(data["reserve_transaction_ids"] or [])
         else:
             reserve_ids = (previous_reserve_ids & requested_ids) | (requested_ids - previous_ids)
         if not reserve_ids.issubset(requested_ids):
             raise HTTPException(status_code=422, detail="Reserve income transactions must also be selected for the monthly budget")
-        db.query(MonthlyBudgetIncome).filter(MonthlyBudgetIncome.plan_id == plan.id).delete(synchronize_session=False)
-        db.add_all([
+
+        for transaction_id, row in rows_by_transaction_id.items():
+            if transaction_id not in requested_ids:
+                db.delete(row)
+            else:
+                row.include_in_reserve = transaction_id in reserve_ids
+
+        plan.selected_incomes.extend(
             MonthlyBudgetIncome(
-                plan_id=plan.id,
                 transaction_id=transaction_id,
                 include_in_reserve=transaction_id in reserve_ids,
             )
-            for transaction_id in sorted(requested_ids)
-        ])
+            for transaction_id in sorted(requested_ids - previous_ids)
+        )
     elif "reserve_transaction_ids" in data:
         reserve_ids = set(data["reserve_transaction_ids"] or [])
         selected_rows = list(plan.selected_incomes)

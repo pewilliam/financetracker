@@ -22,11 +22,12 @@ import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
 import DeleteTransactionModal from "../../modals/DeleteTransactionModal.jsx";
+import BatchTransactionModal from "../../modals/BatchTransactionModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -82,6 +83,7 @@ export default function AppShell() {
     return () => media.removeEventListener("change", closeMobileDrawer);
   }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(false);
@@ -103,7 +105,7 @@ export default function AppShell() {
   const monthInputValue = `${year}-${String(month).padStart(2, "0")}`;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
-  const overlayOpen = drawerOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
+  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
   const bodyLocked = overlayOpen;
 
   useEffect(() => {
@@ -490,6 +492,24 @@ export default function AppShell() {
     }
   };
 
+  const saveTransactionBatch = async (payload) => {
+    try {
+      const result = await createTransactionBatch(payload);
+      setBatchModalOpen(false);
+      toast.success(`${result.created_count} ${result.created_count === 1 ? "lançamento adicionado" : "lançamentos adicionados"}!`);
+      await syncMonthCollections();
+      return result;
+    } catch (error) {
+      const details = String(error?.message || "");
+      toast.error(details.includes("1000")
+        ? "O lote pode ter no máximo 1.000 lançamentos."
+        : details.includes("Category not found")
+          ? "A categoria selecionada não está mais disponível."
+          : "Erro ao adicionar lançamentos em lote.");
+      throw error;
+    }
+  };
+
   const saveInstallmentCategory = async (id, categoryIds) => {
     try {
       const updated = await updateInstallmentCategory(id, categoryIds);
@@ -599,11 +619,8 @@ export default function AppShell() {
 
   const saveBudgetPlanning = async (planPayload, reservePayload) => {
     try {
-      await Promise.all([
-        updateMonthlyBudgetPlan(year, month, planPayload),
-        updateBudgetReserveRule(year, month, reservePayload),
-      ]);
-      const saved = await getMonthlyBudgetPlan(year, month);
+      await updateMonthlyBudgetPlan(year, month, planPayload);
+      const saved = await updateBudgetReserveRule(year, month, reservePayload);
       setBudgetPlan(saved);
       toast.success(t("categories.planningSaved"));
       return saved;
@@ -821,7 +838,7 @@ export default function AppShell() {
           {loading ? <Skeleton /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} openBatchForm={() => setBatchModalOpen(true)} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
@@ -837,6 +854,7 @@ export default function AppShell() {
       </main>
 
       <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
+      <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} onCreateCategory={saveCategory} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
       {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}

@@ -341,6 +341,7 @@ export const enUS = {
     closing: "Closing",
     monthlyTable: "Monthly table",
     months: "Months",
+    addBatch: "Add in bulk",
     expenseChip: "EXPENSE",
     incomeChip: "INCOME",
     balanceChip: "BALANCE",

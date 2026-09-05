@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Category, Transaction, User
+from app.models import Category, MonthlyBudgetIncome, Transaction, User
 from app.routers.budgets import get_monthly_budget_plan, update_budget_reserve_rule, update_monthly_budget_plan
 from app.schemas.budgets import BudgetReserveRuleUpdate, MonthlyBudgetPlanUpdate
 
@@ -122,6 +122,39 @@ class MonthlyBudgetPlanningTests(unittest.TestCase):
         self.assertEqual(fixed.reserve_amount, Decimal("1782.40"))
         self.assertEqual(fixed.available_budget, Decimal("120.00"))
         self.assertTrue(fixed.reserve_capped)
+
+    def test_resaving_same_income_selection_updates_rows_in_place(self):
+        update_monthly_budget_plan(
+            self.year,
+            self.month,
+            MonthlyBudgetPlanUpdate(
+                transaction_ids=[self.salary.id, self.extra.id],
+                reserve_transaction_ids=[self.salary.id],
+            ),
+            self.db,
+            self.user,
+        )
+        salary_selection = self.db.query(MonthlyBudgetIncome).filter_by(transaction_id=self.salary.id).one()
+
+        result = update_monthly_budget_plan(
+            self.year,
+            self.month,
+            MonthlyBudgetPlanUpdate(
+                transaction_ids=[self.salary.id, self.extra.id],
+                reserve_transaction_ids=[self.extra.id],
+            ),
+            self.db,
+            self.user,
+        )
+
+        saved_salary_selection = self.db.query(MonthlyBudgetIncome).filter_by(transaction_id=self.salary.id).one()
+        self.assertIs(saved_salary_selection, salary_selection)
+        self.assertFalse(saved_salary_selection.include_in_reserve)
+        self.assertEqual(result.reserve_income_count, 1)
+        self.assertEqual(
+            {item.description: item.included_in_reserve for item in result.income_candidates},
+            {"Salário": False, "Renda extra": True},
+        )
 
     def test_income_candidates_follow_category_preference_instead_of_name(self):
         self.income_category.include_in_income_planning = False

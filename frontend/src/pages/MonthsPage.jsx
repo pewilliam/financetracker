@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Grid2X2, List, Plus } from "lucide-react";
+import { ChevronDown, Grid2X2, Layers3, List, Plus } from "lucide-react";
 import MonthlyTable from "../components/MonthlyTable.jsx";
 import MonthCard from "../components/months/MonthCard.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -7,7 +7,7 @@ import { formatMoney } from "../utils/format.js";
 import { getMonthPeriod, quickAddDate } from "../app/helpers.js";
 import { MONTHS_VIEW_MODE_KEY } from "../app/constants.js";
 
-export default function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction }) {
+export default function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, openBatchForm, setEditing, setDrawerOpen, removeTransaction }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const tableRef = useRef(null);
@@ -89,6 +89,7 @@ export default function MonthsPage({ monthData, summary, monthCards, year, month
           )}
         </div>
         <div className="view-actions">
+          <button className="btn month-batch-btn" type="button" onClick={openBatchForm}><Layers3 size={16} /> {tt("monthlyTable.addBatch", "Adicionar em lote")}</button>
           <div className="view-toggle" aria-label="Alternar visualização">
             <button className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
             <button className={viewMode === "table" ? "active" : ""} onClick={() => changeView("table")}><List size={16} /> Tabela</button>
