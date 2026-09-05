@@ -162,6 +162,7 @@ export default function CategoriesPage({
   const [planningSaving, setPlanningSaving] = useState(false);
   const [incomeMode, setIncomeMode] = useState("transactions");
   const [selectedIncomeIds, setSelectedIncomeIds] = useState([]);
+  const [reserveIncomeIds, setReserveIncomeIds] = useState([]);
   const [manualIncome, setManualIncome] = useState("");
   const [expectedIncome, setExpectedIncome] = useState("");
   const [reserveType, setReserveType] = useState("percentage");
@@ -181,6 +182,7 @@ export default function CategoriesPage({
     if (!budgetPlan) return;
     setIncomeMode(budgetPlan.income_mode || "transactions");
     setSelectedIncomeIds((budgetPlan.income_candidates || []).filter((item) => item.selected).map((item) => item.transaction_id));
+    setReserveIncomeIds((budgetPlan.income_candidates || []).filter((item) => item.selected && item.included_in_reserve !== false).map((item) => item.transaction_id));
     setManualIncome(moneyDraft(budgetPlan.manual_income, language));
     setExpectedIncome(moneyDraft(budgetPlan.expected_income, language));
     setReserveType(budgetPlan.reserve_rule?.rule_type || "percentage");
@@ -273,13 +275,15 @@ export default function CategoriesPage({
 
   const selectedCandidates = (budgetPlan?.income_candidates || []).filter((item) => selectedIncomeIds.includes(item.transaction_id));
   const draftTransactionIncome = selectedCandidates.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const draftReserveTransactionIncome = selectedCandidates.filter((item) => reserveIncomeIds.includes(item.transaction_id)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const draftManualIncome = parseTypedMoneyInput(manualIncome, language);
   const draftActualIncome = incomeMode === "manual" ? draftManualIncome : draftTransactionIncome;
   const draftExpectedIncome = parseTypedMoneyInput(expectedIncome, language);
   const draftPlanningIncome = draftActualIncome > 0 ? draftActualIncome : draftExpectedIncome;
+  const draftReserveBaseIncome = incomeMode === "transactions" && draftActualIncome > 0 ? draftReserveTransactionIncome : draftPlanningIncome;
   const draftReserveValue = parseTypedMoneyInput(reserveValue, language);
-  const draftReserveRequested = reserveType === "percentage" ? draftPlanningIncome * Math.min(draftReserveValue, 100) / 100 : draftReserveValue;
-  const draftReserveAmount = draftPlanningIncome > 0 ? Math.min(draftReserveRequested, draftPlanningIncome) : 0;
+  const draftReserveRequested = reserveType === "percentage" ? draftReserveBaseIncome * Math.min(draftReserveValue, 100) / 100 : draftReserveValue;
+  const draftReserveAmount = draftReserveBaseIncome > 0 ? Math.min(draftReserveRequested, draftReserveBaseIncome) : 0;
   const reserveInputValid = reserveType !== "percentage" || draftReserveValue <= 100;
 
   const saveLimit = async (category) => {
@@ -308,12 +312,21 @@ export default function CategoriesPage({
     try { await onUpdateCategory(category.id, { monthly_limit: null }); }
     finally { setSavingId(null); }
   };
-  const toggleIncome = (id) => setSelectedIncomeIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleIncome = (id) => {
+    if (selectedIncomeIds.includes(id)) {
+      setSelectedIncomeIds((current) => current.filter((item) => item !== id));
+      setReserveIncomeIds((current) => current.filter((item) => item !== id));
+    } else {
+      setSelectedIncomeIds((current) => [...current, id]);
+      setReserveIncomeIds((current) => current.includes(id) ? current : [...current, id]);
+    }
+  };
+  const toggleReserveIncome = (id) => setReserveIncomeIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const savePlanning = async () => {
     if (!reserveInputValid || planningSaving) return;
     setPlanningSaving(true);
     try {
-      await onSavePlanning({ income_mode: incomeMode, manual_income: manualIncome.trim() ? draftManualIncome : null, expected_income: expectedIncome.trim() ? draftExpectedIncome : null, transaction_ids: selectedIncomeIds }, { rule_type: reserveType, value: draftReserveValue });
+      await onSavePlanning({ income_mode: incomeMode, manual_income: manualIncome.trim() ? draftManualIncome : null, expected_income: expectedIncome.trim() ? draftExpectedIncome : null, transaction_ids: selectedIncomeIds, reserve_transaction_ids: reserveIncomeIds.filter((id) => selectedIncomeIds.includes(id)) }, { rule_type: reserveType, value: draftReserveValue });
       setPlanningOpen(false);
     } finally { setPlanningSaving(false); }
   };
@@ -367,7 +380,22 @@ export default function CategoriesPage({
               <div className="categories-reserve-input">
                 {reserveType === "percentage" ? <label><span>{t("categories.wantReserve")}</span><span className="categories-percent-field"><input inputMode="decimal" value={reserveValue} onChange={(event) => setReserveValue(event.target.value)} /><b>%</b></span><span>{t("categories.ofIncome")}</span></label> : <label><span>{t("categories.wantReserve")}</span><span className="categories-money-field"><span>R$</span><input inputMode="decimal" value={reserveValue} onChange={(event) => setReserveValue(event.target.value)} /></span><span>{t("categories.perMonth")}</span></label>}
                 {!reserveInputValid && <small className="field-error">{t("categories.invalidReservePercentage")}</small>}
-                {draftPlanningIncome > 0 ? <p>{draftActualIncome <= 0 ? t("categories.estimatedCalculation") : t("categories.currentIncomeCalculation")} <strong>{formatMoney(draftReserveAmount, language)}</strong>{reserveType === "fixed" && draftActualIncome > 0 ? ` · ${safePercent(draftReserveAmount, draftActualIncome).toFixed(1)}%` : ""}</p> : <p>{t("categories.reserveWithoutIncome")}</p>}
+                {draftPlanningIncome > 0 ? draftReserveBaseIncome > 0 ? <p>{draftActualIncome <= 0 ? t("categories.estimatedCalculation") : t("categories.currentIncomeCalculation")} <strong>{formatMoney(draftReserveAmount, language)}</strong>{reserveType === "fixed" && draftActualIncome > 0 ? ` · ${safePercent(draftReserveAmount, draftReserveBaseIncome).toFixed(1)}%` : ""}</p> : <p>{t("categories.reserveWithoutSource")}</p> : <p>{t("categories.reserveWithoutIncome")}</p>}
+              </div>
+              <div className="categories-reserve-sources">
+                <div><strong>{t("categories.reserveSources")}</strong><small>{t("categories.reserveSourcesHint")}</small></div>
+                {incomeMode === "transactions" ? selectedCandidates.length ? (
+                  <div className="categories-reserve-source-list">
+                    {selectedCandidates.map((item) => (
+                      <label key={item.transaction_id}>
+                        <input type="checkbox" checked={reserveIncomeIds.includes(item.transaction_id)} onChange={() => toggleReserveIncome(item.transaction_id)} />
+                        <span>{item.description || t("categories.incomeWithoutDescription")}</span>
+                        <strong>{formatMoney(item.amount, language)}</strong>
+                      </label>
+                    ))}
+                  </div>
+                ) : <small className="categories-reserve-source-empty">{t("categories.noReserveSources")}</small> : <small className="categories-reserve-source-empty">{t("categories.manualReserveSource")}</small>}
+                <div className="categories-reserve-source-total"><span>{t("categories.reserveBase")}</span><strong>{formatMoney(draftReserveBaseIncome, language)}</strong></div>
               </div>
             </div>
             <div className="categories-planning-actions"><button className="btn btn-ghost" type="button" onClick={() => setPlanningOpen(false)}>{t("actions.cancel")}</button><button className="btn btn-primary" type="button" disabled={!reserveInputValid || planningSaving} onClick={savePlanning}>{planningSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />} {t("categories.savePlanning")}</button></div>

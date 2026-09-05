@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -42,6 +42,7 @@ class MonthlyBudgetIncome(Base):
         ForeignKey("transactions.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    include_in_reserve = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
     plan = relationship("MonthlyBudgetPlan", back_populates="selected_incomes")

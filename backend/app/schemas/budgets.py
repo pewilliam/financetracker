@@ -13,6 +13,7 @@ class BudgetIncomeCandidateOut(APIModel):
     date: date
     amount: Decimal
     selected: bool = False
+    included_in_reserve: bool = False
     received: bool = False
 
 
@@ -36,6 +37,8 @@ class MonthlyBudgetPlanOut(APIModel):
     pending_income: Decimal = Decimal("0.00")
     selected_income_total: Decimal = Decimal("0.00")
     planning_income: Decimal = Decimal("0.00")
+    reserve_base_income: Decimal = Decimal("0.00")
+    reserve_income_count: int = 0
     has_actual_income: bool = False
     is_estimated: bool = False
     reserve_rule: BudgetReserveRuleOut
@@ -50,6 +53,7 @@ class MonthlyBudgetPlanUpdate(APIModel):
     manual_income: Optional[Decimal] = Field(default=None, ge=0)
     expected_income: Optional[Decimal] = Field(default=None, ge=0)
     transaction_ids: Optional[list[int]] = None
+    reserve_transaction_ids: Optional[list[int]] = None
 
 
 class BudgetReserveRuleUpdate(APIModel):

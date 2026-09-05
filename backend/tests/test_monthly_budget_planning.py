@@ -82,6 +82,47 @@ class MonthlyBudgetPlanningTests(unittest.TestCase):
         self.assertTrue(result.has_actual_income)
         self.assertFalse(result.is_estimated)
 
+    def test_only_chosen_income_sources_compose_the_reserve_base(self):
+        selected = update_monthly_budget_plan(
+            self.year,
+            self.month,
+            MonthlyBudgetPlanUpdate(
+                transaction_ids=[self.salary.id, self.extra.id],
+                reserve_transaction_ids=[self.salary.id],
+            ),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(selected.planning_income, Decimal("1902.40"))
+        self.assertEqual(selected.reserve_base_income, Decimal("1782.40"))
+        self.assertEqual(selected.reserve_income_count, 1)
+        self.assertEqual(
+            {item.description: item.included_in_reserve for item in selected.income_candidates},
+            {"Salário": True, "Renda extra": False},
+        )
+
+        percentage = update_budget_reserve_rule(
+            self.year,
+            self.month,
+            BudgetReserveRuleUpdate(rule_type="percentage", value=Decimal("20.00")),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(percentage.reserve_amount, Decimal("356.48"))
+        self.assertEqual(percentage.available_budget, Decimal("1545.92"))
+
+        fixed = update_budget_reserve_rule(
+            self.year,
+            self.month,
+            BudgetReserveRuleUpdate(rule_type="fixed", value=Decimal("1800.00")),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(fixed.reserve_amount, Decimal("1782.40"))
+        self.assertEqual(fixed.available_budget, Decimal("120.00"))
+        self.assertTrue(fixed.reserve_capped)
+
     def test_income_candidates_follow_category_preference_instead_of_name(self):
         self.income_category.include_in_income_planning = False
         self.other_category.include_in_income_planning = True

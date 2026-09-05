@@ -97,6 +97,11 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
         row.transaction_id
         for row in (plan.selected_incomes if plan else [])
     }
+    reserve_ids = {
+        row.transaction_id
+        for row in (plan.selected_incomes if plan else [])
+        if row.include_in_reserve
+    }
     candidate_output = [
         BudgetIncomeCandidateOut(
             transaction_id=transaction.id,
@@ -104,11 +109,13 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
             date=transaction.date,
             amount=_money(transaction.amount),
             selected=transaction.id in selected_ids,
+            included_in_reserve=transaction.id in reserve_ids,
             received=transaction.date <= date.today(),
         )
         for transaction in candidates
     ]
     selected_candidates = [item for item in candidate_output if item.selected]
+    reserve_candidates = [item for item in selected_candidates if item.included_in_reserve]
     received_candidates = [item for item in selected_candidates if item.received]
     pending_candidates = [item for item in selected_candidates if not item.received]
     income_mode = plan.income_mode if plan else "transactions"
@@ -121,6 +128,11 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
     transaction_planning_income = selected_income_total
     active_income = received_income if income_mode == "manual" else transaction_planning_income
     planning_income = active_income if active_income > 0 else _money(expected_income)
+    reserve_base_income = (
+        planning_income
+        if income_mode == "manual" or active_income <= 0
+        else _money(sum((item.amount for item in reserve_candidates), Decimal("0.00")))
+    )
     is_estimated = (
         (income_mode == "transactions" and pending_income > 0)
         or (active_income <= 0 and planning_income > 0)
@@ -130,10 +142,10 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
     rule_type = rule.rule_type if rule else "percentage"
     rule_value = _money(rule.value) if rule else Decimal("0.00")
     if rule_type == "percentage":
-        reserve_requested = _money(planning_income * rule_value / Decimal("100"))
+        reserve_requested = _money(reserve_base_income * rule_value / Decimal("100"))
     else:
         reserve_requested = rule_value
-    reserve_amount = min(reserve_requested, planning_income) if planning_income > 0 else Decimal("0.00")
+    reserve_amount = min(reserve_requested, reserve_base_income) if reserve_base_income > 0 else Decimal("0.00")
     available_budget = max(planning_income - reserve_amount, Decimal("0.00"))
 
     return MonthlyBudgetPlanOut(
@@ -149,6 +161,8 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
         pending_income=pending_income if income_mode == "transactions" else Decimal("0.00"),
         selected_income_total=selected_income_total,
         planning_income=planning_income,
+        reserve_base_income=reserve_base_income,
+        reserve_income_count=len(reserve_candidates) if income_mode == "transactions" and active_income > 0 else 0,
         has_actual_income=has_actual_income,
         is_estimated=is_estimated,
         reserve_rule=BudgetReserveRuleOut(
@@ -159,7 +173,7 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
         ),
         reserve_requested=reserve_requested,
         reserve_amount=_money(reserve_amount),
-        reserve_capped=planning_income > 0 and reserve_requested > planning_income,
+        reserve_capped=reserve_base_income > 0 and reserve_requested > reserve_base_income,
         available_budget=_money(available_budget),
     )
 
@@ -198,11 +212,31 @@ def update_monthly_budget_plan(
         invalid_ids = requested_ids - candidate_ids
         if invalid_ids:
             raise HTTPException(status_code=422, detail="Only income transactions from configured income categories in the selected month can be selected")
+        previous_ids = {row.transaction_id for row in plan.selected_incomes}
+        previous_reserve_ids = {row.transaction_id for row in plan.selected_incomes if row.include_in_reserve}
+        if "reserve_transaction_ids" in data:
+            reserve_ids = set(data["reserve_transaction_ids"] or [])
+        else:
+            reserve_ids = (previous_reserve_ids & requested_ids) | (requested_ids - previous_ids)
+        if not reserve_ids.issubset(requested_ids):
+            raise HTTPException(status_code=422, detail="Reserve income transactions must also be selected for the monthly budget")
         db.query(MonthlyBudgetIncome).filter(MonthlyBudgetIncome.plan_id == plan.id).delete(synchronize_session=False)
         db.add_all([
-            MonthlyBudgetIncome(plan_id=plan.id, transaction_id=transaction_id)
+            MonthlyBudgetIncome(
+                plan_id=plan.id,
+                transaction_id=transaction_id,
+                include_in_reserve=transaction_id in reserve_ids,
+            )
             for transaction_id in sorted(requested_ids)
         ])
+    elif "reserve_transaction_ids" in data:
+        reserve_ids = set(data["reserve_transaction_ids"] or [])
+        selected_rows = list(plan.selected_incomes)
+        selected_ids = {row.transaction_id for row in selected_rows}
+        if not reserve_ids.issubset(selected_ids):
+            raise HTTPException(status_code=422, detail="Reserve income transactions must also be selected for the monthly budget")
+        for row in selected_rows:
+            row.include_in_reserve = row.transaction_id in reserve_ids
 
     db.commit()
     return _build_plan(db, current_user.id, year, month)
