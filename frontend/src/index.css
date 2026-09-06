@@ -6080,7 +6080,6 @@ select {
 }
 .months-tutorial-layer .simulation-tutorial-spotlight {
   box-shadow: 0 0 0 9999px rgba(7,18,14,0.64), 0 0 0 5px rgba(60,200,140,0.18);
-  transition: none;
 }
 .simulation-tutorial-card {
   position: fixed;
