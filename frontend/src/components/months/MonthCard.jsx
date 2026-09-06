@@ -4,7 +4,7 @@ import { formatMoney } from "../../utils/format.js";
 import AnimatedMoney from "../common/AnimatedMoney.jsx";
 import { formatTransactionCount, getMonthPeriod } from "../../app/helpers.js";
 
-export default function MonthCard({ item, onView, onQuickAdd }) {
+export default function MonthCard({ item, onView, onQuickAdd, tourTarget }) {
   const { language } = useI18n();
   const period = getMonthPeriod(item);
   const isCurrent = period === "current";
@@ -47,7 +47,7 @@ export default function MonthCard({ item, onView, onQuickAdd }) {
   };
 
   return (
-    <article className={`month-card ${period}`}>
+    <article className={`month-card ${period}`} data-months-tour={tourTarget}>
       <header className="month-card-head">
         <div className="month-card-title">
           <h3>{normalizedMonthName}</h3>

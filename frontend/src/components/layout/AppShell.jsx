@@ -852,7 +852,7 @@ export default function AppShell() {
                 <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
                 <h1>{t("app.title")}</h1>
               </div>
-              <div className="toolbar">
+              <div className="toolbar" data-months-tour={location.pathname === "/meses" ? "period" : undefined}>
                 {!viewingCurrentMonth && (
                   <button className="btn month-current-btn" type="button" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}>
                     <CalendarClock size={16} /> {t("actions.currentMonth")}
@@ -861,7 +861,7 @@ export default function AppShell() {
                 <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
                 <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
                 <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
-                <button className="btn btn-primary header-new-btn" type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
+                <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
           )}

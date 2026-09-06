@@ -31,7 +31,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
         return (
           <div key={day.date} className={weekSeparator ? "week-block" : ""}>
             {weekSeparator && <div className="week-separator" />}
-            <div className={`day-row ${future ? "future" : ""}`}>
+            <div className={`day-row ${future ? "future" : ""}`} data-months-tour={index === 0 ? "entries" : undefined}>
               <div className="day-date">
                 {future && <Clock3 size={15} />}
                 <span>{formatDateWithWeekday(day.date)}</span>
@@ -82,7 +82,7 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
         );
       })}
 
-      <div className="month-footer">
+      <div className="month-footer" data-months-tour="summary">
         {summary && (
           <div className="month-totals">
             <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
