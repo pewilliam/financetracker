@@ -448,7 +448,6 @@ export default function AppShell() {
   };
 
   const toggleTemplate = async (template) => {
-    if (template.active && !window.confirm(`Desativar ${template.name}? As faturas existentes continuam, mas não será possível criar novas.`)) return;
     try {
       await toggleInvoiceTemplate(template.id);
       toast.success(template.active ? "Modelo desativado" : "Modelo reativado");

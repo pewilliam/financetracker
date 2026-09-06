@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { Plus, Power, RotateCcw, Trash2 } from "lucide-react";
 import InvoiceTemplateModal from "../modals/InvoiceTemplateModal.jsx";
+import InvoiceTemplateActionModal from "../modals/InvoiceTemplateActionModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { defaultTemplateForm, normalizeInvoiceColor } from "../app/helpers.js";
 
@@ -11,6 +12,7 @@ export default function InvoiceTemplatesPage({ templates, onSave, onToggle, onDe
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [editingTemplate, setEditingTemplate] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
 
   useEffect(() => {
     if (!location.hash) return;
@@ -49,12 +51,12 @@ export default function InvoiceTemplatesPage({ templates, onSave, onToggle, onDe
             <span>{template.pending_invoices} {tt("invoiceModels.pendingAbbr", "pend.")}</span>
             <div className="template-actions">
               <button className="btn btn-ghost compact" onClick={() => setEditingTemplate(template)}>{tt("invoiceModels.edit", "Editar")}</button>
-              <button className="btn btn-ghost compact" onClick={() => onToggle(template)}>
+              <button className="btn btn-ghost compact" onClick={() => template.active ? setPendingAction({ action: "disable", template }) : onToggle(template)}>
                 {template.active ? <Power size={15} /> : <RotateCcw size={15} />}
                 {template.active ? tt("invoiceModels.disable", "Desativar") : tt("invoiceModels.reactivate", "Reativar")}
               </button>
-              {!template.active && template.pending_invoices === 0 && template.total_invoices === 0 && (
-                <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(template)}><Trash2 size={15} /> {tt("invoiceModels.delete", "Excluir")}</button>
+              {!template.active && template.can_delete && (
+                <button className="btn btn-ghost compact danger-text" onClick={() => setPendingAction({ action: "delete", template })}><Trash2 size={15} /> {tt("invoiceModels.delete", "Excluir")}</button>
               )}
             </div>
           </div>
@@ -67,6 +69,14 @@ export default function InvoiceTemplatesPage({ templates, onSave, onToggle, onDe
           initial={editingTemplate.id ? editingTemplate : null}
           onClose={() => setEditingTemplate(null)}
           onSubmit={saveTemplate}
+        />
+      )}
+      {pendingAction && (
+        <InvoiceTemplateActionModal
+          template={pendingAction.template}
+          action={pendingAction.action}
+          onClose={() => setPendingAction(null)}
+          onConfirm={pendingAction.action === "delete" ? onDelete : onToggle}
         />
       )}
     </section>

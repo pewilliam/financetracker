@@ -3471,6 +3471,9 @@ select {
 .modal-icon.danger {
   background: var(--expense);
 }
+.modal-icon.warning {
+  background: #D97706;
+}
 .invoice-stepper {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
@@ -6192,6 +6195,11 @@ select {
   background: #CC2244;
   border-color: #CC2244;
 }
+.warning-action,
+.warning-action:hover {
+  background: #D97706;
+  border-color: #D97706;
+}
 .details-actions { padding-top: 18px; }
 .danger-text { color: var(--expense); }
 .review-row.has-error {
@@ -7175,6 +7183,22 @@ select {
   background: color-mix(in srgb, var(--card) 94%, var(--border));
 }
 .category-delete-context i { width: 10px; height: 10px; border-radius: 50%; background: var(--category-color); box-shadow: 0 0 0 4px color-mix(in srgb, var(--category-color) 12%, transparent); }
+.invoice-template-action-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--card) 94%, var(--border));
+}
+.invoice-template-action-context i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--invoice-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--invoice-color) 12%, transparent);
+}
 
 @media (max-width: 767px) {
   .settings-page { gap: 26px; }

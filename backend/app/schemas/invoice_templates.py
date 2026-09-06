@@ -25,3 +25,4 @@ class InvoiceTemplateOut(APIModel):
     created_at: Optional[datetime] = None
     total_invoices: int = 0
     pending_invoices: int = 0
+    can_delete: bool = False
