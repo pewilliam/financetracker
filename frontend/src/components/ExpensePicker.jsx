@@ -102,7 +102,7 @@ export default function ExpensePicker({
             <span className="expense-picker-trigger-icon">{optionKind(selected) === "months" ? <CalendarDays size={17} /> : <CreditCard size={17} />}</span>
             <span className="expense-picker-trigger-copy">
               <strong>{selected.description}</strong>
-              <small>{selected.invoice_name || (selected.origin === "months" ? "Meses" : "Fatura")} · {formatDateShort(selected.date, language)} · {formatMoney(selected.amount, language)}</small>
+              <small>{selected.invoice_name || (selected.origin === "months" ? (language === "en-US" ? "Monthly control" : "Controle mensal") : (language === "en-US" ? "Invoice" : "Fatura"))} · {formatDateShort(selected.date, language)} · {formatMoney(selected.amount, language)}</small>
             </span>
           </>
         ) : (
@@ -134,7 +134,7 @@ export default function ExpensePicker({
           <div className="expense-picker-filters">
             {[
               ["all", language === "en-US" ? "All" : "Todos"],
-              ["months", language === "en-US" ? "Months" : "Meses"],
+              ["months", language === "en-US" ? "Monthly control" : "Controle mensal"],
               ["invoice", language === "en-US" ? "Invoices" : "Faturas"],
               ["installment", language === "en-US" ? "Installments" : "Parcelados"],
             ].map(([filter, label]) => <button className={kind === filter ? "active" : ""} key={filter} type="button" onClick={() => setKind(filter)}>{label}</button>)}
@@ -152,7 +152,7 @@ export default function ExpensePicker({
                       <span className="expense-picker-option-copy">
                         <strong>{option.description}</strong>
                         <small>
-                          {option.invoice_name || (option.origin === "months" ? "Meses" : "Fatura")}
+                          {option.invoice_name || (option.origin === "months" ? (language === "en-US" ? "Monthly control" : "Controle mensal") : (language === "en-US" ? "Invoice" : "Fatura"))}
                           {option.installment_number ? ` · ${option.installment_number}/${option.installment_count}` : ""}
                           {` · ${formatDateShort(option.date, language)}`}
                         </small>

@@ -24,9 +24,9 @@ export const ptBR = {
     noDescription: "Sem descrição"
   },
   categories: {
-    eyebrow: "ORGANIZAÇÃO DOS GASTOS",
-    title: "Gastos por categoria",
-    description: "Entenda para onde seu dinheiro está indo e defina limites mensais para manter o orçamento sob controle.",
+    eyebrow: "ORGANIZAÇÃO FINANCEIRA",
+    title: "Orçamento e gastos",
+    description: "Planeje sua renda e reserva, acompanhe para onde o dinheiro está indo e defina limites mensais.",
     totalThisMonth: "Total neste mês",
     vsPrevious: "{{value}}% vs. mês anterior",
     classified: "Gastos classificados",
@@ -186,13 +186,13 @@ export const ptBR = {
   },
   sidebar: {
     dashboard: "Dashboard",
-    months: "Meses",
+    months: "Controle mensal",
     invoices: "Faturas",
     invoiceModels: "Modelos de fatura",
     installments: "Parcelamentos",
     simulator: "Simulador",
     receivables: "Recebíveis",
-    categories: "Categorias",
+    categories: "Orçamento e gastos",
     settings: "Configurações",
     collapse: "Recolher sidebar",
     expand: "Expandir sidebar",
@@ -227,7 +227,7 @@ export const ptBR = {
     exportCsv: "Exportar CSV",
     expandCategories: "Exibir categorias",
     collapseCategories: "Recolher categorias",
-    ignoreInCategoryAnalysis: "Ignorar na tela de Categorias",
+    ignoreInCategoryAnalysis: "Ignorar em Orçamento e gastos",
     ignoreInCategoryAnalysisHint: "Não entra nos totais, limites, gráfico ou alertas dessa tela.",
     includeInIncomePlanning: "Considerar como renda",
     includeInIncomePlanningHint: "Seus recebimentos poderão compor o planejamento mensal."

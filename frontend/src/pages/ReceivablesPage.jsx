@@ -147,7 +147,7 @@ export default function ReceivablesPage({ receivables, linkedTransactions = [], 
                   <div className="receivable-linked-expense">
                     <Link2 size={14} />
                     <span>
-                      {item.linked_expense.origin === "months" ? "Meses" : item.linked_expense.invoice_name || "Fatura"}
+                      {item.linked_expense.origin === "months" ? (language === "en-US" ? "Monthly control" : "Controle mensal") : item.linked_expense.invoice_name || (language === "en-US" ? "Invoice" : "Fatura")}
                       {item.linked_expense.installment_number ? ` · parcela ${item.linked_expense.installment_number}/${item.linked_expense.installment_count}` : ""}
                     </span>
                     <strong>{item.linked_expense.description}</strong>
