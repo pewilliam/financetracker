@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import CategoryModal, { CATEGORY_COLORS } from "../modals/CategoryModal.jsx";
 
 function normalizeValues(value, values) {
@@ -9,14 +9,28 @@ function normalizeValues(value, values) {
   return source ? [String(source)] : [];
 }
 
+function normalizeSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
+}
+
 export default function CategorySelect({ categories = [], value = "", values, onChange, onCreate, className = "" }) {
   const rootRef = useRef(null);
   const menuRef = useRef(null);
+  const searchRef = useRef(null);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [menuPosition, setMenuPosition] = useState({});
   const [creating, setCreating] = useState(false);
   const selectedIds = useMemo(() => normalizeValues(value, values), [value, values]);
   const selected = categories.filter((category) => selectedIds.includes(String(category.id)));
+  const filteredCategories = useMemo(() => {
+    const normalizedSearch = normalizeSearch(search.trim());
+    if (!normalizedSearch) return categories;
+    return categories.filter((category) => normalizeSearch(category.name).includes(normalizedSearch));
+  }, [categories, search]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -26,7 +40,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
     const positionMenu = () => {
       const rect = rootRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const menuHeight = 280;
+      const menuHeight = 330;
       const openUp = window.innerHeight - rect.bottom < menuHeight && rect.top > menuHeight;
       setMenuPosition({
         left: Math.max(8, rect.left),
@@ -46,6 +60,11 @@ export default function CategorySelect({ categories = [], value = "", values, on
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    searchRef.current?.focus();
+  }, [open]);
+
   const toggle = (categoryId) => {
     const id = String(categoryId);
     onChange?.(selectedIds.includes(id)
@@ -62,7 +81,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
 
   return (
     <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef}>
-      <button className="category-multi-trigger" type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open}>
+      <button className="category-multi-trigger" type="button" onClick={() => { setSearch(""); setOpen((current) => !current); }} aria-haspopup="listbox" aria-expanded={open}>
         <span className="category-multi-values">
           {selected.length ? selected.map((category) => (
             <span className="category-choice-chip" style={{ "--category-color": category.color }} key={category.id}>
@@ -75,9 +94,23 @@ export default function CategorySelect({ categories = [], value = "", values, on
       </button>
 
       {open && createPortal(
-        <div className="category-multi-menu" style={menuPosition} ref={menuRef} role="listbox" aria-label="Categorias" aria-multiselectable="true">
-          <div className="category-multi-options">
-            {categories.map((category) => {
+        <div className="category-multi-menu" style={menuPosition} ref={menuRef}>
+          <div className="category-multi-search">
+            <Search size={15} aria-hidden="true" />
+            <input
+              ref={searchRef}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setOpen(false);
+              }}
+              placeholder="Buscar categoria..."
+              aria-label="Buscar categoria"
+            />
+          </div>
+          <div className="category-multi-options" role="listbox" aria-label="Categorias" aria-multiselectable="true">
+            {filteredCategories.map((category) => {
               const checked = selectedIds.includes(String(category.id));
               return (
                 <button className={checked ? "selected" : ""} type="button" role="option" aria-selected={checked} onClick={() => toggle(category.id)} key={category.id}>
@@ -88,6 +121,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
               );
             })}
             {!categories.length && <p>Nenhuma categoria cadastrada.</p>}
+            {!!categories.length && !filteredCategories.length && <p>Nenhuma categoria encontrada.</p>}
           </div>
           {onCreate && <button className="category-multi-create" type="button" onClick={() => { setOpen(false); setCreating(true); }}><Plus size={14} /> Nova categoria</button>}
         </div>,
