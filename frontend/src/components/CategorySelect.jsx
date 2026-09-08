@@ -109,7 +109,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
           <span className="category-multi-values">{selectedValues}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
         </button>
-        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias"><X size={14} /><span>Limpar</span></button>}
+        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias" title="Limpar categorias"><X size={14} /></button>}
       </div>
 
       <div className="category-multi-native-control">
@@ -128,7 +128,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
             {onCreate && <option value="__create__">+ Nova categoria</option>}
           </select>
         </div>
-        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias"><X size={14} /><span>Limpar</span></button>}
+        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias"><X size={14} /></button>}
       </div>
 
       {open && createPortal(

@@ -531,6 +531,7 @@ button:focus-visible {
   width: 100%;
   min-width: 0;
 }
+.date-native-control { display: none; }
 .date-native-input { display: none; }
 .date-custom-control { width: 100%; }
 .date-input-shell {
@@ -7276,8 +7277,12 @@ select {
 .category-multi-desktop-control {
   display: flex;
   align-items: stretch;
-  gap: 6px;
   min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
 .category-multi-trigger {
   display: flex;
@@ -7294,24 +7299,33 @@ select {
   text-align: left;
   cursor: pointer;
 }
-.category-multi-desktop-control .category-multi-trigger { flex: 1; min-width: 0; }
+.category-multi-desktop-control .category-multi-trigger {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.category-multi-select.open .category-multi-desktop-control,
+.category-multi-desktop-control:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent); }
+.category-multi-select.open .category-multi-desktop-control .category-multi-trigger,
+.category-multi-desktop-control .category-multi-trigger:focus-visible { border: 0; outline: 0; }
 .category-multi-clear {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0 9px;
-  background: var(--card);
+  width: 38px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
   cursor: pointer;
 }
 .category-multi-clear:hover,
-.category-multi-clear:focus-visible { border-color: var(--primary); color: var(--primary); outline: none; }
+.category-multi-clear:focus-visible { background: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--primary); outline: none; }
 .category-multi-select.open .category-multi-trigger,
 .category-multi-trigger:focus-visible { border-color: var(--primary); outline: 2px solid color-mix(in srgb, var(--primary) 18%, transparent); }
 .category-multi-values { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
@@ -7412,33 +7426,53 @@ select {
 
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
   .date-custom-control { display: none; }
-  .date-native-input {
-    display: block;
-    width: 100%;
+  .date-native-control { position: relative; display: block; width: 100%; min-width: 0; }
+  .date-native-control .date-input-shell { pointer-events: none; }
+  .date-native-value {
     min-width: 0;
-    height: 44px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0 10px;
-    background: var(--card);
+    overflow: hidden;
+    padding: 0 12px;
     color: var(--text);
     font-size: 16px;
     font-weight: 700;
+    line-height: 42px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .date-native-input:focus { border-color: var(--focus-border); outline: none; box-shadow: var(--focus-ring); }
-  .has-error .date-native-input { border-color: #DC2626; box-shadow: var(--error-ring); }
-  .date-field.compact .date-native-input { height: 38px; }
+  .date-native-input {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 44px;
+    box-sizing: border-box;
+    border: 0;
+    padding: 0;
+    opacity: 0;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .date-native-control:focus-within .date-input-shell { border-color: var(--focus-border); box-shadow: var(--focus-ring); }
+  .has-error .date-native-control .date-input-shell { border-color: #DC2626; box-shadow: var(--error-ring); }
+  .date-field.compact .date-native-input,
+  .date-field.compact .date-native-value { height: 38px; line-height: 36px; }
   .date-day-popover { display: none; }
 
   .category-multi-desktop-control { display: none; }
   .category-multi-native-control {
     display: flex;
     align-items: stretch;
-    gap: 6px;
     min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
   }
   .category-multi-native-picker { position: relative; flex: 1; min-width: 0; }
-  .category-multi-native-picker .category-multi-trigger { height: 100%; pointer-events: none; }
+  .category-multi-native-picker .category-multi-trigger { height: 100%; border: 0; border-radius: 0; background: transparent; pointer-events: none; }
   .category-multi-native-picker select {
     position: absolute;
     inset: 0;
@@ -7450,9 +7484,10 @@ select {
     font-size: 16px;
   }
   .category-multi-native-picker:focus-within .category-multi-trigger {
-    border-color: var(--primary);
-    outline: 2px solid color-mix(in srgb, var(--primary) 18%, transparent);
+    border: 0;
+    outline: 0;
   }
+  .category-multi-native-control:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent); }
   .category-multi-clear { min-height: 44px; }
   .category-multi-menu { display: none; }
 }

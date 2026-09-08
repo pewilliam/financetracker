@@ -154,14 +154,22 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   return (
     <div className={`date-field ${open ? "open" : ""} ${className}`} ref={rootRef}>
-      <input
-        className="date-native-input"
-        type="date"
-        value={value || ""}
-        onBlur={onBlur}
-        onChange={(event) => onChange(event.target.value)}
-        aria-invalid={ariaInvalid}
-      />
+      <div className="date-native-control">
+        <div className="date-input-shell" aria-hidden="true">
+          <div className="date-native-value">
+            {formatDisplayDate(value, language) || (language === "en-US" ? "mm/dd/yyyy" : "dd/mm/aaaa")}
+          </div>
+          <div className="date-trigger"><CalendarDays size={16} /></div>
+        </div>
+        <input
+          className="date-native-input"
+          type="date"
+          value={value || ""}
+          onBlur={onBlur}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={ariaInvalid}
+        />
+      </div>
       <div className="date-custom-control">
         <div className="date-input-shell">
           <input
