@@ -7,7 +7,10 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      "/api": "http://api:8010"
+      "/api": {
+        target: "http://api:8010",
+        xfwd: true
+      }
     }
   }
 });

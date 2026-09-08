@@ -124,6 +124,19 @@ button:focus-visible {
 .auth-card p, .muted { color: var(--muted); }
 .auth-submit { width: 100%; justify-content: center; }
 .auth-link { display: inline-block; margin-top: 18px; color: var(--primary); font-weight: 600; }
+.password-requirements {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.password-requirements li::before { content: "○"; margin-right: 6px; }
+.password-requirements li.valid { color: var(--success, #008f72); }
+.password-requirements li.valid::before { content: "✓"; }
+.password-requirements li.invalid { color: var(--expense, #dc2626); }
 
 .app-layout {
   --sidebar-expanded: 264px;
@@ -7070,6 +7083,7 @@ select {
 .settings-panel { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .settings-panel .form-stack { flex: 1; }
 .settings-panel .form-stack > .btn { align-self: flex-start; margin-top: auto; }
+.settings-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; }
 .settings-panel-title { display: flex; align-items: flex-start; gap: 11px; }
 .settings-panel-title > i {
   display: grid;
@@ -7094,6 +7108,7 @@ select {
   font-size: 11px;
   line-height: 1.45;
 }
+.settings-field-note.field-error { color: var(--expense); border-left-color: var(--expense); }
 .settings-balance-panel { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.2fr); align-items: end; }
 .settings-inline-form { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 10px; }
 .settings-inline-form label { display: grid; gap: 7px; }

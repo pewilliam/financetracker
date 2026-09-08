@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { ChevronDown, ChevronUp, CircleDollarSign, CreditCard, Download, Edit3, EyeOff, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { setOpeningBalance, updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -26,12 +26,15 @@ export default function SettingsPage({
   onDeleteInvoiceTemplate,
   refresh
 }) {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
+  const navigate = useNavigate();
   const { t, language, setLanguage } = useI18n();
   const tt = (key, pt) => language === "en-US" ? t(key) : pt;
-  const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "" });
+  const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "", current_password: "" });
   const [allowOverdueInvoiceEdits, setAllowOverdueInvoiceEdits] = useState(Boolean(user?.allow_overdue_invoice_edits));
-  const [password, setPassword] = useState({ current_password: "", new_password: "" });
+  const [password, setPassword] = useState({ current_password: "", new_password: "", confirmation: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [openingBalance, setOpeningBalanceInput] = useState("");
   const [categoryEditor, setCategoryEditor] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
@@ -50,24 +53,48 @@ export default function SettingsPage({
   ];
 
   useEffect(() => {
-    setProfile({ name: user?.name || "", email: user?.email || "" });
+    setProfile({ name: user?.name || "", email: user?.email || "", current_password: "" });
     setAllowOverdueInvoiceEdits(Boolean(user?.allow_overdue_invoice_edits));
   }, [user]);
 
+  const emailChanged = profile.email.trim().toLowerCase() !== (user?.email || "").toLowerCase();
+  const profileChanged = profile.name.trim() !== (user?.name || "") || emailChanged;
+  const passwordIsLongEnough = password.new_password.length >= 12;
+  const passwordFitsBcrypt = new TextEncoder().encode(password.new_password).length <= 72;
+  const passwordsMatch = password.new_password === password.confirmation;
+
+  const accountErrorMessage = (error, fallback) => {
+    if (error.status === 429) return tt("settings.tooManyRequests", "Muitas tentativas. Aguarde um pouco e tente novamente.");
+    if (error.status === 409) return tt("settings.emailAlreadyUsed", "Este e-mail já está em uso.");
+    if (error.message === "Current password is incorrect") return tt("settings.incorrectPassword", "A senha atual está incorreta.");
+    if (error.message?.includes("name or email")) return tt("settings.passwordPersonalData", "A senha não pode conter seu nome ou e-mail.");
+    if (error.message?.includes("easy to guess")) return tt("settings.passwordTooEasy", "Esta senha é muito fácil de adivinhar.");
+    if (error.status === 422) return error.message;
+    return fallback;
+  };
+
   const saveProfile = async (event) => {
     event.preventDefault();
+    setSavingProfile(true);
     try {
-      await updateProfile({ ...profile, allow_overdue_invoice_edits: allowOverdueInvoiceEdits });
+      await updateProfile({
+        name: profile.name.trim(),
+        email: profile.email.trim(),
+        current_password: emailChanged ? profile.current_password : null,
+        allow_overdue_invoice_edits: allowOverdueInvoiceEdits
+      });
       toast.success(t("toasts.profileUpdated"));
-    } catch {
-      toast.error(t("toasts.profileUpdateError"));
+    } catch (error) {
+      toast.error(accountErrorMessage(error, t("toasts.profileUpdateError")));
+    } finally {
+      setSavingProfile(false);
     }
   };
 
   const saveInvoiceProtection = async (event) => {
     event.preventDefault();
     try {
-      await updateProfile({ ...profile, allow_overdue_invoice_edits: allowOverdueInvoiceEdits });
+      await updateProfile({ name: user.name, email: user.email, allow_overdue_invoice_edits: allowOverdueInvoiceEdits });
       toast.success(allowOverdueInvoiceEdits ? "Ajustes em faturas vencidas liberados" : "Proteção de faturas vencidas restaurada");
     } catch {
       toast.error("Erro ao atualizar proteção de faturas");
@@ -76,12 +103,21 @@ export default function SettingsPage({
 
   const savePassword = async (event) => {
     event.preventDefault();
+    if (!passwordIsLongEnough || !passwordFitsBcrypt || !passwordsMatch) {
+      toast.error(!passwordsMatch ? tt("settings.passwordsDoNotMatch", "As senhas não coincidem.") : !passwordIsLongEnough ? tt("settings.passwordMinimum", "A nova senha precisa ter pelo menos 12 caracteres.") : tt("settings.passwordMaximum", "A nova senha é longa demais."));
+      return;
+    }
+    setSavingPassword(true);
     try {
-      await updatePassword(password);
-      setPassword({ current_password: "", new_password: "" });
+      await updatePassword({ current_password: password.current_password, new_password: password.new_password });
+      setPassword({ current_password: "", new_password: "", confirmation: "" });
       toast.success(t("toasts.passwordUpdated"));
-    } catch {
-      toast.error(t("toasts.passwordUpdateError"));
+      logout();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      toast.error(accountErrorMessage(error, t("toasts.passwordUpdateError")));
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -177,18 +213,27 @@ export default function SettingsPage({
           <form className="card settings-panel" onSubmit={saveProfile}>
             <div className="settings-panel-title"><i><UserRound size={18} /></i><div><h3>{t("settings.profile")}</h3><p>{tt("settings.profileDescription", "Informações usadas para identificar sua conta.")}</p></div></div>
             <div className="form-stack">
-              <label><span>{t("settings.name")}</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label>
-              <label><span>{t("settings.email")}</span><input type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
-              <button className="btn btn-primary" type="submit">{t("settings.saveProfile")}</button>
+              <label><span>{t("settings.name")}</span><input autoComplete="name" minLength="2" maxLength="100" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} required /></label>
+              <label><span>{t("settings.email")}</span><input type="email" autoComplete="email" maxLength="254" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} required /></label>
+              {emailChanged && <>
+                <p className="settings-field-note">{tt("settings.emailChangeNote", "A confirmação por e-mail será adicionada depois. Por segurança, confirme sua senha atual para alterar o endereço.")}</p>
+                <label><span>{t("settings.currentPassword")}</span><input type="password" autoComplete="current-password" value={profile.current_password} onChange={(event) => setProfile({ ...profile, current_password: event.target.value })} required /></label>
+              </>}
+              <div className="settings-form-actions">
+                <button className="btn btn-ghost" type="button" disabled={savingProfile || !profileChanged} onClick={() => setProfile({ name: user.name, email: user.email, current_password: "" })}>{tt("settings.discardChanges", "Descartar")}</button>
+                <button className="btn btn-primary" type="submit" disabled={savingProfile || !profileChanged}>{savingProfile ? tt("settings.saving", "Salvando...") : t("settings.saveProfile")}</button>
+              </div>
             </div>
           </form>
 
           <form className="card settings-panel" onSubmit={savePassword}>
             <div className="settings-panel-title"><i><LockKeyhole size={18} /></i><div><h3>{t("settings.password")}</h3><p>{tt("settings.passwordDescription", "Escolha uma senha forte e diferente das anteriores.")}</p></div></div>
             <div className="form-stack">
-              <label><span>{t("settings.currentPassword")}</span><input type="password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} /></label>
-              <label><span>{t("settings.newPassword")}</span><input type="password" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} /></label>
-              <button className="btn" type="submit">{t("settings.changePassword")}</button>
+              <label><span>{t("settings.currentPassword")}</span><input type="password" autoComplete="current-password" value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} required /></label>
+              <label><span>{t("settings.newPassword")}</span><input type="password" autoComplete="new-password" minLength="12" value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} required /></label>
+              <label><span>{tt("settings.confirmNewPassword", "Confirmar nova senha")}</span><input type="password" autoComplete="new-password" minLength="12" value={password.confirmation} onChange={(event) => setPassword({ ...password, confirmation: event.target.value })} required /></label>
+              <p className={`settings-field-note ${password.new_password && (!passwordIsLongEnough || !passwordFitsBcrypt) ? "field-error" : ""}`}>{tt("settings.passwordHint", "Use pelo menos 12 caracteres. Evite seu nome, e-mail e senhas fáceis de adivinhar.")}</p>
+              <button className="btn" type="submit" disabled={savingPassword}>{savingPassword ? tt("settings.saving", "Salvando...") : t("settings.changePassword")}</button>
             </div>
           </form>
         </div>

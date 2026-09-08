@@ -10,6 +10,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
+    auth_version = Column(Integer, nullable=False, default=0)
     allow_overdue_invoice_edits = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now())
 

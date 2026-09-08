@@ -89,6 +89,18 @@ docker compose up --build
 - Frontend: http://localhost:5173
 - API Docs: http://localhost:8010/docs
 
+## Segurança da autenticação
+
+Antes de publicar, defina `APP_ENV=production` e gere um `JWT_SECRET_KEY` aleatório
+com pelo menos 32 caracteres. A API não inicia em produção sem esse segredo.
+
+A API limita requisições por IP, com limites próprios mais restritos para login e
+cadastro. Os valores podem ser ajustados pelas variáveis `RATE_LIMIT_*`,
+`REGISTER_RATE_LIMIT_*` e `LOGIN_RATE_LIMIT_*` do `.env.example`. Se houver um
+proxy reverso, adicione somente os IPs ou redes desse proxy a
+`TRUSTED_PROXY_IPS`; cabeçalhos `X-Forwarded-For` vindos de outros endereços são
+ignorados para impedir falsificação do IP de origem.
+
 ## Seed de dados
 
 Depois do primeiro build, use o comando abaixo para popular o banco:

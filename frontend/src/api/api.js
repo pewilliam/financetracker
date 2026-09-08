@@ -1,6 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "finance-token";
 
+export class ApiError extends Error {
+  constructor(message, status, retryAfter = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -26,8 +35,17 @@ async function request(path, options = {}) {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Request failed");
+    let message = "Request failed";
+    try {
+      const payload = await response.json();
+      if (typeof payload.detail === "string") message = payload.detail;
+      else if (Array.isArray(payload.detail) && payload.detail[0]?.msg) {
+        message = payload.detail[0].msg.replace(/^Value error,\s*/i, "");
+      }
+    } catch {
+      // Keep a stable fallback for non-JSON failures (proxy, gateway, etc.).
+    }
+    throw new ApiError(message, response.status, response.headers.get("Retry-After"));
   }
 
   if (response.status === 204) {
