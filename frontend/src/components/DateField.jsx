@@ -154,23 +154,33 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   return (
     <div className={`date-field ${open ? "open" : ""} ${className}`} ref={rootRef}>
-      <div className="date-input-shell">
-        <input
-          inputMode="numeric"
-          placeholder={language === "en-US" ? "mm/dd/yyyy" : "dd/mm/aaaa"}
-          value={text}
-          onBlur={handleInputBlur}
-          onChange={(event) => setText(formatTypedDate(event.target.value))}
-          onFocus={() => setOpen(true)}
-          aria-invalid={ariaInvalid}
-        />
-        <button type="button" className="date-trigger" onClick={() => setOpen((current) => !current)} aria-label={language === "en-US" ? "Open calendar" : "Abrir calendario"}>
-          <CalendarDays size={16} />
-        </button>
+      <input
+        className="date-native-input"
+        type="date"
+        value={value || ""}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={ariaInvalid}
+      />
+      <div className="date-custom-control">
+        <div className="date-input-shell">
+          <input
+            inputMode="numeric"
+            placeholder={language === "en-US" ? "mm/dd/yyyy" : "dd/mm/aaaa"}
+            value={text}
+            onBlur={handleInputBlur}
+            onChange={(event) => setText(formatTypedDate(event.target.value))}
+            onFocus={() => setOpen(true)}
+            aria-invalid={ariaInvalid}
+          />
+          <button type="button" className="date-trigger" onClick={() => setOpen((current) => !current)} aria-label={language === "en-US" ? "Open calendar" : "Abrir calendario"}>
+            <CalendarDays size={16} />
+          </button>
+        </div>
       </div>
 
       {open && createPortal(
-        <div className="date-popover date-popover-floating" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
+        <div className="date-popover date-popover-floating date-day-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
             <button type="button" onClick={() => moveMonth(-1)} aria-label={language === "en-US" ? "Previous month" : "Mes anterior"}><ChevronLeft size={16} /></button>
             <strong>{monthLabel(cursor, language)}</strong>

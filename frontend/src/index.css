@@ -531,6 +531,8 @@ button:focus-visible {
   width: 100%;
   min-width: 0;
 }
+.date-native-input { display: none; }
+.date-custom-control { width: 100%; }
 .date-input-shell {
   width: 100%;
   height: 44px;
@@ -7271,6 +7273,12 @@ select {
 
 .category-multi-select { z-index: 2; }
 .category-multi-select.open { z-index: 25; }
+.category-multi-desktop-control {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
 .category-multi-trigger {
   display: flex;
   align-items: center;
@@ -7286,6 +7294,24 @@ select {
   text-align: left;
   cursor: pointer;
 }
+.category-multi-desktop-control .category-multi-trigger { flex: 1; min-width: 0; }
+.category-multi-clear {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.category-multi-clear:hover,
+.category-multi-clear:focus-visible { border-color: var(--primary); color: var(--primary); outline: none; }
 .category-multi-select.open .category-multi-trigger,
 .category-multi-trigger:focus-visible { border-color: var(--primary); outline: 2px solid color-mix(in srgb, var(--primary) 18%, transparent); }
 .category-multi-values { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
@@ -7304,8 +7330,6 @@ select {
   font-weight: 800;
   line-height: 1.15;
 }
-.category-choice-chip svg { flex: 0 0 auto; border-radius: 50%; cursor: pointer; }
-.category-choice-chip svg:hover { background: color-mix(in srgb, var(--category-color) 20%, transparent); }
 .category-multi-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .18s ease; }
 .category-multi-select.open .category-multi-chevron { transform: rotate(180deg); }
 .category-multi-menu {
@@ -7384,6 +7408,54 @@ select {
 }
 .category-multi-create:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
 .category-multi-select.compact .category-multi-trigger { min-height: 34px; border-radius: 6px; padding: 4px 8px; }
+.category-multi-native-control { display: none; }
+
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .date-custom-control { display: none; }
+  .date-native-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 10px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .date-native-input:focus { border-color: var(--focus-border); outline: none; box-shadow: var(--focus-ring); }
+  .has-error .date-native-input { border-color: #DC2626; box-shadow: var(--error-ring); }
+  .date-field.compact .date-native-input { height: 38px; }
+  .date-day-popover { display: none; }
+
+  .category-multi-desktop-control { display: none; }
+  .category-multi-native-control {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 0;
+  }
+  .category-multi-native-picker { position: relative; flex: 1; min-width: 0; }
+  .category-multi-native-picker .category-multi-trigger { height: 100%; pointer-events: none; }
+  .category-multi-native-picker select {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .category-multi-native-picker:focus-within .category-multi-trigger {
+    border-color: var(--primary);
+    outline: 2px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+  .category-multi-clear { min-height: 44px; }
+  .category-multi-menu { display: none; }
+}
 
 @media (max-width: 767px) {
   .category-spending-content { grid-template-columns: 1fr; gap: 6px; }

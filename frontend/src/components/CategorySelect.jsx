@@ -79,19 +79,57 @@ export default function CategorySelect({ categories = [], value = "", values, on
     setOpen(false);
   };
 
+  const clear = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    onChange?.([]);
+    setOpen(false);
+  };
+
+  const handleNativeSelect = (event) => {
+    const nextValue = event.target.value;
+    if (!nextValue) return;
+    if (nextValue === "__create__") {
+      setCreating(true);
+      return;
+    }
+    toggle(nextValue);
+  };
+
+  const selectedValues = selected.length ? selected.map((category) => (
+    <span className="category-choice-chip" style={{ "--category-color": category.color }} key={category.id}>
+      {category.name}
+    </span>
+  )) : <span className="category-multi-placeholder">Sem categoria</span>;
+
   return (
     <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef}>
-      <button className="category-multi-trigger" type="button" onClick={() => { setSearch(""); setOpen((current) => !current); }} aria-haspopup="listbox" aria-expanded={open}>
-        <span className="category-multi-values">
-          {selected.length ? selected.map((category) => (
-            <span className="category-choice-chip" style={{ "--category-color": category.color }} key={category.id}>
-              {category.name}
-              <X size={12} role="button" aria-label={`Remover ${category.name}`} onClick={(event) => { event.stopPropagation(); toggle(category.id); }} />
-            </span>
-          )) : <span className="category-multi-placeholder">Sem categoria</span>}
-        </span>
-        <ChevronDown className="category-multi-chevron" size={15} />
-      </button>
+      <div className="category-multi-desktop-control">
+        <button className="category-multi-trigger" type="button" onClick={() => { setSearch(""); setOpen((current) => !current); }} aria-haspopup="listbox" aria-expanded={open}>
+          <span className="category-multi-values">{selectedValues}</span>
+          <ChevronDown className="category-multi-chevron" size={15} />
+        </button>
+        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias"><X size={14} /><span>Limpar</span></button>}
+      </div>
+
+      <div className="category-multi-native-control">
+        <div className="category-multi-native-picker">
+          <div className="category-multi-trigger" aria-hidden="true">
+            <span className="category-multi-values">{selectedValues}</span>
+            <ChevronDown className="category-multi-chevron" size={15} />
+          </div>
+          <select value="" onChange={handleNativeSelect} aria-label="Selecionar ou remover categoria">
+            <option value="">Selecionar categoria...</option>
+            {categories.map((category) => (
+              <option value={category.id} key={category.id}>
+                {selectedIds.includes(String(category.id)) ? "✓ " : ""}{category.name}
+              </option>
+            ))}
+            {onCreate && <option value="__create__">+ Nova categoria</option>}
+          </select>
+        </div>
+        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias"><X size={14} /><span>Limpar</span></button>}
+      </div>
 
       {open && createPortal(
         <div className="category-multi-menu" style={menuPosition} ref={menuRef}>
