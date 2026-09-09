@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, CreditCard, Trash2, X } from "lucide-react";
+import { Check, CreditCard, Layers3, ReceiptText, Trash2, X } from "lucide-react";
 import InvoiceSelector from "../components/InvoiceSelector.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { addMonthsToDate, formatMonthShort, formatMonthSlash, invoiceAcceptsNewCharges, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InstallmentModal({ form, setForm, invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onSubmit, onClose }) {
+export default function InstallmentModal({ form, setForm, invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onOpenSingle, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
@@ -100,8 +100,14 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
     <div className="modal-layer">
       <button className="modal-backdrop" onClick={onClose} />
       <form className={`modal-card invoice-modal installment-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts}>
-        <div className="modal-titlebar installment-modal-titlebar">
-          <h2>{tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
+        <div className={`modal-titlebar installment-modal-titlebar ${onOpenSingle ? "has-mode-switch" : ""}`}>
+          <h2>{onOpenSingle ? (language === "en-US" ? "Add to invoice" : "Adicionar à fatura") : tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
+          {onOpenSingle && (
+            <div className="transaction-mode-switch invoice-entry-mode-switch" aria-label={language === "en-US" ? "Purchase type" : "Tipo de compra"}>
+              <button type="button" aria-pressed="false" onClick={onOpenSingle}><ReceiptText size={15} /> {language === "en-US" ? "One-time purchase" : "Compra única"}</button>
+              <button className="active" type="button" aria-pressed="true"><Layers3 size={15} /> {language === "en-US" ? "Installment purchase" : "Compra parcelada"}</button>
+            </div>
+          )}
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-stepper">

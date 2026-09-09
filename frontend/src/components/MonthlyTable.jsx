@@ -48,12 +48,14 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                         {formatMoney(tx.amount)}
                       </strong>
                       <span className="tx-description">
-                        {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
-                        {tx.linked_expense && <span className="transaction-expense-pill" title={`Associado a ${tx.linked_expense.description}`}><Link2 size={12} /> {tt("receivables.linkedExpense", "Gasto associado")}</span>}
-                        {(tx.categories?.length ? tx.categories : tx.category ? [tx.category] : []).map((category) => (
-                          <span className="transaction-category-pill" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
-                        ))}
-                        {tx.description || tt("monthlyTable.noDescription", "Sem descrição")}
+                        <span className="tx-badges">
+                          {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
+                          {tx.linked_expense && <span className="transaction-expense-pill" title={`Associado a ${tx.linked_expense.description}`}><Link2 size={12} /> {tt("receivables.linkedExpense", "Gasto associado")}</span>}
+                          {(tx.categories?.length ? tx.categories : tx.category ? [tx.category] : []).map((category) => (
+                            <span className="transaction-category-pill" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
+                          ))}
+                        </span>
+                        <span className="tx-description-text">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
                       </span>
                       <div className="row-actions">
                         <button className="icon-btn small" onClick={() => onEdit(tx)} aria-label="Editar">

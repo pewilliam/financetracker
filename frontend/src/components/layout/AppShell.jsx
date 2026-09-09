@@ -26,7 +26,7 @@ import BatchTransactionModal from "../../modals/BatchTransactionModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
-import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, nextMonthDate, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
+import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
 import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
@@ -98,6 +98,7 @@ export default function AppShell() {
   const [paymentToCancel, setPaymentToCancel] = useState(null);
   const [receivableToDelete, setReceivableToDelete] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [invoicePageOverlayOpen, setInvoicePageOverlayOpen] = useState(false);
   const monthLoadSequence = useRef(0);
   const selectedPeriodRef = useRef({ year, month, language });
   selectedPeriodRef.current = { year, month, language };
@@ -111,7 +112,7 @@ export default function AppShell() {
     ? `Loading ${formatMonthLabel(year, month, language)}`
     : `Carregando dados de ${formatMonthLabel(year, month, language)}`;
   const loadingHint = language === "en-US" ? "Please wait while the values are updated." : "Aguarde enquanto atualizamos os valores.";
-  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete;
+  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || invoicePageOverlayOpen;
   const bodyLocked = overlayOpen;
 
   useEffect(() => {
@@ -429,17 +430,6 @@ export default function AppShell() {
     setInvoiceModal(true);
   };
 
-  const openDuplicateInvoiceModal = (invoice) => {
-    setInvoiceForm({
-      template_id: String(invoice.template_id),
-      due_date: nextMonthDate(invoice.due_date),
-      initial_amount: formatMoney(invoice.total_amount, language),
-      duplicate_next_month: false,
-      duplicate_months: 1
-    });
-    setInvoiceModal(true);
-  };
-
   const saveInvoiceTemplate = async (payload, id = null) => {
     const saved = id ? await updateInvoiceTemplate(id, payload) : await createInvoiceTemplate(payload);
     const templatesPayload = await listInvoiceTemplates();
@@ -479,8 +469,10 @@ export default function AppShell() {
       setInstallmentModal(false);
       toast.success("Compra parcelada criada");
       await syncInvoiceAndMonthCollections();
+      return true;
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao criar compra parcelada");
+      return false;
     }
   };
 
@@ -566,6 +558,7 @@ export default function AppShell() {
       await syncMonthCollections();
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "Esta fatura não aceita novos itens" : Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
+      throw error;
     }
   };
 
@@ -871,7 +864,7 @@ export default function AppShell() {
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} addInstallment={openInstallmentModal} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} openInstallmentModal={() => openInstallmentModal()} openDuplicateInvoiceModal={openDuplicateInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOverlayChange={setInvoicePageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />

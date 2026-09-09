@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
-import { CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Tag, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Tag, Trash2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
-import CategorySelect from "./CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges } from "../app/helpers.js";
-import { daysUntil, formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getDaysUntil, parseTypedMoneyInput } from "../utils/format.js";
+import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/format.js";
 
 function invoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#14A078";
@@ -115,19 +113,13 @@ function InstallmentBadge({ item, language, onView }) {
   );
 }
 
-export default function InvoiceCard({ invoice, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, allowOverdueInvoiceEdits = false, onAddItem, onEditItem, onUpdateDueDate, onAddInstallment, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onDuplicateNext, onViewInstallment }) {
+export default function InvoiceCard({ invoice, expenseOptions = [], onManageReceivable, allowOverdueInvoiceEdits = false, onAddEntry, onEditItem, onUpdateDueDate, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
-  const [addMode, setAddMode] = useState(null);
   const [itemsOpen, setItemsOpen] = useState(false);
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [categoryIds, setCategoryIds] = useState([]);
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateDraft, setDueDateDraft] = useState(invoice.due_date);
   const [savingDueDate, setSavingDueDate] = useState(false);
-  const adding = addMode !== null;
-  const addingRefund = addMode === "refund";
   const status = daysUntil(invoice.due_date);
   const overdue = !invoice.paid && getDaysUntil(invoice.due_date) <= 0;
   const regularItems = invoice.items || [];
@@ -139,22 +131,14 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
     && regularItems.length === 1
     && normalizeName(regularItems[0].description) === normalizeName(invoice.name);
   const canToggleItems = totalItemCount !== 1 || !singleMainItem;
-  const itemsExpanded = itemsOpen || adding;
+  const itemsExpanded = itemsOpen;
   const viewItemsLabel = language === "en-US" ? `View items (${totalItemCount})` : `Ver itens (${totalItemCount})`;
   const hideItemsLabel = language === "en-US" ? "Hide items" : "Ocultar itens";
   const addItemLabel = language === "en-US" ? "Add item" : "Adicionar item";
   const addRefundLabel = language === "en-US" ? "Add refund" : "Adicionar reembolso";
-  const addItemToInvoiceLabel = language === "en-US" ? "+ Add item to invoice" : "+ Adicionar item à fatura";
-  const addRefundToInvoiceLabel = language === "en-US" ? "+ Add refund to invoice" : "+ Adicionar reembolso à fatura";
-  const cancelLabel = tt("actions.cancel", "Cancelar");
+  const addItemShortLabel = language === "en-US" ? "New item" : "Novo item";
+  const addRefundShortLabel = language === "en-US" ? "Refund" : "Reembolso";
   const refundLabel = language === "en-US" ? "Refund" : "Reembolso";
-  const refundDescriptionLabel = language === "en-US" ? "Refund description" : "Descrição do reembolso";
-  const amountPlaceholder = addingRefund
-    ? (language === "en-US" ? "Refund amount" : "Valor reembolsado")
-    : "R$ 0,00";
-  const submitLabel = addingRefund
-    ? (language === "en-US" ? "Refund" : "Reembolsar")
-    : tt("invoices.add", "Adicionar");
 
   const startEditingDueDate = () => {
     if (!canEditDueDate) return;
@@ -181,70 +165,23 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
     }
   };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    if (!canAddToInvoice) return;
-    const parsed = parseTypedMoneyInput(amount, language);
-    const cleanDescription = description.trim();
-    if (!parsed || (!addingRefund && !cleanDescription)) return;
-    onAddItem(invoice.id, {
-      description: cleanDescription || refundLabel,
-      amount: addingRefund ? -Math.abs(parsed) : parsed,
-      category_ids: categoryIds.map(Number)
-    });
-    setDescription("");
-    setAmount("");
-    setCategoryIds([]);
-    setAddMode(null);
-  };
-
-  const startAdding = (mode = "item") => {
-    if (!canAddToInvoice) return;
-    if (canToggleItems) setItemsOpen(true);
-    setAddMode(mode);
-  };
-
-  const cancelAdding = () => {
-    setDescription("");
-    setAmount("");
-    setCategoryIds([]);
-    setAddMode(null);
-  };
-
   const startEditingItem = (item) => {
-    setAddMode(null);
     onEditItem?.(invoice, item);
   };
 
-  const renderAddChoices = (single = false) => (
-    <div className={single ? "invoice-single-add-actions" : "invoice-inline-actions"}>
-      <button className={single ? "invoice-single-add-link" : "add-inline"} type="button" onClick={() => startAdding("item")}>
+  const renderQuickAddActions = () => (
+    <div className="invoice-quick-add-actions">
+      <button className="invoice-quick-add-button item" type="button" onClick={() => onAddEntry?.(invoice, "expense")} aria-label={addItemLabel}>
         <Plus size={16} />
-        {single ? addItemToInvoiceLabel : addItemLabel}
+        <span className="invoice-quick-add-label-full">{addItemLabel}</span>
+        <span className="invoice-quick-add-label-short">{addItemShortLabel}</span>
       </button>
-      <button className={`${single ? "invoice-single-add-link" : "add-inline"} refund`} type="button" onClick={() => startAdding("refund")}>
+      <button className="invoice-quick-add-button refund" type="button" onClick={() => onAddEntry?.(invoice, "refund")} aria-label={addRefundLabel}>
         <CircleMinus size={16} />
-        {single ? addRefundToInvoiceLabel : addRefundLabel}
+        <span className="invoice-quick-add-label-full">{addRefundLabel}</span>
+        <span className="invoice-quick-add-label-short">{addRefundShortLabel}</span>
       </button>
     </div>
-  );
-
-  const renderAddForm = () => (
-    <form className={`inline-form ${addingRefund ? "refund-form" : ""}`} onSubmit={handleSubmit}>
-      <input placeholder={addingRefund ? refundDescriptionLabel : tt("invoices.description", "Descrição")} value={description} onChange={(event) => setDescription(event.target.value)} />
-      <CategorySelect className="compact" categories={categories} values={categoryIds} onChange={setCategoryIds} onCreate={onCreateCategory} />
-      <input inputMode="decimal" placeholder={amountPlaceholder} value={amount} onChange={(event) => setAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setAmount(formatTypedMoneyAsCurrency(amount, language))} />
-      <div className="inline-form-actions">
-        <button className="btn btn-primary compact inline-add-submit" type="submit">
-          <span className="inline-add-submit-text">{submitLabel}</span>
-          <span className="inline-add-submit-symbol" aria-hidden="true">{addingRefund ? "-" : "+"}</span>
-        </button>
-        <button className="inline-form-cancel" type="button" onClick={cancelAdding}>
-          <span aria-hidden="true">×</span>
-          {cancelLabel}
-        </button>
-      </div>
-    </form>
   );
 
   const renderRegularItem = (item) => {
@@ -288,21 +225,26 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
               </button>
             </div>
           ) : (
-            <p className="invoice-due-line">
-              <CalendarDays size={14} />
-              <span>{tt("invoices.dueOn", "Vencimento em")} {formatDateShort(invoice.due_date)}</span>
-            </p>
+            <div className="invoice-due-summary">
+              <p className="invoice-due-line">
+                <CalendarDays size={14} />
+                <span className="invoice-due-copy">
+                  <small>{tt("invoices.dueOn", "Vencimento em")}</small>
+                  <strong>{formatDateShort(invoice.due_date)}</strong>
+                </span>
+              </p>
+              {canEditDueDate && (
+                <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
+                  <Pencil size={13} />
+                </button>
+              )}
+            </div>
           )}
         </div>
         <div className="invoice-status-actions">
           <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
             {invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
           </span>
-          {canEditDueDate && !editingDueDate && (
-            <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
-              <Pencil size={13} />
-            </button>
-          )}
         </div>
       </header>
 
@@ -351,41 +293,19 @@ export default function InvoiceCard({ invoice, categories = [], expenseOptions =
                 </>
               ) : <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>}
             </div>
-
-            {adding ? renderAddForm() : canAddToInvoice ? renderAddChoices() : null}
           </div>
         </div>
       )}
 
       {!canToggleItems && (
-        adding ? (
-          <div className="invoice-single-add">
-            {renderAddForm()}
-          </div>
-        ) : (
-          <>
-            <div className="invoice-single-item-panel">
-              {regularItems.map(renderRegularItem)}
-            </div>
-            {canAddToInvoice && renderAddChoices(true)}
-          </>
-        )
+        <div className="invoice-single-item-panel">
+          {regularItems.map(renderRegularItem)}
+        </div>
       )}
 
-      <div className="invoice-template-footer">
-        <Link to={`/configuracoes?secao=modelos#template-${invoice.template_id}`}>{tt("invoices.model", "Modelo:")} {invoice.name} →</Link>
-      </div>
+      {canAddToInvoice && renderQuickAddActions()}
+
       <div className="invoice-actions">
-        <button className="btn btn-ghost" onClick={() => onDuplicateNext(invoice)}>
-          <CalendarPlus size={16} />
-          {tt("invoices.nextInvoice", "Próxima fatura")}
-        </button>
-        {canAddToInvoice && (
-          <button className="btn btn-ghost" onClick={() => onAddInstallment(invoice)}>
-            <CreditCard size={16} />
-            {tt("invoices.installment", "+ Parcela")}
-          </button>
-        )}
         <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
           {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
           {invoice.paid ? tt("invoices.markAsPending", "Marcar pendente") : tt("invoices.markAsPaid", "Marcar paga")}
