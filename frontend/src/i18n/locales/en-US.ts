@@ -433,7 +433,7 @@ export const enUS = {
     selectModel: "Select a model",
     createNewModel: "+ Create new model",
     firstDueDate: "First invoice due date",
-    initialAmount: "Initial amount",
+    initialAmount: "Initial amount (optional)",
     duplicateNextMonths: "Duplicate to the next months",
     duplicateDescription: "Generate future invoices and review each month before confirming.",
     additionalMonths: "Additional months",

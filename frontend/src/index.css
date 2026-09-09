@@ -7633,6 +7633,16 @@ select {
   font-size: 16px;
 }
 
+@media (min-width: 768px) {
+  .invoice-entry-modal { width: min(720px, calc(100vw - 32px)); }
+  .invoice-entry-modal .modal-titlebar.has-mode-switch {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) auto 38px;
+  }
+  .invoice-entry-modal .transaction-mode-switch { min-width: max-content; }
+  .invoice-entry-modal .transaction-mode-switch button { white-space: nowrap; }
+}
+
 @media (max-width: 767px) {
   .invoice-entry-modal .modal-titlebar { padding-block: 12px; }
   .invoice-entry-modal-body { gap: 12px; }

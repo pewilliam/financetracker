@@ -47,7 +47,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
     <div className="modal-layer transaction-modal-layer invoice-entry-modal-layer">
       <button className="modal-backdrop" type="button" onClick={saving ? undefined : onClose} aria-label={copy("Fechar", "Close")} />
       <form className={`modal-card transaction-modal invoice-entry-modal ${isRefund ? "refund" : "expense"}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="invoice-entry-modal-title">
-        <div className="modal-titlebar">
+        <div className={`modal-titlebar ${!isRefund && onOpenInstallment ? "has-mode-switch" : ""}`}>
           <div className="invoice-entry-heading">
             <p className="eyebrow">{invoice.name}</p>
             <h2 id="invoice-entry-modal-title">{title}</h2>
