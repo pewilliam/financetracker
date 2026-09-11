@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Layers3, Loader2, ReceiptText, X } from "lucide-react";
 
+import { isMobileViewport } from "../app/helpers.js";
 import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
@@ -12,8 +13,15 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
   const isRefund = kind === "refund";
   const [form, setForm] = useState({ description: "", amount: "", category_ids: [] });
   const [saving, setSaving] = useState(false);
+  const amountInputRef = useRef(null);
   const amount = parseTypedMoneyInput(form.amount, language);
   const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving);
+
+  useEffect(() => {
+    if (isMobileViewport()) return undefined;
+    const focusFrame = requestAnimationFrame(() => amountInputRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(focusFrame);
+  }, []);
 
   useEffect(() => {
     const closeOnEscape = (event) => {
@@ -64,6 +72,22 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
         </div>
 
         <div className="transaction-modal-body invoice-entry-modal-body">
+          <label className="amount-field">
+            <span>{copy("Valor", "Amount")}</span>
+            <div className={`money-input ${isRefund ? "success" : "danger"}`}>
+              <span>R$</span>
+              <input
+                ref={amountInputRef}
+                inputMode="decimal"
+                value={form.amount.replace(/^R\$\s?/, "")}
+                onChange={(event) => setForm((current) => ({ ...current, amount: formatTypedMoneyForEditing(event.target.value, language) }))}
+                onBlur={() => setForm((current) => ({ ...current, amount: formatTypedMoneyAsCurrency(current.amount, language) }))}
+                onFocus={(event) => event.target.select()}
+                aria-label={copy("Valor", "Amount")}
+              />
+            </div>
+          </label>
+
           <label className="invoice-entry-description">
             <span>{copy("Descrição", "Description")}</span>
             <input
@@ -74,7 +98,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
             />
           </label>
 
-          <label>
+          <label className="invoice-entry-category">
             <span>{copy("Categoria", "Category")}</span>
             <CategorySelect
               categories={categories}
@@ -82,20 +106,6 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
               onChange={(category_ids) => setForm((current) => ({ ...current, category_ids }))}
               onCreate={onCreateCategory}
             />
-          </label>
-
-          <label className="amount-field">
-            <span>{copy("Valor", "Amount")}</span>
-            <div className={`money-input ${isRefund ? "success" : "danger"}`}>
-              <span>R$</span>
-              <input
-                inputMode="decimal"
-                value={form.amount.replace(/^R\$\s?/, "")}
-                onChange={(event) => setForm((current) => ({ ...current, amount: formatTypedMoneyForEditing(event.target.value, language) }))}
-                onBlur={() => setForm((current) => ({ ...current, amount: formatTypedMoneyAsCurrency(current.amount, language) }))}
-                aria-label={copy("Valor", "Amount")}
-              />
-            </div>
           </label>
 
           <div className="transaction-modal-actions">
