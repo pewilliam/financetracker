@@ -3,6 +3,7 @@ import { ChevronDown, Filter, Plus } from "lucide-react";
 import InvoiceCard from "../components/InvoiceCard.jsx";
 import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
 import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
+import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 import InstallmentModal from "../modals/InstallmentModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { defaultInstallmentForm, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
@@ -15,10 +16,11 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [editingItem, setEditingItem] = useState(null);
+  const [viewingItem, setViewingItem] = useState(null);
   const [creatingEntry, setCreatingEntry] = useState(null);
   const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
   const statusMenuRef = useRef(null);
-  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem);
+  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem || viewingItem);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
@@ -133,6 +135,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
 
   const openEntryModal = (invoice, kind) => {
     setEditingItem(null);
+    setViewingItem(null);
     setInstallmentForm(defaultInstallmentForm(invoice.id));
     setCreatingEntry({ invoice, kind, entryMode: "single" });
   };
@@ -148,7 +151,44 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
 
   const manageReceivable = (option) => {
     setEditingItem(null);
+    setViewingItem(null);
     onManageReceivable?.(option);
+  };
+
+  const invoiceItemInsight = ({ invoice: targetInvoice, item: targetItem, context }) => {
+    const targetCategories = targetItem.categories?.length ? targetItem.categories : targetItem.category ? [targetItem.category] : [];
+    const category = targetCategories[0];
+    if (!category) return null;
+    const targetIsRefund = context === "invoice" && Number(targetItem.amount) < 0;
+    const monthEntries = invoices
+      .filter((invoice) => yearMonthKey(invoice.due_date) === yearMonthKey(targetInvoice.due_date))
+      .flatMap((invoice) => [
+        ...(invoice.items || []).map((item) => ({ ...item, invoice, context: "invoice" })),
+        ...(invoice.installment_items || []).map((item) => ({ ...item, invoice, context: "installment" })),
+      ])
+      .filter((entry) => {
+        const entryCategories = entry.categories?.length ? entry.categories : entry.category ? [entry.category] : [];
+        const isRefund = entry.context === "invoice" && Number(entry.amount) < 0;
+        return isRefund === targetIsRefund && entryCategories.some((item) => item.id === category.id);
+      })
+      .sort((left, right) => String(left.invoice.due_date).localeCompare(String(right.invoice.due_date))
+        || String(left.created_at || "").localeCompare(String(right.created_at || ""))
+        || Number(left.id) - Number(right.id));
+    const position = monthEntries.findIndex((entry) => entry.id === targetItem.id && entry.context === context && entry.invoice.id === targetInvoice.id) + 1;
+    const categoryTotal = monthEntries.reduce((total, entry) => total + Math.abs(Number(entry.amount || 0)), 0);
+    const share = categoryTotal ? Math.min((Math.abs(Number(targetItem.amount || 0)) / categoryTotal) * 100, 100) : 0;
+    const kind = targetIsRefund
+      ? (language === "en-US" ? "refund" : "reembolso")
+      : (language === "en-US" ? "expense" : "gasto");
+    return {
+      label: language === "en-US"
+        ? `#${position} ${kind} in ${category.name} across this month's invoices`
+        : `${position}º ${kind} em ${category.name} nas faturas deste mês`,
+      share,
+      shareLabel: language === "en-US"
+        ? `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% of the invoiced category total`
+        : `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% do total da categoria nas faturas`,
+    };
   };
 
   return (
@@ -248,7 +288,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
                     </button>
                     {expanded && (
                       group.items.length ? (
-                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} expenseOptions={expenseOptions} onManageReceivable={manageReceivable} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddEntry={openEntryModal} onEditItem={(targetInvoice, item) => { setCreatingEntry(null); setEditingItem({ invoice: targetInvoice, item }); }} onUpdateDueDate={updateDueDate} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onViewInstallment={onViewInstallment} />)}</div>
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} expenseOptions={expenseOptions} onManageReceivable={manageReceivable} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddEntry={openEntryModal} onEditItem={(targetInvoice, item) => { setCreatingEntry(null); setViewingItem(null); setEditingItem({ invoice: targetInvoice, item }); }} onViewItem={(targetInvoice, item, context) => { setCreatingEntry(null); setEditingItem(null); setViewingItem({ invoice: targetInvoice, item, context }); }} onUpdateDueDate={updateDueDate} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onViewInstallment={onViewInstallment} />)}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
                     )}
                   </section>
@@ -293,6 +333,24 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
           onCreateCategory={onCreateCategory}
           onSave={saveEditedItem}
           onClose={() => setEditingItem(null)}
+        />
+      )}
+      {viewingItem && (
+        <EntryDetailsModal
+          item={viewingItem.item}
+          context={viewingItem.context}
+          invoice={viewingItem.invoice}
+          insight={invoiceItemInsight(viewingItem)}
+          onClose={() => setViewingItem(null)}
+          onEdit={viewingItem.context === "invoice" ? () => {
+            const target = viewingItem;
+            setViewingItem(null);
+            setEditingItem({ invoice: target.invoice, item: target.item });
+          } : undefined}
+          onViewInstallment={viewingItem.context === "installment" ? (purchaseId) => {
+            setViewingItem(null);
+            onViewInstallment?.(purchaseId);
+          } : undefined}
         />
       )}
     </section>

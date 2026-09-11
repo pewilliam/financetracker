@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Clock3, Edit3, Link2, Plus, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
+import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 
 function isFutureDate(dateString) {
   const today = new Date();
@@ -8,9 +10,50 @@ function isFutureDate(dateString) {
   return new Date(`${dateString}T00:00:00`) > today;
 }
 
-export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete }) {
+export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete, onOverlayChange }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const [viewingTransaction, setViewingTransaction] = useState(null);
+
+  useEffect(() => {
+    onOverlayChange?.(Boolean(viewingTransaction));
+    return () => onOverlayChange?.(false);
+  }, [viewingTransaction, onOverlayChange]);
+
+  const transactionInsight = (transaction) => {
+    const category = (transaction.categories?.length ? transaction.categories : transaction.category ? [transaction.category] : [])[0];
+    if (!category) return null;
+    const categoryEntries = days
+      .flatMap((day) => day.transactions)
+      .filter((entry) => {
+        const entryCategories = entry.categories?.length ? entry.categories : entry.category ? [entry.category] : [];
+        return entry.type === transaction.type && entryCategories.some((item) => item.id === category.id);
+      })
+      .sort((left, right) => String(left.date).localeCompare(String(right.date)) || Number(left.id) - Number(right.id));
+    const position = categoryEntries.findIndex((entry) => entry.id === transaction.id) + 1;
+    const categoryTotal = categoryEntries.reduce((total, entry) => total + Math.abs(Number(entry.amount || 0)), 0);
+    const share = categoryTotal ? Math.min((Math.abs(Number(transaction.amount || 0)) / categoryTotal) * 100, 100) : 0;
+    const kind = transaction.type === "income"
+      ? (language === "en-US" ? "income" : "ganho")
+      : (language === "en-US" ? "expense" : "gasto");
+    return {
+      label: language === "en-US"
+        ? `#${position} ${kind} in ${category.name} this month`
+        : `${position}º ${kind} em ${category.name} neste mês`,
+      share,
+      shareLabel: language === "en-US"
+        ? `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% of the category total`
+        : `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% do total da categoria`,
+    };
+  };
+
+  const openWithKeyboard = (event, transaction) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setViewingTransaction(transaction);
+    }
+  };
 
   if (!days.length) {
     return (
@@ -40,7 +83,15 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
               <div className="day-transactions">
                 {day.transactions.length ? (
                   day.transactions.map((tx) => (
-                    <div className="transaction-line" key={tx.id}>
+                    <div
+                      className="transaction-line is-clickable"
+                      key={tx.id}
+                      role="button"
+                      tabIndex="0"
+                      onClick={() => setViewingTransaction(tx)}
+                      onKeyDown={(event) => openWithKeyboard(event, tx)}
+                      aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${tx.description || tt("monthlyTable.noDescription", "Sem descrição")}`}
+                    >
                       <span className={`type-chip ${tx.type === "income" ? "income" : "expense"}`}>
                         {tx.type === "income" ? tt("monthlyTable.incomeChip", "GANHO") : tt("monthlyTable.expenseChip", "GASTO")}
                       </span>
@@ -58,10 +109,10 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
                         <span className="tx-description-text">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
                       </span>
                       <div className="row-actions">
-                        <button className="icon-btn small" onClick={() => onEdit(tx)} aria-label="Editar">
+                        <button className="icon-btn small" onClick={(event) => { event.stopPropagation(); onEdit(tx); }} aria-label="Editar">
                           <Edit3 size={15} />
                         </button>
-                        <button className="icon-btn small danger" onClick={() => onDelete(tx)} aria-label="Excluir">
+                        <button className="icon-btn small danger" onClick={(event) => { event.stopPropagation(); onDelete(tx); }} aria-label="Excluir">
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -93,6 +144,18 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete })
           </div>
         )}
       </div>
+      {viewingTransaction && (
+        <EntryDetailsModal
+          item={viewingTransaction}
+          insight={transactionInsight(viewingTransaction)}
+          onClose={() => setViewingTransaction(null)}
+          onEdit={() => {
+            const transaction = viewingTransaction;
+            setViewingTransaction(null);
+            onEdit(transaction);
+          }}
+        />
+      )}
     </div>
   );
 }

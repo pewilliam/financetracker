@@ -80,7 +80,7 @@ function InstallmentBadge({ item, language, onView }) {
       <button
         className="installment-badge"
         type="button"
-        onClick={() => { setTooltip(null); onView?.(item.purchase_id); }}
+        onClick={(event) => { event.stopPropagation(); setTooltip(null); onView?.(item.purchase_id); }}
         onMouseEnter={showTooltip}
         onMouseLeave={() => setTooltip(null)}
         onFocus={showTooltip}
@@ -113,7 +113,7 @@ function InstallmentBadge({ item, language, onView }) {
   );
 }
 
-export default function InvoiceCard({ invoice, expenseOptions = [], onManageReceivable, allowOverdueInvoiceEdits = false, onAddEntry, onEditItem, onUpdateDueDate, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onViewInstallment }) {
+export default function InvoiceCard({ invoice, expenseOptions = [], onManageReceivable, allowOverdueInvoiceEdits = false, onAddEntry, onEditItem, onViewItem, onUpdateDueDate, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [itemsOpen, setItemsOpen] = useState(false);
@@ -169,6 +169,14 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
     onEditItem?.(invoice, item);
   };
 
+  const openItemWithKeyboard = (event, item, context) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onViewItem?.(invoice, item, context);
+    }
+  };
+
   const renderQuickAddActions = () => (
     <div className="invoice-quick-add-actions">
       <button className="invoice-quick-add-button item" type="button" onClick={() => onAddEntry?.(invoice, "expense")} aria-label={addItemLabel}>
@@ -188,7 +196,15 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
     const refund = Number(item.amount) < 0;
     const itemCategories = item.categories?.length ? item.categories : item.category ? [item.category] : [];
     return (
-      <div className={`invoice-item ${refund ? "refund-line" : ""}`} key={`item-${item.id}`}>
+      <div
+        className={`invoice-item is-clickable ${refund ? "refund-line" : ""}`}
+        key={`item-${item.id}`}
+        role="button"
+        tabIndex="0"
+        onClick={() => onViewItem?.(invoice, item, "invoice")}
+        onKeyDown={(event) => openItemWithKeyboard(event, item, "invoice")}
+        aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${item.description}`}
+      >
         <div className="invoice-item-main">
           <span className="invoice-item-description">
             {refund && <em className="refund-badge">{refundLabel}</em>}
@@ -198,10 +214,10 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         </div>
         <strong>{formatMoney(item.amount)}</strong>
         <span className="invoice-item-actions">
-          <button className="icon-btn small" type="button" onClick={() => startEditingItem(item)} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
+          <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); startEditingItem(item); }} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
             <Pencil size={15} />
           </button>
-          <button className="icon-btn small danger" type="button" onClick={() => onDeleteItem(invoice.id, item.id)} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
+          <button className="icon-btn small danger" type="button" onClick={(event) => { event.stopPropagation(); onDeleteItem(invoice.id, item.id); }} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
             <Trash2 size={15} />
           </button>
         </span>
@@ -269,8 +285,13 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
                   {regularItems.map(renderRegularItem)}
                   {installmentItems.map((item) => (
                     <div
-                      className="invoice-item installment-line"
+                      className="invoice-item installment-line is-clickable"
                       key={`installment-${item.id}`}
+                      role="button"
+                      tabIndex="0"
+                      onClick={() => onViewItem?.(invoice, item, "installment")}
+                      onKeyDown={(event) => openItemWithKeyboard(event, item, "installment")}
+                      aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${item.purchase_description || item.description}`}
                     >
                       <div className="invoice-item-main">
                         <span className="invoice-item-description">
@@ -281,10 +302,10 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
                       </div>
                       <strong>{formatMoney(item.amount)}</strong>
                       <span className="invoice-item-actions">
-                        <button className="icon-btn small" type="button" onClick={() => onManageReceivable?.(expenseOptions.find((option) => option.source_type === "installment_item" && option.source_id === item.id))} aria-label="Associar recebível" title="Associar recebível">
+                        <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); onManageReceivable?.(expenseOptions.find((option) => option.source_type === "installment_item" && option.source_id === item.id)); }} aria-label="Associar recebível" title="Associar recebível">
                           <CircleDollarSign size={15} />
                         </button>
-                        <button className="icon-btn small danger" type="button" onClick={() => onDeleteInstallmentItem(item.id)} aria-label="Remover parcela">
+                        <button className="icon-btn small danger" type="button" onClick={(event) => { event.stopPropagation(); onDeleteInstallmentItem(item.id); }} aria-label="Remover parcela">
                           <Trash2 size={15} />
                         </button>
                       </span>
