@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Layers3, Link2, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
 import ExpensePicker from "./ExpensePicker.jsx";
 import { useI18n } from "../i18n/index.ts";
+import { isMobileViewport } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, getFormatLocale, parseTypedMoneyInput } from "../utils/format.js";
 
 function getDayFromDate(dateString) {
@@ -79,6 +80,13 @@ export default function TransactionForm({
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [saving, setSaving] = useState(false);
+  const amountInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || isMobileViewport()) return undefined;
+    const focusFrame = requestAnimationFrame(() => amountInputRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(focusFrame);
+  }, [open]);
 
   useEffect(() => {
     if (initial) {
@@ -291,6 +299,7 @@ export default function TransactionForm({
             <div className={`money-input ${isExpense ? "danger" : "success"}`}>
               <span>R$</span>
               <input
+                ref={amountInputRef}
                 inputMode="decimal"
                 value={form.amount.replace(/^R\$\s?/, "")}
                 onBlur={() => handleBlur("amount")}

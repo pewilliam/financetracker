@@ -185,7 +185,7 @@ function MonthsTutorial({ content, layoutKey, open, stepIndex, onBack, onClose, 
   );
 }
 
-export default function MonthsPage({ monthData, summary, monthCards, year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction, onOverlayChange }) {
+export default function MonthsPage({ monthData, summary, monthCards, expenseOptions = [], year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction, onLoadCategoryDetails, onOverlayChange }) {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -327,7 +327,7 @@ export default function MonthsPage({ monthData, summary, monthCards, year, month
       </div>
       {viewMode === "table" ? (
         <div ref={tableRef} data-months-tour="table">
-          <MonthlyTable days={monthData.days} summary={summary} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} onOverlayChange={onOverlayChange} />
+          <MonthlyTable days={monthData.days} summary={summary} expenseOptions={expenseOptions} onAdd={openAddForm} onEdit={(tx) => { setEditing(tx); setDrawerOpen(true); }} onDelete={removeTransaction} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} />
         </div>
       ) : (
         <div className="month-year-list">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { CalendarPlus, Check, CreditCard, Trash2, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
@@ -6,7 +6,7 @@ import InvoiceTemplateModal from "./InvoiceTemplateModal.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { CREATE_TEMPLATE_VALUE } from "../app/constants.js";
-import { addMonthsToDate, formatMonthShort, nextDueDateFromDay, normalizeInvoiceColor } from "../app/helpers.js";
+import { addMonthsToDate, formatMonthShort, isMobileViewport, nextDueDateFromDay, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 export default function InvoiceModal({ form, setForm, templates, categories = [], onCreateCategory, onCreateTemplate, onSubmit, onClose }) {
@@ -15,11 +15,18 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const templateSelectRef = useRef(null);
   const duplicateMonths = Math.min(23, Math.max(1, Number(form.duplicate_months) || 1));
   const totalCount = form.duplicate_next_month ? duplicateMonths + 1 : 1;
   const startLabel = form.due_date ? formatMonthShort(form.due_date) : "";
   const endLabel = form.due_date ? formatMonthShort(addMonthsToDate(form.due_date, totalCount - 1)) : "";
   const selectedTemplate = templates.find((template) => String(template.id) === String(form.template_id));
+
+  useEffect(() => {
+    if (isMobileViewport()) return undefined;
+    const focusFrame = requestAnimationFrame(() => templateSelectRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(focusFrame);
+  }, []);
 
   const updateForm = (patch) => setForm({ ...form, ...patch });
 
@@ -138,7 +145,7 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
                 <span>{tt("invoiceModal.invoiceModel", "Modelo de fatura")}</span>
                 <div className="template-select-shell">
                   {selectedTemplate && <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(selectedTemplate.color) }} />}
-                  <select value={form.template_id} onChange={(event) => selectTemplate(event.target.value)} required>
+                  <select ref={templateSelectRef} value={form.template_id} onChange={(event) => selectTemplate(event.target.value)} required>
                     <option value="">{tt("invoiceModal.selectModel", "Selecione um modelo")}</option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>● {template.name} — {template.default_due_day}/mês</option>

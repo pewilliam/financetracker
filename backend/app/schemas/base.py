@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated
 
@@ -14,5 +15,13 @@ NonNegativeMoney = Annotated[Decimal, Field(ge=0, le=MAX_MONEY_AMOUNT)]
 PositiveMoney = Annotated[Decimal, Field(gt=0, le=MAX_MONEY_AMOUNT)]
 
 
+def serialize_datetime(value: datetime) -> str:
+    normalized = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return normalized.isoformat().replace("+00:00", "Z")
+
+
 class APIModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={Decimal: float, datetime: serialize_datetime},
+    )

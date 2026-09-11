@@ -51,6 +51,7 @@ class LinkedExpenseOut(APIModel):
     description: str
     amount: Decimal
     date: date
+    created_at: Optional[datetime] = None
     origin: str
     invoice_name: Optional[str] = None
     purchase_id: Optional[int] = None

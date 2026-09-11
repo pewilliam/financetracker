@@ -1,5 +1,5 @@
 import unittest
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceTemplate, Receivable, ReceivablePerson, Transaction, User
+from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Transaction, User
 from app.routers.receivables import create_receivable, list_linked_receivable_transactions, list_receivable_expense_options
 from app.routers.transactions import create_transaction, update_transaction
 from app.schemas.receivables import ReceivableCreate, ReceivableExpenseLinkIn
@@ -36,6 +36,71 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
             due_date=date(2026, 9, 10),
             expense_link=link,
         )
+
+    def test_expense_options_expose_the_source_registration_time(self):
+        template = InvoiceTemplate(
+            user_id=self.user.id,
+            name="Cartão",
+            color="#3B82F6",
+            default_due_day=10,
+            active=True,
+        )
+        self.db.add(template)
+        self.db.flush()
+        invoice = Invoice(
+            user_id=self.user.id,
+            template_id=template.id,
+            due_date=date(2026, 9, 30),
+            total_amount=Decimal("0.00"),
+        )
+        transaction = Transaction(
+            user_id=self.user.id,
+            date=date(2026, 9, 10),
+            type="expense",
+            amount=Decimal("20.00"),
+            description="Avulso",
+            created_at=datetime(2026, 9, 10, 12, 0),
+        )
+        self.db.add_all([invoice, transaction])
+        self.db.flush()
+        invoice_item = InvoiceItem(
+            invoice_id=invoice.id,
+            description="Item da fatura",
+            amount=Decimal("30.00"),
+            created_at=datetime(2026, 8, 1, 9, 0),
+        )
+        purchase = InstallmentPurchase(
+            user_id=self.user.id,
+            description="Compra antiga",
+            total_amount=Decimal("40.00"),
+            installment_count=1,
+            installment_value=Decimal("40.00"),
+            first_invoice_id=invoice.id,
+            created_at=datetime(2026, 7, 1, 8, 0),
+        )
+        self.db.add_all([invoice_item, purchase])
+        self.db.flush()
+        installment_item = InstallmentItem(
+            purchase_id=purchase.id,
+            invoice_id=invoice.id,
+            installment_number=1,
+            amount=Decimal("40.00"),
+            description="Compra antiga (1/1)",
+            status="pending",
+            created_at=datetime(2026, 9, 1, 8, 0),
+        )
+        self.db.add(installment_item)
+        self.db.commit()
+
+        options = {
+            (option.source_type, option.source_id): option
+            for option in list_receivable_expense_options(self.db, self.user)
+        }
+
+        self.assertEqual(options[("transaction", transaction.id)].created_at, transaction.created_at)
+        self.assertEqual(options[("invoice_item", invoice_item.id)].created_at, invoice_item.created_at)
+        self.assertEqual(options[("installment_item", installment_item.id)].created_at, purchase.created_at)
+        self.assertEqual(options[("installment_purchase", purchase.id)].created_at, purchase.created_at)
 
     def test_partial_receivable_can_link_to_month_expense(self):
         expense = Transaction(

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { AlertTriangle, ArrowRight, Banknote, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Clock3, CreditCard, Loader2, PieChart as PieChartIcon, Plus, ReceiptText, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, ChevronDown, ChevronUp, Clock3, Loader2, PieChart as PieChartIcon, Plus, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useI18n } from "../i18n/index.ts";
-import { formatDateShort, formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import { formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
 
 function changePercentage(current, previous) {
   if (!previous) return current ? 100 : 0;
@@ -66,72 +66,6 @@ function buildVisibleExpenseGroups(items, categories, ignoredCategoryIds) {
       }),
     }))
     .sort((left, right) => right.amount - left.amount);
-}
-
-function CategoryExpenseDetails({ group, categories, language, loading, error, income = false, onClose }) {
-  const details = group.details || [];
-  const groupCategories = (group.category_ids || []).map((categoryId) => categories.find((category) => category.id === categoryId)).filter(Boolean);
-  const average = details.length ? Number(group.amount || 0) / details.length : 0;
-  const text = language === "en-US"
-    ? income
-      ? { eyebrow: "Income details", total: "Group total", entries: "entries", average: "Average income", empty: "No income details available.", loading: "Loading income…", error: "Could not load the income details.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
-      : { eyebrow: "Expense details", total: "Group total", entries: "entries", average: "Average expense", empty: "No expense details available.", loading: "Loading expenses…", error: "Could not load the expense details.", standalone: "Standalone entry", invoice: "Invoice", installment: "Installment" }
-    : income
-      ? { eyebrow: "Detalhes dos ganhos", total: "Total do grupo", entries: "lançamentos", average: "Ganho médio", empty: "Nenhum ganho disponível neste grupo.", loading: "Carregando ganhos…", error: "Não foi possível carregar os detalhes dos ganhos.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" }
-      : { eyebrow: "Detalhes dos gastos", total: "Total do grupo", entries: "lançamentos", average: "Gasto médio", empty: "Nenhum detalhe disponível para este grupo.", loading: "Carregando lançamentos…", error: "Não foi possível carregar os detalhes dos gastos.", standalone: "Lançamento avulso", invoice: "Fatura", installment: "Parcela" };
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <div className="modal-layer categories-detail-layer">
-      <button className="modal-backdrop" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close details" : "Fechar detalhes"} />
-      <section className="modal-card categories-detail-modal" role="dialog" aria-modal="true" aria-labelledby="category-expense-detail-title">
-        <header className="categories-detail-header" style={{ "--category-color": group.color }}>
-          <i><Tags size={20} /></i>
-          <div><p className="eyebrow">{text.eyebrow}</p><h2 id="category-expense-detail-title">{group.name}</h2></div>
-          <button className="icon-btn" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close" : "Fechar"}><X size={18} /></button>
-        </header>
-
-        {groupCategories.length > 0 && <div className="categories-detail-tags">{groupCategories.map((category) => <span key={category.id} style={{ "--category-color": category.color }}><i />{category.name}</span>)}</div>}
-
-        <div className="categories-detail-summary">
-          <div><small>{text.total}</small><strong>{formatMoney(group.amount, language)}</strong><span>{Number(group.percentage || 0).toFixed(1)}% {language === "en-US" ? "of the month" : "do mês"}</span></div>
-          <div><small>{language === "en-US" ? "Composition" : "Composição"}</small><strong>{loading ? "—" : details.length}</strong><span>{text.entries}</span></div>
-          <div><small>{text.average}</small><strong>{loading ? "—" : formatMoney(average, language)}</strong><span>{language === "en-US" ? "per entry" : "por lançamento"}</span></div>
-        </div>
-
-        <div className="categories-detail-list">
-          {loading ? <div className="categories-detail-status"><Loader2 className="spin" size={22} /><span>{text.loading}</span></div> : error ? <div className="categories-detail-status error"><AlertTriangle size={22} /><span>{text.error}</span></div> : details.length ? details.map((detail) => {
-            const installment = detail.source_type === "installment_item";
-            const invoice = detail.source_type === "invoice_item";
-            const SourceIcon = installment || invoice ? CreditCard : ReceiptText;
-            const origin = installment
-              ? `${detail.invoice_name ? `${text.invoice} ${detail.invoice_name} · ` : ""}${text.installment} ${detail.installment_number}/${detail.installment_count}`
-              : invoice
-                ? `${text.invoice} ${detail.invoice_name || ""}`.trim()
-                : text.standalone;
-            return (
-              <article className="categories-detail-item" key={`${detail.source_type}-${detail.source_id}`}>
-                <i><SourceIcon size={17} /></i>
-                <span><strong>{detail.description}</strong><small><CalendarDays size={12} /> {formatDateShort(detail.date, language)}<em>·</em>{origin}</small></span>
-                <strong className={income ? "income" : Number(detail.amount) < 0 ? "refund" : ""}>{formatMoney(detail.amount, language)}</strong>
-              </article>
-            );
-          }) : <div className="categories-detail-empty"><ReceiptText size={22} /><span>{text.empty}</span></div>}
-        </div>
-      </section>
-    </div>,
-    document.body,
-  );
 }
 
 function CategoryChartTooltip({ active, payload, language }) {
@@ -646,7 +580,7 @@ export default function CategoriesPage({
           </div>
         </article>
       </section>
-      {selectedExpenseGroup && <CategoryExpenseDetails group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
+      {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
     </div>
   );
 }

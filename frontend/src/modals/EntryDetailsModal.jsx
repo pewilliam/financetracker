@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -15,10 +15,20 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
+import CategoryExpenseDetailsModal from "./CategoryExpenseDetailsModal.jsx";
 
 function categoriesFor(item) {
   if (item?.categories?.length) return item.categories;
   return item?.category ? [item.category] : [];
+}
+
+function categoryGroupKey(value) {
+  const categoryIds = value?.category_ids?.length
+    ? value.category_ids
+    : value?.category_id !== null && value?.category_id !== undefined
+      ? [value.category_id]
+      : [];
+  return categoryIds.map(String).sort().join("-");
 }
 
 function formatCreatedAt(value, language) {
@@ -36,12 +46,16 @@ export default function EntryDetailsModal({
   context = "transaction",
   invoice,
   insight,
+  onLoadCategoryDetails,
   onClose,
   onEdit,
   onViewInstallment,
 }) {
   const { language } = useI18n();
   const closeButtonRef = useRef(null);
+  const categoryCardRef = useRef(null);
+  const categoryRequestRef = useRef(0);
+  const [categoryDetails, setCategoryDetails] = useState(null);
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const isTransaction = context === "transaction";
   const isInstallment = context === "installment";
@@ -52,15 +66,63 @@ export default function EntryDetailsModal({
   const categories = categoriesFor(item);
   const createdAt = formatCreatedAt(item.created_at, language);
   const detailDate = isTransaction ? item.date : invoice?.due_date;
+  const canOpenCategory = categories.length > 0 && Boolean(detailDate && onLoadCategoryDetails);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !categoryDetails) onClose();
     };
     document.addEventListener("keydown", handleKeyDown);
-    closeButtonRef.current?.focus();
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [categoryDetails, onClose]);
+
+  useEffect(() => () => {
+    categoryRequestRef.current += 1;
+  }, []);
+
+  const openCategoryDetails = async () => {
+    if (!canOpenCategory) return;
+    const categoryIds = categories.map((category) => category.id).sort((left, right) => Number(left) - Number(right));
+    const estimatedTotal = insight?.share > 0
+      ? Math.abs(Number(item.amount || 0)) / (insight.share / 100)
+      : Math.abs(Number(item.amount || 0));
+    const initialGroup = {
+      category_id: categoryIds.length === 1 ? categoryIds[0] : null,
+      category_ids: categoryIds,
+      name: categories.map((category) => category.name).sort((left, right) => left.localeCompare(right, language)).join(" + "),
+      color: categories[0]?.color,
+      amount: estimatedTotal,
+      percentage: 0,
+      details: [],
+    };
+    const requestId = ++categoryRequestRef.current;
+    setCategoryDetails({ group: initialGroup, loading: true, error: false });
+
+    try {
+      const [targetYear, targetMonth] = String(detailDate).slice(0, 7).split("-").map(Number);
+      const breakdown = await onLoadCategoryDetails(targetYear, targetMonth);
+      if (requestId !== categoryRequestRef.current) return;
+      const groups = isIncome
+        ? breakdown.income_chart_items || breakdown.income_items || []
+        : breakdown.chart_items || breakdown.items || [];
+      const loadedGroup = groups.find((group) => categoryGroupKey(group) === categoryGroupKey(initialGroup));
+      setCategoryDetails({ group: loadedGroup || initialGroup, loading: false, error: !loadedGroup });
+    } catch {
+      if (requestId === categoryRequestRef.current) {
+        setCategoryDetails({ group: initialGroup, loading: false, error: true });
+      }
+    }
+  };
+
+  const closeCategoryDetails = () => {
+    categoryRequestRef.current += 1;
+    setCategoryDetails(null);
+    requestAnimationFrame(() => categoryCardRef.current?.focus());
+  };
 
   const Icon = isInstallment
     ? CreditCard
@@ -167,7 +229,20 @@ export default function EntryDetailsModal({
                 <strong>{createdAt}</strong>
               </div>
             )}
-            <section className={`entry-detail-field entry-detail-categories ${insight ? "has-insight" : ""}`}>
+            <section
+              ref={categoryCardRef}
+              className={`entry-detail-field entry-detail-categories ${insight ? "has-insight" : ""} ${canOpenCategory ? "is-clickable" : ""}`}
+              role={canOpenCategory ? "button" : undefined}
+              tabIndex={canOpenCategory ? 0 : undefined}
+              onClick={openCategoryDetails}
+              onKeyDown={(event) => {
+                if (canOpenCategory && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  openCategoryDetails();
+                }
+              }}
+              aria-label={canOpenCategory ? copy("Ver todos os lançamentos desta categoria", "View all entries in this category") : undefined}
+            >
               <span><Tag size={15} /> {categories.length === 1 ? copy("Categoria", "Category") : copy("Categorias", "Categories")}</span>
               <div>
                 {categories.length ? categories.map((category) => (
@@ -215,6 +290,17 @@ export default function EntryDetailsModal({
           )}
         </footer>
       </section>
+      {categoryDetails && (
+        <CategoryExpenseDetailsModal
+          group={categoryDetails.group}
+          categories={categories}
+          language={language}
+          loading={categoryDetails.loading}
+          error={categoryDetails.error}
+          income={isIncome}
+          onClose={closeCategoryDetails}
+        />
+      )}
     </div>
   );
 }

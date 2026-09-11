@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock3, Edit3, Link2, Plus, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
+import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 
 function isFutureDate(dateString) {
@@ -10,7 +11,7 @@ function isFutureDate(dateString) {
   return new Date(`${dateString}T00:00:00`) > today;
 }
 
-export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete, onOverlayChange }) {
+export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd, onEdit, onDelete, onLoadCategoryDetails, onOverlayChange }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [viewingTransaction, setViewingTransaction] = useState(null);
@@ -23,6 +24,14 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete, o
   const transactionInsight = (transaction) => {
     const category = (transaction.categories?.length ? transaction.categories : transaction.category ? [transaction.category] : [])[0];
     if (!category) return null;
+    if (transaction.type === "expense") {
+      return buildUnifiedExpenseInsight(expenseOptions, {
+        sourceType: "transaction",
+        sourceId: transaction.id,
+        date: transaction.date,
+        amount: transaction.amount,
+      }, category, language);
+    }
     const categoryEntries = days
       .flatMap((day) => day.transactions)
       .filter((entry) => {
@@ -46,6 +55,11 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete, o
         : `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% do total da categoria`,
     };
   };
+
+  const viewingInsight = useMemo(
+    () => viewingTransaction ? transactionInsight(viewingTransaction) : null,
+    [days, expenseOptions, language, viewingTransaction],
+  );
 
   const openWithKeyboard = (event, transaction) => {
     if (event.target !== event.currentTarget) return;
@@ -147,7 +161,8 @@ export default function MonthlyTable({ days, summary, onAdd, onEdit, onDelete, o
       {viewingTransaction && (
         <EntryDetailsModal
           item={viewingTransaction}
-          insight={transactionInsight(viewingTransaction)}
+          insight={viewingInsight}
+          onLoadCategoryDetails={onLoadCategoryDetails}
           onClose={() => setViewingTransaction(null)}
           onEdit={() => {
             const transaction = viewingTransaction;

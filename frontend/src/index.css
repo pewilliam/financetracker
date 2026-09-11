@@ -583,12 +583,12 @@ button:focus-visible {
   height: 42px;
   display: grid;
   place-items: center;
+  justify-content: center;
   border: 0;
-  border-left: 1px solid var(--border);
-  background: rgba(20,160,120,0.06);
+  background: transparent;
   color: var(--muted);
+  cursor: text;
 }
-.date-trigger:hover { color: var(--primary); }
 .date-popover {
   z-index: 80;
   width: min(292px, calc(100vw - 32px));
@@ -3026,8 +3026,7 @@ select {
   color: #fff;
 }
 .invoice-due-editor .date-trigger {
-  border-left-color: rgba(255,255,255,.28);
-  background: rgba(255,255,255,.12);
+  background: transparent;
   color: #fff;
 }
 .invoice-due-editor .icon-btn {
@@ -3393,7 +3392,21 @@ select {
   z-index: 45;
 }
 .month-new-fab,
-.dashboard-new-fab { display: none; }
+.dashboard-new-fab {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 20;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(20,160,120,.35);
+}
 .modal-card {
   position: relative;
   z-index: 1;
@@ -6271,6 +6284,19 @@ select {
 .entry-detail-created { align-content: center; }
 .entry-detail-categories { display: grid; gap: 9px; }
 .entry-detail-categories.has-insight { grid-column: 1 / -1; }
+.entry-detail-categories.is-clickable {
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.entry-detail-categories.is-clickable:hover,
+.entry-detail-categories.is-clickable:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+  background: color-mix(in srgb, var(--card) 90%, var(--primary));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 13%, transparent), 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+  transform: translateY(-1px);
+}
+.entry-detail-categories.is-clickable:active { transform: translateY(0); }
 .entry-detail-categories > div { display: flex; flex-wrap: wrap; gap: 7px; }
 .entry-detail-categories .transaction-category-pill { margin: 0; }
 .entry-detail-categories em { color: var(--muted); font-size: 13px; font-style: normal; }
@@ -7525,6 +7551,11 @@ select {
 }
 .category-multi-options > button:hover,
 .category-multi-options > button.selected { background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.category-multi-options > button:focus-visible {
+  outline: 0;
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 72%, transparent);
+}
 .category-multi-options > button > i { width: 9px; height: 9px; border-radius: 3px; background: var(--category-color); }
 .category-multi-options > button > span { overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .category-multi-options > button > b { display: grid; place-items: center; color: var(--primary); }

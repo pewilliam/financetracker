@@ -86,6 +86,83 @@ export default function CategorySelect({ categories = [], value = "", values, on
     setOpen(false);
   };
 
+  const handleFocusLeave = (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget && (rootRef.current?.contains(nextTarget) || menuRef.current?.contains(nextTarget))) return;
+    setOpen(false);
+  };
+
+  const categoryOptionButtons = () => (
+    Array.from(menuRef.current?.querySelectorAll(".category-multi-options > button") || [])
+  );
+
+  const focusCategoryOption = (index) => {
+    const options = categoryOptionButtons();
+    if (!options.length) return false;
+    options[(index + options.length) % options.length].focus();
+    return true;
+  };
+
+  const closeAndFocusSubmit = () => {
+    const form = rootRef.current?.closest("form");
+    const submitControl = form?.querySelector([
+      'button[type="submit"]:not(:disabled)',
+      'input[type="submit"]:not(:disabled)',
+      'button:not([type]):not(:disabled)',
+    ].join(", "));
+    setOpen(false);
+    requestAnimationFrame(() => {
+      if (submitControl) submitControl.focus();
+      else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+  };
+
+  const handleSearchKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAndFocusSubmit();
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      focusCategoryOption(event.key === "ArrowDown" ? 0 : -1);
+      return;
+    }
+
+    if (event.key === "Tab" && !event.shiftKey && focusCategoryOption(0)) {
+      event.preventDefault();
+    }
+  };
+
+  const handleOptionKeyDown = (event, index) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAndFocusSubmit();
+      return;
+    }
+
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      searchRef.current?.focus();
+      return;
+    }
+
+    const targetIndex = {
+      ArrowDown: index + 1,
+      ArrowUp: index - 1,
+      Home: 0,
+      End: categoryOptionButtons().length - 1,
+    }[event.key];
+
+    if (targetIndex !== undefined) {
+      event.preventDefault();
+      focusCategoryOption(targetIndex);
+    }
+  };
+
   const handleNativeSelect = (event) => {
     const nextValue = event.target.value;
     if (!nextValue) return;
@@ -103,7 +180,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
   )) : <span className="category-multi-placeholder">Sem categoria</span>;
 
   return (
-    <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef}>
+    <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef} onBlurCapture={handleFocusLeave}>
       <div className="category-multi-desktop-control">
         <button className="category-multi-trigger" type="button" onClick={() => { setSearch(""); setOpen((current) => !current); }} aria-haspopup="listbox" aria-expanded={open}>
           <span className="category-multi-values">{selectedValues}</span>
@@ -140,18 +217,16 @@ export default function CategorySelect({ categories = [], value = "", values, on
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setOpen(false);
-              }}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Buscar categoria..."
               aria-label="Buscar categoria"
             />
           </div>
           <div className="category-multi-options" role="listbox" aria-label="Categorias" aria-multiselectable="true">
-            {filteredCategories.map((category) => {
+            {filteredCategories.map((category, index) => {
               const checked = selectedIds.includes(String(category.id));
               return (
-                <button className={checked ? "selected" : ""} type="button" role="option" aria-selected={checked} onClick={() => toggle(category.id)} key={category.id}>
+                <button className={checked ? "selected" : ""} type="button" role="option" tabIndex={-1} aria-selected={checked} onClick={() => toggle(category.id)} onKeyDown={(event) => handleOptionKeyDown(event, index)} key={category.id}>
                   <i style={{ "--category-color": category.color }} />
                   <span>{category.name}</span>
                   <b>{checked && <Check size={14} />}</b>

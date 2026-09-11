@@ -72,6 +72,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
   const [text, setText] = useState(formatDisplayDate(value, language));
   const [cursor, setCursor] = useState(parsedValue || new Date());
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
   const popoverRef = useRef(null);
   const [popoverStyle, setPopoverStyle] = useState(null);
 
@@ -145,6 +146,12 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
     onBlur?.();
   };
 
+  const handleFocusLeave = (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget && (rootRef.current?.contains(nextTarget) || popoverRef.current?.contains(nextTarget))) return;
+    setOpen(false);
+  };
+
   const handleInputBlur = () => {
     const nextValue = parseDisplayDate(text, language);
     if (nextValue) onChange(nextValue);
@@ -153,7 +160,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
   };
 
   return (
-    <div className={`date-field ${open ? "open" : ""} ${className}`} ref={rootRef}>
+    <div className={`date-field ${open ? "open" : ""} ${className}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
       <div className="date-native-control">
         <div className="date-input-shell" aria-hidden="true">
           <div className="date-native-value">
@@ -173,6 +180,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       <div className="date-custom-control">
         <div className="date-input-shell">
           <input
+            ref={inputRef}
             inputMode="numeric"
             placeholder={language === "en-US" ? "mm/dd/yyyy" : "dd/mm/aaaa"}
             value={text}
@@ -181,9 +189,16 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
             onFocus={() => setOpen(true)}
             aria-invalid={ariaInvalid}
           />
-          <button type="button" className="date-trigger" onClick={() => setOpen((current) => !current)} aria-label={language === "en-US" ? "Open calendar" : "Abrir calendario"}>
+          <span
+            className="date-trigger"
+            aria-hidden="true"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              inputRef.current?.focus();
+            }}
+          >
             <CalendarDays size={16} />
-          </button>
+          </span>
         </div>
       </div>
 
@@ -306,8 +321,14 @@ export function MonthField({ value, onChange }) {
     setOpen(false);
   };
 
+  const handleFocusLeave = (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget && (rootRef.current?.contains(nextTarget) || popoverRef.current?.contains(nextTarget))) return;
+    setOpen(false);
+  };
+
   return (
-    <div className={`date-field month-field ${open ? "open" : ""}`} ref={rootRef}>
+    <div className={`date-field month-field ${open ? "open" : ""}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
       <button type="button" className="date-input-shell month-trigger" onClick={() => setOpen((current) => !current)}>
         <span>{formatMonthDisplay(value, language)}</span>
         <CalendarDays size={16} />

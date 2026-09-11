@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Filter, Plus } from "lucide-react";
 import InvoiceCard from "../components/InvoiceCard.jsx";
 import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
@@ -7,8 +7,9 @@ import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 import InstallmentModal from "../modals/InstallmentModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { defaultInstallmentForm, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
+import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 
-export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
@@ -160,6 +161,14 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
     const category = targetCategories[0];
     if (!category) return null;
     const targetIsRefund = context === "invoice" && Number(targetItem.amount) < 0;
+    if (!targetIsRefund) {
+      return buildUnifiedExpenseInsight(expenseOptions, {
+        sourceType: context === "installment" ? "installment_item" : "invoice_item",
+        sourceId: targetItem.id,
+        date: targetInvoice.due_date,
+        amount: targetItem.amount,
+      }, category, language);
+    }
     const monthEntries = invoices
       .filter((invoice) => yearMonthKey(invoice.due_date) === yearMonthKey(targetInvoice.due_date))
       .flatMap((invoice) => [
@@ -190,6 +199,11 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
         : `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% do total da categoria nas faturas`,
     };
   };
+
+  const viewingInsight = useMemo(
+    () => viewingItem ? invoiceItemInsight(viewingItem) : null,
+    [expenseOptions, invoices, language, viewingItem],
+  );
 
   return (
     <section>
@@ -340,7 +354,8 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
           item={viewingItem.item}
           context={viewingItem.context}
           invoice={viewingItem.invoice}
-          insight={invoiceItemInsight(viewingItem)}
+          insight={viewingInsight}
+          onLoadCategoryDetails={onLoadCategoryDetails}
           onClose={() => setViewingItem(null)}
           onEdit={viewingItem.context === "invoice" ? () => {
             const target = viewingItem;
