@@ -2,9 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import Field
-
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, NonNegativeMoney
 
 
 class BudgetIncomeCandidateOut(APIModel):
@@ -50,12 +48,12 @@ class MonthlyBudgetPlanOut(APIModel):
 
 class MonthlyBudgetPlanUpdate(APIModel):
     income_mode: Optional[Literal["transactions", "manual"]] = None
-    manual_income: Optional[Decimal] = Field(default=None, ge=0)
-    expected_income: Optional[Decimal] = Field(default=None, ge=0)
+    manual_income: Optional[NonNegativeMoney] = None
+    expected_income: Optional[NonNegativeMoney] = None
     transaction_ids: Optional[list[int]] = None
     reserve_transaction_ids: Optional[list[int]] = None
 
 
 class BudgetReserveRuleUpdate(APIModel):
     rule_type: Literal["percentage", "fixed"]
-    value: Decimal = Field(ge=0)
+    value: NonNegativeMoney

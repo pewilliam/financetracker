@@ -1,13 +1,13 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, MoneyValue, NonNegativeMoney
 from app.schemas.categories import CategoryOut
 
 
 class InvoiceItemCreate(APIModel):
     description: str
-    amount: Decimal
+    amount: MoneyValue
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
 
@@ -44,7 +44,7 @@ class InvoiceInstallmentItemOut(APIModel):
 class InvoiceCreate(APIModel):
     template_id: int
     due_date: date
-    initial_amount: Decimal = Decimal("0.00")
+    initial_amount: NonNegativeMoney = Decimal("0.00")
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
 

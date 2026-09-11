@@ -14,6 +14,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { Plus } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/format.js";
 
@@ -39,7 +40,8 @@ export default function Dashboard({
   invoices = [],
   monthData,
   categoryBreakdown = { total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [] },
-  onOpenInvoice
+  onOpenInvoice,
+  onNewTransaction
 }) {
   const { t, language } = useI18n();
   const [categoryView, setCategoryView] = useState("expenses");
@@ -224,6 +226,15 @@ export default function Dashboard({
           )) : <p className="muted">{t("dashboard.noExpenses")}</p>}
         </div>
       </section>
+
+      <button
+        className="dashboard-new-fab"
+        type="button"
+        onClick={onNewTransaction}
+        aria-label={language === "en-US" ? "New transaction" : "Novo lançamento"}
+      >
+        <Plus size={24} />
+      </button>
     </div>
   );
 }

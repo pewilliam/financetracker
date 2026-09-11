@@ -173,11 +173,13 @@ button:focus-visible {
   padding: 14px 10px;
 }
 .sidebar-top {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 .sidebar-brand {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -258,6 +260,7 @@ button:focus-visible {
   padding: 0 10px;
 }
 .sidebar-nav {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -396,6 +399,7 @@ button:focus-visible {
   pointer-events: none;
 }
 .sidebar-bottom {
+  flex: 0 0 auto;
   margin-top: auto;
   display: flex;
   flex-direction: column;
@@ -405,12 +409,14 @@ button:focus-visible {
 }
 .app-layout.sidebar-closed .sidebar-nav {
   width: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   padding: 0;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .app-layout.sidebar-closed .sidebar-bottom {
   width: 100%;
@@ -3372,7 +3378,8 @@ select {
   box-shadow: 0 12px 28px rgba(20,160,120,.35);
   z-index: 45;
 }
-.month-new-fab { display: none; }
+.month-new-fab,
+.dashboard-new-fab { display: none; }
 .modal-card {
   position: relative;
   z-index: 1;
@@ -6788,7 +6795,8 @@ select {
     z-index: 45;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   }
-  .month-new-fab {
+  .month-new-fab,
+  .dashboard-new-fab {
     position: fixed;
     right: 20px;
     bottom: 24px;
@@ -7628,8 +7636,8 @@ select {
 }
 .invoice-entry-modal-body .money-input input {
   height: 44px;
-  padding-inline: 48px 12px;
-  text-align: left;
+  padding-inline: 48px;
+  text-align: center;
   font-size: 16px;
 }
 

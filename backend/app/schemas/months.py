@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, MoneyValue
 from app.schemas.transactions import TransactionOut
 
 
@@ -50,7 +50,7 @@ class MonthCardSummaryOut(APIModel):
 
 
 class OpeningBalancePayload(APIModel):
-    opening_balance: Decimal
+    opening_balance: MoneyValue
 
 
 class CategoryExpenseDetailOut(APIModel):

@@ -2,7 +2,7 @@ from datetime import date as Date, datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 from pydantic import Field
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, PositiveMoney
 from app.schemas.categories import CategoryOut
 from app.schemas.receivables import LinkedExpenseOut, ReceivableExpenseLinkIn
 
@@ -20,12 +20,13 @@ class TransactionBase(APIModel):
 
 
 class TransactionCreate(TransactionBase):
+    amount: PositiveMoney
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
 class TransactionBatchRule(APIModel):
     description: Optional[str] = None
-    amount: Decimal = Field(gt=0)
+    amount: PositiveMoney
     weekdays: List[int] = Field(min_length=1, max_length=7)
 
 
@@ -41,7 +42,7 @@ class TransactionBatchCreate(APIModel):
 class TransactionUpdate(APIModel):
     date: Optional[Date] = None
     type: Optional[str] = None
-    amount: Optional[Decimal] = None
+    amount: Optional[PositiveMoney] = None
     description: Optional[str] = None
     is_future: Optional[bool] = None
     invoice_id: Optional[int] = None

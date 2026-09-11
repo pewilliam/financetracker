@@ -2,26 +2,26 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 from pydantic import Field
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, NonNegativeMoney
 
 
 class SimulationAllocationCategory(APIModel):
     id: str
     name: str
     mode: Literal["percentage", "fixed"] = "fixed"
-    value: Decimal = Field(default=Decimal("0.00"), ge=0)
+    value: NonNegativeMoney = Decimal("0.00")
 
 
 class SimulationItemPayload(APIModel):
     description: str = ""
     type: str
     mode: str
-    total_amount: Decimal = Decimal("0.00")
+    total_amount: NonNegativeMoney = Decimal("0.00")
     installment_count: int = Field(default=1, ge=1, le=120)
     recurrence_count: int = Field(default=1, ge=1, le=120)
     value_mode: str = "equal"
     start_month: str
-    custom_values: List[Decimal] = []
+    custom_values: List[NonNegativeMoney] = []
     category_id: Optional[str] = Field(default=None, max_length=64)
 
 
@@ -29,7 +29,7 @@ class SimulationCreate(APIModel):
     name: str
     include_real: bool = True
     reserve_mode: Literal["percentage", "fixed"] = "percentage"
-    reserve_value: Decimal = Field(default=Decimal("0.00"), ge=0)
+    reserve_value: NonNegativeMoney = Decimal("0.00")
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: List[int] = []
@@ -41,7 +41,7 @@ class SimulationUpdate(APIModel):
     name: Optional[str] = None
     include_real: Optional[bool] = None
     reserve_mode: Optional[Literal["percentage", "fixed"]] = None
-    reserve_value: Optional[Decimal] = Field(default=None, ge=0)
+    reserve_value: Optional[NonNegativeMoney] = None
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: Optional[List[int]] = None
@@ -75,7 +75,7 @@ class SimulationPreviewPayload(APIModel):
     end_month: str
     include_real: bool = True
     reserve_mode: Literal["percentage", "fixed"] = "percentage"
-    reserve_value: Decimal = Field(default=Decimal("0.00"), ge=0)
+    reserve_value: NonNegativeMoney = Decimal("0.00")
     reserve_start_month: Optional[str] = None
     reserve_end_month: Optional[str] = None
     reserve_source_item_positions: List[int] = []

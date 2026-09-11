@@ -1,5 +1,8 @@
 let activeLocale = "pt-BR";
 
+export const MAX_MONEY_AMOUNT = 99_999_999.99;
+const MAX_MONEY_INTEGER_DIGITS = 8;
+
 export function setFormatLocale(locale) {
   activeLocale = locale || "pt-BR";
 }
@@ -74,7 +77,10 @@ export function formatTypedMoneyForEditing(value, locale = activeLocale) {
   const decimalSeparator = locale === "en-US" ? "." : ",";
   const text = String(value || "").replace(decimalSeparator === "." ? /[^\d.]/g : /[^\d,]/g, "");
   const [integerPart, decimalPart] = text.split(decimalSeparator);
-  const digits = integerPart.replace(/\D/g, "");
+  const digits = integerPart
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, MAX_MONEY_INTEGER_DIGITS);
   const number = Number(digits || 0);
   const integer = number ? number.toLocaleString(locale) : "";
   if (decimalPart === undefined) return integer;

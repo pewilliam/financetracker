@@ -2,23 +2,23 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, List, Optional
 from pydantic import Field
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, NonNegativeMoney, PositiveMoney
 from app.schemas.invoices import InvoiceOut
 from app.schemas.categories import CategoryOut
 
 
 class InstallmentDraftIn(APIModel):
     invoice_id: Optional[int] = None
-    amount: Decimal
+    amount: NonNegativeMoney
     target_due_date: Optional[date] = None
 
 
 class InstallmentCreate(APIModel):
     description: str
-    total_amount: Decimal
+    total_amount: PositiveMoney
     installment_count: int = Field(ge=1, le=48)
     first_invoice_id: int
-    custom_values: Optional[List[Decimal]] = None
+    custom_values: Optional[List[NonNegativeMoney]] = None
     items: Optional[List[InstallmentDraftIn]] = None
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
@@ -26,7 +26,7 @@ class InstallmentCreate(APIModel):
 
 class InstallmentItemUpdate(APIModel):
     invoice_id: Optional[int] = None
-    amount: Decimal = Field(gt=0)
+    amount: PositiveMoney
     status: Literal["pending", "refunded", "canceled"] = "pending"
 
 
