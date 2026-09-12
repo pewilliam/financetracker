@@ -8,6 +8,8 @@ import { formatMoney } from "../utils/format.js";
 import { getMonthPeriod, quickAddDate } from "../app/helpers.js";
 import { MONTHS_VIEW_MODE_KEY } from "../app/constants.js";
 
+const MONTHS_TUTORIAL_VERSION = 1;
+
 function getTutorialContent(language) {
   if (language === "en-US") {
     return {
@@ -186,11 +188,10 @@ function MonthsTutorial({ content, layoutKey, open, stepIndex, onBack, onClose, 
 }
 
 export default function MonthsPage({ monthData, summary, monthCards, expenseOptions = [], year, month, setYear, setMonth, openAddForm, setEditing, setDrawerOpen, removeTransaction, onLoadCategoryDetails, onOverlayChange }) {
-  const { user } = useAuth();
+  const { user, completeTutorial } = useAuth();
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const tutorialContent = useMemo(() => getTutorialContent(language), [language]);
-  const tutorialStorageKey = `kashy365_months_tutorial_v1_${user?.id || "local"}`;
   const tableRef = useRef(null);
   const [pendingTableScroll, setPendingTableScroll] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
@@ -242,26 +243,16 @@ export default function MonthsPage({ monthData, summary, monthCards, expenseOpti
 
   useEffect(() => {
     if (!user?.id) return;
-    try {
-      if (localStorage.getItem(tutorialStorageKey) === "1") return;
-    } catch {
-      // O tutorial ainda pode ser exibido quando o armazenamento não está disponível.
-    }
+    if ((user.months_tutorial_version || 0) >= MONTHS_TUTORIAL_VERSION) return;
     setTutorialStep(0);
     setTutorialOpen(true);
-  }, [tutorialStorageKey, user?.id]);
-
-  const markTutorialSeen = () => {
-    try {
-      localStorage.setItem(tutorialStorageKey, "1");
-    } catch {
-      // O fechamento continua funcionando sem armazenamento local.
-    }
-  };
+  }, [user?.id, user?.months_tutorial_version]);
 
   const closeTutorial = () => {
-    markTutorialSeen();
     setTutorialOpen(false);
+    completeTutorial("months", MONTHS_TUTORIAL_VERSION).catch(() => {
+      // Uma falha temporária fará o tutorial reaparecer até o progresso ser salvo.
+    });
   };
 
   const openTutorial = () => {

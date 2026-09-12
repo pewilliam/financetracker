@@ -113,6 +113,13 @@ export function createTransaction(payload) {
   });
 }
 
+export function updateTutorialProgress(tutorial, version) {
+  return request(`/auth/me/tutorials/${tutorial}`, {
+    method: "PATCH",
+    body: JSON.stringify({ version })
+  });
+}
+
 export function createTransactionBatch(payload) {
   return request("/transactions/batch", {
     method: "POST",

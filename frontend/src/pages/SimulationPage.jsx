@@ -597,6 +597,8 @@ const SIMULATION_TUTORIAL_STEPS = [
   }
 ];
 
+const SIMULATION_TUTORIAL_VERSION = 2;
+
 function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNext }) {
   const [targetRect, setTargetRect] = useState(null);
   const step = SIMULATION_TUTORIAL_STEPS[stepIndex];
@@ -697,10 +699,9 @@ function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNex
 }
 
 export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits = false, monthCards = [], onInserted }) {
-  const { user } = useAuth();
+  const { user, completeTutorial } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
-  const tutorialStorageKey = `kashy365_simulation_tutorial_v2_${user?.id || "local"}`;
   const [items, setItems] = useState([]);
   const [activeItems, setActiveItems] = useState([]);
   const [includeReal, setIncludeReal] = useState(true);
@@ -817,15 +818,11 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
 
   useEffect(() => {
     if (!user?.id) return;
-    try {
-      if (localStorage.getItem(tutorialStorageKey) === "1") return;
-    } catch {
-      // The tutorial can still be displayed when storage is unavailable.
-    }
+    if ((user.simulation_tutorial_version || 0) >= SIMULATION_TUTORIAL_VERSION) return;
     setTutorialStartStep(0);
     setTutorialStep(0);
     setTutorialOpen(true);
-  }, [tutorialStorageKey, user?.id]);
+  }, [user?.id, user?.simulation_tutorial_version]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -1091,16 +1088,11 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
     setSaveDialog(null);
     setDecisionDialog(null);
   };
-  const markTutorialSeen = () => {
-    try {
-      localStorage.setItem(tutorialStorageKey, "1");
-    } catch {
-      // localStorage can be unavailable in private contexts.
-    }
-  };
   const closeTutorial = () => {
-    markTutorialSeen();
     setTutorialOpen(false);
+    completeTutorial("simulation", SIMULATION_TUTORIAL_VERSION).catch(() => {
+      toast.error("Não foi possível salvar o progresso do tutorial");
+    });
   };
   const openTutorial = () => {
     const firstStep = editorOpen ? 2 : 0;

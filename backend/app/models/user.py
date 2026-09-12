@@ -12,6 +12,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     auth_version = Column(Integer, nullable=False, default=0)
     allow_overdue_invoice_edits = Column(Boolean, nullable=False, default=False)
+    simulation_tutorial_version = Column(Integer, nullable=False, default=0)
+    months_tutorial_version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, server_default=func.now())
 
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")

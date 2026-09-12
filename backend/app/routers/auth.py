@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas.auth import LoginPayload, PasswordUpdate, TokenOut, UserCreate, UserOut, UserUpdate
+from app.schemas.auth import LoginPayload, PasswordUpdate, TokenOut, TutorialProgressUpdate, UserCreate, UserOut, UserUpdate
 from app.security import create_access_token, get_current_user, hash_password, verify_password
 from app.validation import validate_password_strength
 
@@ -97,3 +97,26 @@ def update_password(
     current_user.auth_version = int(current_user.auth_version or 0) + 1
     db.commit()
     return {"status": "updated", "sessions_revoked": True}
+
+
+@router.patch("/me/tutorials/{tutorial_name}", response_model=UserOut)
+def update_tutorial_progress(
+    tutorial_name: str,
+    payload: TutorialProgressUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    fields = {
+        "simulation": "simulation_tutorial_version",
+        "months": "months_tutorial_version",
+    }
+    field = fields.get(tutorial_name)
+    if field is None:
+        raise HTTPException(status_code=404, detail="Tutorial not found")
+
+    current_version = int(getattr(current_user, field) or 0)
+    if payload.version > current_version:
+        setattr(current_user, field, payload.version)
+        db.commit()
+        db.refresh(current_user)
+    return current_user

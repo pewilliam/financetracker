@@ -10,8 +10,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import User
 from app.rate_limit import RateLimitMiddleware, RateLimitPolicy
-from app.routers.auth import register, update_me, update_password
-from app.schemas.auth import PasswordUpdate, UserCreate, UserUpdate
+from app.routers.auth import register, update_me, update_password, update_tutorial_progress
+from app.schemas.auth import PasswordUpdate, TutorialProgressUpdate, UserCreate, UserUpdate
 from app.security import create_access_token, get_current_user, hash_password, verify_password
 
 
@@ -88,6 +88,49 @@ class AuthSecurityTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as context:
             get_current_user(old_token, self.db)
         self.assertEqual(context.exception.status_code, 401)
+
+    def test_tutorial_progress_is_persisted_and_never_moves_backwards(self):
+        user = User(name="Maria Silva", email="maria@example.com", password_hash=hash_password("Senha original segura 2026"))
+        self.db.add(user)
+        self.db.commit()
+
+        result = update_tutorial_progress(
+            "simulation",
+            TutorialProgressUpdate(version=2),
+            self.db,
+            user,
+        )
+        update_tutorial_progress(
+            "simulation",
+            TutorialProgressUpdate(version=1),
+            self.db,
+            user,
+        )
+        update_tutorial_progress(
+            "months",
+            TutorialProgressUpdate(version=1),
+            self.db,
+            user,
+        )
+
+        self.assertEqual(result.simulation_tutorial_version, 2)
+        self.assertEqual(self.db.get(User, user.id).simulation_tutorial_version, 2)
+        self.assertEqual(self.db.get(User, user.id).months_tutorial_version, 1)
+
+    def test_unknown_tutorial_is_rejected(self):
+        user = User(name="Maria Silva", email="maria@example.com", password_hash=hash_password("Senha original segura 2026"))
+        self.db.add(user)
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            update_tutorial_progress(
+                "unknown",
+                TutorialProgressUpdate(version=1),
+                self.db,
+                user,
+            )
+
+        self.assertEqual(context.exception.status_code, 404)
 
 
 class RateLimitTests(unittest.IsolatedAsyncioTestCase):

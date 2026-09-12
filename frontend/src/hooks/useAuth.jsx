@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { clearToken, getMe, getToken, login, register, setToken, updateMe } from "../api/api.js";
+import { clearToken, getMe, getToken, login, register, setToken, updateMe, updateTutorialProgress } from "../api/api.js";
 
 const AuthContext = createContext(null);
 
@@ -46,6 +46,10 @@ export function AuthProvider({ children }) {
       },
       async updateProfile(data) {
         const payload = await updateMe(data);
+        setUser(payload);
+      },
+      async completeTutorial(tutorial, version) {
+        const payload = await updateTutorialProgress(tutorial, version);
         setUser(payload);
       },
       logout() {

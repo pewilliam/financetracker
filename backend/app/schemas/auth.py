@@ -49,6 +49,10 @@ class PasswordUpdate(APIModel):
         return validate_password_strength(value)
 
 
+class TutorialProgressUpdate(APIModel):
+    version: int = Field(ge=1, le=1000)
+
+
 class LoginPayload(APIModel):
     email: EmailStr = Field(max_length=254)
     password: str = Field(min_length=1, max_length=128)
@@ -59,6 +63,8 @@ class UserOut(APIModel):
     name: str
     email: EmailStr
     allow_overdue_invoice_edits: bool = False
+    simulation_tutorial_version: int = 0
+    months_tutorial_version: int = 0
     created_at: Optional[datetime] = None
 
 
