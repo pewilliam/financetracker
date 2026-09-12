@@ -162,26 +162,81 @@ export default function AppShell() {
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
-      const monthRequest = getMonth(year, month);
-      const summaryRequest = getMonthSummary(year, month);
-      const invoicesRequest = listInvoices();
+      const priorityPayloads = {};
+
+      if (showLoading && location.pathname === "/meses") {
+        [priorityPayloads.month, priorityPayloads.summary, priorityPayloads.monthCards] = await Promise.all([
+          getMonth(year, month),
+          getMonthSummary(year, month),
+          getMonthsSummary()
+        ]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(priorityPayloads.month);
+        setSummary(priorityPayloads.summary);
+        setMonthCards(priorityPayloads.monthCards);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/carteiras") {
+        priorityPayloads.wallets = await listWallets();
+        if (!isCurrentPeriod()) return;
+        setWalletSummary(priorityPayloads.wallets);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/categorias") {
+        [priorityPayloads.categories, priorityPayloads.categoryBreakdown, priorityPayloads.previousCategoryBreakdown, priorityPayloads.budgetPlan] = await Promise.all([
+          listCategories(),
+          getCategoryBreakdown(year, month),
+          getCategoryBreakdown(previousTarget.year, previousTarget.month),
+          getMonthlyBudgetPlan(year, month)
+        ]);
+        if (!isCurrentPeriod()) return;
+        setCategories(priorityPayloads.categories);
+        setCategoryBreakdown(priorityPayloads.categoryBreakdown);
+        setPreviousCategoryBreakdown(priorityPayloads.previousCategoryBreakdown);
+        setBudgetPlan(priorityPayloads.budgetPlan);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/") {
+        [priorityPayloads.month, priorityPayloads.summary, priorityPayloads.invoices, priorityPayloads.categoryBreakdown, priorityPayloads.comparison] = await Promise.all([
+          getMonth(year, month),
+          getMonthSummary(year, month),
+          listInvoices(),
+          getCategoryBreakdown(year, month),
+          Promise.all(offsets.map(async (offset) => {
+            const target = shiftMonth(year, month, offset);
+            const data = await getMonthSummary(target.year, target.month);
+            return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
+          }))
+        ]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(priorityPayloads.month);
+        setSummary(priorityPayloads.summary);
+        setInvoices(priorityPayloads.invoices);
+        setCategoryBreakdown(priorityPayloads.categoryBreakdown);
+        setComparisons(priorityPayloads.comparison);
+        setLoading(false);
+      }
+
+      const cachedRequest = (key, request) => Object.prototype.hasOwnProperty.call(priorityPayloads, key)
+        ? Promise.resolve(priorityPayloads[key])
+        : request();
+      const monthRequest = cachedRequest("month", () => getMonth(year, month));
+      const summaryRequest = cachedRequest("summary", () => getMonthSummary(year, month));
+      const invoicesRequest = cachedRequest("invoices", listInvoices);
       const templatesRequest = listInvoiceTemplates();
       const installmentsRequest = listInstallments();
-      const categoriesRequest = listCategories();
-      const walletsRequest = listWallets();
-      const categoryBreakdownRequest = getCategoryBreakdown(year, month);
-      const previousCategoryBreakdownRequest = getCategoryBreakdown(previousTarget.year, previousTarget.month);
-      const budgetPlanRequest = getMonthlyBudgetPlan(year, month);
+      const categoriesRequest = cachedRequest("categories", listCategories);
+      const walletsRequest = cachedRequest("wallets", listWallets);
+      const categoryBreakdownRequest = cachedRequest("categoryBreakdown", () => getCategoryBreakdown(year, month));
+      const previousCategoryBreakdownRequest = cachedRequest("previousCategoryBreakdown", () => getCategoryBreakdown(previousTarget.year, previousTarget.month));
+      const budgetPlanRequest = cachedRequest("budgetPlan", () => getMonthlyBudgetPlan(year, month));
       const receivablesRequest = listReceivables();
       const linkedReceivablesRequest = listLinkedReceivableTransactions();
       const peopleRequest = listReceivablePeople();
       const expenseOptionsRequest = listReceivableExpenseOptions();
-      const monthCardsRequest = getMonthsSummary();
-      const comparisonRequest = Promise.all(offsets.map(async (offset) => {
+      const monthCardsRequest = cachedRequest("monthCards", getMonthsSummary);
+      const comparisonRequest = cachedRequest("comparison", () => Promise.all(offsets.map(async (offset) => {
         const target = shiftMonth(year, month, offset);
         const data = await getMonthSummary(target.year, target.month);
         return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-      }));
+      })));
 
       const allPayloadsRequest = Promise.all([
         monthRequest,
@@ -202,32 +257,6 @@ export default function AppShell() {
         comparisonRequest
       ]);
       void allPayloadsRequest.catch(() => undefined);
-
-      if (showLoading && location.pathname === "/meses") {
-        const [monthPayload, summaryPayload, monthCardsPayload] = await Promise.all([monthRequest, summaryRequest, monthCardsRequest]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(monthPayload);
-        setSummary(summaryPayload);
-        setMonthCards(monthCardsPayload);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/categorias") {
-        const [categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload] = await Promise.all([categoriesRequest, categoryBreakdownRequest, previousCategoryBreakdownRequest, budgetPlanRequest]);
-        if (!isCurrentPeriod()) return;
-        setCategories(categoriesPayload);
-        setCategoryBreakdown(categoryBreakdownPayload);
-        setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
-        setBudgetPlan(budgetPlanPayload);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/") {
-        const [monthPayload, summaryPayload, invoicesPayload, categoryBreakdownPayload, comparisonPayload] = await Promise.all([monthRequest, summaryRequest, invoicesRequest, categoryBreakdownRequest, comparisonRequest]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(monthPayload);
-        setSummary(summaryPayload);
-        setInvoices(invoicesPayload);
-        setCategoryBreakdown(categoryBreakdownPayload);
-        setComparisons(comparisonPayload);
-        setLoading(false);
-      }
 
       const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, walletsPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await allPayloadsRequest;
       if (!isCurrentPeriod()) return;

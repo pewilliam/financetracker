@@ -3,7 +3,7 @@ import CategorySelect from "./CategorySelect.jsx";
 export function walletSelectOptions(wallets = []) {
   return wallets.map((wallet) => ({
     id: wallet.id,
-    name: `${wallet.institution ? `${wallet.institution} · ` : ""}${wallet.name}${wallet.is_primary ? " · Principal" : ""}`,
+    name: wallet.name,
     color: wallet.color || "#14A078",
   }));
 }

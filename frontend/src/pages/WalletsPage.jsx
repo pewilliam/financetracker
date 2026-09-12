@@ -78,8 +78,8 @@ function WalletEditor({ wallet, language, onClose, onSaved }) {
 
   return <div className="modal-layer">
     <button className="modal-backdrop" onClick={onClose} aria-label="Fechar" />
-    <form className="modal-card wallet-modal" onSubmit={submit}>
-      <div className="modal-titlebar"><h2>{editing ? "Editar carteira" : "Nova carteira"}</h2><button className="icon-btn" type="button" onClick={onClose}><X size={18} /></button></div>
+    <form className="modal-card wallet-modal wallet-editor-modal" onSubmit={submit}>
+      <div className="wallet-transfer-header"><i><WalletCards size={20} /></i><div><small>{editing ? "CONFIGURAÇÃO DA CARTEIRA" : "NOVA CARTEIRA"}</small><h2>{editing ? "Editar carteira" : "Criar carteira"}</h2><p>{editing ? "Atualize a identificação e a aparência da carteira." : "Cadastre onde você mantém seu dinheiro."}</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
       <div className="wallet-modal-body form-stack">
         <label><span>Nome da carteira</span><input maxLength="100" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex: Conta principal" required autoFocus /></label>
         <label><span>Instituição <small>(opcional)</small></span><input maxLength="100" value={form.institution} onChange={(event) => setForm({ ...form, institution: event.target.value })} placeholder="Ex: Nubank" /></label>

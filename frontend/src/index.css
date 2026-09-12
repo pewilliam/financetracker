@@ -6312,6 +6312,8 @@ select {
 .entry-detail-categories > span svg { color: var(--primary); }
 .entry-detail-field strong { overflow-wrap: anywhere; font-size: 13px; }
 .entry-detail-field small { color: var(--muted); font-size: 10px; }
+.entry-detail-wallet strong { display: flex; gap: 7px; align-items: center; }
+.entry-detail-wallet strong > i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 3px; background: var(--entry-wallet-color, var(--primary)); }
 .entry-detail-created { align-content: center; }
 .entry-detail-categories { display: grid; gap: 9px; }
 .entry-detail-categories.has-insight { grid-column: 1 / -1; }
@@ -8382,6 +8384,8 @@ select {
 .wallet-history-more small { color: var(--muted); font-size: .65rem; }
 .wallet-detail-loading { display: flex; justify-content: center; gap: 8px; align-items: center; min-height: 180px; color: var(--muted); }
 .wallet-modal { width: min(540px, calc(100vw - 24px)); }
+.wallet-editor-modal { padding: 0; overflow: hidden; }
+.wallet-editor-modal .wallet-modal-body { margin-top: 0; }
 .wallet-modal-body { padding: 20px; }
 .wallet-modal-body label > span { display: inline-flex; gap: 5px; align-items: center; }
 .wallet-modal-body label small { color: var(--muted); font-weight: 400; }

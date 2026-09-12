@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.models.wallet import Wallet, WalletAdjustment, WalletTransfer
@@ -119,3 +119,80 @@ def serialize_wallet(db: Session, wallet: Wallet) -> dict:
         "total_expenses": money(signed_expense),
         "transaction_count": int(count or 0),
     }
+
+
+def serialize_wallets(db: Session, wallets: list[Wallet]) -> list[dict]:
+    """Serialize a wallet collection with a fixed number of aggregate queries."""
+    if not wallets:
+        return []
+
+    today = date.today()
+    wallet_ids = [wallet.id for wallet in wallets]
+    transaction_rows = db.query(
+        Transaction.wallet_id,
+        func.coalesce(func.sum(case((and_(
+            Transaction.type == "income",
+            Transaction.date >= Wallet.tracking_started_on,
+            Transaction.date <= today,
+        ), Transaction.amount), else_=0)), 0).label("income"),
+        func.coalesce(func.sum(case((and_(
+            Transaction.type == "expense",
+            Transaction.date >= Wallet.tracking_started_on,
+            Transaction.date <= today,
+        ), Transaction.amount), else_=0)), 0).label("expenses"),
+        func.count(Transaction.id).label("transaction_count"),
+    ).join(Wallet, Wallet.id == Transaction.wallet_id).filter(
+        Transaction.wallet_id.in_(wallet_ids),
+    ).group_by(Transaction.wallet_id).all()
+    transaction_totals = {
+        row.wallet_id: (money(row.income), money(row.expenses), int(row.transaction_count or 0))
+        for row in transaction_rows
+    }
+
+    adjustment_totals = dict(db.query(
+        WalletAdjustment.wallet_id,
+        func.coalesce(func.sum(WalletAdjustment.amount), 0),
+    ).join(Wallet, Wallet.id == WalletAdjustment.wallet_id).filter(
+        WalletAdjustment.wallet_id.in_(wallet_ids),
+        WalletAdjustment.date >= Wallet.tracking_started_on,
+        WalletAdjustment.date <= today,
+    ).group_by(WalletAdjustment.wallet_id).all())
+    incoming_totals = dict(db.query(
+        WalletTransfer.destination_wallet_id,
+        func.coalesce(func.sum(WalletTransfer.amount), 0),
+    ).join(Wallet, Wallet.id == WalletTransfer.destination_wallet_id).filter(
+        WalletTransfer.destination_wallet_id.in_(wallet_ids),
+        WalletTransfer.date >= Wallet.tracking_started_on,
+        WalletTransfer.date <= today,
+    ).group_by(WalletTransfer.destination_wallet_id).all())
+    outgoing_totals = dict(db.query(
+        WalletTransfer.source_wallet_id,
+        func.coalesce(func.sum(WalletTransfer.amount), 0),
+    ).join(Wallet, Wallet.id == WalletTransfer.source_wallet_id).filter(
+        WalletTransfer.source_wallet_id.in_(wallet_ids),
+        WalletTransfer.date >= Wallet.tracking_started_on,
+        WalletTransfer.date <= today,
+    ).group_by(WalletTransfer.source_wallet_id).all())
+
+    result = []
+    for wallet in wallets:
+        income, expenses, transaction_count = transaction_totals.get(
+            wallet.id,
+            (Decimal("0.00"), Decimal("0.00"), 0),
+        )
+        current_balance = (
+            money(wallet.initial_balance)
+            + income
+            - expenses
+            + money(adjustment_totals.get(wallet.id))
+            + money(incoming_totals.get(wallet.id))
+            - money(outgoing_totals.get(wallet.id))
+        )
+        result.append({
+            **{column.name: getattr(wallet, column.name) for column in wallet.__table__.columns},
+            "current_balance": money(current_balance),
+            "total_income": income,
+            "total_expenses": expenses,
+            "transaction_count": transaction_count,
+        })
+    return result

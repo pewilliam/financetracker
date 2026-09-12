@@ -11,6 +11,7 @@ import {
   ReceiptText,
   Repeat2,
   Tag,
+  WalletCards,
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
@@ -179,6 +180,13 @@ export default function EntryDetailsModal({
               <div className="entry-detail-field">
                 <span><CalendarDays size={15} /> {isTransaction ? copy("Data", "Date") : copy("Vencimento", "Due date")}</span>
                 <strong>{formatDateShort(detailDate, language)}</strong>
+              </div>
+            )}
+            {isTransaction && item.wallet && (
+              <div className="entry-detail-field entry-detail-wallet" style={{ "--entry-wallet-color": item.wallet.color }}>
+                <span><WalletCards size={15} /> {copy("Carteira", "Wallet")}</span>
+                <strong><i aria-hidden="true" /> {item.wallet.name}</strong>
+                {(item.wallet.institution || item.wallet.is_primary) && <small>{[item.wallet.institution, item.wallet.is_primary ? copy("Principal", "Primary") : null].filter(Boolean).join(" · ")}</small>}
               </div>
             )}
             {invoice && (

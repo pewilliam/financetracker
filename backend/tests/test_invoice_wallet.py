@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import InvoiceTemplate, User, Wallet
 from app.services.invoices import create_invoice_with_transaction
+from app.schemas.transactions import TransactionOut
 
 
 class InvoiceWalletTests(unittest.TestCase):
@@ -38,6 +39,8 @@ class InvoiceWalletTests(unittest.TestCase):
         )
 
         self.assertEqual(invoice.linked_transaction.wallet_id, self.selected.id)
+        serialized = TransactionOut.model_validate(invoice.linked_transaction)
+        self.assertEqual(serialized.wallet.name, "Mercado Pago")
 
     def test_invoice_without_selection_uses_primary_wallet(self):
         self.primary.is_primary = False

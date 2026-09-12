@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
@@ -44,6 +44,42 @@ class WalletTests(unittest.TestCase):
         balances = {item["name"]: item["current_balance"] for item in summary["wallets"]}
         self.assertEqual(balances, {"Conta principal": Decimal("1150.00"), "Caixinha": Decimal("0.00")})
         self.assertEqual(summary["total_balance"], Decimal("1150.00"))
+
+    def test_wallet_list_uses_a_fixed_number_of_queries(self):
+        self.db.add_all([
+            Transaction(user_id=self.user.id, wallet_id=self.primary.id, date=date.today(), type="income", amount=Decimal("200.00")),
+            Transaction(user_id=self.user.id, wallet_id=self.primary.id, date=date.today(), type="expense", amount=Decimal("50.00")),
+            WalletAdjustment(
+                user_id=self.user.id,
+                wallet_id=self.reserve.id,
+                date=date.today(),
+                amount=Decimal("25.00"),
+                balance_before=Decimal("100.00"),
+                balance_after=Decimal("125.00"),
+            ),
+            WalletTransfer(
+                user_id=self.user.id,
+                source_wallet_id=self.primary.id,
+                destination_wallet_id=self.reserve.id,
+                date=date.today(),
+                amount=Decimal("100.00"),
+            ),
+        ])
+        self.db.commit()
+        current_user = type("CurrentUser", (), {"id": self.user.id})()
+
+        statements = []
+        listener = lambda *args: statements.append(args[2])
+        event.listen(self.engine, "before_cursor_execute", listener)
+        try:
+            summary = list_wallets(True, self.db, current_user)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", listener)
+
+        self.assertEqual(len(statements), 5)
+        balances = {item["name"]: item["current_balance"] for item in summary["wallets"]}
+        self.assertEqual(balances, {"Conta principal": Decimal("1050.00"), "Caixinha": Decimal("125.00")})
+        self.assertEqual(summary["total_balance"], Decimal("1175.00"))
 
     def test_wallet_router_is_registered_in_the_application(self):
         paths = {route.path for route in app.routes}

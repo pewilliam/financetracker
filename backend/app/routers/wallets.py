@@ -21,7 +21,7 @@ from app.schemas.wallets import (
     WalletCreate,
 )
 from app.security import get_current_user
-from app.services.wallets import money, serialize_wallet, set_primary_wallet, user_wallet, wallet_balance
+from app.services.wallets import money, serialize_wallet, serialize_wallets, set_primary_wallet, user_wallet, wallet_balance
 
 router = APIRouter(prefix="/api/wallets", tags=["wallets"])
 
@@ -163,7 +163,7 @@ def list_wallets(
         user_wallet(db, current_user.id, None)
         db.commit()
         wallets = db.query(Wallet).filter(Wallet.user_id == current_user.id).all()
-    serialized = [serialize_wallet(db, wallet) for wallet in wallets]
+    serialized = serialize_wallets(db, wallets)
     active = [item for item in serialized if item["active"]]
     return {
         "total_balance": sum((money(item["current_balance"]) for item in active), Decimal("0.00")),

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import MonthlyBalance, Transaction, User
+from app.models import MonthlyBalance, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.routers.months import _build_month_summary, _summarize_month_data, get_month, list_month_summaries
 
 
@@ -87,6 +87,74 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].current_balance, Decimal("700.00"))
         self.assertEqual(result[0].closing_balance, Decimal("625.00"))
+
+    def test_wallet_month_summaries_use_a_fixed_number_of_queries(self):
+        primary = Wallet(
+            user_id=self.user.id,
+            name="Conta principal",
+            type="checking",
+            initial_balance=Decimal("1000.00"),
+            tracking_started_on=date(2026, 1, 1),
+            is_primary=True,
+        )
+        reserve = Wallet(
+            user_id=self.user.id,
+            name="Reserva",
+            type="reserve",
+            initial_balance=Decimal("200.00"),
+            tracking_started_on=date(2026, 2, 15),
+        )
+        self.db.add_all([primary, reserve])
+        self.db.flush()
+        self.db.add_all([
+            Transaction(user_id=self.user.id, wallet_id=primary.id, date=date(2026, 1, 5), type="income", amount=Decimal("1000.00")),
+            Transaction(user_id=self.user.id, wallet_id=primary.id, date=date(2026, 1, 10), type="expense", amount=Decimal("200.00")),
+            Transaction(user_id=self.user.id, wallet_id=primary.id, date=date(2026, 2, 12), type="expense", amount=Decimal("100.00")),
+            Transaction(user_id=self.user.id, wallet_id=reserve.id, date=date(2026, 3, 8), type="income", amount=Decimal("200.00")),
+            WalletAdjustment(
+                user_id=self.user.id,
+                wallet_id=reserve.id,
+                date=date(2026, 2, 20),
+                amount=Decimal("25.00"),
+                balance_before=Decimal("250.00"),
+                balance_after=Decimal("275.00"),
+            ),
+            WalletTransfer(
+                user_id=self.user.id,
+                source_wallet_id=primary.id,
+                destination_wallet_id=reserve.id,
+                date=date(2026, 2, 18),
+                amount=Decimal("50.00"),
+            ),
+        ])
+        self.db.commit()
+        current_user = type("CurrentUser", (), {"id": self.user.id})()
+
+        expected = {}
+        for target_month in (1, 2, 3):
+            data = get_month(2026, target_month, self.db, current_user)
+            expected[target_month] = (
+                data.opening_balance,
+                data.total_income,
+                data.total_expenses,
+                data.closing_balance,
+            )
+
+        statements = []
+        listener = lambda *args: statements.append(args[2])
+        event.listen(self.engine, "before_cursor_execute", listener)
+        try:
+            result = list_month_summaries(self.db, current_user)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", listener)
+
+        self.assertEqual(len(statements), 4)
+        self.assertEqual([(item.year, item.month) for item in result], [(2026, 3), (2026, 2), (2026, 1)])
+        for item in result:
+            self.assertEqual(
+                (item.opening_balance, item.total_income, item.total_expenses, item.closing_balance),
+                expected[item.month],
+            )
 
 
 if __name__ == "__main__":
