@@ -1,14 +1,36 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC } from "../app/constants.js";
+
+function PasswordField({ label, visible, onToggleVisible, ...inputProps }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <span className="password-input-wrap">
+        <input {...inputProps} type={visible ? "text" : "password"} />
+        <button
+          type="button"
+          className="password-visibility-toggle"
+          onClick={onToggleVisible}
+          aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+          title={visible ? "Ocultar senha" : "Mostrar senha"}
+        >
+          {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+        </button>
+      </span>
+    </label>
+  );
+}
 
 export default function AuthPage({ mode }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const isRegister = mode === "register";
   const [form, setForm] = useState({ name: "", email: "", password: "", passwordConfirmation: "" });
+  const [visiblePasswords, setVisiblePasswords] = useState({ password: false, passwordConfirmation: false });
   const [busy, setBusy] = useState(false);
 
   const passwordIsLongEnough = form.password.length >= 12;
@@ -62,9 +84,27 @@ export default function AuthPage({ mode }) {
             <label><span>Nome</span><input autoComplete="name" minLength="2" maxLength="100" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
           )}
           <label><span>E-mail</span><input type="email" autoComplete="email" maxLength="254" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
-          <label><span>Senha</span><input type="password" autoComplete={isRegister ? "new-password" : "current-password"} minLength={isRegister ? 12 : 1} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required /></label>
+          <PasswordField
+            label="Senha"
+            visible={visiblePasswords.password}
+            onToggleVisible={() => setVisiblePasswords((current) => ({ ...current, password: !current.password }))}
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            minLength={isRegister ? 12 : 1}
+            value={form.password}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+            required
+          />
           {isRegister && <>
-            <label><span>Confirmar senha</span><input type="password" autoComplete="new-password" minLength="12" value={form.passwordConfirmation} onChange={(event) => setForm({ ...form, passwordConfirmation: event.target.value })} required /></label>
+            <PasswordField
+              label="Confirmar senha"
+              visible={visiblePasswords.passwordConfirmation}
+              onToggleVisible={() => setVisiblePasswords((current) => ({ ...current, passwordConfirmation: !current.passwordConfirmation }))}
+              autoComplete="new-password"
+              minLength="12"
+              value={form.passwordConfirmation}
+              onChange={(event) => setForm({ ...form, passwordConfirmation: event.target.value })}
+              required
+            />
             <ul className="password-requirements" aria-live="polite">
               <li className={passwordIsLongEnough ? "valid" : ""}>Pelo menos 12 caracteres</li>
               <li className={form.passwordConfirmation && passwordsMatch ? "valid" : ""}>As duas senhas devem coincidir</li>
@@ -81,4 +121,3 @@ export default function AuthPage({ mode }) {
 }
 
 // Conteúdo interno da sidebar — compartilhado entre desktop e mobile
-

@@ -124,6 +124,35 @@ button:focus-visible {
 .auth-card p, .muted { color: var(--muted); }
 .auth-submit { width: 100%; justify-content: center; }
 .auth-link { display: inline-block; margin-top: 18px; color: var(--primary); font-weight: 600; }
+.password-input-wrap {
+  position: relative;
+  display: block;
+}
+.form-stack .password-input-wrap input {
+  width: 100%;
+  padding-right: 44px;
+}
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+.password-visibility-toggle:hover {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.password-visibility-toggle:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 34%, transparent);
+}
 .password-requirements {
   display: grid;
   gap: 4px;
