@@ -83,6 +83,7 @@ class WalletOut(APIModel):
     color: str
     icon: Optional[str] = None
     active: bool
+    is_primary: bool = False
     current_balance: Decimal = Decimal("0.00")
     total_income: Decimal = Decimal("0.00")
     total_expenses: Decimal = Decimal("0.00")
@@ -110,6 +111,54 @@ class WalletTransferCreate(APIModel):
     amount: PositiveMoney
     date: date
     description: Optional[str] = Field(default=None, max_length=255)
+
+
+class WalletConsolidationCreate(APIModel):
+    source_wallet_id: int
+    destination_wallet_id: int
+    adjust_tracking_start: bool = True
+
+
+class WalletConsolidationPreview(APIModel):
+    source_wallet_id: int
+    destination_wallet_id: int
+    transaction_count: int
+    expense_count: int
+    expense_total: Decimal
+    realized_expense_total: Decimal
+    income_count: int
+    income_total: Decimal
+    realized_income_total: Decimal
+    recurrence_count: int
+    expense_recurrence_count: int
+    income_recurrence_count: int
+    adjustment_count: int
+    initial_balance: Decimal
+    direct_transfer_count: int
+    direct_transfer_total: Decimal
+    redirected_transfer_count: int
+    earliest_date: Optional[date] = None
+    latest_date: Optional[date] = None
+    source_balance_before: Decimal
+    source_balance_after: Decimal
+    destination_balance_before: Decimal
+    destination_balance_after: Decimal
+    total_balance_before: Decimal
+    total_balance_after: Decimal
+    tracking_start_before: date
+    tracking_start_after: date
+    tracking_start_changes: bool
+    destination_becomes_primary: bool
+
+
+class WalletConsolidationResult(APIModel):
+    moved_transaction_count: int
+    moved_recurrence_count: int
+    moved_adjustment_count: int
+    removed_transfer_count: int
+    redirected_transfer_count: int
+    source_wallet: WalletOut
+    destination_wallet: WalletOut
 
 
 class WalletMovementOut(APIModel):

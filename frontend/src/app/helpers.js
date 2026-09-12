@@ -26,7 +26,7 @@ export function normalizeInvoiceColor(color) {
 }
 
 export function defaultInvoiceForm() {
-  return { template_id: "", due_date: "", initial_amount: "", category_ids: [], duplicate_next_month: false, duplicate_months: 1 };
+  return { template_id: "", due_date: "", initial_amount: "", category_ids: [], wallet_id: "", duplicate_next_month: false, duplicate_months: 1 };
 }
 
 export function defaultTemplateForm() {

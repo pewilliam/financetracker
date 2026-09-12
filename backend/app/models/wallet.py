@@ -17,6 +17,7 @@ class Wallet(Base):
     color = Column(String(7), nullable=False, default="#14A078")
     icon = Column(String(40), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
+    is_primary = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

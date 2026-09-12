@@ -35,9 +35,9 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
             "tracking_started_on": date.today(),
             "color": "#14A078",
         }]
-        for wallet_payload in wallet_payloads:
+        for index, wallet_payload in enumerate(wallet_payloads):
             data = wallet_payload if isinstance(wallet_payload, dict) else wallet_payload.model_dump()
-            db.add(Wallet(user_id=user.id, **data))
+            db.add(Wallet(user_id=user.id, is_primary=index == 0, **data))
         db.commit()
     except IntegrityError as exc:
         db.rollback()

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Layers3, Link2, Loader2, ReceiptText, Repeat2, WalletCards, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
+import WalletSelect from "./WalletSelect.jsx";
 import ExpensePicker from "./ExpensePicker.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { isMobileViewport } from "../app/helpers.js";
@@ -100,7 +101,7 @@ export default function TransactionForm({
         amount: formatMoney(initial.amount),
         description: initial.description || "",
         category_ids: initialCategoryIds,
-        wallet_id: String(initial.wallet_id || wallets.find((wallet) => wallet.active)?.id || ""),
+        wallet_id: String(initial.wallet_id || wallets.find((wallet) => wallet.active && wallet.is_primary)?.id || wallets.find((wallet) => wallet.active)?.id || ""),
         recurrence: false,
         recurrence_scope: initial.recurrence_id && !initialIsReceivable ? "future" : "single",
         day_of_month: "",
@@ -114,7 +115,7 @@ export default function TransactionForm({
         amount: "",
         description: "",
         category_ids: [],
-        wallet_id: String(wallets.find((wallet) => wallet.active)?.id || ""),
+        wallet_id: String(wallets.find((wallet) => wallet.active && wallet.is_primary)?.id || wallets.find((wallet) => wallet.active)?.id || ""),
         recurrence: false,
         recurrence_scope: "single",
         day_of_month: "",
@@ -335,12 +336,7 @@ export default function TransactionForm({
 
           <label className={errors.wallet_id ? "has-error" : ""}>
             <span><WalletCards size={15} /> Carteira</span>
-            <select value={form.wallet_id} onChange={(event) => setField("wallet_id", event.target.value)} aria-invalid={!!errors.wallet_id} required>
-              <option value="">Selecione a carteira</option>
-              {wallets.filter((wallet) => wallet.active || String(wallet.id) === String(form.wallet_id)).map((wallet) => (
-                <option key={wallet.id} value={wallet.id}>{wallet.institution ? `${wallet.institution} · ` : ""}{wallet.name}</option>
-              ))}
-            </select>
+            <WalletSelect wallets={wallets.filter((wallet) => wallet.active || String(wallet.id) === String(form.wallet_id))} value={form.wallet_id} onChange={(value) => setField("wallet_id", value)} ariaLabel="Carteiras do lançamento" />
             {errors.wallet_id && <small className="field-error">{errors.wallet_id}</small>}
           </label>
 

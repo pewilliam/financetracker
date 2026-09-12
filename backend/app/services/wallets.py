@@ -16,11 +16,15 @@ def default_wallet(db: Session, user_id: int, *, create: bool = True) -> Wallet 
     wallet = (
         db.query(Wallet)
         .filter(Wallet.user_id == user_id, Wallet.active.is_(True))
-        .order_by(Wallet.id)
+        .order_by(Wallet.is_primary.desc(), Wallet.id)
         .first()
     )
-    if wallet or not create:
+    if wallet:
+        if not wallet.is_primary:
+            set_primary_wallet(db, wallet)
         return wallet
+    if not create:
+        return None
     wallet = Wallet(
         user_id=user_id,
         name="Carteira principal",
@@ -28,9 +32,20 @@ def default_wallet(db: Session, user_id: int, *, create: bool = True) -> Wallet 
         initial_balance=Decimal("0.00"),
         tracking_started_on=date.today(),
         color="#14A078",
+        is_primary=True,
     )
     db.add(wallet)
     db.flush()
+    return wallet
+
+
+def set_primary_wallet(db: Session, wallet: Wallet) -> Wallet:
+    db.query(Wallet).filter(
+        Wallet.user_id == wallet.user_id,
+        Wallet.id != wallet.id,
+        Wallet.is_primary.is_(True),
+    ).update({Wallet.is_primary: False}, synchronize_session=False)
+    wallet.is_primary = True
     return wallet
 
 
@@ -45,28 +60,35 @@ def user_wallet(db: Session, user_id: int, wallet_id: int | None, *, active_only
     return wallet
 
 
-def wallet_balance(db: Session, wallet: Wallet, as_of: date | None = None) -> Decimal:
+def wallet_balance(
+    db: Session,
+    wallet: Wallet,
+    as_of: date | None = None,
+    *,
+    tracking_started_on: date | None = None,
+) -> Decimal:
     as_of = as_of or date.today()
-    if as_of < wallet.tracking_started_on:
+    tracking_start = tracking_started_on or wallet.tracking_started_on
+    if as_of < tracking_start:
         return Decimal("0.00")
     end_filters = [Transaction.date <= as_of]
     signed = case((Transaction.type == "income", Transaction.amount), else_=-Transaction.amount)
     transaction_net = db.query(func.coalesce(func.sum(signed), 0)).filter(
         Transaction.wallet_id == wallet.id,
-        Transaction.date >= wallet.tracking_started_on,
+        Transaction.date >= tracking_start,
         *end_filters,
     ).scalar()
     adjustment_query = db.query(func.coalesce(func.sum(WalletAdjustment.amount), 0)).filter(
         WalletAdjustment.wallet_id == wallet.id,
-        WalletAdjustment.date >= wallet.tracking_started_on,
+        WalletAdjustment.date >= tracking_start,
     )
     incoming_query = db.query(func.coalesce(func.sum(WalletTransfer.amount), 0)).filter(
         WalletTransfer.destination_wallet_id == wallet.id,
-        WalletTransfer.date >= wallet.tracking_started_on,
+        WalletTransfer.date >= tracking_start,
     )
     outgoing_query = db.query(func.coalesce(func.sum(WalletTransfer.amount), 0)).filter(
         WalletTransfer.source_wallet_id == wallet.id,
-        WalletTransfer.date >= wallet.tracking_started_on,
+        WalletTransfer.date >= tracking_start,
     )
     adjustment_query = adjustment_query.filter(WalletAdjustment.date <= as_of)
     incoming_query = incoming_query.filter(WalletTransfer.date <= as_of)

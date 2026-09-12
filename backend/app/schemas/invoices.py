@@ -47,6 +47,7 @@ class InvoiceCreate(APIModel):
     initial_amount: NonNegativeMoney = Decimal("0.00")
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    wallet_id: Optional[int] = None
 
 
 class InvoicePaidUpdate(APIModel):

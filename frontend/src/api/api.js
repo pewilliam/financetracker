@@ -142,12 +142,24 @@ export function restoreWallet(id) {
   return request(`/wallets/${id}/restore`, { method: "PATCH" });
 }
 
+export function setPrimaryWallet(id) {
+  return request(`/wallets/${id}/primary`, { method: "PATCH" });
+}
+
 export function adjustWalletBalance(id, payload) {
   return request(`/wallets/${id}/adjustments`, { method: "POST", body: JSON.stringify(payload) });
 }
 
 export function transferBetweenWallets(payload) {
   return request("/wallets/transfers", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function previewWalletConsolidation(payload) {
+  return request("/wallets/consolidation/preview", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function consolidateWallet(payload) {
+  return request("/wallets/consolidation", { method: "POST", body: JSON.stringify(payload) });
 }
 
 export function updateTutorialProgress(tutorial, version) {

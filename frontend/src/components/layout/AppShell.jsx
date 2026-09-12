@@ -417,7 +417,8 @@ export default function AppShell() {
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
         initial_amount: parseTypedMoneyInput(draft.initial_amount, language),
-        category_ids: (draft.category_ids || []).map(Number)
+        category_ids: (draft.category_ids || []).map(Number),
+        wallet_id: Number(draft.wallet_id)
       })));
       const createdIds = new Set(createdInvoices.map((invoice) => invoice.id));
       setInvoices((current) => sortInvoicesByDueDate([
@@ -435,7 +436,9 @@ export default function AppShell() {
 
   const openNewInvoiceModal = () => {
     const activeTemplate = invoiceTemplates.find((template) => template.active);
-    setInvoiceForm(activeTemplate ? { ...defaultInvoiceForm(), template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : defaultInvoiceForm());
+    const activeWallet = walletSummary.wallets.find((wallet) => wallet.active && wallet.is_primary) || walletSummary.wallets.find((wallet) => wallet.active);
+    const initialForm = { ...defaultInvoiceForm(), wallet_id: String(activeWallet?.id || "") };
+    setInvoiceForm(activeTemplate ? { ...initialForm, template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : initialForm);
     setInvoiceModal(true);
   };
 
@@ -889,7 +892,7 @@ export default function AppShell() {
 
       <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
-      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
+      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
       {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} categories={categories} expenseOptions={receivableExpenseOptions} onCreateCategory={saveCategory} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}

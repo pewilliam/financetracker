@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Building2, ChevronLeft, ChevronRight, CircleDollarSign, Edit3, Landmark, Loader2, Plus, RotateCcw, SlidersHorizontal, TrendingUp, WalletCards, X } from "lucide-react";
+import { Archive, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Building2, ChevronLeft, ChevronRight, CircleDollarSign, Edit3, Landmark, Loader2, MoveRight, Plus, ReceiptText, RotateCcw, SlidersHorizontal, Star, TrendingUp, WalletCards, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { adjustWalletBalance, archiveWallet, createWallet, getWallet, getWalletMovements, listWallets, restoreWallet, transferBetweenWallets, updateWallet } from "../api/api.js";
+import { adjustWalletBalance, archiveWallet, consolidateWallet, createWallet, getWallet, getWalletMovements, listWallets, previewWalletConsolidation, restoreWallet, setPrimaryWallet, transferBetweenWallets, updateWallet } from "../api/api.js";
 import DateField from "../components/DateField.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
+import WalletSelect from "../components/WalletSelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -121,8 +122,8 @@ function BalanceAdjustment({ wallet, language, onClose, onSaved }) {
 
 function TransferEditor({ wallets, initialSource, language, onClose, onSaved }) {
   const active = wallets.filter((wallet) => wallet.active);
-  const walletOptions = active.map((wallet) => ({ id: String(wallet.id), name: `${wallet.name}${wallet.institution ? ` · ${wallet.institution}` : ""}`, color: wallet.color }));
-  const [form, setForm] = useState({ source_wallet_id: String(initialSource?.id || active[0]?.id || ""), destination_wallet_id: String(active.find((wallet) => wallet.id !== initialSource?.id)?.id || ""), amount: "", date: todayIso(), description: "" });
+  const defaultSource = initialSource || active.find((wallet) => wallet.is_primary) || active[0];
+  const [form, setForm] = useState({ source_wallet_id: String(defaultSource?.id || ""), destination_wallet_id: String(active.find((wallet) => wallet.id !== defaultSource?.id)?.id || ""), amount: "", date: todayIso(), description: "" });
   const [busy, setBusy] = useState(false);
   const sourceWallet = active.find((wallet) => String(wallet.id) === form.source_wallet_id);
   const destinationWallet = active.find((wallet) => String(wallet.id) === form.destination_wallet_id);
@@ -146,9 +147,9 @@ function TransferEditor({ wallets, initialSource, language, onClose, onSaved }) 
     <div className="wallet-transfer-header"><i><ArrowRightLeft size={20} /></i><div><small>TRANSFERÊNCIA INTERNA</small><h2>Transferir entre carteiras</h2><p>Mova seu dinheiro sem alterar o patrimônio total.</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
     <div className="wallet-modal-body form-stack">
       <div className="wallet-transfer-route">
-        <label><span>Carteira de origem</span><CategorySelect categories={walletOptions} value={form.source_wallet_id} onChange={(sourceId) => setForm((current) => ({ ...current, source_wallet_id: sourceId, destination_wallet_id: current.destination_wallet_id === sourceId ? String(active.find((wallet) => String(wallet.id) !== sourceId)?.id || "") : current.destination_wallet_id }))} multiple={false} clearable={false} placeholder="Selecione a origem" searchPlaceholder="Buscar carteira..." ariaLabel="Carteiras de origem" /></label>
+        <label><span>Carteira de origem</span><WalletSelect wallets={active} value={form.source_wallet_id} onChange={(sourceId) => setForm((current) => ({ ...current, source_wallet_id: sourceId, destination_wallet_id: current.destination_wallet_id === sourceId ? String(active.find((wallet) => String(wallet.id) !== sourceId)?.id || "") : current.destination_wallet_id }))} placeholder="Selecione a origem" ariaLabel="Carteiras de origem" /></label>
         <span className="wallet-transfer-direction" aria-hidden="true"><ArrowRightLeft size={16} /></span>
-        <label><span>Carteira de destino</span><CategorySelect categories={walletOptions.filter((wallet) => wallet.id !== form.source_wallet_id)} value={form.destination_wallet_id} onChange={(destinationId) => setForm((current) => ({ ...current, destination_wallet_id: destinationId }))} multiple={false} clearable={false} placeholder="Selecione o destino" searchPlaceholder="Buscar carteira..." ariaLabel="Carteiras de destino" /></label>
+        <label><span>Carteira de destino</span><WalletSelect wallets={active.filter((wallet) => String(wallet.id) !== form.source_wallet_id)} value={form.destination_wallet_id} onChange={(destinationId) => setForm((current) => ({ ...current, destination_wallet_id: destinationId }))} placeholder="Selecione o destino" ariaLabel="Carteiras de destino" /></label>
       </div>
       <div className="wallet-transfer-details"><label><span className="wallet-transfer-value-label"><span>Valor</span><button type="button" onClick={useFullBalance} disabled={!sourceWallet || sourceBalance <= 0 || busy}>Usar saldo total</button></span><input inputMode="decimal" value={form.amount} onChange={(event) => setForm({ ...form, amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => setForm({ ...form, amount: formatTypedMoneyAsCurrency(form.amount, language) })} placeholder={formatMoney(0, language)} required /></label><label><span>Data</span><DateField value={form.date} onChange={(value) => setForm({ ...form, date: value })} /></label></div>
       <div className="wallet-transfer-preview" aria-live="polite">
@@ -162,12 +163,97 @@ function TransferEditor({ wallets, initialSource, language, onClose, onSaved }) 
   </form></div>;
 }
 
+function ConsolidationEditor({ wallets, initialSource, language, onClose, onSaved }) {
+  const active = wallets.filter((wallet) => wallet.active);
+  const initialSourceId = String(initialSource?.id || active[0]?.id || "");
+  const [form, setForm] = useState({
+    source_wallet_id: initialSourceId,
+    destination_wallet_id: String(active.find((wallet) => String(wallet.id) !== initialSourceId)?.id || ""),
+    adjust_tracking_start: true,
+  });
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!form.source_wallet_id || !form.destination_wallet_id) return undefined;
+    let cancelled = false;
+    setLoading(true);
+    previewWalletConsolidation({
+      ...form,
+      source_wallet_id: Number(form.source_wallet_id),
+      destination_wallet_id: Number(form.destination_wallet_id),
+    }).then((result) => { if (!cancelled) setPreview(result); })
+      .catch(() => { if (!cancelled) { setPreview(null); toast.error("Não foi possível calcular a reorganização"); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [form]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const result = await consolidateWallet({
+        ...form,
+        source_wallet_id: Number(form.source_wallet_id),
+        destination_wallet_id: Number(form.destination_wallet_id),
+      });
+      toast.success(`${result.moved_transaction_count} ${result.moved_transaction_count === 1 ? "lançamento consolidado" : "lançamentos consolidados"} com sucesso`);
+      await onSaved(Number(form.source_wallet_id));
+      onClose();
+    } catch (error) {
+      toast.error(error.message === "No wallet history to consolidate" ? "Não há histórico nessa carteira" : error.message === "Wallet consolidation would change total balance" ? "Não foi possível preservar o patrimônio com essas datas de acompanhamento" : "Não foi possível consolidar a carteira");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const source = active.find((wallet) => String(wallet.id) === form.source_wallet_id);
+  const destination = active.find((wallet) => String(wallet.id) === form.destination_wallet_id);
+  const preservesTotal = preview && Number(preview.total_balance_before) === Number(preview.total_balance_after);
+  const includesFutureTransactions = preview?.latest_date && preview.latest_date > todayIso();
+  const formatDate = (value) => value ? new Date(`${value}T12:00:00`).toLocaleDateString(language) : "—";
+
+  return <div className="modal-layer"><button className="modal-backdrop" onClick={onClose} aria-label="Fechar" /><form className="modal-card wallet-modal wallet-transfer-modal wallet-consolidation-modal" onSubmit={submit}>
+    <div className="wallet-transfer-header"><i><ReceiptText size={20} /></i><div><small>CONSOLIDAÇÃO DE CARTEIRA</small><h2>Mover todo o histórico</h2><p>Reúna saldo inicial, ganhos, gastos e lançamentos futuros em uma só carteira.</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
+    <div className="wallet-modal-body form-stack">
+      <div className="wallet-transfer-route">
+        <label><span>Carteira que será esvaziada</span><WalletSelect wallets={active.filter((wallet) => String(wallet.id) !== form.destination_wallet_id)} value={form.source_wallet_id} onChange={(sourceId) => setForm((current) => ({ ...current, source_wallet_id: sourceId, destination_wallet_id: current.destination_wallet_id === sourceId ? String(active.find((wallet) => String(wallet.id) !== sourceId)?.id || "") : current.destination_wallet_id }))} ariaLabel="Carteiras de origem" /></label>
+        <span className="wallet-transfer-direction" aria-hidden="true"><MoveRight size={17} /></span>
+        <label><span>Carteira que receberá tudo</span><WalletSelect wallets={active.filter((wallet) => String(wallet.id) !== form.source_wallet_id)} value={form.destination_wallet_id} onChange={(destinationId) => setForm((current) => ({ ...current, destination_wallet_id: destinationId }))} ariaLabel="Carteiras de destino" /></label>
+      </div>
+
+      {loading ? <div className="wallet-consolidation-loading"><Loader2 className="spin" size={17} /> Calculando impacto...</div> : preview && <>
+        <div className="wallet-consolidation-summary">
+          <div><strong>{preview.transaction_count}</strong><span>{preview.transaction_count === 1 ? "lançamento" : "lançamentos"}{includesFutureTransactions ? " · inclui futuros" : ""}</span></div>
+          <div><strong className="money-income">+{formatMoney(preview.income_total, language)}</strong><span>{preview.income_count} {preview.income_count === 1 ? "ganho" : "ganhos"}</span></div>
+          <div><strong className="money-expense">-{formatMoney(preview.expense_total, language)}</strong><span>{preview.expense_count} {preview.expense_count === 1 ? "gasto" : "gastos"}</span></div>
+          <small>{formatDate(preview.earliest_date)} até {formatDate(preview.latest_date)}</small>
+        </div>
+        <div className="wallet-transfer-preview">
+          <section style={{ "--wallet-preview-color": source?.color || "var(--primary)" }}><header><i /><div><small>Origem</small><strong>{source?.name}</strong></div></header><div><span>Saldo atual <strong>{formatMoney(preview.source_balance_before, language)}</strong></span><span>Saldo após <strong>{formatMoney(preview.source_balance_after, language)}</strong></span></div></section>
+          <section style={{ "--wallet-preview-color": destination?.color || "var(--primary)" }}><header><i /><div><small>Destino</small><strong>{destination?.name}</strong></div></header><div><span>Saldo atual <strong>{formatMoney(preview.destination_balance_before, language)}</strong></span><span>Saldo após <strong className={Number(preview.destination_balance_after) < 0 ? "negative" : ""}>{formatMoney(preview.destination_balance_after, language)}</strong></span></div></section>
+        </div>
+        {preview.direct_transfer_count > 0 && <p className="wallet-consolidation-transfer-note"><ArrowRightLeft size={15} /><span><strong>{preview.direct_transfer_count} {preview.direct_transfer_count === 1 ? "transferência direta será desfeita" : "transferências diretas serão desfeitas"}</strong><small>{formatMoney(preview.direct_transfer_total, language)} entre estas duas carteiras. Transferências com outras carteiras apenas trocarão a origem ou o destino.</small></span></p>}
+        {preview.tracking_start_changes && <p className="wallet-consolidation-tracking-note">O início do acompanhamento de <strong>{destination?.name}</strong> será antecipado de {formatDate(preview.tracking_start_before)} para {formatDate(preview.tracking_start_after)}, incluindo todo o período da carteira de origem.</p>}
+        {preview.destination_becomes_primary && <p className="wallet-consolidation-primary-note"><Star size={15} /><span><strong>{destination?.name} passará a ser a carteira principal</strong><small>Novos lançamentos e faturas começarão selecionados nela.</small></span></p>}
+        {!preservesTotal && <p className="wallet-consolidation-warning">A operação foi bloqueada porque alteraria o patrimônio total. Ajuste as datas de acompanhamento antes de continuar.</p>}
+        <p className="wallet-consolidation-recurrences"><strong>{preview.recurrence_count} {preview.recurrence_count === 1 ? "recorrência será movida" : "recorrências serão movidas"}</strong><span>{preview.income_recurrence_count} de ganhos e {preview.expense_recurrence_count} de gastos; os próximos lançamentos usarão a carteira de destino.</span></p>
+      </>}
+
+      <p className="wallet-form-note">Datas, valores, categorias, vínculos e recorrências serão preservados. A carteira de origem ficará zerada e poderá ser arquivada depois.</p>
+      <div className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || loading || !preview || !preservesTotal}>{busy ? <><Loader2 className="spin" size={16} /> Consolidando...</> : "Consolidar carteira"}</button></div>
+    </div>
+  </form></div>;
+}
+
 export default function WalletsPage({ summary: initialSummary, onChanged }) {
   const { language } = useI18n();
   const [summary, setSummary] = useState(initialSummary || { total_balance: 0, active_count: 0, wallets: [] });
   const [editor, setEditor] = useState(null);
   const [adjusting, setAdjusting] = useState(null);
   const [transferring, setTransferring] = useState(null);
+  const [consolidating, setConsolidating] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -252,7 +338,16 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
       toast.success(wallet.active ? "Carteira arquivada; o histórico foi preservado" : "Carteira reativada");
       if (wallet.id === selectedId && wallet.active) closeDetail();
       await refresh(wallet.active ? null : wallet.id);
-    } catch (error) { toast.error(error.message === "Keep at least one active wallet" ? "Mantenha pelo menos uma carteira ativa" : error.message?.includes("balance to zero") ? "Transfira ou ajuste o saldo para zero antes de arquivar" : "Não foi possível alterar a carteira"); }
+    } catch (error) { toast.error(error.message === "Keep at least one active wallet" ? "Mantenha pelo menos uma carteira ativa" : error.message === "Choose another primary wallet before archiving" ? "Defina outra carteira como principal antes de arquivar esta" : error.message?.includes("balance to zero") ? "Transfira ou ajuste o saldo para zero antes de arquivar" : "Não foi possível alterar a carteira"); }
+  };
+  const makePrimary = async (wallet) => {
+    try {
+      await setPrimaryWallet(wallet.id);
+      toast.success(`${wallet.name} agora é a carteira principal`);
+      await refresh(wallet.id);
+    } catch {
+      toast.error("Não foi possível definir a carteira principal");
+    }
   };
 
   const historyMonthLabel = new Date(historyPeriod.year, historyPeriod.month - 1, 1).toLocaleDateString(language, { month: "long", year: "numeric" });
@@ -300,7 +395,7 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
             <div className="wallet-card-heading">
               <i><Icon size={18} /></i>
               <div><small>{wallet.institution || WALLET_TYPES.find(([value]) => value === wallet.type)?.[1]}</small><h3>{wallet.name}</h3></div>
-              {!wallet.active && <span className="wallet-status">Arquivada</span>}
+              {wallet.is_primary ? <span className="wallet-primary-status"><Star size={11} fill="currentColor" /> Principal</span> : !wallet.active && <span className="wallet-status">Arquivada</span>}
             </div>
             <div className="wallet-card-balance"><span>Saldo atual</span><strong>{formatMoney(wallet.current_balance, language)}</strong></div>
             <div className="wallet-card-flow">
@@ -314,10 +409,12 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
 
       {(selectedId || detailLoading) && <aside className={`card wallet-detail ${detailClosing ? "closing" : ""}`} key={selectedId || "wallet-detail"} style={{ "--wallet-color": detail?.color || selectedWallet?.color || "var(--primary)" }}>
         {detailLoading && !detail ? <div className="wallet-detail-loading"><Loader2 className="spin" /> Carregando histórico...</div> : detail && <>
-          <div className="wallet-detail-head"><div><small>{detail.institution || "Carteira"}</small><h2>{detail.name}</h2></div><button className="icon-btn" onClick={closeDetail} aria-label="Fechar detalhes"><X size={18} /></button></div>
+          <div className="wallet-detail-head"><div><small>{detail.institution || "Carteira"}</small><h2>{detail.name}</h2>{detail.is_primary && <span className="wallet-primary-detail"><Star size={12} fill="currentColor" /> Carteira principal</span>}</div><button className="icon-btn" onClick={closeDetail} aria-label="Fechar detalhes"><X size={18} /></button></div>
           <div className="wallet-detail-stats"><div><span>Saldo atual</span><strong>{formatMoney(detail.current_balance, language)}</strong></div><div><span>Entradas · desde o início</span><strong className="money-income">{formatMoney(detail.total_income, language)}</strong></div><div><span>Saídas · desde o início</span><strong className="money-expense">{formatMoney(detail.total_expenses, language)}</strong></div></div>
           <div className="wallet-detail-actions">
             {detail.active && <button className="btn btn-ghost" type="button" onClick={() => setAdjusting(detail)}><SlidersHorizontal size={15} /> Ajustar saldo</button>}
+            {detail.active && <button className="btn btn-ghost" type="button" onClick={() => setConsolidating(detail)}><MoveRight size={15} /> Consolidar</button>}
+            {detail.active && !detail.is_primary && <button className="btn btn-ghost" type="button" onClick={() => makePrimary(detail)}><Star size={15} /> Definir como principal</button>}
             <button className="btn btn-ghost" type="button" onClick={() => setEditor(detail)}><Edit3 size={15} /> Editar</button>
             <button className="btn btn-ghost" type="button" onClick={() => toggleArchive(detail)}>{detail.active ? <Archive size={15} /> : <RotateCcw size={15} />}{detail.active ? "Arquivar" : "Reativar"}</button>
           </div>
@@ -350,5 +447,6 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
     {editor && <WalletEditor wallet={editor.id ? editor : null} language={language} onClose={() => setEditor(null)} onSaved={refresh} />}
     {adjusting && <BalanceAdjustment wallet={adjusting} language={language} onClose={() => setAdjusting(null)} onSaved={refresh} />}
     {transferring && <TransferEditor wallets={wallets} initialSource={transferring} language={language} onClose={() => setTransferring(null)} onSaved={refresh} />}
+    {consolidating && <ConsolidationEditor wallets={wallets} initialSource={consolidating} language={language} onClose={() => setConsolidating(null)} onSaved={refresh} />}
   </section>;
 }
