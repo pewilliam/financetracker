@@ -126,3 +126,13 @@ class WalletMovementOut(APIModel):
 
 class WalletDetailOut(WalletOut):
     movements: list[WalletMovementOut] = []
+
+
+class WalletMovementPageOut(APIModel):
+    items: list[WalletMovementOut] = Field(default_factory=list)
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+    year: int
+    month: int

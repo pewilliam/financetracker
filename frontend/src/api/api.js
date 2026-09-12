@@ -121,6 +121,11 @@ export function getWallet(id) {
   return request(`/wallets/${id}`);
 }
 
+export function getWalletMovements(id, { year, month, page = 1, pageSize = 10 }) {
+  const params = new URLSearchParams({ year, month, page, page_size: pageSize });
+  return request(`/wallets/${id}/movements?${params}`);
+}
+
 export function createWallet(payload) {
   return request("/wallets", { method: "POST", body: JSON.stringify(payload) });
 }

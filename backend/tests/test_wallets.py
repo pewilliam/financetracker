@@ -9,8 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.main import app
 from app.models import Transaction, User, Wallet, WalletAdjustment, WalletTransfer
-from app.routers.wallets import adjust_wallet_balance, archive_wallet, list_wallets, transfer_between_wallets
-from app.schemas.wallets import WalletAdjustmentCreate, WalletDetailOut, WalletTransferCreate
+from app.routers.wallets import adjust_wallet_balance, archive_wallet, list_wallet_movements, list_wallets, transfer_between_wallets
+from app.schemas.wallets import WalletAdjustmentCreate, WalletMovementPageOut, WalletTransferCreate
 from app.services.wallets import wallet_balance
 
 
@@ -49,6 +49,7 @@ class WalletTests(unittest.TestCase):
         paths = {route.path for route in app.routes}
         self.assertIn("/api/wallets", paths)
         self.assertIn("/api/wallets/transfers", paths)
+        self.assertIn("/api/wallets/{wallet_id}/movements", paths)
 
     def test_transfer_moves_balance_without_changing_total(self):
         before = wallet_balance(self.db, self.primary) + wallet_balance(self.db, self.reserve)
@@ -79,8 +80,71 @@ class WalletTests(unittest.TestCase):
             Decimal("50.00"), Decimal("1000.00"), Decimal("1050.00")
         ))
         self.assertEqual(wallet_balance(self.db, self.primary), Decimal("1050.00"))
-        validated = WalletDetailOut.model_validate(detail)
-        self.assertIn("adjustment", {movement.kind for movement in validated.movements})
+        self.assertEqual(detail["movements"], [])
+        history = list_wallet_movements(
+            self.primary.id,
+            year=date.today().year,
+            month=date.today().month,
+            page=1,
+            page_size=10,
+            db=self.db,
+            current_user=self.user,
+        )
+        validated = WalletMovementPageOut.model_validate(history)
+        self.assertIn("adjustment", {movement.kind for movement in validated.items})
+
+    def test_wallet_history_is_filtered_by_month_and_paginated(self):
+        current = date.today()
+        previous_month = (current.replace(day=1) - timedelta(days=1)).replace(day=1)
+        self.db.add_all([
+            Transaction(
+                user_id=self.user.id,
+                wallet_id=self.primary.id,
+                date=current,
+                type="income",
+                amount=Decimal(index + 1),
+                description=f"Movimento {index + 1}",
+            )
+            for index in range(12)
+        ])
+        self.db.add(Transaction(
+            user_id=self.user.id,
+            wallet_id=self.primary.id,
+            date=previous_month,
+            type="expense",
+            amount=Decimal("999.00"),
+            description="Fora do período",
+        ))
+        self.db.commit()
+
+        first_page = list_wallet_movements(
+            self.primary.id,
+            year=current.year,
+            month=current.month,
+            page=1,
+            page_size=5,
+            db=self.db,
+            current_user=self.user,
+        )
+        second_page = list_wallet_movements(
+            self.primary.id,
+            year=current.year,
+            month=current.month,
+            page=2,
+            page_size=5,
+            db=self.db,
+            current_user=self.user,
+        )
+
+        expected_total = 12 + int(
+            self.primary.tracking_started_on.year == current.year
+            and self.primary.tracking_started_on.month == current.month
+        )
+        self.assertEqual(first_page["total"], expected_total)
+        self.assertEqual(first_page["total_pages"], (expected_total + 4) // 5)
+        self.assertEqual(len(first_page["items"]), 5)
+        self.assertEqual(len(second_page["items"]), 5)
+        self.assertNotIn("Fora do período", {item["description"] for item in first_page["items"] + second_page["items"]})
 
     def test_wallet_with_balance_cannot_be_archived_and_history_is_preserved(self):
         with self.assertRaises(HTTPException):

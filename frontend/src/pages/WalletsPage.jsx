@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { Archive, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Building2, CircleDollarSign, Edit3, Landmark, Loader2, Plus, RotateCcw, SlidersHorizontal, TrendingDown, TrendingUp, WalletCards, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Building2, ChevronLeft, ChevronRight, CircleDollarSign, Edit3, Landmark, Loader2, Plus, RotateCcw, SlidersHorizontal, TrendingDown, TrendingUp, WalletCards, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { adjustWalletBalance, archiveWallet, createWallet, getWallet, listWallets, restoreWallet, transferBetweenWallets, updateWallet } from "../api/api.js";
+import { adjustWalletBalance, archiveWallet, createWallet, getWallet, getWalletMovements, listWallets, restoreWallet, transferBetweenWallets, updateWallet } from "../api/api.js";
 import DateField from "../components/DateField.jsx";
+import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -16,11 +17,23 @@ const WALLET_TYPES = [
   ["other", "Outros"]
 ];
 
+const WALLET_TYPE_OPTIONS = WALLET_TYPES.map(([id, name], index) => ({
+  id,
+  name,
+  color: ["#14A078", "#2F80ED", "#D49A17", "#8B5CF6", "#0EA5E9", "#64748B"][index],
+}));
+
 const TYPE_ICONS = { checking: Landmark, digital: Building2, cash: Banknote, reserve: CircleDollarSign, investment: TrendingUp, other: WalletCards };
+const HISTORY_PAGE_SIZE = 8;
 
 function todayIso() {
   const value = new Date();
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function currentHistoryPeriod() {
+  const value = new Date();
+  return { year: value.getFullYear(), month: value.getMonth() + 1 };
 }
 
 function emptyWallet() {
@@ -69,7 +82,7 @@ function WalletEditor({ wallet, language, onClose, onSaved }) {
       <div className="wallet-modal-body form-stack">
         <label><span>Nome da carteira</span><input maxLength="100" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex: Conta principal" required autoFocus /></label>
         <label><span>Instituição <small>(opcional)</small></span><input maxLength="100" value={form.institution} onChange={(event) => setForm({ ...form, institution: event.target.value })} placeholder="Ex: Nubank" /></label>
-        <label><span>Tipo</span><select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{WALLET_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span>Tipo</span><CategorySelect categories={WALLET_TYPE_OPTIONS} value={form.type} onChange={(type) => setForm({ ...form, type })} multiple={false} clearable={false} placeholder="Selecione o tipo" searchPlaceholder="Buscar tipo..." ariaLabel="Tipos de carteira" className="wallet-type-select" /></label>
         {!editing && <label><span>Saldo inicial</span><input inputMode="decimal" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => setForm({ ...form, initial_balance: formatTypedMoneyAsCurrency(form.initial_balance, language) })} placeholder={formatMoney(0, language)} /></label>}
         {editing && <p className="wallet-form-note">O saldo inicial não é sobrescrito. Use “Ajustar saldo” para manter a alteração registrada no histórico.</p>}
         <label><span>Início do acompanhamento</span><DateField value={form.tracking_started_on} onChange={(value) => setForm({ ...form, tracking_started_on: value })} /></label>
@@ -141,6 +154,10 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [historyPeriod, setHistoryPeriod] = useState(currentHistoryPeriod);
+  const [history, setHistory] = useState({ items: [], page: 1, total: 0, total_pages: 0 });
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRequest = useRef(0);
   const [showArchived, setShowArchived] = useState(false);
   const [organizeDismissed, setOrganizeDismissed] = useState(() => localStorage.getItem("wallet-organize-dismissed") === "1");
 
@@ -160,15 +177,42 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
     });
   }, [visibleWallets, language]);
 
+  const loadHistory = async (walletId, period, page = 1) => {
+    const requestId = ++historyRequest.current;
+    setHistoryLoading(true);
+    try {
+      const next = await getWalletMovements(walletId, { ...period, page, pageSize: HISTORY_PAGE_SIZE });
+      if (requestId === historyRequest.current) setHistory(next);
+    } catch {
+      if (requestId === historyRequest.current) toast.error("Não foi possível carregar as movimentações da carteira");
+    } finally {
+      if (requestId === historyRequest.current) setHistoryLoading(false);
+    }
+  };
   const loadDetail = async (walletId) => {
-    setSelectedId(walletId); setDetailLoading(true);
-    try { setDetail(await getWallet(walletId)); } catch { toast.error("Não foi possível carregar o histórico da carteira"); }
+    const period = currentHistoryPeriod();
+    setSelectedId(walletId); setDetail(null); setDetailLoading(true);
+    setHistoryPeriod(period); setHistory({ items: [], page: 1, total: 0, total_pages: 0 });
+    void loadHistory(walletId, period, 1);
+    try { setDetail(await getWallet(walletId)); } catch { toast.error("Não foi possível carregar os detalhes da carteira"); }
     finally { setDetailLoading(false); }
   };
   const refresh = async (detailId = selectedId) => {
     const next = await listWallets(); setSummary(next);
-    if (detailId) await loadDetail(detailId);
+    if (detailId) {
+      setDetailLoading(true);
+      try { setDetail(await getWallet(detailId)); } finally { setDetailLoading(false); }
+      await loadHistory(detailId, historyPeriod, history.page);
+    }
     await onChanged?.();
+  };
+  const shiftHistoryMonth = (offset) => {
+    if (!selectedId || historyLoading) return;
+    const value = new Date(historyPeriod.year, historyPeriod.month - 1 + offset, 1);
+    const period = { year: value.getFullYear(), month: value.getMonth() + 1 };
+    setHistoryPeriod(period);
+    setHistory({ items: [], page: 1, total: 0, total_pages: 0 });
+    void loadHistory(selectedId, period, 1);
   };
   const toggleArchive = async (wallet) => {
     try {
@@ -178,6 +222,8 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
       await refresh(wallet.active ? null : wallet.id);
     } catch (error) { toast.error(error.message === "Keep at least one active wallet" ? "Mantenha pelo menos uma carteira ativa" : error.message?.includes("balance to zero") ? "Transfira ou ajuste o saldo para zero antes de arquivar" : "Não foi possível alterar a carteira"); }
   };
+
+  const historyMonthLabel = new Date(historyPeriod.year, historyPeriod.month - 1, 1).toLocaleDateString(language, { month: "long", year: "numeric" });
 
   return <section className="wallets-page">
     <header className="card wallets-hero">
@@ -230,7 +276,7 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
 
       {(selectedId || detailLoading) && <aside className="card wallet-detail">
         {detailLoading && !detail ? <div className="wallet-detail-loading"><Loader2 className="spin" /> Carregando histórico...</div> : detail && <>
-          <div className="wallet-detail-head"><div><small>{detail.institution || "Carteira"}</small><h2>{detail.name}</h2></div><button className="icon-btn" onClick={() => { setSelectedId(null); setDetail(null); }}><X size={18} /></button></div>
+          <div className="wallet-detail-head"><div><small>{detail.institution || "Carteira"}</small><h2>{detail.name}</h2></div><button className="icon-btn" onClick={() => { historyRequest.current += 1; setSelectedId(null); setDetail(null); setHistory({ items: [], page: 1, total: 0, total_pages: 0 }); }}><X size={18} /></button></div>
           <div className="wallet-detail-stats"><div><span>Saldo atual</span><strong>{formatMoney(detail.current_balance, language)}</strong></div><div><span>Entradas · desde o início</span><strong className="money-income">{formatMoney(detail.total_income, language)}</strong></div><div><span>Saídas · desde o início</span><strong className="money-expense">{formatMoney(detail.total_expenses, language)}</strong></div></div>
           <div className="wallet-detail-actions">
             {detail.active && <button className="btn btn-ghost" type="button" onClick={() => setAdjusting(detail)}><SlidersHorizontal size={15} /> Ajustar saldo</button>}
@@ -238,12 +284,18 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
             <button className="btn btn-ghost" type="button" onClick={() => toggleArchive(detail)}>{detail.active ? <Archive size={15} /> : <RotateCcw size={15} />}{detail.active ? "Arquivar" : "Reativar"}</button>
           </div>
           <p className="wallet-tracking-note">Saldo inicial em {new Date(`${detail.tracking_started_on}T12:00:00`).toLocaleDateString(language)}: <strong>{formatMoney(detail.initial_balance, language)}</strong></p>
-          <h3>Histórico da carteira</h3>
-          <div className="wallet-movement-list">{detail.movements?.map((movement) => <div className="wallet-movement" key={`${movement.kind}-${movement.id}-${movement.date}`}>
-            <i className={Number(movement.amount) >= 0 ? "positive" : "negative"}>{movement.kind.startsWith("transfer") ? <ArrowRightLeft size={16} /> : movement.kind === "adjustment" ? <SlidersHorizontal size={16} /> : Number(movement.amount) >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}</i>
-            <div><strong>{movement.description || "Movimentação"}</strong><small>{new Date(`${movement.date}T12:00:00`).toLocaleDateString(language)}{movement.counterpart_wallet_name ? ` · ${movement.counterpart_wallet_name}` : ""}</small></div>
-            <strong className={Number(movement.amount) >= 0 ? "money-income" : "money-expense"}>{Number(movement.amount) > 0 ? "+" : ""}{formatMoney(movement.amount, language)}</strong>
-          </div>)}</div>
+          <div className="wallet-history-heading">
+            <div><h3>Histórico da carteira</h3>{history.total > 0 && <small>{history.total} {history.total === 1 ? "movimentação" : "movimentações"}</small>}</div>
+            <div className="wallet-history-month"><button className="icon-btn" type="button" onClick={() => shiftHistoryMonth(-1)} disabled={historyLoading} aria-label="Mês anterior"><ChevronLeft size={16} /></button><strong>{historyMonthLabel}</strong><button className="icon-btn" type="button" onClick={() => shiftHistoryMonth(1)} disabled={historyLoading} aria-label="Próximo mês"><ChevronRight size={16} /></button></div>
+          </div>
+          {historyLoading ? <div className="wallet-history-state"><Loader2 className="spin" size={18} /> Carregando movimentações...</div> : history.items.length > 0 ? <>
+            <div className="wallet-movement-list">{history.items.map((movement) => <div className="wallet-movement" key={`${movement.kind}-${movement.id}-${movement.date}`}>
+              <i className={Number(movement.amount) >= 0 ? "positive" : "negative"}>{movement.kind.startsWith("transfer") ? <ArrowRightLeft size={16} /> : movement.kind === "adjustment" ? <SlidersHorizontal size={16} /> : Number(movement.amount) >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}</i>
+              <div><strong>{movement.description || "Movimentação"}</strong><small>{new Date(`${movement.date}T12:00:00`).toLocaleDateString(language)}{movement.counterpart_wallet_name ? ` · ${movement.counterpart_wallet_name}` : ""}</small></div>
+              <strong className={Number(movement.amount) >= 0 ? "money-income" : "money-expense"}>{Number(movement.amount) > 0 ? "+" : ""}{formatMoney(movement.amount, language)}</strong>
+            </div>)}</div>
+            {history.total_pages > 1 && <nav className="wallet-history-pagination" aria-label="Paginação do histórico"><button className="btn btn-ghost" type="button" disabled={history.page <= 1 || historyLoading} onClick={() => loadHistory(selectedId, historyPeriod, history.page - 1)}><ChevronLeft size={15} /> Anterior</button><span>Página {history.page} de {history.total_pages}</span><button className="btn btn-ghost" type="button" disabled={history.page >= history.total_pages || historyLoading} onClick={() => loadHistory(selectedId, historyPeriod, history.page + 1)}>Próxima <ChevronRight size={15} /></button></nav>}
+          </> : <div className="wallet-history-state">Nenhuma movimentação em {historyMonthLabel}.</div>}
         </>}
       </aside>}
     </div>

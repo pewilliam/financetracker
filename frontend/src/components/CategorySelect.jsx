@@ -16,7 +16,19 @@ function normalizeSearch(value) {
     .toLocaleLowerCase("pt-BR");
 }
 
-export default function CategorySelect({ categories = [], value = "", values, onChange, onCreate, className = "" }) {
+export default function CategorySelect({
+  categories = [],
+  value = "",
+  values,
+  onChange,
+  onCreate,
+  className = "",
+  multiple = true,
+  clearable = true,
+  placeholder = "Sem categoria",
+  searchPlaceholder = "Buscar categoria...",
+  ariaLabel = "Categorias",
+}) {
   const rootRef = useRef(null);
   const menuRef = useRef(null);
   const searchRef = useRef(null);
@@ -67,6 +79,11 @@ export default function CategorySelect({ categories = [], value = "", values, on
 
   const toggle = (categoryId) => {
     const id = String(categoryId);
+    if (!multiple) {
+      onChange?.(id);
+      setOpen(false);
+      return;
+    }
     onChange?.(selectedIds.includes(id)
       ? selectedIds.filter((current) => current !== id)
       : [...selectedIds, id]);
@@ -177,7 +194,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
     <span className="category-choice-chip" style={{ "--category-color": category.color }} key={category.id}>
       {category.name}
     </span>
-  )) : <span className="category-multi-placeholder">Sem categoria</span>;
+  )) : <span className="category-multi-placeholder">{placeholder}</span>;
 
   return (
     <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef} onBlurCapture={handleFocusLeave}>
@@ -186,7 +203,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
           <span className="category-multi-values">{selectedValues}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
         </button>
-        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias" title="Limpar categorias"><X size={14} /></button>}
+        {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
       </div>
 
       <div className="category-multi-native-control">
@@ -195,8 +212,8 @@ export default function CategorySelect({ categories = [], value = "", values, on
             <span className="category-multi-values">{selectedValues}</span>
             <ChevronDown className="category-multi-chevron" size={15} />
           </div>
-          <select value="" onChange={handleNativeSelect} aria-label="Selecionar ou remover categoria">
-            <option value="">Selecionar categoria...</option>
+          <select value={multiple ? "" : String(value || "")} onChange={handleNativeSelect} aria-label={`Selecionar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}>
+            {multiple && <option value="">Selecionar categoria...</option>}
             {categories.map((category) => (
               <option value={category.id} key={category.id}>
                 {selectedIds.includes(String(category.id)) ? "✓ " : ""}{category.name}
@@ -205,7 +222,7 @@ export default function CategorySelect({ categories = [], value = "", values, on
             {onCreate && <option value="__create__">+ Nova categoria</option>}
           </select>
         </div>
-        {!!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label="Limpar categorias"><X size={14} /></button>}
+        {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
       </div>
 
       {open && createPortal(
@@ -218,11 +235,11 @@ export default function CategorySelect({ categories = [], value = "", values, on
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={handleSearchKeyDown}
-              placeholder="Buscar categoria..."
-              aria-label="Buscar categoria"
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder.replace(/\.\.\.$/, "")}
             />
           </div>
-          <div className="category-multi-options" role="listbox" aria-label="Categorias" aria-multiselectable="true">
+          <div className="category-multi-options" role="listbox" aria-label={ariaLabel} aria-multiselectable={multiple}>
             {filteredCategories.map((category, index) => {
               const checked = selectedIds.includes(String(category.id));
               return (
@@ -233,8 +250,8 @@ export default function CategorySelect({ categories = [], value = "", values, on
                 </button>
               );
             })}
-            {!categories.length && <p>Nenhuma categoria cadastrada.</p>}
-            {!!categories.length && !filteredCategories.length && <p>Nenhuma categoria encontrada.</p>}
+            {!categories.length && <p>Nenhuma opção disponível.</p>}
+            {!!categories.length && !filteredCategories.length && <p>Nenhuma opção encontrada.</p>}
           </div>
           {onCreate && <button className="category-multi-create" type="button" onClick={() => { setOpen(false); setCreating(true); }}><Plus size={14} /> Nova categoria</button>}
         </div>,

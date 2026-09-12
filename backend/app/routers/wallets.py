@@ -2,13 +2,15 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy import Date as SqlDate, DateTime, Integer, Numeric, String, case, cast, func, literal, null, select, union_all
+from sqlalchemy.orm import Session, aliased
 
 from app.database import get_db
 from app.models import Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.schemas.wallets import (
     WalletAdjustmentCreate,
     WalletDetailOut,
+    WalletMovementPageOut,
     WalletOut,
     WalletSummaryOut,
     WalletTransferCreate,
@@ -70,59 +72,128 @@ def get_wallet(
     current_user: User = Depends(get_current_user),
 ):
     wallet = user_wallet(db, current_user.id, wallet_id)
-    movements = [{
-        "id": 0,
-        "kind": "initial_balance",
-        "date": wallet.tracking_started_on,
-        "amount": wallet.initial_balance,
-        "description": "Saldo inicial",
-        "wallet_id": wallet.id,
-        "created_at": wallet.created_at,
-    }]
-    for transaction in db.query(Transaction).filter(
+    return {**serialize_wallet(db, wallet), "movements": []}
+
+
+@router.get("/{wallet_id}/movements", response_model=WalletMovementPageOut)
+def list_wallet_movements(
+    wallet_id: int,
+    year: int | None = Query(default=None, ge=1, le=9999),
+    month: int | None = Query(default=None, ge=1, le=12),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    wallet = user_wallet(db, current_user.id, wallet_id)
+    today = date.today()
+    selected_year = year or today.year
+    selected_month = month or today.month
+    period_start = date(selected_year, selected_month, 1)
+    period_end = date(selected_year + 1, 1, 1) if selected_month == 12 else date(selected_year, selected_month + 1, 1)
+
+    empty_integer = cast(null(), Integer)
+    empty_string = cast(null(), String(100))
+    transaction_movements = select(
+        Transaction.id.label("id"),
+        case((Transaction.type == "income", literal("income")), else_=literal("expense")).label("kind"),
+        Transaction.date.label("date"),
+        case((Transaction.type == "income", Transaction.amount), else_=-Transaction.amount).label("amount"),
+        Transaction.description.label("description"),
+        Transaction.wallet_id.label("wallet_id"),
+        empty_integer.label("counterpart_wallet_id"),
+        empty_string.label("counterpart_wallet_name"),
+        Transaction.created_at.label("created_at"),
+    ).where(
         Transaction.user_id == current_user.id,
         Transaction.wallet_id == wallet.id,
-    ).all():
-        movements.append({
-            "id": transaction.id,
-            "kind": transaction.type,
-            "date": transaction.date,
-            "amount": transaction.amount if transaction.type == "income" else -transaction.amount,
-            "description": transaction.description,
-            "wallet_id": wallet.id,
-            "created_at": transaction.created_at,
-        })
-    for adjustment in db.query(WalletAdjustment).filter(WalletAdjustment.wallet_id == wallet.id).all():
-        movements.append({
-            "id": adjustment.id,
-            "kind": "adjustment",
-            "date": adjustment.date,
-            "amount": adjustment.amount,
-            "description": adjustment.description or "Ajuste de saldo",
-            "wallet_id": wallet.id,
-            "created_at": adjustment.created_at,
-        })
-    wallet_names = {item.id: item.name for item in db.query(Wallet).filter(Wallet.user_id == current_user.id).all()}
-    transfers = db.query(WalletTransfer).filter(
+        Transaction.date >= period_start,
+        Transaction.date < period_end,
+    )
+    adjustment_movements = select(
+        WalletAdjustment.id.label("id"),
+        literal("adjustment").label("kind"),
+        WalletAdjustment.date.label("date"),
+        WalletAdjustment.amount.label("amount"),
+        func.coalesce(WalletAdjustment.description, literal("Ajuste de saldo")).label("description"),
+        WalletAdjustment.wallet_id.label("wallet_id"),
+        empty_integer.label("counterpart_wallet_id"),
+        empty_string.label("counterpart_wallet_name"),
+        WalletAdjustment.created_at.label("created_at"),
+    ).where(
+        WalletAdjustment.user_id == current_user.id,
+        WalletAdjustment.wallet_id == wallet.id,
+        WalletAdjustment.date >= period_start,
+        WalletAdjustment.date < period_end,
+    )
+
+    counterpart = aliased(Wallet)
+    outgoing_transfers = select(
+        WalletTransfer.id.label("id"),
+        literal("transfer_out").label("kind"),
+        WalletTransfer.date.label("date"),
+        (-WalletTransfer.amount).label("amount"),
+        func.coalesce(WalletTransfer.description, literal("Transferência entre carteiras")).label("description"),
+        WalletTransfer.source_wallet_id.label("wallet_id"),
+        WalletTransfer.destination_wallet_id.label("counterpart_wallet_id"),
+        counterpart.name.label("counterpart_wallet_name"),
+        WalletTransfer.created_at.label("created_at"),
+    ).join(counterpart, counterpart.id == WalletTransfer.destination_wallet_id).where(
         WalletTransfer.user_id == current_user.id,
-        (WalletTransfer.source_wallet_id == wallet.id) | (WalletTransfer.destination_wallet_id == wallet.id),
-    ).all()
-    for transfer in transfers:
-        incoming = transfer.destination_wallet_id == wallet.id
-        counterpart_id = transfer.source_wallet_id if incoming else transfer.destination_wallet_id
-        movements.append({
-            "id": transfer.id,
-            "kind": "transfer_in" if incoming else "transfer_out",
-            "date": transfer.date,
-            "amount": transfer.amount if incoming else -transfer.amount,
-            "description": transfer.description or "Transferência entre carteiras",
-            "wallet_id": wallet.id,
-            "counterpart_wallet_id": counterpart_id,
-            "counterpart_wallet_name": wallet_names.get(counterpart_id),
-            "created_at": transfer.created_at,
-        })
-    movements.sort(key=lambda item: (item["date"], item["created_at"] or wallet.created_at), reverse=True)
-    return {**serialize_wallet(db, wallet), "movements": movements}
+        WalletTransfer.source_wallet_id == wallet.id,
+        WalletTransfer.date >= period_start,
+        WalletTransfer.date < period_end,
+    )
+
+    counterpart = aliased(Wallet)
+    incoming_transfers = select(
+        WalletTransfer.id.label("id"),
+        literal("transfer_in").label("kind"),
+        WalletTransfer.date.label("date"),
+        WalletTransfer.amount.label("amount"),
+        func.coalesce(WalletTransfer.description, literal("Transferência entre carteiras")).label("description"),
+        WalletTransfer.destination_wallet_id.label("wallet_id"),
+        WalletTransfer.source_wallet_id.label("counterpart_wallet_id"),
+        counterpart.name.label("counterpart_wallet_name"),
+        WalletTransfer.created_at.label("created_at"),
+    ).join(counterpart, counterpart.id == WalletTransfer.source_wallet_id).where(
+        WalletTransfer.user_id == current_user.id,
+        WalletTransfer.destination_wallet_id == wallet.id,
+        WalletTransfer.date >= period_start,
+        WalletTransfer.date < period_end,
+    )
+
+    statements = [transaction_movements, adjustment_movements, outgoing_transfers, incoming_transfers]
+    if period_start <= wallet.tracking_started_on < period_end:
+        statements.append(select(
+            literal(0).label("id"),
+            literal("initial_balance").label("kind"),
+            literal(wallet.tracking_started_on, type_=SqlDate).label("date"),
+            literal(wallet.initial_balance, type_=Numeric(10, 2)).label("amount"),
+            literal("Saldo inicial").label("description"),
+            literal(wallet.id).label("wallet_id"),
+            empty_integer.label("counterpart_wallet_id"),
+            empty_string.label("counterpart_wallet_name"),
+            literal(wallet.created_at, type_=DateTime).label("created_at"),
+        ))
+
+    movements = union_all(*statements).subquery("wallet_movements")
+    total = db.execute(select(func.count()).select_from(movements)).scalar_one()
+    rows = db.execute(
+        select(movements)
+        .order_by(movements.c.date.desc(), movements.c.created_at.desc(), movements.c.kind, movements.c.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).mappings().all()
+    return {
+        "items": [dict(row) for row in rows],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+        "year": selected_year,
+        "month": selected_month,
+    }
 
 
 @router.put("/{wallet_id}", response_model=WalletOut)
