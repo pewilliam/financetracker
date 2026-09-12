@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, CalendarRange, Layers3, Loader2, Plus, ReceiptText, Trash2, X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, CalendarRange, Layers3, Loader2, Plus, ReceiptText, Trash2, WalletCards, X } from "lucide-react";
 import CategorySelect from "../components/CategorySelect.jsx";
+import WalletSelect from "../components/WalletSelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
@@ -44,6 +45,7 @@ function initialForm(year, month) {
     end_date: isoDate(year, month, lastDay),
     type: "expense",
     category_ids: [],
+    wallet_id: "",
     rules: [defaultRule()],
   };
 }
@@ -75,7 +77,7 @@ function buildEntries(form) {
   return entries;
 }
 
-export default function BatchTransactionModal({ open, year, month, categories = [], onCreateCategory, onOpenSingle, onClose, onSave }) {
+export default function BatchTransactionModal({ open, year, month, categories = [], wallets = [], onCreateCategory, onOpenSingle, onClose, onSave }) {
   const { language } = useI18n();
   const english = language === "en-US";
   const copy = (pt, en) => english ? en : pt;
@@ -85,10 +87,11 @@ export default function BatchTransactionModal({ open, year, month, categories = 
 
   useEffect(() => {
     if (!open) return;
-    setForm(initialForm(year, month));
+    const primaryWallet = wallets.find((wallet) => wallet.active && wallet.is_primary) || wallets.find((wallet) => wallet.active);
+    setForm({ ...initialForm(year, month), wallet_id: String(primaryWallet?.id || "") });
     setErrors({});
     setSaving(false);
-  }, [open, year, month]);
+  }, [open, year, month, wallets]);
 
   const entries = useMemo(() => buildEntries(form), [form]);
   const total = useMemo(() => entries.reduce((sum, entry) => sum + entry.amount, 0), [entries]);
@@ -127,6 +130,7 @@ export default function BatchTransactionModal({ open, year, month, categories = 
     if (!end) next.end_date = copy("Informe uma data final válida", "Enter a valid end date");
     if (start && end && end < start) next.end_date = copy("A data final deve vir depois da inicial", "End date must be after start date");
     if (start && end && (end - start) / 86400000 >= 366) next.end_date = copy("O período máximo é de 366 dias", "The maximum period is 366 days");
+    if (!form.wallet_id) next.wallet_id = copy("Selecione uma carteira", "Choose a wallet");
     form.rules.forEach((rule) => {
       if (!rule.description.trim()) next[`rule_${rule.id}_description`] = copy("Informe uma descrição", "Enter a description");
       if (parseTypedMoneyInput(rule.amount) <= 0) next[`rule_${rule.id}_amount`] = copy("Informe um valor maior que zero", "Enter an amount greater than zero");
@@ -147,6 +151,7 @@ export default function BatchTransactionModal({ open, year, month, categories = 
         start_date: form.start_date,
         end_date: form.end_date,
         type: form.type,
+        wallet_id: Number(form.wallet_id),
         category_ids: form.category_ids.map(Number),
         rules: form.rules.map((rule) => ({
           description: rule.description.trim(),
@@ -202,6 +207,11 @@ export default function BatchTransactionModal({ open, year, month, categories = 
               <label className="batch-category-field">
                 <span>{copy("Categoria para todos", "Category for all")}</span>
                 <CategorySelect categories={categories} values={form.category_ids} onChange={(value) => setForm({ ...form, category_ids: value })} onCreate={onCreateCategory} />
+              </label>
+              <label className={`batch-category-field ${errors.wallet_id ? "has-error" : ""}`}>
+                <span><WalletCards size={15} /> {copy("Carteira para todos", "Wallet for all")}</span>
+                <WalletSelect wallets={wallets.filter((wallet) => wallet.active)} value={form.wallet_id} onChange={(value) => { setForm({ ...form, wallet_id: value }); setErrors({ ...errors, wallet_id: null }); }} ariaLabel={copy("Carteiras dos lançamentos", "Entry wallets")} />
+                {errors.wallet_id && <small className="field-error">{errors.wallet_id}</small>}
               </label>
             </section>
 

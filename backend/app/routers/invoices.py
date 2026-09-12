@@ -45,7 +45,7 @@ def create_invoice(
     if not template:
         raise HTTPException(status_code=404, detail="Invoice template not found")
 
-    invoice = create_invoice_with_transaction(db, current_user.id, template, payload.due_date)
+    invoice = create_invoice_with_transaction(db, current_user.id, template, payload.due_date, payload.wallet_id)
 
     if payload.initial_amount and payload.initial_amount > 0:
         item = InvoiceItem(

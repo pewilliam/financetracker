@@ -187,6 +187,7 @@ export const ptBR = {
   sidebar: {
     dashboard: "Dashboard",
     months: "Controle mensal",
+    wallets: "Carteiras",
     invoices: "Faturas",
     invoiceModels: "Modelos de fatura",
     installments: "Parcelamentos",

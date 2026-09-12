@@ -13,6 +13,7 @@ import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
 import SimulationPage from "../../pages/SimulationPage.jsx";
 import ReceivablesPage from "../../pages/ReceivablesPage.jsx";
 import CategoriesPage from "../../pages/CategoriesPage.jsx";
+import WalletsPage from "../../pages/WalletsPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
 import InvoiceModal from "../../modals/InvoiceModal.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
@@ -27,7 +28,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isMobileViewport, nextDueDateFromDay, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInstallments, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -45,6 +46,7 @@ export default function AppShell() {
   const [invoiceTemplates, setInvoiceTemplates] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [walletSummary, setWalletSummary] = useState({ total_balance: 0, active_count: 0, wallets: [] });
   const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
   const [previousCategoryBreakdown, setPreviousCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [] });
   const [budgetPlan, setBudgetPlan] = useState(null);
@@ -160,25 +162,81 @@ export default function AppShell() {
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
-      const monthRequest = getMonth(year, month);
-      const summaryRequest = getMonthSummary(year, month);
-      const invoicesRequest = listInvoices();
+      const priorityPayloads = {};
+
+      if (showLoading && location.pathname === "/meses") {
+        [priorityPayloads.month, priorityPayloads.summary, priorityPayloads.monthCards] = await Promise.all([
+          getMonth(year, month),
+          getMonthSummary(year, month),
+          getMonthsSummary()
+        ]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(priorityPayloads.month);
+        setSummary(priorityPayloads.summary);
+        setMonthCards(priorityPayloads.monthCards);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/carteiras") {
+        priorityPayloads.wallets = await listWallets();
+        if (!isCurrentPeriod()) return;
+        setWalletSummary(priorityPayloads.wallets);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/categorias") {
+        [priorityPayloads.categories, priorityPayloads.categoryBreakdown, priorityPayloads.previousCategoryBreakdown, priorityPayloads.budgetPlan] = await Promise.all([
+          listCategories(),
+          getCategoryBreakdown(year, month),
+          getCategoryBreakdown(previousTarget.year, previousTarget.month),
+          getMonthlyBudgetPlan(year, month)
+        ]);
+        if (!isCurrentPeriod()) return;
+        setCategories(priorityPayloads.categories);
+        setCategoryBreakdown(priorityPayloads.categoryBreakdown);
+        setPreviousCategoryBreakdown(priorityPayloads.previousCategoryBreakdown);
+        setBudgetPlan(priorityPayloads.budgetPlan);
+        setLoading(false);
+      } else if (showLoading && location.pathname === "/") {
+        [priorityPayloads.month, priorityPayloads.summary, priorityPayloads.invoices, priorityPayloads.categoryBreakdown, priorityPayloads.comparison] = await Promise.all([
+          getMonth(year, month),
+          getMonthSummary(year, month),
+          listInvoices(),
+          getCategoryBreakdown(year, month),
+          Promise.all(offsets.map(async (offset) => {
+            const target = shiftMonth(year, month, offset);
+            const data = await getMonthSummary(target.year, target.month);
+            return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
+          }))
+        ]);
+        if (!isCurrentPeriod()) return;
+        setMonthData(priorityPayloads.month);
+        setSummary(priorityPayloads.summary);
+        setInvoices(priorityPayloads.invoices);
+        setCategoryBreakdown(priorityPayloads.categoryBreakdown);
+        setComparisons(priorityPayloads.comparison);
+        setLoading(false);
+      }
+
+      const cachedRequest = (key, request) => Object.prototype.hasOwnProperty.call(priorityPayloads, key)
+        ? Promise.resolve(priorityPayloads[key])
+        : request();
+      const monthRequest = cachedRequest("month", () => getMonth(year, month));
+      const summaryRequest = cachedRequest("summary", () => getMonthSummary(year, month));
+      const invoicesRequest = cachedRequest("invoices", listInvoices);
       const templatesRequest = listInvoiceTemplates();
       const installmentsRequest = listInstallments();
-      const categoriesRequest = listCategories();
-      const categoryBreakdownRequest = getCategoryBreakdown(year, month);
-      const previousCategoryBreakdownRequest = getCategoryBreakdown(previousTarget.year, previousTarget.month);
-      const budgetPlanRequest = getMonthlyBudgetPlan(year, month);
+      const categoriesRequest = cachedRequest("categories", listCategories);
+      const walletsRequest = cachedRequest("wallets", listWallets);
+      const categoryBreakdownRequest = cachedRequest("categoryBreakdown", () => getCategoryBreakdown(year, month));
+      const previousCategoryBreakdownRequest = cachedRequest("previousCategoryBreakdown", () => getCategoryBreakdown(previousTarget.year, previousTarget.month));
+      const budgetPlanRequest = cachedRequest("budgetPlan", () => getMonthlyBudgetPlan(year, month));
       const receivablesRequest = listReceivables();
       const linkedReceivablesRequest = listLinkedReceivableTransactions();
       const peopleRequest = listReceivablePeople();
       const expenseOptionsRequest = listReceivableExpenseOptions();
-      const monthCardsRequest = getMonthsSummary();
-      const comparisonRequest = Promise.all(offsets.map(async (offset) => {
+      const monthCardsRequest = cachedRequest("monthCards", getMonthsSummary);
+      const comparisonRequest = cachedRequest("comparison", () => Promise.all(offsets.map(async (offset) => {
         const target = shiftMonth(year, month, offset);
         const data = await getMonthSummary(target.year, target.month);
         return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-      }));
+      })));
 
       const allPayloadsRequest = Promise.all([
         monthRequest,
@@ -187,6 +245,7 @@ export default function AppShell() {
         templatesRequest,
         installmentsRequest,
         categoriesRequest,
+        walletsRequest,
         categoryBreakdownRequest,
         previousCategoryBreakdownRequest,
         budgetPlanRequest,
@@ -199,33 +258,7 @@ export default function AppShell() {
       ]);
       void allPayloadsRequest.catch(() => undefined);
 
-      if (showLoading && location.pathname === "/meses") {
-        const [monthPayload, summaryPayload, monthCardsPayload] = await Promise.all([monthRequest, summaryRequest, monthCardsRequest]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(monthPayload);
-        setSummary(summaryPayload);
-        setMonthCards(monthCardsPayload);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/categorias") {
-        const [categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload] = await Promise.all([categoriesRequest, categoryBreakdownRequest, previousCategoryBreakdownRequest, budgetPlanRequest]);
-        if (!isCurrentPeriod()) return;
-        setCategories(categoriesPayload);
-        setCategoryBreakdown(categoryBreakdownPayload);
-        setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
-        setBudgetPlan(budgetPlanPayload);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/") {
-        const [monthPayload, summaryPayload, invoicesPayload, categoryBreakdownPayload, comparisonPayload] = await Promise.all([monthRequest, summaryRequest, invoicesRequest, categoryBreakdownRequest, comparisonRequest]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(monthPayload);
-        setSummary(summaryPayload);
-        setInvoices(invoicesPayload);
-        setCategoryBreakdown(categoryBreakdownPayload);
-        setComparisons(comparisonPayload);
-        setLoading(false);
-      }
-
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await allPayloadsRequest;
+      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, installmentsPayload, categoriesPayload, walletsPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await allPayloadsRequest;
       if (!isCurrentPeriod()) return;
       setMonthData(monthPayload);
       setSummary(summaryPayload);
@@ -233,6 +266,7 @@ export default function AppShell() {
       setInvoiceTemplates(templatesPayload);
       setInstallments(installmentsPayload);
       setCategories(categoriesPayload);
+      setWalletSummary(walletsPayload);
       setCategoryBreakdown(categoryBreakdownPayload);
       setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
       setBudgetPlan(budgetPlanPayload);
@@ -287,7 +321,7 @@ export default function AppShell() {
     const loadSequence = ++monthLoadSequence.current;
     const offsets = [-5, -4, -3, -2, -1, 0];
     const previousTarget = shiftMonth(year, month, -1);
-    const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, linkedReceivablesPayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await Promise.all([
+    const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, linkedReceivablesPayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload, walletsPayload] = await Promise.all([
       getMonth(year, month),
       getMonthSummary(year, month),
       getCategoryBreakdown(year, month),
@@ -300,7 +334,8 @@ export default function AppShell() {
         const target = shiftMonth(year, month, offset);
         const data = await getMonthSummary(target.year, target.month);
         return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-      }))
+      })),
+      listWallets()
     ]);
     const selectedPeriod = selectedPeriodRef.current;
     if (
@@ -318,6 +353,7 @@ export default function AppShell() {
     setReceivableExpenseOptions(expenseOptionsPayload);
     setMonthCards(monthCardsPayload);
     setComparisons(comparisonPayload);
+    setWalletSummary(walletsPayload);
   };
 
   const syncInvoiceAndMonthCollections = async () => {
@@ -351,7 +387,8 @@ export default function AppShell() {
             active: true,
             apply_to: payload.recurrenceUpdate.apply_to,
             effective_date: payload.recurrenceUpdate.effective_date,
-            category_ids: normalizedData.category_ids
+            category_ids: normalizedData.category_ids,
+            wallet_id: normalizedData.wallet_id
           });
         } else {
           await updateTransaction(editing.id, normalizedData);
@@ -370,7 +407,8 @@ export default function AppShell() {
             recurrence_months: payload.recurrence.recurrence_months,
             start_date: normalizedData.date,
             active: true,
-            category_ids: normalizedData.category_ids
+            category_ids: normalizedData.category_ids,
+            wallet_id: normalizedData.wallet_id
           });
         } else {
           await createTransaction(normalizedData);
@@ -408,7 +446,8 @@ export default function AppShell() {
         template_id: Number(draft.template_id),
         due_date: draft.due_date,
         initial_amount: parseTypedMoneyInput(draft.initial_amount, language),
-        category_ids: (draft.category_ids || []).map(Number)
+        category_ids: (draft.category_ids || []).map(Number),
+        wallet_id: Number(draft.wallet_id)
       })));
       const createdIds = new Set(createdInvoices.map((invoice) => invoice.id));
       setInvoices((current) => sortInvoicesByDueDate([
@@ -426,7 +465,9 @@ export default function AppShell() {
 
   const openNewInvoiceModal = () => {
     const activeTemplate = invoiceTemplates.find((template) => template.active);
-    setInvoiceForm(activeTemplate ? { ...defaultInvoiceForm(), template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : defaultInvoiceForm());
+    const activeWallet = walletSummary.wallets.find((wallet) => wallet.active && wallet.is_primary) || walletSummary.wallets.find((wallet) => wallet.active);
+    const initialForm = { ...defaultInvoiceForm(), wallet_id: String(activeWallet?.id || "") };
+    setInvoiceForm(activeTemplate ? { ...initialForm, template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : initialForm);
     setInvoiceModal(true);
   };
 
@@ -864,6 +905,7 @@ export default function AppShell() {
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} onNewTransaction={() => openAddForm()} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
+              <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage installments={installments} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} />} />
@@ -877,9 +919,9 @@ export default function AppShell() {
         </div>
       </main>
 
-      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
-      <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
-      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
+      <TransactionForm open={drawerOpen} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
+      <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
+      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onDelete={removeInstallment} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
       {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} categories={categories} expenseOptions={receivableExpenseOptions} onCreateCategory={saveCategory} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}

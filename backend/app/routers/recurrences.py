@@ -8,6 +8,7 @@ from app.models import Recurrence, Transaction, User
 from app.schemas.recurrences import RecurrenceCreate, RecurrenceOut, RecurrenceUpdate
 from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
+from app.services.wallets import user_wallet
 
 router = APIRouter(prefix="/api/recurrences", tags=["recurrences"])
 
@@ -56,6 +57,7 @@ def _sync_recurrence_transactions(
         transaction.description = recurrence.description
         transaction.type = recurrence.type
         transaction.amount = recurrence.amount
+        transaction.wallet_id = recurrence.wallet_id
         set_item_categories(transaction, list(recurrence.categories))
 
         last_day = calendar.monthrange(transaction.date.year, transaction.date.month)[1]
@@ -87,6 +89,7 @@ def create_recurrence(
     current_user: User = Depends(get_current_user),
 ):
     selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
+    wallet = user_wallet(db, current_user.id, payload.wallet_id, active_only=True)
     recurrence = Recurrence(
         user_id=current_user.id,
         description=payload.description,
@@ -96,6 +99,7 @@ def create_recurrence(
         recurrence_months=max(1, payload.recurrence_months),
         active=payload.active,
         category_id=payload.category_id,
+        wallet_id=wallet.id,
     )
     db.add(recurrence)
     set_item_categories(recurrence, selected_categories)
@@ -122,6 +126,7 @@ def create_recurrence(
                 is_future=target_date > today,
                 recurrence_id=recurrence.id,
                 category_id=recurrence.category_id,
+                wallet_id=recurrence.wallet_id,
             )
         set_item_categories(transaction, list(recurrence.categories))
         db.add(transaction)
@@ -147,12 +152,14 @@ def update_recurrence(
         raise HTTPException(status_code=404, detail="Recurrence not found")
 
     selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
+    wallet = user_wallet(db, current_user.id, payload.wallet_id or recurrence.wallet_id, active_only=True)
 
     recurrence.description = payload.description
     recurrence.type = payload.type
     recurrence.amount = payload.amount
     recurrence.day_of_month = max(1, min(payload.day_of_month, 31))
     recurrence.active = payload.active
+    recurrence.wallet_id = wallet.id
     set_item_categories(recurrence, selected_categories)
 
     _sync_recurrence_transactions(

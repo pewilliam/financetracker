@@ -14,6 +14,7 @@ function SidebarContent({ open, setOpen, onClose }) {
   const links = [
     [t("sidebar.dashboard"), "/", BarChart3],
     [t("sidebar.months"), "/meses", CalendarDays],
+    [t("sidebar.wallets"), "/carteiras", Wallet],
     [t("sidebar.categories"), "/categorias", ChartPie],
     [t("sidebar.invoices"), "/faturas", CreditCard],
     [t("sidebar.installments"), "/parcelamentos", CreditCard],

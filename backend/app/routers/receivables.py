@@ -339,6 +339,8 @@ def _set_receivable_categories(db: Session, user_id: int, receivable: Receivable
 
 
 def _create_income_transaction(db: Session, user_id: int, receivable: Receivable, amount: Decimal, paid_at: date) -> Transaction:
+    from app.services.wallets import default_wallet
+    wallet = default_wallet(db, user_id)
     transaction = Transaction(
         user_id=user_id,
         date=paid_at,
@@ -347,6 +349,7 @@ def _create_income_transaction(db: Session, user_id: int, receivable: Receivable
         description=f"Recebimento - {receivable.person_name}: {receivable.description}",
         is_future=False,
         category_id=receivable.category_id,
+        wallet_id=wallet.id,
     )
     set_item_categories(transaction, list(receivable.categories))
     db.add(transaction)

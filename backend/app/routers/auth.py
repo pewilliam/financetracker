@@ -1,8 +1,10 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import User, Wallet
 from app.schemas.auth import LoginPayload, PasswordUpdate, TokenOut, TutorialProgressUpdate, UserCreate, UserOut, UserUpdate
 from app.security import create_access_token, get_current_user, hash_password, verify_password
 from app.validation import validate_password_strength
@@ -24,6 +26,18 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     )
     db.add(user)
     try:
+        db.flush()
+        wallet_payloads = payload.wallets or [{
+            "name": "Carteira principal",
+            "institution": None,
+            "type": "other",
+            "initial_balance": payload.initial_balance,
+            "tracking_started_on": date.today(),
+            "color": "#14A078",
+        }]
+        for index, wallet_payload in enumerate(wallet_payloads):
+            data = wallet_payload if isinstance(wallet_payload, dict) else wallet_payload.model_dump()
+            db.add(Wallet(user_id=user.id, is_primary=index == 0, **data))
         db.commit()
     except IntegrityError as exc:
         db.rollback()

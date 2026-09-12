@@ -113,6 +113,55 @@ export function createTransaction(payload) {
   });
 }
 
+export function listWallets(includeArchived = true) {
+  return request(`/wallets?include_archived=${includeArchived ? "true" : "false"}`);
+}
+
+export function getWallet(id) {
+  return request(`/wallets/${id}`);
+}
+
+export function getWalletMovements(id, { year, month, page = 1, pageSize = 10 }) {
+  const params = new URLSearchParams({ year, month, page, page_size: pageSize });
+  return request(`/wallets/${id}/movements?${params}`);
+}
+
+export function createWallet(payload) {
+  return request("/wallets", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateWallet(id, payload) {
+  return request(`/wallets/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export function archiveWallet(id) {
+  return request(`/wallets/${id}/archive`, { method: "PATCH" });
+}
+
+export function restoreWallet(id) {
+  return request(`/wallets/${id}/restore`, { method: "PATCH" });
+}
+
+export function setPrimaryWallet(id) {
+  return request(`/wallets/${id}/primary`, { method: "PATCH" });
+}
+
+export function adjustWalletBalance(id, payload) {
+  return request(`/wallets/${id}/adjustments`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function transferBetweenWallets(payload) {
+  return request("/wallets/transfers", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function previewWalletConsolidation(payload) {
+  return request("/wallets/consolidation/preview", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function consolidateWallet(payload) {
+  return request("/wallets/consolidation", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function updateTutorialProgress(tutorial, version) {
   return request(`/auth/me/tutorials/${tutorial}`, {
     method: "PATCH",

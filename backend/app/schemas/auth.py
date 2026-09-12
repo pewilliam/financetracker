@@ -1,14 +1,35 @@
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 from pydantic import EmailStr, Field, field_validator, model_validator
-from app.schemas.base import APIModel
+from app.schemas.base import APIModel, MoneyValue
+from app.schemas.wallets import WalletType
 from app.validation import validate_password_strength
+
+
+class OnboardingWallet(APIModel):
+    name: str = Field(min_length=1, max_length=100)
+    institution: Optional[str] = Field(default=None, max_length=100)
+    type: WalletType = "other"
+    initial_balance: MoneyValue = Decimal("0.00")
+    tracking_started_on: date = Field(default_factory=date.today)
+    color: str = "#14A078"
+
+    @field_validator("name")
+    @classmethod
+    def clean_wallet_name(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Wallet name is required")
+        return cleaned
 
 
 class UserCreate(APIModel):
     name: str = Field(min_length=2, max_length=100)
     email: EmailStr = Field(max_length=254)
     password: str = Field(min_length=12, max_length=128)
+    initial_balance: MoneyValue = Decimal("0.00")
+    wallets: list[OnboardingWallet] = Field(default_factory=list, max_length=20)
 
     @field_validator("name")
     @classmethod

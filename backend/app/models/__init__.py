@@ -14,6 +14,7 @@ from app.models.simulation import Simulation
 from app.models.simulation_item import SimulationItem
 from app.models.category import Category
 from app.models.budget import BudgetReserveRule, MonthlyBudgetIncome, MonthlyBudgetPlan
+from app.models.wallet import Wallet, WalletAdjustment, WalletTransfer
 
 __all__ = [
     "User",
@@ -34,4 +35,7 @@ __all__ = [
     "MonthlyBudgetPlan",
     "MonthlyBudgetIncome",
     "BudgetReserveRule",
+    "Wallet",
+    "WalletAdjustment",
+    "WalletTransfer",
 ]

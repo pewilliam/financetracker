@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { ChevronDown, ChevronUp, CircleDollarSign, CreditCard, Download, Edit3, EyeOff, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { setOpeningBalance, updatePassword } from "../api/api.js";
+import { updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
 import CategoryModal, { CATEGORY_COLORS } from "../modals/CategoryModal.jsx";
 import DeleteCategoryModal from "../modals/DeleteCategoryModal.jsx";
 import InvoiceTemplatesPage from "./InvoiceTemplatesPage.jsx";
-import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import { formatMoney } from "../utils/format.js";
 
 export default function SettingsPage({
   summary,
@@ -35,7 +35,6 @@ export default function SettingsPage({
   const [password, setPassword] = useState({ current_password: "", new_password: "", confirmation: "" });
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [openingBalance, setOpeningBalanceInput] = useState("");
   const [categoryEditor, setCategoryEditor] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -118,17 +117,6 @@ export default function SettingsPage({
       toast.error(accountErrorMessage(error, t("toasts.passwordUpdateError")));
     } finally {
       setSavingPassword(false);
-    }
-  };
-
-  const saveOpeningBalance = async (event) => {
-    event.preventDefault();
-    try {
-      await setOpeningBalance(year, month, parseTypedMoneyInput(openingBalance, language));
-      toast.success(t("toasts.openingBalanceUpdated"));
-      await refresh();
-    } catch {
-      toast.error(t("toasts.openingBalanceError"));
     }
   };
 
@@ -271,17 +259,9 @@ export default function SettingsPage({
       {activeSection === "financeiro" && <section className="settings-section" role="tabpanel">
         <div className="settings-section-heading">
           <span>{tt("settings.financialOrganizationEyebrow", "ORGANIZAÇÃO FINANCEIRA")}</span>
-          <h2>{tt("settings.financialOrganizationHeading", "Saldo e categorias")}</h2>
-          <p>{tt("settings.financialOrganizationDescription", "Ajuste a base do mês e mantenha suas classificações organizadas.")}</p>
+          <h2>{tt("settings.financialOrganizationHeading", "Categorias")}</h2>
+          <p>{tt("settings.financialOrganizationDescription", "Mantenha suas classificações organizadas. Saldos e contas agora são gerenciados na tela de Carteiras.")}</p>
         </div>
-
-        <form className="card settings-panel settings-balance-panel" onSubmit={saveOpeningBalance}>
-          <div className="settings-panel-title"><i><WalletCards size={18} /></i><div><h3>{t("settings.openingBalance")}</h3><p>{t("settings.currentBalance", { value: formatMoney(summary.current_balance, language) })}</p></div></div>
-          <div className="settings-inline-form">
-            <label><span>{t("settings.monthBalance")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={openingBalance} onChange={(event) => setOpeningBalanceInput(formatTypedMoneyForEditing(event.target.value, language))} onBlur={() => setOpeningBalanceInput(formatTypedMoneyAsCurrency(openingBalance, language))} /></label>
-            <button className="btn" type="submit">{t("settings.saveBalance")}</button>
-          </div>
-        </form>
 
         <div className="card settings-category-card">
         <div className="settings-category-head">

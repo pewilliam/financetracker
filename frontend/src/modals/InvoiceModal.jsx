@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { CalendarPlus, Check, CreditCard, Trash2, X } from "lucide-react";
+import { CalendarPlus, Check, CreditCard, Trash2, WalletCards, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
 import InvoiceTemplateModal from "./InvoiceTemplateModal.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
+import WalletSelect from "../components/WalletSelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { CREATE_TEMPLATE_VALUE } from "../app/constants.js";
 import { addMonthsToDate, formatMonthShort, isMobileViewport, nextDueDateFromDay, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InvoiceModal({ form, setForm, templates, categories = [], onCreateCategory, onCreateTemplate, onSubmit, onClose }) {
+export default function InvoiceModal({ form, setForm, templates, categories = [], wallets = [], onCreateCategory, onCreateTemplate, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
@@ -64,12 +65,13 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
     template_color: normalizeInvoiceColor(selectedTemplate?.color),
     due_date: addMonthsToDate(form.due_date, index),
     initial_amount: form.initial_amount,
-    category_ids: form.category_ids || []
+    category_ids: form.category_ids || [],
+    wallet_id: form.wallet_id,
   }));
 
   const goToReview = (event) => {
     event.preventDefault();
-    if (!form.template_id || !form.due_date) return;
+    if (!form.template_id || !form.due_date || !form.wallet_id) return;
     setDrafts(buildDrafts());
     setStep(2);
   };
@@ -157,6 +159,7 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>{tt("invoiceModal.initialAmount", "Valor inicial (opcional)")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
               <label><span>Categorias do valor inicial</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
+              <label><span><WalletCards size={15} /> Carteira da fatura</span><WalletSelect wallets={wallets.filter((wallet) => wallet.active)} value={form.wallet_id} onChange={(value) => updateForm({ wallet_id: value })} ariaLabel="Carteiras da fatura" /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input
@@ -203,7 +206,7 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
 
             <div className="modal-actions">
               <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
-              <button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button>
+              <button className="btn btn-primary" disabled={!form.template_id || !form.due_date || !form.wallet_id}>{tt("installmentModal.next", "Próximo →")}</button>
             </div>
           </>
         ) : (

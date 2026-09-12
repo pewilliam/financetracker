@@ -8,6 +8,7 @@ from app.schemas.receivables import ReceivableExpenseLinkIn
 from app.schemas.transactions import TransactionBatchCreate, TransactionBatchOut, TransactionCreate, TransactionOut, TransactionUpdate
 from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
+from app.services.wallets import user_wallet
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -131,6 +132,7 @@ def create_transaction(
             raise HTTPException(status_code=404, detail="Recurrence not found")
 
     selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
+    wallet = user_wallet(db, current_user.id, payload.wallet_id, active_only=True)
 
     transaction = Transaction(
         user_id=current_user.id,
@@ -142,6 +144,7 @@ def create_transaction(
         invoice_id=payload.invoice_id,
         recurrence_id=payload.recurrence_id,
         category_id=payload.category_id,
+        wallet_id=wallet.id,
     )
     set_item_categories(transaction, selected_categories)
     db.add(transaction)
@@ -182,6 +185,7 @@ def create_transaction_batch(
         raise HTTPException(status_code=400, detail="A batch can create at most 1000 transactions")
 
     selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
+    wallet = user_wallet(db, current_user.id, payload.wallet_id, active_only=True)
     today = date.today()
     transactions = []
     cursor = payload.start_date
@@ -197,6 +201,7 @@ def create_transaction_batch(
                 description=(rule.description or "").strip() or None,
                 is_future=cursor > today,
                 category_id=selected_categories[0].id if selected_categories else None,
+                wallet_id=wallet.id,
             )
             set_item_categories(transaction, selected_categories)
             db.add(transaction)
@@ -234,8 +239,16 @@ def update_transaction(
     selected_category_ids = category_ids_from_payload(payload)
     data.pop("category_ids", None)
     data.pop("category_id", None)
+    wallet_id_set = "wallet_id" in data
+    requested_wallet_id = data.pop("wallet_id", None)
     for field, value in data.items():
         setattr(transaction, field, value)
+
+    if wallet_id_set:
+        selected_wallet = user_wallet(db, current_user.id, requested_wallet_id)
+        if not selected_wallet.active and selected_wallet.id != transaction.wallet_id:
+            raise HTTPException(status_code=400, detail="Archived wallet cannot receive movements")
+        transaction.wallet_id = selected_wallet.id
 
     if payload.invoice_id:
         invoice = (

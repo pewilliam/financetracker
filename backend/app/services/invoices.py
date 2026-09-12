@@ -4,6 +4,7 @@ import re
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction
+from app.services.wallets import user_wallet
 
 DEFAULT_INVOICE_COLOR = "#3B82F6"
 
@@ -43,7 +44,8 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     return invoice
 
 
-def create_invoice_with_transaction(db: Session, user_id: int, template: InvoiceTemplate, due_date: date) -> Invoice:
+def create_invoice_with_transaction(db: Session, user_id: int, template: InvoiceTemplate, due_date: date, wallet_id: int | None = None) -> Invoice:
+    wallet = user_wallet(db, user_id, wallet_id, active_only=True)
     invoice = Invoice(
         user_id=user_id,
         template_id=template.id,
@@ -62,6 +64,7 @@ def create_invoice_with_transaction(db: Session, user_id: int, template: Invoice
         description=f"Fatura: {template.name}",
         is_future=invoice.due_date > date.today(),
         invoice_id=invoice.id,
+        wallet_id=wallet.id,
     )
     db.add(transaction)
     db.flush()
