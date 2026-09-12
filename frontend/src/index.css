@@ -8299,7 +8299,11 @@ select {
 .wallet-onboarding-banner { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding: 20px 24px; border-color: color-mix(in srgb, var(--primary) 42%, var(--border)); }
 .wallet-onboarding-banner p { margin: 5px 0 0; color: var(--muted); }
 .wallet-onboarding-banner > div:last-child { display: flex; flex-shrink: 0; gap: 8px; }
-.wallets-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.wallets-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+.wallet-toolbar-main { display: grid; gap: 5px; }
+.wallet-toolbar-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.wallet-consolidation-helper { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); font-size: .68rem; line-height: 1.35; }
+.wallet-consolidation-helper svg { flex: 0 0 auto; color: var(--primary); }
 .wallet-archived-toggle { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: .9rem; }
 .wallets-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .wallets-layout:has(.wallet-detail) { grid-template-columns: minmax(0, 1.5fr) minmax(330px, .8fr); }
@@ -8518,6 +8522,19 @@ select {
     overflow: visible;
     padding-right: 0;
   }
+  .wallet-history-more {
+    gap: 7px;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+    padding: 14px 0 4px;
+  }
+  .wallet-history-more button {
+    justify-content: center;
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+    border-radius: 10px;
+  }
 }
 
 @keyframes wallet-detail-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
@@ -8525,6 +8542,8 @@ select {
 @keyframes wallet-detail-sheet-exit { from { opacity: 1; transform: translateY(0); } to { opacity: .7; transform: translateY(100%); } }
 
 @media (max-width: 640px) {
+  .wallets-toolbar { align-items: flex-start; gap: 12px; }
+  .wallet-consolidation-helper { max-width: 270px; }
   .wallets-hero { grid-template-columns: 1fr; padding: 20px; }
   .wallets-total, .wallets-hero > .btn { grid-column: auto; grid-row: auto; }
   .wallets-hero > .btn { width: 100%; }
@@ -8535,7 +8554,6 @@ select {
   .wallet-detail-stats > div:first-child { grid-column: auto; }
   .wallet-history-period { grid-template-columns: 38px minmax(0, 1fr) 38px; }
   .wallet-history-period > button { width: 38px; }
-  .wallet-movement-list { max-height: 410px; }
   .wallet-movement > strong { padding-left: 4px; font-size: .8rem; }
   .wallet-transfer-route { grid-template-columns: 1fr; }
   .wallet-transfer-direction { width: 100%; height: 22px; }

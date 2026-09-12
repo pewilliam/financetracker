@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Building2, ChevronLeft, ChevronRight, CircleDollarSign, Edit3, Landmark, Loader2, MoveRight, Plus, ReceiptText, RotateCcw, SlidersHorizontal, Star, TrendingUp, WalletCards, X } from "lucide-react";
+import { Archive, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Building2, ChevronLeft, ChevronRight, CircleDollarSign, CircleHelp, Edit3, Landmark, Loader2, MoveRight, Plus, ReceiptText, RotateCcw, SlidersHorizontal, Star, TrendingUp, WalletCards, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { adjustWalletBalance, archiveWallet, consolidateWallet, createWallet, getWallet, getWalletMovements, listWallets, previewWalletConsolidation, restoreWallet, setPrimaryWallet, transferBetweenWallets, updateWallet } from "../api/api.js";
@@ -387,7 +387,13 @@ export default function WalletsPage({ summary: initialSummary, onChanged, onOver
     </aside>}
 
     <div className="wallets-toolbar">
-      <div><button className="btn btn-ghost" type="button" disabled={summary.active_count < 2} onClick={() => setTransferring(wallets.find((wallet) => wallet.active))}><ArrowRightLeft size={16} /> Transferir</button></div>
+      <div className="wallet-toolbar-main">
+        <div className="wallet-toolbar-actions">
+          <button className="btn btn-ghost" type="button" disabled={summary.active_count < 2} onClick={() => setTransferring(wallets.find((wallet) => wallet.active))}><ArrowRightLeft size={16} /> Transferir</button>
+          <button className="btn btn-ghost" type="button" disabled={summary.active_count < 2} onClick={() => setConsolidating(wallets.find((wallet) => wallet.active && wallet.is_primary) || wallets.find((wallet) => wallet.active))}><MoveRight size={16} /> Consolidar</button>
+        </div>
+        <small className="wallet-consolidation-helper"><CircleHelp size={13} /> Move todo o histórico de uma carteira para outra, preservando o patrimônio total.</small>
+      </div>
       {wallets.some((wallet) => !wallet.active) && <label className="wallet-archived-toggle"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Exibir arquivadas</label>}
     </div>
 
