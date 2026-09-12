@@ -9,6 +9,7 @@ class Recurrence(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    wallet_id = Column(Integer, ForeignKey("wallets.id", ondelete="RESTRICT"), nullable=True, index=True)
     description = Column(String(255), nullable=False)
     type = Column(Enum("expense", "income", name="transaction_type"), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)

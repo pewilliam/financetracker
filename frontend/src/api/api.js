@@ -113,6 +113,38 @@ export function createTransaction(payload) {
   });
 }
 
+export function listWallets(includeArchived = true) {
+  return request(`/wallets?include_archived=${includeArchived ? "true" : "false"}`);
+}
+
+export function getWallet(id) {
+  return request(`/wallets/${id}`);
+}
+
+export function createWallet(payload) {
+  return request("/wallets", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateWallet(id, payload) {
+  return request(`/wallets/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export function archiveWallet(id) {
+  return request(`/wallets/${id}/archive`, { method: "PATCH" });
+}
+
+export function restoreWallet(id) {
+  return request(`/wallets/${id}/restore`, { method: "PATCH" });
+}
+
+export function adjustWalletBalance(id, payload) {
+  return request(`/wallets/${id}/adjustments`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function transferBetweenWallets(payload) {
+  return request("/wallets/transfers", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function updateTutorialProgress(tutorial, version) {
   return request(`/auth/me/tutorials/${tutorial}`, {
     method: "PATCH",

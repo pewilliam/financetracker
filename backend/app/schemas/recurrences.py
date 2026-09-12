@@ -15,6 +15,7 @@ class RecurrenceCreate(APIModel):
     active: bool = True
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    wallet_id: Optional[int] = None
 
 
 class RecurrenceUpdate(APIModel):
@@ -27,6 +28,7 @@ class RecurrenceUpdate(APIModel):
     effective_date: Optional[date] = None
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    wallet_id: Optional[int] = None
 
 
 class RecurrenceOut(APIModel):
@@ -41,3 +43,4 @@ class RecurrenceOut(APIModel):
     category_id: Optional[int] = None
     category_ids: List[int] = []
     categories: List[CategoryOut] = []
+    wallet_id: Optional[int] = None

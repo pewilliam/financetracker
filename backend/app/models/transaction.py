@@ -9,6 +9,7 @@ class Transaction(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    wallet_id = Column(Integer, ForeignKey("wallets.id", ondelete="RESTRICT"), nullable=True, index=True)
     date = Column(Date, nullable=False, index=True)
     type = Column(Enum("expense", "income", name="transaction_type"), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
@@ -23,6 +24,7 @@ class Transaction(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     user = relationship("User", back_populates="transactions")
+    wallet = relationship("Wallet", back_populates="transactions")
     invoice = relationship("Invoice", foreign_keys=[invoice_id], back_populates="transactions")
     recurrence = relationship("Recurrence", foreign_keys=[recurrence_id], back_populates="transactions")
     category = relationship("Category", back_populates="transactions")

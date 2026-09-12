@@ -187,6 +187,7 @@ export const enUS = {
   sidebar: {
     dashboard: "Dashboard",
     months: "Monthly control",
+    wallets: "Wallets",
     invoices: "Invoices",
     invoiceModels: "Invoice models",
     installments: "Installments",
@@ -255,8 +256,8 @@ export const enUS = {
     paidInvoicesProtected: "Paid invoices remain protected and must be marked pending before any change.",
     saveProtection: "Save protection",
     financialOrganizationEyebrow: "FINANCIAL ORGANIZATION",
-    financialOrganizationHeading: "Balance and categories",
-    financialOrganizationDescription: "Adjust the month's base and keep your classifications organized.",
+    financialOrganizationHeading: "Categories",
+    financialOrganizationDescription: "Keep classifications organized. Balances and accounts are now managed on the Wallets page.",
     dataEyebrow: "YOUR DATA",
     dataHeading: "Export",
     dataDescription: "Download a copy of the selected month's entries.",

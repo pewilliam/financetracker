@@ -79,7 +79,8 @@ export function normalizeTransactionPayload(data) {
     is_future: Boolean(data?.is_future)
   };
   normalized.category_ids = (data?.category_ids || (data?.category_id ? [data.category_id] : [])).map(Number);
-  normalized.expense_link = data?.expense_link || null;
+    normalized.expense_link = data?.expense_link || null;
+    normalized.wallet_id = data?.wallet_id ? Number(data.wallet_id) : null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized.date)) normalized.date = "";
   return normalized;
 }

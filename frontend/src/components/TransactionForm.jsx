@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Layers3, Link2, Loader2, ReceiptText, Repeat2, X } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Layers3, Link2, Loader2, ReceiptText, Repeat2, WalletCards, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import CategorySelect from "./CategorySelect.jsx";
 import ExpensePicker from "./ExpensePicker.jsx";
@@ -55,6 +55,7 @@ export default function TransactionForm({
   initial,
   date,
   categories = [],
+  wallets = [],
   expenseOption,
   expenseOptions = [],
   onManageReceivable,
@@ -71,6 +72,7 @@ export default function TransactionForm({
     amount: "",
     description: "",
     category_ids: [],
+    wallet_id: "",
     recurrence: false,
     recurrence_scope: initial?.recurrence_id ? "future" : "single",
     day_of_month: "",
@@ -98,6 +100,7 @@ export default function TransactionForm({
         amount: formatMoney(initial.amount),
         description: initial.description || "",
         category_ids: initialCategoryIds,
+        wallet_id: String(initial.wallet_id || wallets.find((wallet) => wallet.active)?.id || ""),
         recurrence: false,
         recurrence_scope: initial.recurrence_id && !initialIsReceivable ? "future" : "single",
         day_of_month: "",
@@ -111,6 +114,7 @@ export default function TransactionForm({
         amount: "",
         description: "",
         category_ids: [],
+        wallet_id: String(wallets.find((wallet) => wallet.active)?.id || ""),
         recurrence: false,
         recurrence_scope: "single",
         day_of_month: "",
@@ -121,7 +125,7 @@ export default function TransactionForm({
     setErrors({});
     setTouched({});
     setSaving(false);
-  }, [initial, date, open, categories]);
+  }, [initial, date, open, categories, wallets]);
 
   const handleAmount = (value) => {
     const formatted = formatAmountForEditing(value);
@@ -180,6 +184,7 @@ export default function TransactionForm({
       const day = Number(form.day_of_month);
       if (!form.day_of_month || day < 1 || day > 31) nextErrors.day_of_month = "Informe o dia do mês";
     }
+    if (!form.wallet_id) nextErrors.wallet_id = "Selecione uma carteira";
     if (form.expense_source_key) {
       const linkedOption = expenseOptions.find((option) => `${option.source_type}:${option.source_id}` === form.expense_source_key);
       const ownAmount = linkedOption?.transaction_ids?.includes(initial?.id) ? Number(initial?.amount || 0) : 0;
@@ -228,6 +233,7 @@ export default function TransactionForm({
           type: form.type,
           amount,
           description: form.description,
+          wallet_id: Number(form.wallet_id),
           category_ids: form.category_ids.map(Number),
           expense_link: sourceType ? {
             source_type: sourceType,
@@ -325,6 +331,17 @@ export default function TransactionForm({
           <label>
             <span>Categoria</span>
             <CategorySelect categories={categories} values={form.category_ids} onChange={(value) => setField("category_ids", value)} onCreate={onCreateCategory} />
+          </label>
+
+          <label className={errors.wallet_id ? "has-error" : ""}>
+            <span><WalletCards size={15} /> Carteira</span>
+            <select value={form.wallet_id} onChange={(event) => setField("wallet_id", event.target.value)} aria-invalid={!!errors.wallet_id} required>
+              <option value="">Selecione a carteira</option>
+              {wallets.filter((wallet) => wallet.active || String(wallet.id) === String(form.wallet_id)).map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>{wallet.institution ? `${wallet.institution} · ` : ""}{wallet.name}</option>
+              ))}
+            </select>
+            {errors.wallet_id && <small className="field-error">{errors.wallet_id}</small>}
           </label>
 
           {isReceivableCategory && (

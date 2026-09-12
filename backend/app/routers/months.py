@@ -1,14 +1,15 @@
 import calendar
 from bisect import bisect_left
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Transaction, User
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Transaction, User, Wallet, WalletAdjustment
 from app.schemas.months import CategoryBreakdownOut, CategoryExpenseOut, MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
 from app.security import get_current_user
+from app.services.wallets import money, wallet_balance
 
 router = APIRouter(prefix="/api/months", tags=["months"])
 
@@ -44,6 +45,20 @@ def _month_bounds(year: int, month: int):
 
 
 def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
+    wallets = db.query(Wallet).filter(Wallet.user_id == user_id, Wallet.active.is_(True)).all()
+    if wallets:
+        previous_day = start - timedelta(days=1)
+        return sum(
+            (
+                money(wallet.initial_balance)
+                if wallet.tracking_started_on == start
+                else wallet_balance(db, wallet, previous_day)
+                if wallet.tracking_started_on < start
+                else Decimal("0.00")
+                for wallet in wallets
+            ),
+            Decimal("0.00"),
+        )
     anchor = (
         db.query(MonthlyBalance)
         .filter(
@@ -74,6 +89,25 @@ def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
     return (_to_decimal(anchor.opening_balance) if anchor else Decimal("0.00")) + net_since_anchor
 
 
+def _wallet_balance_effects(db: Session, start: date, end: date, user_id: int) -> dict[date, Decimal]:
+    """Non-transaction ledger changes that affect consolidated balance inside a month."""
+    effects: dict[date, Decimal] = {}
+    wallets = db.query(Wallet).filter(Wallet.user_id == user_id, Wallet.active.is_(True)).all()
+    if not wallets:
+        return effects
+    wallet_ids = [wallet.id for wallet in wallets]
+    for wallet in wallets:
+        if start < wallet.tracking_started_on <= end:
+            effects[wallet.tracking_started_on] = effects.get(wallet.tracking_started_on, Decimal("0.00")) + money(wallet.initial_balance)
+    for row in db.query(WalletAdjustment.date, WalletAdjustment.amount).filter(
+        WalletAdjustment.wallet_id.in_(wallet_ids),
+        WalletAdjustment.date >= start,
+        WalletAdjustment.date <= end,
+    ).all():
+        effects[row.date] = effects.get(row.date, Decimal("0.00")) + money(row.amount)
+    return effects
+
+
 def _build_month_data(db: Session, year: int, month: int, user_id: int) -> MonthResponse:
     start, end, last_day = _month_bounds(year, month)
     transactions = (
@@ -97,6 +131,7 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
     )
 
     opening_balance = _opening_balance(db, start, user_id)
+    balance_effects = _wallet_balance_effects(db, start, end, user_id)
 
     by_date: dict[date, list[Transaction]] = {}
     for tx in transactions:
@@ -118,7 +153,7 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
             (tx.amount for tx in day_transactions if tx.type == "expense"),
             Decimal("0.00"),
         )
-        balance = balance + income - expenses
+        balance = balance + balance_effects.get(current_date, Decimal("0.00")) + income - expenses
         total_income += income
         total_expenses += expenses
         notes = "; ".join([tx.description for tx in day_transactions if tx.description])
@@ -187,6 +222,7 @@ def _build_month_summary(
     start, end, _ = _month_bounds(year, month)
     current_date = today or date.today()
     opening_balance = _opening_balance(db, start, user_id)
+    balance_effects = _wallet_balance_effects(db, start, end, user_id)
     transaction_rows = (
         db.query(Transaction.date, Transaction.type, Transaction.amount)
         .filter(
@@ -200,13 +236,14 @@ def _build_month_summary(
     total_income = sum((row.amount for row in transaction_rows if row.type == "income"), Decimal("0.00"))
     total_expenses = sum((row.amount for row in transaction_rows if row.type == "expense"), Decimal("0.00"))
     total_net = total_income - total_expenses
+    total_balance_effect = sum(balance_effects.values(), Decimal("0.00"))
 
     if end < current_date:
-        current_balance = opening_balance + total_net
+        current_balance = opening_balance + total_balance_effect + total_net
         future_net = Decimal("0.00")
     elif start > current_date:
         current_balance = opening_balance
-        future_net = total_net
+        future_net = total_net + total_balance_effect
     else:
         current_net = sum(
             (
@@ -216,8 +253,10 @@ def _build_month_summary(
             ),
             Decimal("0.00"),
         )
-        future_net = total_net - current_net
-        current_balance = opening_balance + current_net
+        current_balance_effect = sum((amount for effect_date, amount in balance_effects.items() if effect_date <= current_date), Decimal("0.00"))
+        future_balance_effect = total_balance_effect - current_balance_effect
+        future_net = total_net - current_net + future_balance_effect
+        current_balance = opening_balance + current_net + current_balance_effect
 
     return MonthSummaryOut(
         year=year,
@@ -506,14 +545,57 @@ def list_month_summaries(
         .order_by(Transaction.date, Transaction.id)
         .all()
     )
+    ledger_rows = (
+        db.query(MonthlyBalance, Wallet, WalletAdjustment)
+        .select_from(User)
+        .outerjoin(MonthlyBalance, MonthlyBalance.user_id == User.id)
+        .outerjoin(Wallet, Wallet.user_id == User.id)
+        .outerjoin(WalletAdjustment, WalletAdjustment.wallet_id == Wallet.id)
+        .filter(User.id == current_user.id)
+        .all()
+    )
+    active_wallets = list({wallet.id: wallet for _, wallet, _ in ledger_rows if wallet and wallet.active}.values())
+    if active_wallets:
+        active_wallet_ids = {wallet.id for wallet in active_wallets}
+        adjustment_dates = {
+            adjustment.id: adjustment.date
+            for _, wallet, adjustment in ledger_rows
+            if wallet and wallet.id in active_wallet_ids and adjustment
+        }.values()
+        periods = sorted({
+            (activity_date.year, activity_date.month)
+            for activity_date in (
+                [row.date for row in transaction_rows]
+                + list(adjustment_dates)
+                + [wallet.tracking_started_on for wallet in active_wallets]
+            )
+        })
+        summaries = []
+        for row_year, row_month in reversed(periods):
+            data = _build_month_data(db, row_year, row_month, current_user.id)
+            summary = _build_month_summary(db, row_year, row_month, current_user.id, current_date)
+            opening = data.opening_balance
+            closing = data.closing_balance
+            difference_pct = ((closing - opening) / abs(opening) * Decimal("100")) if opening else Decimal("0.00")
+            summaries.append(MonthCardSummaryOut(
+                year=row_year,
+                month=row_month,
+                label=f"{MONTH_NAMES[row_month]} de {row_year}",
+                opening_balance=opening,
+                current_balance=summary.current_balance,
+                total_expenses=data.total_expenses,
+                total_income=data.total_income,
+                closing_balance=closing,
+                difference_pct=difference_pct,
+                transaction_count=sum(len(day.transactions) for day in data.days),
+            ))
+        return summaries
     if not transaction_rows:
         return []
 
-    balance_rows = (
-        db.query(MonthlyBalance.year, MonthlyBalance.month, MonthlyBalance.opening_balance)
-        .filter(MonthlyBalance.user_id == current_user.id)
-        .order_by(MonthlyBalance.year, MonthlyBalance.month)
-        .all()
+    balance_rows = sorted(
+        {balance.id: balance for balance, _, _ in ledger_rows if balance}.values(),
+        key=lambda balance: (balance.year, balance.month),
     )
 
     month_totals: dict[tuple[int, int], dict[str, Decimal | int]] = {}

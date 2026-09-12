@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2, WalletCards } from "lucide-react";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC } from "../app/constants.js";
+import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 function PasswordField({ label, visible, onToggleVisible, ...inputProps }) {
   return (
@@ -32,10 +33,14 @@ export default function AuthPage({ mode }) {
   const [form, setForm] = useState({ name: "", email: "", password: "", passwordConfirmation: "" });
   const [visiblePasswords, setVisiblePasswords] = useState({ password: false, passwordConfirmation: false });
   const [busy, setBusy] = useState(false);
+  const [onboardingMode, setOnboardingMode] = useState("quick");
+  const [initialBalance, setInitialBalance] = useState("");
+  const [onboardingWallets, setOnboardingWallets] = useState([{ name: "", institution: "", type: "checking", initial_balance: "" }]);
 
   const passwordIsLongEnough = form.password.length >= 12;
   const passwordFitsBcrypt = new TextEncoder().encode(form.password).length <= 72;
   const passwordsMatch = form.password === form.passwordConfirmation;
+  const onboardingTotal = onboardingWallets.reduce((total, wallet) => total + parseTypedMoneyInput(wallet.initial_balance), 0);
 
   if (auth.authenticated) return <Navigate to="/" replace />;
 
@@ -49,6 +54,14 @@ export default function AuthPage({ mode }) {
     try {
       if (isRegister) {
         const { passwordConfirmation: _, ...payload } = form;
+        if (onboardingMode === "quick") payload.initial_balance = parseTypedMoneyInput(initialBalance);
+        else {
+          if (!onboardingWallets.length || onboardingWallets.some((wallet) => !wallet.name.trim())) {
+            toast.error("Informe o nome de cada carteira");
+            return;
+          }
+          payload.wallets = onboardingWallets.map((wallet) => ({ ...wallet, name: wallet.name.trim(), institution: wallet.institution.trim() || null, initial_balance: parseTypedMoneyInput(wallet.initial_balance) }));
+        }
         await auth.signUp(payload);
       }
       else await auth.signIn({ email: form.email, password: form.password });
@@ -109,6 +122,24 @@ export default function AuthPage({ mode }) {
               <li className={passwordIsLongEnough ? "valid" : ""}>Pelo menos 12 caracteres</li>
               <li className={form.passwordConfirmation && passwordsMatch ? "valid" : ""}>As duas senhas devem coincidir</li>
             </ul>
+            <section className="auth-wallet-onboarding">
+              <div className="auth-wallet-heading"><WalletCards size={18} /><div><strong>Como você quer começar?</strong><small>Você pode alterar e criar carteiras depois.</small></div></div>
+              <div className="auth-wallet-mode">
+                <button type="button" className={onboardingMode === "quick" ? "active" : ""} onClick={() => setOnboardingMode("quick")}><strong>Configuração rápida</strong><small>Informar apenas quanto possuo</small></button>
+                <button type="button" className={onboardingMode === "organized" ? "active" : ""} onClick={() => setOnboardingMode("organized")}><strong>Organizar contas</strong><small>Separar o saldo por carteira</small></button>
+              </div>
+              {onboardingMode === "quick" ? <label><span>Saldo atual</span><input inputMode="decimal" value={initialBalance} onChange={(event) => setInitialBalance(formatTypedMoneyForEditing(event.target.value))} onBlur={() => setInitialBalance(formatTypedMoneyAsCurrency(initialBalance))} placeholder="R$ 0,00" /></label> : <div className="auth-wallet-list">
+                {onboardingWallets.map((wallet, index) => <div className="auth-wallet-row" key={index}>
+                  <input aria-label="Nome da carteira" placeholder="Nome da carteira" value={wallet.name} onChange={(event) => setOnboardingWallets((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} required />
+                  <input aria-label="Instituição" placeholder="Instituição (opcional)" value={wallet.institution} onChange={(event) => setOnboardingWallets((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, institution: event.target.value } : item))} />
+                  <select aria-label="Tipo" value={wallet.type} onChange={(event) => setOnboardingWallets((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value } : item))}><option value="checking">Conta corrente</option><option value="digital">Conta digital</option><option value="cash">Dinheiro</option><option value="reserve">Reserva / Caixinha</option><option value="investment">Investimento</option><option value="other">Outros</option></select>
+                  <input aria-label="Saldo inicial" inputMode="decimal" placeholder="Saldo inicial" value={wallet.initial_balance} onChange={(event) => setOnboardingWallets((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, initial_balance: formatTypedMoneyForEditing(event.target.value) } : item))} onBlur={() => setOnboardingWallets((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, initial_balance: formatTypedMoneyAsCurrency(item.initial_balance) } : item))} />
+                  {onboardingWallets.length > 1 && <button type="button" className="icon-btn" aria-label="Remover carteira" onClick={() => setOnboardingWallets((items) => items.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={16} /></button>}
+                </div>)}
+                <div className="auth-wallet-total"><span>Total inicial</span><strong>{formatMoney(onboardingTotal)}</strong></div>
+                <button type="button" className="btn btn-ghost auth-add-wallet" onClick={() => setOnboardingWallets((items) => [...items, { name: "", institution: "", type: "checking", initial_balance: "" }])}><Plus size={15} /> Adicionar carteira</button>
+              </div>}
+            </section>
           </>}
           <button className="btn btn-primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : isRegister ? "Criar conta" : "Entrar"}</button>
         </form>

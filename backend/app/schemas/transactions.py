@@ -17,6 +17,7 @@ class TransactionBase(APIModel):
     recurrence_id: Optional[int] = None
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    wallet_id: Optional[int] = None
 
 
 class TransactionCreate(TransactionBase):
@@ -36,6 +37,7 @@ class TransactionBatchCreate(APIModel):
     type: Literal["expense", "income"] = "expense"
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    wallet_id: Optional[int] = None
     rules: List[TransactionBatchRule] = Field(min_length=1, max_length=20)
 
 
