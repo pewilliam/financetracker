@@ -6,6 +6,7 @@ import { adjustWalletBalance, archiveWallet, consolidateWallet, createWallet, ge
 import DateField from "../components/DateField.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
 import WalletSelect from "../components/WalletSelect.jsx";
+import { MOBILE_MEDIA_QUERY } from "../app/constants.js";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -43,6 +44,7 @@ function emptyWallet() {
 
 function WalletEditor({ wallet, language, onClose, onSaved }) {
   const editing = Boolean(wallet?.id);
+  const shouldAutoFocusName = !window.matchMedia(MOBILE_MEDIA_QUERY).matches;
   const [form, setForm] = useState(editing ? {
     name: wallet.name,
     institution: wallet.institution || "",
@@ -76,12 +78,12 @@ function WalletEditor({ wallet, language, onClose, onSaved }) {
     }
   };
 
-  return <div className="modal-layer">
+  return <div className="modal-layer wallet-modal-layer">
     <button className="modal-backdrop" onClick={onClose} aria-label="Fechar" />
     <form className="modal-card wallet-modal wallet-editor-modal" onSubmit={submit}>
       <div className="wallet-transfer-header"><i><WalletCards size={20} /></i><div><small>{editing ? "CONFIGURAÇÃO DA CARTEIRA" : "NOVA CARTEIRA"}</small><h2>{editing ? "Editar carteira" : "Criar carteira"}</h2><p>{editing ? "Atualize a identificação e a aparência da carteira." : "Cadastre onde você mantém seu dinheiro."}</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
       <div className="wallet-modal-body form-stack">
-        <label><span>Nome da carteira</span><input maxLength="100" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex: Conta principal" required autoFocus /></label>
+        <label><span>Nome da carteira</span><input maxLength="100" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex: Conta principal" required autoFocus={shouldAutoFocusName} /></label>
         <label><span>Instituição <small>(opcional)</small></span><input maxLength="100" value={form.institution} onChange={(event) => setForm({ ...form, institution: event.target.value })} placeholder="Ex: Nubank" /></label>
         <label><span>Tipo</span><CategorySelect categories={WALLET_TYPE_OPTIONS} value={form.type} onChange={(type) => setForm({ ...form, type })} multiple={false} clearable={false} placeholder="Selecione o tipo" searchPlaceholder="Buscar tipo..." ariaLabel="Tipos de carteira" className="wallet-type-select" /></label>
         {!editing && <label><span>Saldo inicial</span><input inputMode="decimal" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => setForm({ ...form, initial_balance: formatTypedMoneyAsCurrency(form.initial_balance, language) })} placeholder={formatMoney(0, language)} /></label>}
@@ -107,7 +109,7 @@ function BalanceAdjustment({ wallet, language, onClose, onSaved }) {
     } catch (error) { toast.error(error.message === "Balance is already equal to the informed amount" ? "O saldo informado já é o saldo calculado" : "Não foi possível ajustar o saldo"); }
     finally { setBusy(false); }
   };
-  return <div className="modal-layer"><button className="modal-backdrop" onClick={onClose} /><form className="modal-card wallet-modal" onSubmit={submit}>
+  return <div className="modal-layer wallet-modal-layer"><button className="modal-backdrop" onClick={onClose} /><form className="modal-card wallet-modal" onSubmit={submit}>
     <div className="modal-titlebar"><h2>Ajustar saldo</h2><button className="icon-btn" type="button" onClick={onClose}><X size={18} /></button></div>
     <div className="wallet-modal-body form-stack">
       <div className="wallet-calculated-balance"><span>Saldo calculado</span><strong>{formatMoney(wallet.current_balance, language)}</strong></div>
@@ -143,7 +145,7 @@ function TransferEditor({ wallets, initialSource, language, onClose, onSaved }) 
     } catch (error) { toast.error(error.message === "Choose two different wallets" ? "Escolha carteiras diferentes" : "Não foi possível realizar a transferência"); }
     finally { setBusy(false); }
   };
-  return <div className="modal-layer"><button className="modal-backdrop" onClick={onClose} aria-label="Fechar" /><form className="modal-card wallet-modal wallet-transfer-modal" onSubmit={submit}>
+  return <div className="modal-layer wallet-modal-layer"><button className="modal-backdrop" onClick={onClose} aria-label="Fechar" /><form className="modal-card wallet-modal wallet-transfer-modal" onSubmit={submit}>
     <div className="wallet-transfer-header"><i><ArrowRightLeft size={20} /></i><div><small>TRANSFERÊNCIA INTERNA</small><h2>Transferir entre carteiras</h2><p>Mova seu dinheiro sem alterar o patrimônio total.</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
     <div className="wallet-modal-body form-stack">
       <div className="wallet-transfer-route">
@@ -214,7 +216,7 @@ function ConsolidationEditor({ wallets, initialSource, language, onClose, onSave
   const includesFutureTransactions = preview?.latest_date && preview.latest_date > todayIso();
   const formatDate = (value) => value ? new Date(`${value}T12:00:00`).toLocaleDateString(language) : "—";
 
-  return <div className="modal-layer"><button className="modal-backdrop" onClick={onClose} aria-label="Fechar" /><form className="modal-card wallet-modal wallet-transfer-modal wallet-consolidation-modal" onSubmit={submit}>
+  return <div className="modal-layer wallet-modal-layer"><button className="modal-backdrop" onClick={onClose} aria-label="Fechar" /><form className="modal-card wallet-modal wallet-transfer-modal wallet-consolidation-modal" onSubmit={submit}>
     <div className="wallet-transfer-header"><i><ReceiptText size={20} /></i><div><small>CONSOLIDAÇÃO DE CARTEIRA</small><h2>Mover todo o histórico</h2><p>Reúna saldo inicial, ganhos, gastos e lançamentos futuros em uma só carteira.</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
     <div className="wallet-modal-body form-stack">
       <div className="wallet-transfer-route">
@@ -247,7 +249,7 @@ function ConsolidationEditor({ wallets, initialSource, language, onClose, onSave
   </form></div>;
 }
 
-export default function WalletsPage({ summary: initialSummary, onChanged }) {
+export default function WalletsPage({ summary: initialSummary, onChanged, onOverlayChange }) {
   const { language } = useI18n();
   const [summary, setSummary] = useState(initialSummary || { total_balance: 0, active_count: 0, wallets: [] });
   const [editor, setEditor] = useState(null);
@@ -265,9 +267,23 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
   const historyRequest = useRef(0);
   const [showArchived, setShowArchived] = useState(false);
   const [organizeDismissed, setOrganizeDismissed] = useState(() => localStorage.getItem("wallet-organize-dismissed") === "1");
+  const [mobileDetail, setMobileDetail] = useState(() => window.matchMedia(MOBILE_MEDIA_QUERY).matches);
+  const modalOpen = Boolean(editor || adjusting || transferring || consolidating);
+  const overlayOpen = modalOpen || (mobileDetail && Boolean(selectedId || detailLoading));
 
   useEffect(() => setSummary(initialSummary || { total_balance: 0, active_count: 0, wallets: [] }), [initialSummary]);
   useEffect(() => () => clearTimeout(detailCloseTimer.current), []);
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const updateMobileDetail = () => setMobileDetail(media.matches);
+    updateMobileDetail();
+    media.addEventListener("change", updateMobileDetail);
+    return () => media.removeEventListener("change", updateMobileDetail);
+  }, []);
+  useEffect(() => {
+    onOverlayChange?.(overlayOpen);
+    return () => onOverlayChange?.(false);
+  }, [onOverlayChange, overlayOpen]);
   const wallets = summary.wallets || [];
   const visibleWallets = useMemo(() => wallets.filter((wallet) => wallet.active || showArchived), [wallets, showArchived]);
   const walletGroups = useMemo(() => {
@@ -407,7 +423,9 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
         </section>)}
       </div>
 
-      {(selectedId || detailLoading) && <aside className={`card wallet-detail ${detailClosing ? "closing" : ""}`} key={selectedId || "wallet-detail"} style={{ "--wallet-color": detail?.color || selectedWallet?.color || "var(--primary)" }}>
+      {(selectedId || detailLoading) && <>
+      <button className={`wallet-detail-backdrop ${detailClosing ? "closing" : ""}`} type="button" onClick={closeDetail} aria-label="Fechar detalhes da carteira" />
+      <aside className={`card wallet-detail ${detailClosing ? "closing" : ""}`} key={selectedId || "wallet-detail"} style={{ "--wallet-color": detail?.color || selectedWallet?.color || "var(--primary)" }} role={mobileDetail ? "dialog" : undefined} aria-modal={mobileDetail ? "true" : undefined} aria-label={mobileDetail ? `Detalhes de ${detail?.name || selectedWallet?.name || "carteira"}` : undefined}>
         {detailLoading && !detail ? <div className="wallet-detail-loading"><Loader2 className="spin" /> Carregando histórico...</div> : detail && <>
           <div className="wallet-detail-head"><div><small>{detail.institution || "Carteira"}</small><h2>{detail.name}</h2>{detail.is_primary && <span className="wallet-primary-detail"><Star size={12} fill="currentColor" /> Carteira principal</span>}</div><button className="icon-btn" onClick={closeDetail} aria-label="Fechar detalhes"><X size={18} /></button></div>
           <div className="wallet-detail-stats"><div><span>Saldo atual</span><strong>{formatMoney(detail.current_balance, language)}</strong></div><div><span>Entradas · desde o início</span><strong className="money-income">{formatMoney(detail.total_income, language)}</strong></div><div><span>Saídas · desde o início</span><strong className="money-expense">{formatMoney(detail.total_expenses, language)}</strong></div></div>
@@ -441,7 +459,8 @@ export default function WalletsPage({ summary: initialSummary, onChanged }) {
           </> : <div className="wallet-history-state">Nenhuma movimentação em {historyMonthLabel}.</div>}
           </div>
         </>}
-      </aside>}
+      </aside>
+      </>}
     </div>
 
     {editor && <WalletEditor wallet={editor.id ? editor : null} language={language} onClose={() => setEditor(null)} onSaved={refresh} />}
