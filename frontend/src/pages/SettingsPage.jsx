@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
-import CategoryModal, { CATEGORY_COLORS } from "../modals/CategoryModal.jsx";
+import CategoryModal from "../modals/CategoryModal.jsx";
 import DeleteCategoryModal from "../modals/DeleteCategoryModal.jsx";
 import InvoiceTemplatesPage from "./InvoiceTemplatesPage.jsx";
 import { formatMoney } from "../utils/format.js";
@@ -351,7 +351,6 @@ export default function SettingsPage({
       {categoryEditor && (
         <CategoryModal
           category={categoryEditor.id ? categoryEditor : null}
-          suggestedColor={CATEGORY_COLORS[categories.length % CATEGORY_COLORS.length]}
           onSave={saveManagedCategory}
           onClose={() => setCategoryEditor(null)}
         />

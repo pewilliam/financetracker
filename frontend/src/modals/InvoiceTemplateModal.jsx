@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CreditCard, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { defaultTemplateForm, normalizeInvoiceColor } from "../app/helpers.js";
+import ColorPickerField from "../components/ColorPickerField.jsx";
 
 export default function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
   const { t, language } = useI18n();
@@ -34,13 +35,10 @@ export default function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
         </div>
         <div className="invoice-modal-body">
           <label><span>{tt("invoiceModels.name", "Nome")}</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-          <label>
+          <div className="shared-color-field">
             <span>{tt("invoiceModels.color", "Cor")}</span>
-            <div className="template-color-input">
-              <span className="template-dot" style={{ "--invoice-color": normalizeInvoiceColor(form.color) }} />
-              <input type="color" value={normalizeInvoiceColor(form.color)} onChange={(event) => setForm({ ...form, color: event.target.value })} />
-            </div>
-          </label>
+            <ColorPickerField value={form.color} onChange={(color) => setForm({ ...form, color })} label={tt("invoiceModels.customColor", "Cor personalizada")} ariaLabel={tt("invoiceModels.chooseColor", "Escolher a cor do modelo")} />
+          </div>
           <label><span>{tt("invoiceModels.defaultDueDay", "Dia de vencimento padrão")}</span><input type="number" min="1" max="31" value={form.default_due_day ?? ""} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} onBlur={() => setForm({ ...form, default_due_day: dueDay })} required /></label>
         </div>
         <div className="modal-actions">

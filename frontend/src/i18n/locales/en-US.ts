@@ -505,6 +505,8 @@ export const enUS = {
     deleteEmptyInvoicesMessage: "The model and {{count}} {{invoices}} will be permanently deleted.",
     name: "Name",
     color: "Color",
+    customColor: "Custom color",
+    chooseColor: "Choose the model color",
     defaultDueDay: "Default due day",
     model: "model",
     models: "models"

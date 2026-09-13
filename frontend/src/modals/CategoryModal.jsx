@@ -1,19 +1,15 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Loader2, Palette, Tags, X } from "lucide-react";
+import { Loader2, Tags, X } from "lucide-react";
+import { isMobileViewport } from "../app/helpers.js";
+import ColorPickerField, { normalizeColorValue } from "../components/ColorPickerField.jsx";
 
-
-export const CATEGORY_COLORS = ["#14A078", "#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4", "#84CC16"];
-
-function normalizeColor(value, fallback = CATEGORY_COLORS[0]) {
-  return /^#[0-9A-F]{6}$/i.test(value || "") ? value.toUpperCase() : fallback;
-}
-
-export default function CategoryModal({ category = null, suggestedColor = CATEGORY_COLORS[0], onSave, onClose }) {
+export default function CategoryModal({ category = null, onSave, onClose }) {
   const [name, setName] = useState(category?.name || "");
-  const [color, setColor] = useState(normalizeColor(category?.color, normalizeColor(suggestedColor)));
+  const [color, setColor] = useState(normalizeColorValue(category?.color));
   const [saving, setSaving] = useState(false);
   const editing = Boolean(category);
+  const shouldAutoFocusName = !isMobileViewport();
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -35,7 +31,7 @@ export default function CategoryModal({ category = null, suggestedColor = CATEGO
     if (!cleanName || saving) return;
     setSaving(true);
     try {
-      await onSave({ name: cleanName, color: normalizeColor(color) });
+      await onSave({ name: cleanName, color: normalizeColorValue(color) });
     } finally {
       setSaving(false);
     }
@@ -58,33 +54,13 @@ export default function CategoryModal({ category = null, suggestedColor = CATEGO
         <div className="wallet-modal-body form-stack category-modal-body">
           <label>
             <span>Nome da categoria</span>
-            <input autoFocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex: Alimentação, Transporte, Lazer..." />
+            <input autoFocus={shouldAutoFocusName} maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex: Alimentação, Transporte, Lazer..." />
             <small>Use um nome curto para facilitar a leitura no dashboard.</small>
           </label>
 
           <fieldset className="category-color-field">
             <legend>Cor de identificação</legend>
-            <label className="category-custom-color">
-              <input type="color" value={normalizeColor(color)} onChange={(event) => setColor(event.target.value.toUpperCase())} aria-label="Escolher uma cor personalizada" />
-              <span><strong>Cor personalizada</strong><small>{normalizeColor(color)}</small></span>
-              <Palette size={18} />
-            </label>
-            <small className="category-color-hint">Escolha qualquer cor ou use uma das sugestões abaixo.</small>
-            <div className="category-color-options">
-              {CATEGORY_COLORS.map((option) => (
-                <button
-                  className={color === option ? "active" : ""}
-                  key={option}
-                  type="button"
-                  style={{ "--category-option-color": option }}
-                  onClick={() => setColor(option)}
-                  aria-label={`Selecionar cor ${option}`}
-                  aria-pressed={color === option}
-                >
-                  {color === option && <Check size={15} />}
-                </button>
-              ))}
-            </div>
+            <ColorPickerField value={color} onChange={setColor} disabled={saving} />
           </fieldset>
 
           <div className="category-preview">

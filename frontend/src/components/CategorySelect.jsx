@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
-import CategoryModal, { CATEGORY_COLORS } from "../modals/CategoryModal.jsx";
+import CategoryModal from "../modals/CategoryModal.jsx";
 
 function normalizeValues(value, values) {
   const source = values ?? value;
@@ -259,7 +259,6 @@ export default function CategorySelect({
       )}
       {creating && (
         <CategoryModal
-          suggestedColor={CATEGORY_COLORS[categories.length % CATEGORY_COLORS.length]}
           onSave={create}
           onClose={() => setCreating(false)}
         />

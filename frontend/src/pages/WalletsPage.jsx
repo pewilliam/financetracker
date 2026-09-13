@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast";
 import { adjustWalletBalance, archiveWallet, consolidateWallet, createWallet, getWallet, getWalletMovements, listWallets, previewWalletConsolidation, restoreWallet, setPrimaryWallet, transferBetweenWallets, updateWallet } from "../api/api.js";
 import DateField from "../components/DateField.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
+import ColorPickerField from "../components/ColorPickerField.jsx";
 import WalletSelect from "../components/WalletSelect.jsx";
 import { MOBILE_MEDIA_QUERY } from "../app/constants.js";
 import { useI18n } from "../i18n/index.ts";
@@ -89,7 +90,7 @@ function WalletEditor({ wallet, language, onClose, onSaved }) {
         {!editing && <label><span>Saldo inicial</span><input inputMode="decimal" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => setForm({ ...form, initial_balance: formatTypedMoneyAsCurrency(form.initial_balance, language) })} placeholder={formatMoney(0, language)} /></label>}
         {editing && <p className="wallet-form-note">O saldo inicial não é sobrescrito. Use “Ajustar saldo” para manter a alteração registrada no histórico.</p>}
         <label><span>Início do acompanhamento</span><DateField value={form.tracking_started_on} onChange={(value) => setForm({ ...form, tracking_started_on: value })} /></label>
-        <label className="wallet-color-field"><span>Cor</span><input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} /></label>
+        <div className="shared-color-field"><span>Cor</span><ColorPickerField value={form.color} onChange={(color) => setForm({ ...form, color })} label="Cor da carteira" ariaLabel="Escolher a cor da carteira" disabled={busy} /></div>
       </div>
       <footer className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> Salvando</> : "Salvar carteira"}</button></footer>
     </form>
