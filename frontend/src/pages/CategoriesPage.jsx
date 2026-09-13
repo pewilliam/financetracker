@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, ChevronDown, ChevronUp, Clock3, Loader2, PieChart as PieChartIcon, Plus, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, ChevronDown, ChevronUp, Clock3, Loader2, PieChart as PieChartIcon, Plus, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useI18n } from "../i18n/index.ts";
-import { formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import { formatDateShort, formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
+import CategoryLimitModal from "../modals/CategoryLimitModal.jsx";
 
 function changePercentage(current, previous) {
   if (!previous) return current ? 100 : 0;
@@ -94,8 +95,6 @@ export default function CategoriesPage({
   const [drafts, setDrafts] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [addingLimit, setAddingLimit] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
-  const [newLimit, setNewLimit] = useState("");
   const [planningOpen, setPlanningOpen] = useState(false);
   const [planningSaving, setPlanningSaving] = useState(false);
   const [incomeMode, setIncomeMode] = useState("transactions");
@@ -278,19 +277,10 @@ export default function CategoriesPage({
   };
   const openLimitForm = () => {
     if (!availableRows.length) return;
-    setSelectedCategoryId(String(availableRows[0].id));
-    setNewLimit("");
     setAddingLimit(true);
   };
-  const closeLimitForm = () => { setAddingLimit(false); setSelectedCategoryId(""); setNewLimit(""); };
-  const addLimit = async () => {
-    const category = availableRows.find((row) => row.id === Number(selectedCategoryId));
-    const value = parseTypedMoneyInput(newLimit, language);
-    if (!category || value <= 0) return;
-    setSavingId("new");
-    try { await onUpdateCategory(category.id, { monthly_limit: value }); closeLimitForm(); }
-    finally { setSavingId(null); }
-  };
+  const closeLimitForm = () => setAddingLimit(false);
+  const addLimit = (categoryId, value) => onUpdateCategory(categoryId, { monthly_limit: value });
   const removeLimit = async (category) => {
     setSavingId(category.id);
     try { await onUpdateCategory(category.id, { monthly_limit: null }); }
@@ -521,8 +511,7 @@ export default function CategoriesPage({
         <div className="categories-card-heading categories-budget-heading"><div><p className="eyebrow">{t("categories.limitsEyebrow")}</p><h2>{t("categories.limits")}</h2><span>{t("categories.limitsDescription")}</span></div><div className="categories-budget-heading-actions"><small>{t("categories.configuredCount", { configured: budgetedRows.length, total: categories.length })}</small>{categories.length > 0 && <button className="btn compact" type="button" onClick={openLimitForm} disabled={addingLimit || !availableRows.length}><Plus size={15} /> {t("categories.addLimit")}</button>}</div></div>
         <div className={`categories-limit-allocation ${limitsOverBudget ? hasActualIncome ? "danger" : "warning" : ""}`}><div><span>{isEstimated ? t("categories.estimatedBudget") : t("categories.availableBudget")}</span><strong>{hasPlannedIncome ? formatMoney(availableBudget, language) : "—"}</strong></div><ArrowRight size={17} /><div><span>{t("categories.distributedLimits")}</span><strong>{formatMoney(totalLimits, language)}</strong></div><ArrowRight size={17} /><div><span>{limitsOverBudget ? t("categories.aboveBudget") : t("categories.notDistributed")}</span><strong>{hasPlannedIncome ? formatMoney(Math.abs(undistributedBudget), language) : "—"}</strong></div><div className="categories-allocation-progress"><div><span style={{ width: `${Math.min(limitsUsage, 100)}%` }} /></div><small>{hasPlannedIncome ? t("categories.distributedBudget", { limits: formatMoney(totalLimits, language), budget: formatMoney(availableBudget, language), value: limitsUsage.toFixed(0) }) : t("categories.defineBudgetToCompare")}</small></div></div>
         {limitsOverBudget && <div className={`categories-allocation-alert ${hasActualIncome ? "danger" : "warning"}`}><AlertTriangle size={16} /> {isEstimated ? t("categories.limitsAboveEstimate", { value: formatMoney(totalLimits - availableBudget, language) }) : t("categories.limitsAboveBudget", { value: formatMoney(totalLimits - availableBudget, language) })}</div>}
-        {addingLimit && <div className="categories-limit-add"><div className="categories-limit-add-title"><i><Plus size={17} /></i><span><strong>{t("categories.newLimit")}</strong><small>{t("categories.newLimitHint")}</small></span></div><label className="categories-limit-add-field"><span>{t("categories.chooseCategory")}</span><select value={selectedCategoryId} onChange={(event) => setSelectedCategoryId(event.target.value)}>{availableRows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><div className="categories-limit-add-field"><span>{t("categories.monthlyLimit")}</span><label className="categories-money-field"><span>R$</span><input autoFocus inputMode="decimal" aria-label={t("categories.monthlyLimit")} placeholder="0,00" value={newLimit} onChange={(event) => setNewLimit(formatTypedMoneyForEditing(event.target.value, language))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addLimit(); } }} /></label></div><div className="categories-limit-add-actions"><button className="icon-btn" type="button" onClick={closeLimitForm} aria-label={t("actions.cancel")}><X size={17} /></button><button className="btn btn-primary" type="button" disabled={!selectedCategoryId || parseTypedMoneyInput(newLimit, language) <= 0 || savingId === "new"} onClick={addLimit}>{savingId === "new" ? <Loader2 className="spin" size={16} /> : <Plus size={16} />} {t("categories.confirmAdd")}</button></div></div>}
-        {budgetedRows.length ? <div className="categories-budget-list">{budgetedRows.map((row) => { const status = row.usage > 100 ? "danger" : row.usage >= 80 ? "warning" : "success"; const changed = String(drafts[row.id] ?? "").trim() !== moneyDraft(row.monthly_limit, language); return <div className="categories-budget-row" key={row.id}><div className="categories-budget-name"><i style={{ "--category-color": row.color }} /><span><strong>{row.name}</strong><small>{formatMoney(row.spent, language)} {t("categories.spent")}</small></span></div><div className={`categories-budget-progress ${status}`}><div><span style={{ width: `${Math.min(row.usage, 100)}%` }} /></div><small>{Math.round(row.usage)}%</small></div><div className="categories-limit-form"><label className="categories-money-field"><span>R$</span><input inputMode="decimal" aria-label={t("categories.limitFor", { name: row.name })} value={drafts[row.id] ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [row.id]: formatTypedMoneyForEditing(event.target.value, language) }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveLimit(row); } }} /></label><div className="categories-limit-actions"><button className="icon-btn small" type="button" disabled={!changed || savingId === row.id} onClick={() => saveLimit(row)} aria-label={t("categories.saveLimit")}>{savingId === row.id ? <Loader2 className="spin" size={15} /> : <Save size={15} />}</button><button className="icon-btn small danger" type="button" disabled={savingId === row.id} onClick={() => removeLimit(row)} aria-label={t("categories.removeLimit")}><Trash2 size={15} /></button></div></div></div>; })}</div> : !addingLimit && <div className="categories-empty categories-limits-empty"><Target size={30} /><strong>{categories.length ? t("categories.noLimitsTitle") : t("categories.noCategories")}</strong>{categories.length > 0 && <><p>{t("categories.noLimitsHint")}</p><button className="btn btn-primary compact" type="button" onClick={openLimitForm}><Plus size={15} /> {t("categories.addFirstLimit")}</button></>}</div>}
+        {budgetedRows.length ? <div className="categories-budget-list">{budgetedRows.map((row) => { const status = row.usage > 100 ? "danger" : row.usage >= 80 ? "warning" : "success"; const changed = String(drafts[row.id] ?? "").trim() !== moneyDraft(row.monthly_limit, language); return <div className="categories-budget-row" key={row.id}><div className="categories-budget-name"><i style={{ "--category-color": row.color }} /><span><strong>{row.name}</strong><small>{formatMoney(row.spent, language)} {t("categories.spent")}</small></span></div><div className={`categories-budget-progress ${status}`}><div><span style={{ width: `${Math.min(row.usage, 100)}%` }} /></div><small>{Math.round(row.usage)}%</small></div><div className="categories-limit-form"><label className="categories-money-field"><span>R$</span><input inputMode="decimal" aria-label={t("categories.limitFor", { name: row.name })} value={drafts[row.id] ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [row.id]: formatTypedMoneyForEditing(event.target.value, language) }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveLimit(row); } }} /></label><div className="categories-limit-actions"><button className="icon-btn small" type="button" disabled={!changed || savingId === row.id} onClick={() => saveLimit(row)} aria-label={t("categories.saveLimit")}>{savingId === row.id ? <Loader2 className="spin" size={15} /> : <Save size={15} />}</button><button className="icon-btn small danger" type="button" disabled={savingId === row.id} onClick={() => removeLimit(row)} aria-label={t("categories.removeLimit")}><Trash2 size={15} /></button></div></div></div>; })}</div> : <div className="categories-empty categories-limits-empty"><Target size={30} /><strong>{categories.length ? t("categories.noLimitsTitle") : t("categories.noCategories")}</strong>{categories.length > 0 && <><p>{t("categories.noLimitsHint")}</p><button className="btn btn-primary compact" type="button" onClick={openLimitForm}><Plus size={15} /> {t("categories.addFirstLimit")}</button></>}</div>}
       </section>
 
       <section className="categories-main-grid">
@@ -580,6 +569,7 @@ export default function CategoriesPage({
           </div>
         </article>
       </section>
+      {addingLimit && <CategoryLimitModal categories={availableRows} language={language} t={t} onSave={addLimit} onClose={closeLimitForm} />}
       {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
     </div>
   );

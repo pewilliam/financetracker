@@ -83,6 +83,8 @@ export const ptBR = {
     newLimitHint: "Escolha uma categoria e o valor mensal.",
     chooseCategory: "Categoria",
     monthlyLimit: "Limite mensal",
+    limitRepeatsHint: "Esse valor será repetido nos próximos meses e poderá ser alterado quando quiser.",
+    savingLimit: "Salvando...",
     confirmAdd: "Adicionar",
     removeLimit: "Remover limite",
     noLimitsTitle: "Nenhum limite configurado",

@@ -83,6 +83,8 @@ export const enUS = {
     newLimitHint: "Choose a category and its monthly amount.",
     chooseCategory: "Category",
     monthlyLimit: "Monthly limit",
+    limitRepeatsHint: "This amount will repeat in the following months and can be changed at any time.",
+    savingLimit: "Saving...",
     confirmAdd: "Add",
     removeLimit: "Remove limit",
     noLimitsTitle: "No limits configured",
