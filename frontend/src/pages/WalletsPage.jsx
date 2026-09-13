@@ -109,8 +109,8 @@ function BalanceAdjustment({ wallet, language, onClose, onSaved }) {
     } catch (error) { toast.error(error.message === "Balance is already equal to the informed amount" ? "O saldo informado já é o saldo calculado" : "Não foi possível ajustar o saldo"); }
     finally { setBusy(false); }
   };
-  return <div className="modal-layer wallet-modal-layer"><button className="modal-backdrop" onClick={onClose} /><form className="modal-card wallet-modal" onSubmit={submit}>
-    <div className="modal-titlebar"><h2>Ajustar saldo</h2><button className="icon-btn" type="button" onClick={onClose}><X size={18} /></button></div>
+  return <div className="modal-layer wallet-modal-layer"><button className="modal-backdrop" onClick={onClose} aria-label="Fechar" /><form className="modal-card wallet-modal wallet-adjustment-modal" onSubmit={submit}>
+    <div className="wallet-transfer-header"><i><SlidersHorizontal size={20} /></i><div><small>AJUSTE DE SALDO</small><h2>Ajustar saldo</h2><p>Concilie o saldo da carteira com o valor real.</p></div><button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>
     <div className="wallet-modal-body form-stack">
       <div className="wallet-calculated-balance"><span>Saldo calculado</span><strong>{formatMoney(wallet.current_balance, language)}</strong></div>
       <label><span>Saldo real</span><input inputMode="decimal" value={form.actual_balance} onChange={(event) => setForm({ ...form, actual_balance: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => setForm({ ...form, actual_balance: formatTypedMoneyAsCurrency(form.actual_balance, language) })} required autoFocus /></label>

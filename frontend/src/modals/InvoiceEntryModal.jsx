@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Layers3, Loader2, ReceiptText, X } from "lucide-react";
+import { CircleMinus, Layers3, Loader2, ReceiptText, ShoppingBag, X } from "lucide-react";
 
 import { isMobileViewport } from "../app/helpers.js";
 import CategorySelect from "../components/CategorySelect.jsx";
@@ -16,6 +16,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
   const amountInputRef = useRef(null);
   const amount = parseTypedMoneyInput(form.amount, language);
   const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving);
+  const hasModeSwitch = !isRefund && Boolean(onOpenInstallment);
 
   useEffect(() => {
     if (isMobileViewport()) return undefined;
@@ -55,12 +56,13 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
     <div className="modal-layer transaction-modal-layer invoice-entry-modal-layer">
       <button className="modal-backdrop" type="button" onClick={saving ? undefined : onClose} aria-label={copy("Fechar", "Close")} />
       <form className={`modal-card transaction-modal invoice-entry-modal ${isRefund ? "refund" : "expense"}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="invoice-entry-modal-title">
-        <div className={`modal-titlebar ${!isRefund && onOpenInstallment ? "has-mode-switch" : ""}`}>
-          <div className="invoice-entry-heading">
-            <p className="eyebrow">{invoice.name}</p>
+        <header className={`transaction-entry-titlebar invoice-entry-titlebar ${hasModeSwitch ? "" : "compact"}`}>
+          <span className="transaction-entry-icon">{isRefund ? <CircleMinus size={21} /> : <ShoppingBag size={21} />}</span>
+          <div className="transaction-entry-heading">
+            <p>{copy(`FATURA · ${invoice.name}`, `INVOICE · ${invoice.name}`)}</p>
             <h2 id="invoice-entry-modal-title">{title}</h2>
           </div>
-          {!isRefund && onOpenInstallment && (
+          {hasModeSwitch && (
             <div className="transaction-mode-switch" aria-label={copy("Tipo de compra", "Purchase type")}>
               <button className="active" type="button" aria-pressed="true"><ReceiptText size={15} /> {copy("Compra única", "One-time purchase")}</button>
               <button type="button" aria-pressed="false" onClick={onOpenInstallment}><Layers3 size={15} /> {copy("Compra parcelada", "Installment purchase")}</button>
@@ -69,7 +71,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
           <button className="icon-btn" type="button" onClick={onClose} disabled={saving} aria-label={copy("Fechar", "Close")}>
             <X size={18} />
           </button>
-        </div>
+        </header>
 
         <div className="transaction-modal-body invoice-entry-modal-body">
           <label className="amount-field">

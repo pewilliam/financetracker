@@ -374,6 +374,8 @@ export const enUS = {
   transactionModal: {
     newEntry: "New entry",
     editEntry: "Edit entry",
+    newEntryContext: "INDIVIDUAL ENTRY",
+    editEntryContext: "EDIT ENTRY",
     amount: "Amount",
     date: "Date",
     description: "Description",

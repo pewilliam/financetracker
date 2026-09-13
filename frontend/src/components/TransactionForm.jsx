@@ -277,9 +277,13 @@ export default function TransactionForm({
   return (
     <div className="modal-layer transaction-modal-layer">
       <button className="modal-backdrop" onClick={onClose} aria-label="Fechar" />
-      <form className="modal-card transaction-modal" onSubmit={handleSubmit}>
-        <div className="modal-titlebar">
-          <h2>{initial ? tt("transactionModal.editEntry", "Editar lançamento") : tt("transactionModal.newEntry", "Novo lançamento")}</h2>
+      <form className="modal-card transaction-modal" onSubmit={handleSubmit} role="dialog" aria-modal="true" aria-labelledby="transaction-modal-title">
+        <header className={`transaction-entry-titlebar ${initial ? "compact" : ""}`}>
+          <span className="transaction-entry-icon"><ReceiptText size={21} /></span>
+          <div className="transaction-entry-heading">
+            <p>{initial ? tt("transactionModal.editEntryContext", "EDIÇÃO DE LANÇAMENTO") : tt("transactionModal.newEntryContext", "LANÇAMENTO INDIVIDUAL")}</p>
+            <h2 id="transaction-modal-title">{initial ? tt("transactionModal.editEntry", "Editar lançamento") : tt("transactionModal.newEntry", "Novo lançamento")}</h2>
+          </div>
           {!initial && (
             <div className="transaction-mode-switch" aria-label={tt("actions.entryMode", "Modo de lançamento")}>
               <button className="active" type="button" aria-pressed="true"><ReceiptText size={15} /> {tt("actions.singleEntry", "Individual")}</button>
@@ -289,7 +293,7 @@ export default function TransactionForm({
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar">
             <X size={18} />
           </button>
-        </div>
+        </header>
 
         <div className="transaction-modal-body">
           <div className="transaction-kind" aria-label="Tipo do lançamento">

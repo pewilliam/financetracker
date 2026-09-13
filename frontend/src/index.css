@@ -1852,7 +1852,7 @@ select {
 .segmented .active.danger { background: rgba(239,68,68,.12); color: var(--expense); }
 .segmented .active.success { background: #DCFAF0; color: #007864; }
 
-.transaction-modal {
+.modal-card.transaction-modal {
   width: min(620px, calc(100% - 32px));
   margin: 7vh auto;
   padding: 0;
@@ -1872,6 +1872,40 @@ select {
   font-size: 18px;
   font-weight: 600;
 }
+.transaction-entry-titlebar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto 38px;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  background:
+    radial-gradient(circle at 8% 10%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 38%),
+    var(--card);
+}
+.transaction-entry-titlebar.compact { grid-template-columns: 42px minmax(0, 1fr) 38px; }
+.transaction-entry-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: 11px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+}
+.transaction-entry-heading { min-width: 0; }
+.transaction-entry-heading p {
+  margin: 0 0 3px;
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.transaction-entry-heading h2 { margin: 0; font-size: 19px; line-height: 1.2; }
+.transaction-entry-titlebar > .icon-btn { width: 38px; }
 .transaction-mode-switch {
   display: inline-grid;
   grid-template-columns: repeat(2, max-content);
@@ -1908,10 +1942,12 @@ select {
 .transaction-modal-body > div {
   display: grid;
   gap: 7px;
+  min-width: 0;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
 }
+.transaction-modal-body > * { min-width: 0; max-width: 100%; }
 .transaction-modal-body label span {
   display: inline-flex;
   align-items: center;
@@ -3473,21 +3509,6 @@ select {
 }
 .modal-titlebar h2 { margin: 0; font-size: 22px; font-weight: 800; }
 .modal-titlebar .eyebrow { margin: 0 0 3px; }
-.modal-titlebar.installment-modal-titlebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 16px 18px;
-  background: var(--card);
-}
-.modal-titlebar.installment-modal-titlebar h2 {
-  min-width: 0;
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.25;
-}
 .modal-icon {
   width: 46px;
   height: 46px;
@@ -3958,9 +3979,6 @@ select {
   min-width: 0;
 }
 .installment-modal.step-2 { width: min(760px, calc(100% - 32px)); }
-.installment-modal.step-2 .modal-titlebar {
-  grid-template-columns: 46px minmax(180px, 1fr) minmax(190px, 250px) 38px;
-}
 .installment-category-control {
   display: grid;
   gap: 5px;
@@ -4010,16 +4028,9 @@ select {
 }
 
 @media (max-width: 700px) {
-  .installment-modal.step-2 .modal-titlebar {
-    grid-template-columns: 46px minmax(0, 1fr) 38px;
-  }
   .installment-category-control {
     grid-column: 2 / 3;
     grid-row: 2;
-  }
-  .installment-modal.step-2 .modal-titlebar > .icon-btn {
-    grid-column: 3;
-    grid-row: 1;
   }
 }
 .icon-btn:disabled {
@@ -6906,6 +6917,32 @@ select {
     display: flex;
     flex-direction: column;
   }
+  .transaction-modal-layer .transaction-modal {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+    animation: modal-sheet-up .24s ease both;
+  }
+  .transaction-entry-titlebar,
+  .transaction-entry-titlebar.compact {
+    grid-template-columns: 36px minmax(0, 1fr) 38px;
+    gap: 10px;
+    padding: 13px 14px;
+    border-radius: 0;
+  }
+  .transaction-entry-icon { width: 36px; height: 36px; }
+  .transaction-entry-heading h2 { font-size: 17px; }
+  .transaction-entry-titlebar .transaction-mode-switch {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+  .transaction-entry-titlebar > .icon-btn { grid-column: 3; grid-row: 1; }
   .transaction-modal .modal-titlebar {
     flex: 0 0 auto;
     flex-wrap: wrap;
@@ -6927,8 +6964,13 @@ select {
   .modal-actions, .review-toolbar { grid-template-columns: 1fr; }
   .transaction-modal-body {
     flex: 1 1 auto;
+    width: 100%;
     grid-template-columns: 1fr;
     min-height: 0;
+    max-width: 100%;
+    align-content: start;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
     padding: 14px;
     padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   }
@@ -7861,28 +7903,43 @@ select {
   .entry-details-footer .btn { flex: 1; min-width: 0; }
 }
 
-.invoice-entry-heading {
-  min-width: 0;
-  margin-right: auto;
-}
-.invoice-entry-heading .eyebrow { margin-bottom: 2px; }
 .invoice-entry-modal .transaction-modal-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (min-width: 768px) {
   .invoice-entry-modal { width: min(660px, calc(100vw - 32px)); }
-  .invoice-entry-modal .modal-titlebar.has-mode-switch {
-    display: grid;
-    grid-template-columns: minmax(160px, 1fr) auto 38px;
-  }
   .invoice-entry-modal .transaction-mode-switch { min-width: max-content; }
   .invoice-entry-modal .transaction-mode-switch button { white-space: nowrap; }
 }
 
 @media (max-width: 767px) {
-  .invoice-entry-modal .modal-titlebar { padding-block: 12px; }
-  .invoice-entry-modal-body { gap: 12px; }
+  .invoice-entry-modal-layer .invoice-entry-modal {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+  }
+  .invoice-entry-modal .invoice-entry-titlebar {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  .invoice-entry-modal .transaction-mode-switch { min-width: 0; max-width: 100%; }
+  .invoice-entry-modal .transaction-mode-switch button { min-width: 0; white-space: normal; }
+  .invoice-entry-modal-body {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    gap: 12px;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+  .invoice-entry-modal-body > * { min-width: 0; max-width: 100%; }
   .invoice-entry-modal .transaction-modal-actions .btn { min-width: 0; padding-inline: 10px; }
 }
 
@@ -8268,26 +8325,6 @@ select {
   }
 }
 
-.installment-modal .installment-modal-titlebar.has-mode-switch {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 38px;
-}
-
-@media (max-width: 600px) {
-  .installment-modal .installment-modal-titlebar.has-mode-switch {
-    grid-template-columns: minmax(0, 1fr) 38px;
-  }
-  .installment-modal-titlebar.has-mode-switch .invoice-entry-mode-switch {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    grid-template-columns: 1fr 1fr;
-  }
-  .installment-modal-titlebar.has-mode-switch > .icon-btn {
-    grid-column: 2;
-    grid-row: 1;
-  }
-}
 /* Wallets */
 .wallets-page { display: grid; gap: 14px; }
 .wallets-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 28px; align-items: center; padding: 28px; background: radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 45%), var(--card); }
@@ -8389,8 +8426,8 @@ select {
 .wallet-history-more small { color: var(--muted); font-size: .65rem; }
 .wallet-detail-loading { display: flex; justify-content: center; gap: 8px; align-items: center; min-height: 180px; color: var(--muted); }
 .wallet-modal { width: min(540px, calc(100vw - 24px)); }
-.wallet-editor-modal { padding: 0; overflow: hidden; }
-.wallet-editor-modal .wallet-modal-body { margin-top: 0; }
+.wallet-editor-modal, .wallet-adjustment-modal { padding: 0; overflow: hidden; }
+.wallet-editor-modal .wallet-modal-body, .wallet-adjustment-modal .wallet-modal-body { margin-top: 0; }
 .wallet-modal-body { padding: 20px; }
 .wallet-modal-body label > span { display: inline-flex; gap: 5px; align-items: center; }
 .wallet-modal-body label small { color: var(--muted); font-weight: 400; }

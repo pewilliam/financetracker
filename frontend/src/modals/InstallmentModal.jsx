@@ -98,18 +98,22 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
 
   return (
     <div className="modal-layer">
-      <button className="modal-backdrop" onClick={onClose} />
-      <form className={`modal-card invoice-modal installment-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts}>
-        <div className={`modal-titlebar installment-modal-titlebar ${onOpenSingle ? "has-mode-switch" : ""}`}>
-          <h2>{onOpenSingle ? (language === "en-US" ? "Add to invoice" : "Adicionar à fatura") : tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
+      <button className="modal-backdrop" onClick={onClose} aria-label={language === "en-US" ? "Close" : "Fechar"} />
+      <form className={`modal-card invoice-modal installment-modal step-${step}`} onSubmit={step === 1 ? goToReview : submitDrafts} role="dialog" aria-modal="true" aria-labelledby="installment-modal-title">
+        <header className={`transaction-entry-titlebar installment-entry-titlebar ${onOpenSingle ? "" : "compact"}`}>
+          <span className="transaction-entry-icon"><Layers3 size={21} /></span>
+          <div className="transaction-entry-heading">
+            <p>{firstInvoice ? `${language === "en-US" ? "INVOICE" : "FATURA"} · ${firstInvoice.name}` : (language === "en-US" ? "INSTALLMENT PURCHASE" : "COMPRA PARCELADA")}</p>
+            <h2 id="installment-modal-title">{onOpenSingle ? (language === "en-US" ? "Add to invoice" : "Adicionar à fatura") : tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
+          </div>
           {onOpenSingle && (
             <div className="transaction-mode-switch invoice-entry-mode-switch" aria-label={language === "en-US" ? "Purchase type" : "Tipo de compra"}>
               <button type="button" aria-pressed="false" onClick={onOpenSingle}><ReceiptText size={15} /> {language === "en-US" ? "One-time purchase" : "Compra única"}</button>
               <button className="active" type="button" aria-pressed="true"><Layers3 size={15} /> {language === "en-US" ? "Installment purchase" : "Compra parcelada"}</button>
             </div>
           )}
-          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
-        </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close modal" : "Fechar modal"}><X size={18} /></button>
+        </header>
         <div className="invoice-stepper">
           <div className={`stepper-item ${step > 1 ? "done" : "active"}`}><span>{step > 1 ? <Check size={15} /> : "1"}</span><strong>{tt("installmentModal.configure", "Configurar")}</strong></div>
           <i />
