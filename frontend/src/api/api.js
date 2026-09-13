@@ -308,7 +308,7 @@ export function listInstallments() {
   return request("/installments");
 }
 
-export function listInstallmentPage({ tab = "active", search = "", categoryId = "", invoiceTemplateId = "", situation = "all", sortBy = "nextDue", page = 1, pageSize = 12 } = {}) {
+export function listInstallmentPage({ tab = "active", search = "", categoryIds = [], invoiceTemplateId = "", situation = "all", sortBy = "nextDue", page = 1, pageSize = 12 } = {}) {
   const params = new URLSearchParams({
     tab,
     search,
@@ -317,7 +317,7 @@ export function listInstallmentPage({ tab = "active", search = "", categoryId = 
     page: String(page),
     page_size: String(pageSize)
   });
-  if (categoryId) params.set("category_id", String(categoryId));
+  categoryIds.forEach((categoryId) => params.append("category_ids", String(categoryId)));
   if (invoiceTemplateId) params.set("invoice_template_id", String(invoiceTemplateId));
   return request(`/installments/page?${params}`);
 }

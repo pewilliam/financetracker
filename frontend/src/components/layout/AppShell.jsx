@@ -120,7 +120,7 @@ export default function AppShell() {
     ? `Loading ${formatMonthLabel(year, month, language)}`
     : `Carregando dados de ${formatMonthLabel(year, month, language)}`;
   const loadingHint = language === "en-US" ? "Please wait while the values are updated." : "Aguarde enquanto atualizamos os valores.";
-  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen;
+  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen;
   const bodyLocked = overlayOpen;
 
   useEffect(() => {

@@ -9717,6 +9717,13 @@ select {
 .installment-filter-fields label { min-width: 0; display: grid; gap: 4px; }
 .installment-filter-fields label > span { color: var(--muted); font-size: 10px; font-weight: 800; }
 .installment-filter-fields select { width: 100%; min-width: 0; height: 38px; font-size: 12px; }
+.installment-filter-fields .category-multi-trigger { min-height: 38px; padding-block: 4px; }
+.installment-filter-fields .category-multi-native-control { min-height: 38px; }
+.installment-filter-fields .category-choice-chip { max-width: 145px; overflow: hidden; padding-block: 2px; text-overflow: ellipsis; white-space: nowrap; }
+.installment-filter-fields .category-multi-placeholder,
+.filter-select-value { overflow: hidden; color: var(--text); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.installment-filter-fields .category-multi-placeholder { color: var(--muted); }
+.filter-select-menu .category-multi-options > button > i { border-radius: 999px; }
 .installment-view-toggle { height: 40px; }
 .installment-view-toggle button { min-height: 38px; font-size: 12px; }
 .installment-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: -5px; }

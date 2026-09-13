@@ -179,7 +179,7 @@ def list_installments(
 def list_installments_page(
     tab: str = Query(default="active", pattern="^(active|paid)$"),
     search: str = Query(default="", max_length=255),
-    category_id: int | None = Query(default=None, ge=1),
+    category_ids: list[int] | None = Query(default=None),
     invoice_template_id: int | None = Query(default=None, ge=1),
     situation: str = Query(default="all", pattern="^(all|regular|soon|overdue)$"),
     sort_by: str = Query(default="nextDue", pattern="^(nextDue|remaining|installment|progress|newest|oldest|alphabetical)$"),
@@ -246,10 +246,10 @@ def list_installments_page(
     query = query.filter(paid_off_expression if tab == "paid" else ~paid_off_expression)
     if search.strip():
         query = query.filter(InstallmentPurchase.description.ilike(f"%{search.strip()}%"))
-    if category_id:
+    if category_ids:
         query = query.filter(or_(
-            InstallmentPurchase.category_id == category_id,
-            InstallmentPurchase.categories.any(Category.id == category_id),
+            InstallmentPurchase.category_id.in_(category_ids),
+            InstallmentPurchase.categories.any(Category.id.in_(category_ids)),
         ))
     if invoice_template_id:
         query = query.filter(InstallmentPurchase.items.any(

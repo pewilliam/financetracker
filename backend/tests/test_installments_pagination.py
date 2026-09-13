@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceTemplate, User
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceTemplate, User
 from app.routers.installments import list_installments_page
 from app.schemas.installments import InstallmentPageOut
 
@@ -24,10 +24,13 @@ class InstallmentPaginationTests(unittest.TestCase):
         self.db.flush()
         self.pending_invoice = Invoice(user_id=self.user.id, template_id=template.id, due_date=date.today() + timedelta(days=30), total_amount=Decimal("1300.00"), paid=False)
         self.paid_invoice = Invoice(user_id=self.user.id, template_id=template.id, due_date=date.today() - timedelta(days=30), total_amount=Decimal("200.00"), paid=True)
-        self.db.add_all([self.pending_invoice, self.paid_invoice])
+        self.category = Category(user_id=self.user.id, name="Eletrônicos", color="#14A078")
+        self.db.add_all([self.pending_invoice, self.paid_invoice, self.category])
         self.db.flush()
         for index in range(13):
-            self._purchase(f"Compra ativa {index + 1:02d}", self.pending_invoice)
+            purchase = self._purchase(f"Compra ativa {index + 1:02d}", self.pending_invoice)
+            if index == 0:
+                purchase.categories = [self.category]
         for index in range(2):
             self._purchase(f"Compra quitada {index + 1:02d}", self.paid_invoice)
         self.db.commit()
@@ -41,10 +44,11 @@ class InstallmentPaginationTests(unittest.TestCase):
         self.db.add(purchase)
         self.db.flush()
         self.db.add(InstallmentItem(purchase_id=purchase.id, invoice_id=invoice.id, installment_number=1, amount=Decimal("100.00"), description=description, status="pending"))
+        return purchase
 
     def _page(self, **overrides):
         params = {
-            "tab": "active", "search": "", "category_id": None,
+            "tab": "active", "search": "", "category_ids": None,
             "invoice_template_id": None, "situation": "all", "sort_by": "alphabetical",
             "page": 1, "page_size": 5, "db": self.db, "current_user": self.user,
         }
@@ -73,6 +77,12 @@ class InstallmentPaginationTests(unittest.TestCase):
         self.assertEqual(result["items"][0].description, "Compra ativa 12")
         self.assertEqual(paid["total"], 2)
         self.assertTrue(all(item.paid_installments == 1 for item in paid["items"]))
+
+    def test_accepts_multiple_category_ids(self):
+        result = self._page(category_ids=[self.category.id, 99999])
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["items"][0].description, "Compra ativa 01")
 
 
 if __name__ == "__main__":
