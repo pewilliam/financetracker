@@ -8343,11 +8343,12 @@ select {
 .category-create-modal {
   display: flex;
   flex-direction: column;
-  width: min(520px, calc(100% - 32px));
-  max-height: calc(100dvh - 32px);
-  margin: 8vh auto;
+  width: min(540px, calc(100% - 32px));
+  max-height: calc(100dvh - 24px);
+  margin: 0;
   padding: 0;
   overflow: hidden;
+  border-radius: 14px;
   animation: modal-pop .2s ease both;
 }
 .category-modal-header {
@@ -8369,7 +8370,7 @@ select {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--primary);
 }
-.category-modal-body { display: grid; flex: 1 1 auto; gap: 20px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 20px; }
+.category-modal-body { display: grid; flex: 1 1 auto; gap: 20px; min-height: 0; margin-top: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 20px; }
 .category-modal-body label { display: grid; gap: 7px; }
 .category-modal-body label > span,
 .category-modal-body legend {
@@ -8394,10 +8395,42 @@ select {
 }
 .category-modal-body label small { color: var(--muted); font-size: 11px; font-weight: 500; }
 .category-modal-body fieldset { display: grid; gap: 10px; border: 0; margin: 0; padding: 0; }
+.category-custom-color {
+  display: grid !important;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px !important;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.category-custom-color:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); background: color-mix(in srgb, var(--primary) 7%, var(--card)); }
+.category-custom-color:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.category-custom-color > input[type="color"] {
+  width: 52px;
+  height: 46px;
+  border: 0;
+  border-radius: 9px;
+  padding: 3px;
+  background: var(--card);
+  cursor: pointer;
+}
+.category-custom-color > input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.category-custom-color > input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 7px; }
+.category-custom-color > input[type="color"]::-moz-color-swatch { border: 0; border-radius: 7px; }
+.category-custom-color > span { display: grid; gap: 3px; min-width: 0; }
+.category-custom-color > span strong { color: var(--text); font-size: 13px; }
+.category-custom-color > span small { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.category-custom-color > svg { color: var(--primary); }
+.category-color-hint { margin-top: -2px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .category-color-options { display: flex; flex-wrap: wrap; gap: 10px; }
 .category-color-options button {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 3px solid transparent;
@@ -8448,26 +8481,20 @@ select {
 
 @media (max-width: 600px) {
   .category-create-modal {
-    position: fixed;
-    inset: auto 0 0;
-    width: 100%;
-    max-height: 92vh;
+    position: relative;
+    inset: auto;
+    width: min(540px, calc(100vw - 20px));
+    max-height: calc(100dvh - 20px);
     margin: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: 14px;
   }
-  .category-create-modal::before {
-    content: "";
-    width: 40px;
-    height: 4px;
-    display: block;
-    margin: 10px auto 0;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--muted) 45%, transparent);
-  }
+  .category-create-modal::before { content: none; }
   .category-modal-header { padding: 14px 16px; }
   .category-modal-body { padding: 18px 16px; }
   .category-modal-footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .category-modal-footer .btn { flex: 1; }
+  .category-custom-color { grid-template-columns: 46px minmax(0, 1fr) auto; padding: 9px 10px; }
+  .category-custom-color > input[type="color"] { width: 46px; height: 42px; }
 }
 
 .category-limit-modal-body { gap: 18px; scroll-padding-bottom: 18px; }

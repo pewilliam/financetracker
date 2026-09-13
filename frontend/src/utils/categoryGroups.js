@@ -1,5 +1,4 @@
 export function expenseGroupKey(item) {
-  if (item?.dashboardKey) return item.dashboardKey;
   return item?.category_ids?.length
     ? [...item.category_ids].sort((left, right) => left - right).join("-")
     : "uncategorized";

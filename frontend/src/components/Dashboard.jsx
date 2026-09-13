@@ -200,24 +200,11 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const categoryItems = (viewingIncome ? incomeCategoryGroups : expenseCategoryGroups).filter((item) => toNumber(item.amount) > 0);
   const categoryTotal = categoryItems.reduce((total, item) => total + toNumber(item.amount), 0);
   const categoryGroupedTotal = categoryTotal;
-  const topCategoryItems = categoryItems.slice(0, 5);
-  const otherCategoryItems = categoryItems.slice(5);
-  const categoryChartItems = otherCategoryItems.length ? [
-    ...topCategoryItems,
-    { name: copy("Outros", "Other"), amount: otherCategoryItems.reduce((total, item) => total + toNumber(item.amount), 0), percentage: otherCategoryItems.reduce((total, item) => total + toNumber(item.percentage), 0), color: "#94A3B8", dashboardKey: "other", groupKeys: otherCategoryItems.map(expenseGroupKey) }
-  ] : topCategoryItems;
+  const categoryChartItems = categoryItems;
   const visibleCategoryItems = showAllCategories ? categoryItems : categoryItems.slice(0, 5);
   const maxCategory = Math.max(...categoryItems.map((item) => toNumber(item.amount)), 1);
 
   const resolveDetailedGroup = (group, loadedGroups) => {
-    if (group.dashboardKey === "other") {
-      const memberKeys = new Set(group.groupKeys || []);
-      const details = loadedGroups
-        .filter((item) => memberKeys.has(expenseGroupKey(item)))
-        .flatMap((item) => item.details || [])
-        .sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")) || Number(right.source_id || 0) - Number(left.source_id || 0));
-      return { ...group, details };
-    }
     return loadedGroups.find((item) => expenseGroupKey(item) === expenseGroupKey(group)) || group;
   };
 
