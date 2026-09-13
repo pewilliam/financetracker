@@ -223,6 +223,7 @@ export default function MonthsPage({ monthData, summary, monthCards, expenseOpti
     ]));
   }, [yearGroups]);
   const [expandedYears, setExpandedYears] = useState({});
+  const [expandedPreviousMonths, setExpandedPreviousMonths] = useState({});
   const currentYear = String(new Date().getFullYear());
   const tutorialYear = sortedYears.includes(currentYear) ? currentYear : sortedYears[0];
 
@@ -328,6 +329,22 @@ export default function MonthsPage({ monthData, summary, monthCards, expenseOpti
             const yearResult = yearSummaries[groupYear];
             const resultClass = yearResult > 0 ? "money-income" : yearResult < 0 ? "money-expense" : "money-neutral";
             const includesProjections = items.some((item) => getMonthPeriod(item) === "future");
+            const currentItems = items.filter((item) => getMonthPeriod(item) === "current");
+            const previousItems = items.filter((item) => getMonthPeriod(item) === "past");
+            const futureItems = items.filter((item) => getMonthPeriod(item) === "future");
+            const tutorialItem = currentItems[0] || previousItems[0] || futureItems[0];
+            const previousMonthsExpanded = expandedPreviousMonths[groupYear] ?? false;
+
+            const renderMonthCard = (item, featured = false) => (
+              <MonthCard
+                key={`${item.year}-${item.month}`}
+                item={item}
+                featured={featured}
+                onView={() => openMonthTable(item)}
+                onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
+                tourTarget={groupYear === tutorialYear && item === tutorialItem ? "month-card" : undefined}
+              />
+            );
 
             return (
               <section key={groupYear} className={`month-year-group ${isExpanded ? "expanded" : "collapsed"}`}>
@@ -346,16 +363,50 @@ export default function MonthsPage({ monthData, summary, monthCards, expenseOpti
                   <ChevronDown size={18} />
                 </button>
                 {isExpanded && (
-                  <div className="month-card-grid">
-                    {items.map((item, itemIndex) => (
-                      <MonthCard
-                        key={`${item.year}-${item.month}`}
-                        item={item}
-                        onView={() => openMonthTable(item)}
-                        onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
-                        tourTarget={groupYear === tutorialYear && itemIndex === 0 ? "month-card" : undefined}
-                      />
-                    ))}
+                  <div className="month-year-content">
+                    {currentItems.length > 0 && (
+                      <div className="month-current-feature">
+                        {currentItems.map((item) => renderMonthCard(item, true))}
+                      </div>
+                    )}
+                    {previousItems.length > 0 && (
+                      <section className={`month-period-section previous ${previousMonthsExpanded ? "expanded" : "collapsed"}`} aria-labelledby={`previous-months-${groupYear}`}>
+                        <button
+                          className="month-period-toggle"
+                          type="button"
+                          aria-expanded={previousMonthsExpanded}
+                          aria-controls={`previous-month-cards-${groupYear}`}
+                          onClick={() => setExpandedPreviousMonths((previous) => ({ ...previous, [groupYear]: !previous[groupYear] }))}
+                        >
+                          <span className="month-period-toggle-copy">
+                            <span className="month-period-toggle-title" id={`previous-months-${groupYear}`}>{language === "en-US" ? "Previous months" : "Meses anteriores"}</span>
+                            <span className="month-period-count">{previousItems.length} {language === "en-US" ? (previousItems.length === 1 ? "month" : "months") : (previousItems.length === 1 ? "mês" : "meses")}</span>
+                          </span>
+                          <ChevronDown size={17} />
+                        </button>
+                        <div
+                          id={`previous-month-cards-${groupYear}`}
+                          className="month-period-collapse"
+                          aria-hidden={!previousMonthsExpanded}
+                        >
+                          <div className="month-period-collapse-inner">
+                            <div className="month-card-grid">
+                              {previousItems.map((item) => renderMonthCard(item))}
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    )}
+                    {futureItems.length > 0 && (
+                      <section className="month-period-section" aria-labelledby={`future-months-${groupYear}`}>
+                        <div className="month-period-heading">
+                          <h3 id={`future-months-${groupYear}`}>{language === "en-US" ? "Upcoming months" : "Próximos meses"}</h3>
+                        </div>
+                        <div className="month-card-grid">
+                          {futureItems.map((item) => renderMonthCard(item))}
+                        </div>
+                      </section>
+                    )}
                   </div>
                 )}
               </section>

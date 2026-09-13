@@ -1651,16 +1651,120 @@ select {
 }
 .month-year-title > span svg { color: inherit; transform: none !important; }
 .month-year-group.expanded .month-year-toggle svg { transform: rotate(180deg); }
-.month-year-group .month-card-grid {
+.month-year-content {
+  display: grid;
+  gap: 24px;
   margin-top: 14px;
+}
+.month-year-group .month-card-grid {
   padding: 0;
+}
+.month-current-feature {
+  min-width: 0;
+}
+.month-period-section {
+  min-width: 0;
+}
+.month-period-heading {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 2px;
+}
+.month-period-heading h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.month-period-toggle {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 2px 9px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.month-period-toggle-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.month-period-toggle-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.month-period-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.month-period-count::before {
+  content: "—";
+  margin-right: 7px;
+}
+.month-period-toggle > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: color .18s ease, transform .22s ease;
+}
+.month-period-toggle:hover .month-period-toggle-title,
+.month-period-toggle:hover > svg {
+  color: var(--primary);
+}
+.month-period-toggle:focus-visible {
+  border-radius: 7px;
+  outline: 2px solid color-mix(in srgb, var(--primary) 65%, transparent);
+  outline-offset: 3px;
+}
+.month-period-section.previous.expanded .month-period-toggle > svg {
+  transform: rotate(180deg);
+}
+.month-period-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition: grid-template-rows .22s ease, opacity .18s ease, visibility 0s linear;
+}
+.month-period-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.month-period-section.previous.collapsed .month-period-collapse {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition: grid-template-rows .22s ease, opacity .14s ease, visibility 0s linear .22s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .month-period-toggle > svg,
+  .month-period-collapse,
+  .month-period-section.previous.collapsed .month-period-collapse {
+    transition: none;
+  }
 }
 .month-card-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: 14px;
-  margin-top: 18px;
+  margin-top: 8px;
 }
 .month-card {
   position: relative;
@@ -1690,9 +1794,95 @@ select {
 .dark .month-card { box-shadow: var(--shadow); }
 .month-card.current {
   border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
-  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 6%, var(--card)), var(--card) 58%);
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
 }
 .month-card.current::before { background: var(--primary); }
+.month-card.current.featured {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+  box-shadow: 0 10px 28px rgba(13, 92, 66, .09);
+}
+.month-card.current.featured::before { width: 5px; }
+.month-card.featured .month-card-head {
+  padding: 18px 22px 8px;
+}
+.month-card.featured .month-card-head h3 {
+  font-size: 21px;
+}
+.month-card.featured .month-card-body {
+  grid-template-columns: minmax(360px, 1.35fr) minmax(280px, 1fr) minmax(200px, .65fr);
+  align-items: stretch;
+  gap: 16px;
+  padding: 8px 22px 18px;
+}
+.month-card.featured .month-card-balance,
+.month-card.featured .month-flow,
+.month-card.featured .month-result {
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+}
+.month-card.featured .month-card-balance {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  padding: 14px 16px;
+}
+.month-balance-metric {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+.month-balance-metric + .month-balance-metric {
+  border-left: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  margin-left: 16px;
+  padding-left: 16px;
+}
+.month-balance-metric > span:first-child {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.month-balance-metric > span:nth-child(2) {
+  overflow: hidden;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.month-balance-metric.primary > span:nth-child(2) {
+  color: color-mix(in srgb, var(--text) 92%, var(--primary));
+  font-size: clamp(28px, 3vw, 36px);
+}
+.month-balance-metric.projected > span:nth-child(2) {
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+  font-size: clamp(24px, 2.55vw, 32px);
+}
+.month-card.featured .month-flow {
+  align-content: center;
+  padding: 14px 16px;
+}
+.month-card.featured .month-flow-metric > span:last-child {
+  font-size: 14px;
+}
+.month-card.featured .month-result {
+  min-height: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14px 16px;
+}
+.month-card.featured .month-result > strong {
+  font-size: 17px;
+}
+.month-card.featured .month-card-footer {
+  padding-inline: 22px 14px;
+}
 .month-card.future { background: color-mix(in srgb, var(--card) 92%, #8B5CF6 8%); }
 .month-card-head {
   display: flex;
@@ -1892,6 +2082,41 @@ select {
 }
 .month-quick-add:hover {
   background: color-mix(in srgb, var(--primary) 17%, transparent);
+}
+
+@media (max-width: 1100px) {
+  .month-card.featured .month-card-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .month-card.featured .month-card-balance {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .month-year-content { gap: 22px; }
+  .month-card.featured .month-card-head {
+    padding: 16px 15px 8px 18px;
+  }
+  .month-card.featured .month-card-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 6px 15px 14px 18px;
+  }
+  .month-card.featured .month-card-balance {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 13px;
+  }
+  .month-balance-metric + .month-balance-metric {
+    border-top: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+    border-left: 0;
+    margin: 0;
+    padding: 13px 0 0;
+  }
+  .month-card.featured .month-card-footer {
+    padding-inline: 18px 10px;
+  }
 }
 
 .drawer-layer, .modal-layer {

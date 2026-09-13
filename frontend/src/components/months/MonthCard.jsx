@@ -4,7 +4,7 @@ import { formatMoney } from "../../utils/format.js";
 import AnimatedMoney from "../common/AnimatedMoney.jsx";
 import { formatTransactionCount, getMonthPeriod } from "../../app/helpers.js";
 
-export default function MonthCard({ item, onView, onQuickAdd, tourTarget }) {
+export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featured = false }) {
   const { language } = useI18n();
   const period = getMonthPeriod(item);
   const isCurrent = period === "current";
@@ -47,7 +47,7 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget }) {
   };
 
   return (
-    <article className={`month-card ${period}`} data-months-tour={tourTarget}>
+    <article className={`month-card ${period}${featured ? " featured" : ""}`} data-months-tour={tourTarget}>
       <header className="month-card-head">
         <div className="month-card-title">
           <h3>{normalizedMonthName}</h3>
@@ -59,11 +59,24 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget }) {
         </button>
       </header>
       <div className="month-card-body">
-        <div className="month-card-balance">
-          <span>{labelText.closing}</span>
-          <AnimatedMoney value={displayedBalance} />
-          <small>{isCurrent ? labelText.projectedClosing : labelText.startedWith} {formatMoney(isCurrent ? item.closing_balance : item.opening_balance, language)}</small>
-        </div>
+        {featured && isCurrent ? (
+          <div className="month-card-balance featured-balance">
+            <div className="month-balance-metric primary">
+              <span>{labelText.closing}</span>
+              <AnimatedMoney value={displayedBalance} />
+            </div>
+            <div className="month-balance-metric projected">
+              <span>{labelText.projectedClosing}</span>
+              <AnimatedMoney value={item.closing_balance} />
+            </div>
+          </div>
+        ) : (
+          <div className="month-card-balance">
+            <span>{labelText.closing}</span>
+            <AnimatedMoney value={displayedBalance} />
+            <small>{labelText.startedWith} {formatMoney(item.opening_balance, language)}</small>
+          </div>
+        )}
 
         <div className="month-flow" aria-label={labelText.flow}>
           <div className="month-flow-values">
