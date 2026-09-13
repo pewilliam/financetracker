@@ -3,10 +3,9 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, CreditCard, Loader2, ReceiptText, Tags, X } from "lucide-react";
 import { formatDateShort, formatMoney } from "../utils/format.js";
 
-export default function CategoryExpenseDetailsModal({ group, categories, language, loading, error, income = false, onClose }) {
+export default function CategoryExpenseDetailsModal({ group, language, loading, error, income = false, onClose }) {
   const closeButtonRef = useRef(null);
   const details = group.details || [];
-  const groupCategories = (group.category_ids || []).map((categoryId) => categories.find((category) => category.id === categoryId)).filter(Boolean);
   const average = details.length ? Number(group.amount || 0) / details.length : 0;
   const text = language === "en-US"
     ? income
@@ -37,8 +36,6 @@ export default function CategoryExpenseDetailsModal({ group, categories, languag
           <div><p className="eyebrow">{text.eyebrow}</p><h2 id="category-expense-detail-title">{group.name}</h2></div>
           <button ref={closeButtonRef} className="icon-btn" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close" : "Fechar"}><X size={18} /></button>
         </header>
-
-        {groupCategories.length > 0 && <div className="categories-detail-tags">{groupCategories.map((category) => <span key={category.id} style={{ "--category-color": category.color }}><i />{category.name}</span>)}</div>}
 
         <div className="categories-detail-summary">
           <div><small>{text.total}</small><strong>{formatMoney(group.amount, language)}</strong><span>{Number(group.percentage || 0).toFixed(1)}% {language === "en-US" ? "of the month" : "do mês"}</span></div>

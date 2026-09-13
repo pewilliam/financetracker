@@ -389,7 +389,7 @@ export default function CategoriesPage({
         </div>
       </section>
 
-      <nav className="categories-mobile-tabs" role="tablist" aria-label={t("categories.budgetSections")}>
+      <nav className="categories-budget-tabs" role="tablist" aria-label={t("categories.budgetSections")}>
         {mobileTabs.map((tab, index) => <button
           id={`budget-tab-${tab.id}`}
           key={tab.id}
