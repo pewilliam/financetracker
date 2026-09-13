@@ -8935,6 +8935,26 @@ select {
 .wallet-modal-actions .btn:last-child { flex-grow: 1.4; }
 .wallet-color-field input { width: 64px; min-height: 40px; padding: 4px; }
 .wallet-form-note { margin: 0; padding: 11px 13px; border-radius: 10px; color: var(--muted); background: var(--surface); font-size: .82rem; line-height: 1.5; }
+.invoice-template-modal-layer { z-index: 75; }
+.invoice-template-editor-modal,
+.invoice-template-action-modal {
+  width: min(560px, calc(100vw - 24px));
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.invoice-template-editor-body { gap: 18px; margin-top: 0; }
+.invoice-template-editor-body label > small { color: var(--muted); font-size: .72rem; font-weight: 500; line-height: 1.45; }
+.invoice-template-action-modal { width: min(520px, calc(100vw - 24px)); }
+.invoice-template-action-body { display: grid; gap: 16px; margin-top: 0; }
+.invoice-template-action-body > p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.6; }
+.invoice-template-action-modal.danger .wallet-transfer-header > i { color: var(--expense); background: color-mix(in srgb, var(--expense) 12%, transparent); }
+.invoice-template-action-modal.danger .wallet-transfer-header small { color: var(--expense); }
+.invoice-template-action-modal.warning .wallet-transfer-header > i { color: #d48a16; background: color-mix(in srgb, #d48a16 14%, transparent); }
+.invoice-template-action-modal.warning .wallet-transfer-header small { color: #b77712; }
+.invoice-template-action-context { min-width: 0; border-radius: 11px; padding: 15px; }
+.invoice-template-action-context i { flex: 0 0 auto; width: 12px; height: 12px; }
+.invoice-template-action-context strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wallet-calculated-balance, .wallet-adjustment-preview { display: flex; justify-content: space-between; align-items: center; padding: 13px; border-radius: 11px; background: var(--surface); }
 .wallet-adjustment-preview.positive strong { color: #0a8f68; }
 .wallet-adjustment-preview.negative strong { color: #d95050; }
@@ -9110,6 +9130,17 @@ select {
 }
 
 @media (max-width: 767px) {
+  .invoice-template-modal-layer { padding: 0; }
+  .wallet-modal.invoice-template-editor-modal,
+  .wallet-modal.invoice-template-action-modal {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100vw;
+    max-width: none;
+    max-height: 92dvh;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+  }
   .modal-actions,
   .transaction-modal-actions,
   .wallet-modal-actions,
