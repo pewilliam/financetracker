@@ -8513,10 +8513,12 @@ select {
   box-shadow: var(--focus-ring);
   outline: 0;
 }
-.category-limit-money-field {
+.category-limit-modal-body label > .category-limit-money-field {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   align-items: center;
+  gap: 0;
+  width: 100%;
   height: 42px;
   overflow: hidden;
   border: 1px solid var(--border);
