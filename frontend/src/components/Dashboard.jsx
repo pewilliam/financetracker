@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area, Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis
@@ -9,10 +9,12 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/format.js";
+import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
+import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
 
 const EMPTY_CATEGORY_BREAKDOWN = {
   total_expenses: 0, categorized_total: 0, items: [], chart_items: [],
-  total_income: 0, income_categorized_total: 0, income_items: []
+  total_income: 0, income_categorized_total: 0, income_items: [], income_chart_items: []
 };
 
 function toNumber(value) {
@@ -110,17 +112,31 @@ function ComparisonMeta({ value, inverse = false, language }) {
   );
 }
 
-export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, loadError = false, onRetry, onOpenTransaction, onNewTransaction }) {
+export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction }) {
   const { t, language } = useI18n();
   const safeSummary = summary || {};
   const safeCategoryBreakdown = categoryBreakdown || EMPTY_CATEGORY_BREAKDOWN;
   const [activeSection, setActiveSection] = useState("overview");
   const [categoryView, setCategoryView] = useState("expenses");
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedExpenseGroup, setSelectedExpenseGroup] = useState(null);
+  const [detailedExpenseGroups, setDetailedExpenseGroups] = useState(null);
+  const [expenseDetailsLoading, setExpenseDetailsLoading] = useState(false);
+  const [expenseDetailsError, setExpenseDetailsError] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllDueDates, setShowAllDueDates] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
+  const detailsRequestRef = useRef(null);
+  const detailsGenerationRef = useRef(0);
   const copy = (pt, en) => language === "en-US" ? en : pt;
+
+  useEffect(() => {
+    detailsGenerationRef.current += 1;
+    setSelectedExpenseGroup(null);
+    setDetailedExpenseGroups(null);
+    setExpenseDetailsLoading(false);
+    setExpenseDetailsError(false);
+    detailsRequestRef.current = null;
+  }, [categoryBreakdown, categoryView]);
 
   const previous = comparisons.length > 1 ? comparisons[comparisons.length - 2] : null;
   const incomeChange = previous ? percentChange(safeSummary.total_income, previous.total_income) : null;
@@ -177,22 +193,58 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
     };
   }, [historyData]);
 
+  const ignoredCategoryIds = useMemo(() => new Set(categories.filter((category) => category.ignore_in_category_analysis).map((category) => category.id)), [categories]);
+  const expenseCategoryGroups = useMemo(() => buildVisibleExpenseGroups(safeCategoryBreakdown.chart_items || safeCategoryBreakdown.items, categories, ignoredCategoryIds), [safeCategoryBreakdown.chart_items, safeCategoryBreakdown.items, categories, ignoredCategoryIds]);
+  const incomeCategoryGroups = useMemo(() => buildVisibleExpenseGroups(safeCategoryBreakdown.income_chart_items || safeCategoryBreakdown.income_items, categories, ignoredCategoryIds), [safeCategoryBreakdown.income_chart_items, safeCategoryBreakdown.income_items, categories, ignoredCategoryIds]);
   const viewingIncome = categoryView === "income";
-  const categoryItems = [...(viewingIncome ? (safeCategoryBreakdown.income_items || []) : (safeCategoryBreakdown.items || []))]
-    .filter((item) => toNumber(item.amount) > 0)
-    .sort((left, right) => toNumber(right.amount) - toNumber(left.amount));
-  const categoryTotal = viewingIncome ? safeCategoryBreakdown.total_income : safeCategoryBreakdown.total_expenses;
-  const categoryGroupedTotal = viewingIncome ? safeCategoryBreakdown.income_categorized_total : safeCategoryBreakdown.categorized_total;
+  const categoryItems = (viewingIncome ? incomeCategoryGroups : expenseCategoryGroups).filter((item) => toNumber(item.amount) > 0);
+  const categoryTotal = categoryItems.reduce((total, item) => total + toNumber(item.amount), 0);
+  const categoryGroupedTotal = categoryTotal;
   const topCategoryItems = categoryItems.slice(0, 5);
   const otherCategoryItems = categoryItems.slice(5);
   const categoryChartItems = otherCategoryItems.length ? [
     ...topCategoryItems,
-    { name: copy("Outros", "Other"), amount: otherCategoryItems.reduce((total, item) => total + toNumber(item.amount), 0), percentage: otherCategoryItems.reduce((total, item) => total + toNumber(item.percentage), 0), color: "#94A3B8", dashboardKey: "other" }
+    { name: copy("Outros", "Other"), amount: otherCategoryItems.reduce((total, item) => total + toNumber(item.amount), 0), percentage: otherCategoryItems.reduce((total, item) => total + toNumber(item.percentage), 0), color: "#94A3B8", dashboardKey: "other", groupKeys: otherCategoryItems.map(expenseGroupKey) }
   ] : topCategoryItems;
   const visibleCategoryItems = showAllCategories ? categoryItems : categoryItems.slice(0, 5);
-  const categoryKey = (item, index = 0) => item.dashboardKey || item.category_ids?.join("-") || item.category_id || `uncategorized-${index}`;
-  const otherCategoryKeys = otherCategoryItems.map((item, index) => categoryKey(item, index + 5));
   const maxCategory = Math.max(...categoryItems.map((item) => toNumber(item.amount)), 1);
+
+  const resolveDetailedGroup = (group, loadedGroups) => {
+    if (group.dashboardKey === "other") {
+      const memberKeys = new Set(group.groupKeys || []);
+      const details = loadedGroups
+        .filter((item) => memberKeys.has(expenseGroupKey(item)))
+        .flatMap((item) => item.details || [])
+        .sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")) || Number(right.source_id || 0) - Number(left.source_id || 0));
+      return { ...group, details };
+    }
+    return loadedGroups.find((item) => expenseGroupKey(item) === expenseGroupKey(group)) || group;
+  };
+
+  const openCategoryDetails = async (group) => {
+    const generation = detailsGenerationRef.current;
+    const cachedGroup = detailedExpenseGroups ? resolveDetailedGroup(group, detailedExpenseGroups) : null;
+    setSelectedExpenseGroup(cachedGroup || group);
+    setExpenseDetailsError(false);
+    if (cachedGroup || !onLoadCategoryDetails) return;
+
+    setExpenseDetailsLoading(true);
+    try {
+      const request = detailsRequestRef.current || onLoadCategoryDetails();
+      detailsRequestRef.current = request;
+      const breakdown = await request;
+      if (generation !== detailsGenerationRef.current) return;
+      const loadedGroups = buildVisibleExpenseGroups(viewingIncome ? breakdown.income_chart_items || breakdown.income_items : breakdown.chart_items || breakdown.items, categories, ignoredCategoryIds);
+      setDetailedExpenseGroups(loadedGroups);
+      setSelectedExpenseGroup((current) => current ? resolveDetailedGroup(current, loadedGroups) : null);
+    } catch {
+      if (generation !== detailsGenerationRef.current) return;
+      detailsRequestRef.current = null;
+      setExpenseDetailsError(true);
+    } finally {
+      if (generation === detailsGenerationRef.current) setExpenseDetailsLoading(false);
+    }
+  };
 
   const cards = [
     { id: "balance", label: t("dashboard.currentBalance"), value: formatMoney(safeSummary.current_balance, language), tone: "balance", icon: WalletCards, comparison: <ComparisonMeta value={balanceChange} language={language} /> },
@@ -331,17 +383,18 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       {activeSection === "categories" && (
         <section className="dashboard-section" id="dashboard-panel-categories" role="tabpanel" aria-labelledby="dashboard-tab-categories">
           <section className="card category-spending-card dashboard-category-card">
-            <div className="category-spending-head"><div><p className="eyebrow">{copy("Visão por categoria", "Category view")}</p><h2>{viewingIncome ? copy("De onde seu dinheiro está vindo", "Where your money comes from") : copy("Para onde seu dinheiro está indo", "Where your money is going")}</h2></div><div className="category-view-actions"><div className="category-view-toggle" aria-label={copy("Tipo de movimentação", "Movement type")}><button className={viewingIncome ? "active" : ""} type="button" onClick={() => { setCategoryView("income"); setSelectedCategory(null); }}>{copy("Ganhos", "Income")}</button><button className={!viewingIncome ? "active" : ""} type="button" onClick={() => { setCategoryView("expenses"); setSelectedCategory(null); }}>{copy("Gastos", "Expenses")}</button></div><strong className={viewingIncome ? "income" : "expense"}>{formatMoney(categoryTotal, language)}</strong></div></div>
+            <div className="category-spending-head"><div><p className="eyebrow">{copy("Visão por categoria", "Category view")}</p><h2>{viewingIncome ? copy("De onde seu dinheiro está vindo", "Where your money comes from") : copy("Para onde seu dinheiro está indo", "Where your money is going")}</h2></div><div className="category-view-actions"><div className="category-view-toggle" aria-label={copy("Tipo de movimentação", "Movement type")}><button className={viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryView("income")}>{copy("Ganhos", "Income")}</button><button className={!viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryView("expenses")}>{copy("Gastos", "Expenses")}</button></div><strong className={viewingIncome ? "income" : "expense"}>{formatMoney(categoryTotal, language)}</strong></div></div>
             {categoryChartItems.length ? <div className="category-spending-content dashboard-category-content">
-              <div className="category-donut dashboard-category-donut" aria-label={copy("Distribuição por categoria", "Distribution by category")}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categoryChartItems} dataKey="amount" nameKey="name" innerRadius="59%" outerRadius="84%" paddingAngle={2} stroke="none">{categoryChartItems.map((item, index) => { const key = categoryKey(item, index); const selected = key === "other" ? selectedCategory === key || otherCategoryKeys.includes(selectedCategory) : selectedCategory === key; return <Cell className="dashboard-category-slice" cursor="pointer" key={key} fill={item.color} fillOpacity={!selectedCategory || selected ? 1 : 0.32} onClick={() => setSelectedCategory((current) => current === key ? null : key)} />; })}</Pie><Tooltip content={<CategoryTooltip language={language} />} /></PieChart></ResponsiveContainer><div className="category-donut-center"><small>{viewingIncome ? copy("Ganhos", "Income") : copy("Total gasto", "Total spent")}</small><strong>{formatMoney(categoryGroupedTotal, language)}</strong></div></div>
+              <div className="category-donut dashboard-category-donut" aria-label={copy("Distribuição por categoria", "Distribution by category")}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie className="categories-clickable-pie" data={categoryChartItems} dataKey="amount" nameKey="name" innerRadius="59%" outerRadius="84%" paddingAngle={2} stroke="none" onClick={(entry) => openCategoryDetails(entry?.payload || entry)}>{categoryChartItems.map((item) => <Cell className="dashboard-category-slice" key={expenseGroupKey(item)} fill={item.color} />)}</Pie><Tooltip content={<CategoryTooltip language={language} />} /></PieChart></ResponsiveContainer><div className="category-donut-center"><small>{viewingIncome ? copy("Ganhos", "Income") : copy("Total gasto", "Total spent")}</small><strong>{formatMoney(categoryGroupedTotal, language)}</strong></div></div>
               <div className="dashboard-category-ranking"><div className="dashboard-category-ranking-head"><span>{copy("Ranking de categorias", "Category ranking")}</span><small>{categoryItems.length} {copy(categoryItems.length === 1 ? "categoria" : "categorias", categoryItems.length === 1 ? "category" : "categories")}</small></div><div className="category-breakdown-list">
-                {visibleCategoryItems.map((item, index) => { const key = categoryKey(item, index); return <button className={`category-breakdown-row ${selectedCategory === key ? "selected" : ""}`} type="button" onClick={() => setSelectedCategory((current) => current === key ? null : key)} key={key}><span className="category-rank">{index + 1}</span><i style={{ "--category-color": item.color }} /><span><strong>{item.name}</strong><small>{toNumber(item.percentage).toFixed(1)}% {viewingIncome ? copy("dos ganhos", "of income") : copy("dos gastos", "of expenses")}</small><em><b style={{ width: `${(toNumber(item.amount) / maxCategory) * 100}%`, "--category-color": item.color }} /></em></span><strong>{formatMoney(item.amount, language)}</strong></button>; })}
+                {visibleCategoryItems.map((item, index) => <button className="category-breakdown-row" type="button" onClick={() => openCategoryDetails(item)} key={expenseGroupKey(item)}><span className="category-rank">{index + 1}</span><i style={{ "--category-color": item.color }} /><span><strong>{item.name}</strong><small>{toNumber(item.percentage).toFixed(1)}% {viewingIncome ? copy("dos ganhos", "of income") : copy("dos gastos", "of expenses")}</small><em><b style={{ width: `${(toNumber(item.amount) / maxCategory) * 100}%`, "--category-color": item.color }} /></em></span><strong>{formatMoney(item.amount, language)}</strong></button>)}
               </div>{categoryItems.length > 5 && <button className="dashboard-show-more" type="button" onClick={() => setShowAllCategories((current) => !current)}>{showAllCategories ? copy("Mostrar principais", "Show top categories") : copy("Ver todas as categorias", "View all categories")}<ArrowRight size={14} /></button>}</div>
             </div> : <DashboardEmpty icon={CircleDollarSign} title={viewingIncome ? copy("Nenhum ganho categorizado", "No categorized income") : copy("Nenhum gasto categorizado", "No categorized expenses")} description={copy(`Categorize suas próximas ${viewingIncome ? "receitas" : "despesas"} para visualizar a distribuição.`, `Categorize your next ${viewingIncome ? "income entries" : "expenses"} to see the distribution.`)} />}
           </section>
         </section>
       )}
 
+      {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
       <button className="dashboard-new-fab" type="button" onClick={onNewTransaction} aria-label={copy("Novo lançamento", "New transaction")}><Plus size={24} /></button>
     </div>
   );

@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, ChevronDown, Chevron
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
 import CategoryLimitModal from "../modals/CategoryLimitModal.jsx";
 
@@ -19,54 +20,6 @@ function moneyDraft(value, language) {
 function safePercent(value, total) {
   if (!total || total <= 0) return 0;
   return Math.max(0, (value / total) * 100);
-}
-
-function expenseGroupKey(item) {
-  return item?.category_ids?.length
-    ? [...item.category_ids].sort((left, right) => left - right).join("-")
-    : "uncategorized";
-}
-
-function buildVisibleExpenseGroups(items, categories, ignoredCategoryIds) {
-  const categoriesById = new Map(categories.map((category) => [category.id, category]));
-  const grouped = new Map();
-  for (const item of items || []) {
-    const sourceIds = item.category_ids?.length
-      ? item.category_ids
-      : item.category_id !== null && item.category_id !== undefined
-        ? [item.category_id]
-        : [];
-    const visibleIds = sourceIds.filter((categoryId) => !ignoredCategoryIds.has(categoryId));
-    if (sourceIds.length && !visibleIds.length) continue;
-    const key = visibleIds.length ? [...visibleIds].sort((left, right) => left - right).join("-") : "uncategorized";
-    const groupCategories = visibleIds.map((categoryId) => categoriesById.get(categoryId)).filter(Boolean).sort((left, right) => left.name.localeCompare(right.name));
-    const existing = grouped.get(key);
-    if (existing) {
-      existing.amount += Number(item.amount || 0);
-      existing.details.push(...(item.details || []));
-    } else {
-      grouped.set(key, {
-        category_id: visibleIds.length === 1 ? visibleIds[0] : null,
-        category_ids: groupCategories.map((category) => category.id),
-        name: groupCategories.length ? groupCategories.map((category) => category.name).join(" + ") : item.name,
-        color: groupCategories[0]?.color || item.color,
-        amount: Number(item.amount || 0),
-        details: [...(item.details || [])],
-      });
-    }
-  }
-  const result = [...grouped.values()].filter((item) => item.amount !== 0);
-  const total = result.reduce((sum, item) => sum + item.amount, 0);
-  return result
-    .map((item) => ({
-      ...item,
-      percentage: total > 0 ? (item.amount / total) * 100 : 0,
-      details: [...(item.details || [])].sort((left, right) => {
-        const byDate = String(right.date || "").localeCompare(String(left.date || ""));
-        return byDate || Number(right.source_id || 0) - Number(left.source_id || 0);
-      }),
-    }))
-    .sort((left, right) => right.amount - left.amount);
 }
 
 function CategoryChartTooltip({ active, payload, language }) {
@@ -593,8 +546,8 @@ export default function CategoriesPage({
             <div><p className="eyebrow">{t("categories.distributionEyebrow")}</p><h2>{viewingIncome ? t("categories.incomeDistribution") : t("categories.distribution")}</h2></div>
             <div className="categories-analysis-heading-actions">
               <div className="category-view-toggle">
-                <button className={!viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryAnalysisView("expenses")}>{t("categories.analysisExpenses")}</button>
                 <button className={viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryAnalysisView("income")}>{t("categories.analysisIncome")}</button>
+                <button className={!viewingIncome ? "active" : ""} type="button" onClick={() => setCategoryAnalysisView("expenses")}>{t("categories.analysisExpenses")}</button>
               </div>
               <div className="categories-analysis-meta"><span>{viewingIncome ? t("categories.classifiedIncome") : t("categories.classified")}</span><strong>{analysisCoverage.toFixed(0)}%</strong></div>
             </div>

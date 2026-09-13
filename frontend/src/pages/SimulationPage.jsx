@@ -297,8 +297,8 @@ function SimulatedItemCard({ item, index, categories, onChange, onRemove, langua
 
           <div className="simulation-toggle-grid">
             <div className="segmented-control" aria-label="Tipo do item">
-              <button type="button" className={item.type === "expense" ? "active danger" : ""} onClick={() => setType("expense")}>Gasto</button>
               <button type="button" className={item.type === "income" ? "active success" : ""} onClick={() => setType("income")}>Receita</button>
+              <button type="button" className={item.type === "expense" ? "active danger" : ""} onClick={() => setType("expense")}>Gasto</button>
             </div>
             <div className="segmented-control" aria-label="Modalidade">
               <button type="button" className={item.mode === "cash" ? "active" : ""} onClick={() => onChange({ mode: "cash" })}>À vista</button>
@@ -550,7 +550,7 @@ const SIMULATION_TUTORIAL_STEPS = [
     target: "items",
     eyebrow: "Itens simulados",
     title: "Monte o cenário com receitas e gastos",
-    description: "Gastos podem ser à vista ou parcelados e vinculados a uma categoria já cadastrada; receitas podem ser únicas ou recorrentes. Informe descrição, valor e mês inicial. Em itens repetidos, também é possível definir valores diferentes por parcela ou mês e recolher cada card pelo nome."
+    description: "Receitas podem ser únicas ou recorrentes; gastos podem ser à vista ou parcelados e vinculados a uma categoria já cadastrada. Informe descrição, valor e mês inicial. Em itens repetidos, também é possível definir valores diferentes por parcela ou mês e recolher cada card pelo nome."
   },
   {
     target: "actions",

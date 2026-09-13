@@ -152,8 +152,8 @@ export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd
       <div className="month-footer" data-months-tour="summary">
         {summary && (
           <div className="month-totals">
-            <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
             <span>{tt("monthlyTable.income", "Ganhos")} {formatMoney(summary.total_income)}</span>
+            <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
             <strong>{tt("monthlyTable.closing", "Fechamento")} {formatMoney(summary.projected_closing)}</strong>
           </div>
         )}

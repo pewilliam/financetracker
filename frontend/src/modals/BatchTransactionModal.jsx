@@ -201,8 +201,8 @@ export default function BatchTransactionModal({ open, year, month, categories = 
                 </label>
               </div>
               <div className="batch-kind" aria-label={copy("Tipo dos lançamentos", "Entry type")}>
-                <button type="button" className={form.type === "expense" ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}><ArrowDownCircle size={16} /> {copy("GASTOS", "EXPENSES")}</button>
                 <button type="button" className={form.type === "income" ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}><ArrowUpCircle size={16} /> {copy("GANHOS", "INCOME")}</button>
+                <button type="button" className={form.type === "expense" ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}><ArrowDownCircle size={16} /> {copy("GASTOS", "EXPENSES")}</button>
               </div>
               <label className="batch-category-field">
                 <span>{copy("Categoria para todos", "Category for all")}</span>

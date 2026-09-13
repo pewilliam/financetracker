@@ -297,11 +297,11 @@ export default function TransactionForm({
 
         <div className="transaction-modal-body">
           <div className="transaction-kind" aria-label="Tipo do lançamento">
-            <button type="button" className={isExpense ? "active danger" : ""} onClick={() => setTransactionType("expense")}>
-                <ArrowDownCircle size={16} /> {tt("transactionModal.expense", "GASTO")}
-            </button>
             <button type="button" className={!isExpense ? "active success" : ""} onClick={() => setTransactionType("income")}>
                 <ArrowUpCircle size={16} /> {tt("transactionModal.income", "GANHO")}
+            </button>
+            <button type="button" className={isExpense ? "active danger" : ""} onClick={() => setTransactionType("expense")}>
+                <ArrowDownCircle size={16} /> {tt("transactionModal.expense", "GASTO")}
             </button>
           </div>
 
