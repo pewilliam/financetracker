@@ -151,6 +151,7 @@ def _build_plan(db: Session, user_id: int, year: int, month: int) -> MonthlyBudg
     return MonthlyBudgetPlanOut(
         year=year,
         month=month,
+        is_configured=plan is not None,
         income_mode=income_mode,
         manual_income=manual_income,
         expected_income=expected_income,

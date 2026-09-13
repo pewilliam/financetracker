@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, ChevronDown, ChevronUp, Clock3, Loader2, PieChart as PieChartIcon, Plus, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { AlertTriangle, ArrowRight, Banknote, CheckCircle2, ChevronDown, ChevronUp, Clock3, Edit3, Loader2, PieChart as PieChartIcon, Plus, Save, ShieldCheck, Tags, Target, Trash2, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
@@ -87,6 +87,8 @@ export default function CategoriesPage({
   categoryBreakdown = { total_expenses: 0, items: [], chart_items: [], total_income: 0, income_items: [], income_chart_items: [] },
   previousCategoryBreakdown = { total_expenses: 0, items: [], chart_items: [], total_income: 0, income_items: [], income_chart_items: [] },
   budgetPlan = null,
+  mobileTab = "categories",
+  onMobileTabChange,
   onLoadExpenseDetails,
   onUpdateCategory,
   onSavePlanning,
@@ -95,6 +97,7 @@ export default function CategoriesPage({
   const [drafts, setDrafts] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [addingLimit, setAddingLimit] = useState(false);
+  const [editingLimit, setEditingLimit] = useState(null);
   const [planningOpen, setPlanningOpen] = useState(false);
   const [planningSaving, setPlanningSaving] = useState(false);
   const [incomeMode, setIncomeMode] = useState("transactions");
@@ -216,7 +219,10 @@ export default function CategoriesPage({
 
   const hasActualIncome = Boolean(budgetPlan?.has_actual_income);
   const isEstimated = Boolean(budgetPlan?.is_estimated);
-  const hasPlannedIncome = hasActualIncome || isEstimated;
+  const inferredPlanningConfiguration = budgetPlan?.manual_income !== null && budgetPlan?.manual_income !== undefined
+    || budgetPlan?.expected_income !== null && budgetPlan?.expected_income !== undefined
+    || Number(budgetPlan?.selected_income_count || 0) > 0;
+  const hasPlanningConfigured = Boolean(budgetPlan?.is_configured ?? inferredPlanningConfiguration);
   const planningIncome = Number(budgetPlan?.planning_income || 0);
   const receivedIncome = Number(budgetPlan?.received_income || 0);
   const pendingIncome = Number(budgetPlan?.pending_income || 0);
@@ -224,11 +230,12 @@ export default function CategoriesPage({
   const reserveAmount = Number(budgetPlan?.reserve_amount || 0);
   const availableBudget = Number(budgetPlan?.available_budget || 0);
   const budgetBalance = availableBudget - totalExpenses;
-  const spendingUsage = hasPlannedIncome ? availableBudget > 0 ? safePercent(totalExpenses, availableBudget) : totalExpenses > 0 ? 100 : 0 : 0;
+  const spendingUsage = hasPlanningConfigured ? availableBudget > 0 ? safePercent(totalExpenses, availableBudget) : totalExpenses > 0 ? 100 : 0 : 0;
   const undistributedBudget = availableBudget - totalLimits;
-  const limitsUsage = hasPlannedIncome ? availableBudget > 0 ? safePercent(totalLimits, availableBudget) : totalLimits > 0 ? 100 : 0 : 0;
-  const limitsOverBudget = hasPlannedIncome && totalLimits > availableBudget;
+  const limitsUsage = hasPlanningConfigured ? availableBudget > 0 ? safePercent(totalLimits, availableBudget) : totalLimits > 0 ? 100 : 0 : 0;
+  const limitsOverBudget = hasPlanningConfigured && totalLimits > availableBudget;
   const budgetOverrun = hasActualIncome && totalExpenses > availableBudget;
+  const mobileBudgetOverrun = hasPlanningConfigured && totalExpenses > availableBudget;
   const selectedMonthEnded = budgetPlan ? new Date(budgetPlan.year, budgetPlan.month, 1) <= new Date() : false;
 
   const selectedCandidates = (budgetPlan?.income_candidates || []).filter((item) => selectedIncomeIds.includes(item.transaction_id));
@@ -337,27 +344,80 @@ export default function CategoriesPage({
     } finally { setPlanningSaving(false); }
   };
 
+  const mobileTabs = [
+    { id: "categories", label: t("categories.tabCategories") },
+    { id: "planning", label: t("categories.tabPlanning") },
+    { id: "analysis", label: t("categories.tabAnalysis") },
+  ];
+  const handleMobileTabKeyDown = (event, index) => {
+    let targetIndex = null;
+    if (event.key === "ArrowRight") targetIndex = (index + 1) % mobileTabs.length;
+    if (event.key === "ArrowLeft") targetIndex = (index - 1 + mobileTabs.length) % mobileTabs.length;
+    if (event.key === "Home") targetIndex = 0;
+    if (event.key === "End") targetIndex = mobileTabs.length - 1;
+    if (targetIndex === null) return;
+    event.preventDefault();
+    const target = mobileTabs[targetIndex];
+    onMobileTabChange?.(target.id);
+    requestAnimationFrame(() => document.getElementById(`budget-tab-${target.id}`)?.focus());
+  };
+
   return (
-    <div className="categories-page">
+    <div className={`categories-page mobile-tab-${mobileTab}`}>
       <section className="card categories-hero">
         <div className="categories-hero-icon"><Tags size={25} /></div>
         <div><p className="eyebrow">{t("categories.eyebrow")}</p><h1>{t("categories.title")}</h1><p>{t("categories.description")}</p></div>
         <div className="categories-hero-total"><span>{t("categories.totalThisMonth")}</span><strong>{formatMoney(totalExpenses, language)}</strong><small className={monthChange > 0 ? "warning" : "positive"}>{monthChange > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}{t("categories.vsPrevious", { value: Math.abs(monthChange).toFixed(1) })}</small></div>
       </section>
 
-      <section className={`card categories-planning-card ${isEstimated ? "estimated" : ""}`}>
+      <section className={`card categories-mobile-summary ${mobileBudgetOverrun ? "danger" : ""}`} aria-label={t("categories.monthlySummary")}>
+        <div className="categories-mobile-summary-heading">
+          <span>{t("categories.monthlySummary")}</span>
+          {isEstimated && <small><Clock3 size={13} /> {t("categories.estimate")}</small>}
+        </div>
+        <div className="categories-mobile-summary-values">
+          <div><span>{t("categories.monthBudget")}</span><strong>{hasPlanningConfigured ? formatMoney(availableBudget, language) : "—"}</strong></div>
+          <div><span>{t("categories.spentSoFar")}</span><strong>{formatMoney(totalExpenses, language)}</strong></div>
+          <div className={mobileBudgetOverrun ? "danger" : "available"}>
+            <span>{mobileBudgetOverrun ? t("categories.exceededBudget") : t("categories.availableToSpend")}</span>
+            <strong>{hasPlanningConfigured ? formatMoney(Math.abs(budgetBalance), language) : "—"}</strong>
+          </div>
+        </div>
+        <div className={`categories-mobile-progress ${mobileBudgetOverrun ? "danger" : spendingUsage >= 80 ? "warning" : ""}`}>
+          <div><span style={{ width: `${Math.min(spendingUsage, 100)}%` }} /></div>
+          <small>{hasPlanningConfigured ? t("categories.budgetConsumed", { value: spendingUsage.toFixed(0) }) : t("categories.budgetNotConfiguredShort")}</small>
+        </div>
+      </section>
+
+      <nav className="categories-mobile-tabs" role="tablist" aria-label={t("categories.budgetSections")}>
+        {mobileTabs.map((tab, index) => <button
+          id={`budget-tab-${tab.id}`}
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === tab.id}
+          aria-controls={`budget-panel-${tab.id}`}
+          tabIndex={mobileTab === tab.id ? 0 : -1}
+          className={mobileTab === tab.id ? "active" : ""}
+          onClick={() => onMobileTabChange?.(tab.id)}
+          onKeyDown={(event) => handleMobileTabKeyDown(event, index)}
+        >{tab.label}</button>)}
+      </nav>
+
+      <section id="budget-panel-planning" role="tabpanel" aria-labelledby="budget-tab-planning" className={`card categories-planning-card ${isEstimated ? "estimated" : ""} ${!hasPlanningConfigured ? "not-configured" : ""}`}>
         <div className="categories-planning-heading">
           <div><p className="eyebrow">{t("categories.monthPlanningEyebrow")}</p><h2>{t("categories.monthPlanning")}</h2></div>
-          <span className={`categories-planning-status ${isEstimated ? "estimated" : hasActualIncome ? "actual" : "waiting"}`}>{!isEstimated && hasActualIncome ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}{hasPendingIncome ? t("categories.planningWithPending") : isEstimated ? t("categories.estimatedStatus") : hasActualIncome ? t("categories.incomeReceivedStatus") : t("categories.waitingIncome")}</span>
+          <span className={`categories-planning-status ${isEstimated ? "estimated" : hasActualIncome ? "actual" : "waiting"}`}>{!isEstimated && hasActualIncome ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}{hasPendingIncome ? t("categories.planningWithPending") : isEstimated ? t("categories.estimatedStatus") : hasActualIncome ? t("categories.incomeReceivedStatus") : hasPlanningConfigured ? t("categories.zeroBudgetStatus") : t("categories.waitingIncome")}</span>
         </div>
+        {!hasPlanningConfigured && !planningOpen && <div className="categories-planning-empty"><WalletCards size={24} /><div><strong>{t("categories.planningNotConfigured")}</strong><p>{t("categories.planningNotConfiguredHint")}</p></div><button className="btn btn-primary" type="button" onClick={() => setPlanningOpen(true)}>{t("categories.configurePlanning")}</button></div>}
         <div className="categories-planning-flow">
-          <div className="categories-flow-step income"><i><Banknote size={20} /></i><span><small>{hasPendingIncome ? t("categories.plannedIncome") : hasActualIncome ? t("categories.incomeReceived") : isEstimated ? t("categories.expectedIncome") : t("categories.monthIncome")}</small><strong>{hasPlannedIncome ? formatMoney(planningIncome, language) : "—"}</strong><em>{hasPendingIncome ? t("categories.receivedPendingBreakdown", { received: formatMoney(receivedIncome, language), pending: formatMoney(pendingIncome, language) }) : hasActualIncome ? budgetPlan?.income_mode === "manual" ? t("categories.manualIncomeSource") : t("categories.selectedReceipts", { count: budgetPlan?.selected_income_count || 0 }) : isEstimated ? t("categories.estimatedValue") : t("categories.noIncomeSelected")}</em></span></div>
+          <div className="categories-flow-step income"><i><Banknote size={20} /></i><span><small>{hasPendingIncome ? t("categories.plannedIncome") : hasActualIncome ? t("categories.incomeReceived") : isEstimated ? t("categories.expectedIncome") : t("categories.monthIncome")}</small><strong>{hasPlanningConfigured ? formatMoney(planningIncome, language) : "—"}</strong><em>{hasPendingIncome ? t("categories.receivedPendingBreakdown", { received: formatMoney(receivedIncome, language), pending: formatMoney(pendingIncome, language) }) : hasActualIncome ? budgetPlan?.income_mode === "manual" ? t("categories.manualIncomeSource") : t("categories.selectedReceipts", { count: budgetPlan?.selected_income_count || 0 }) : isEstimated ? t("categories.estimatedValue") : t("categories.noIncomeSelected")}</em></span></div>
           <ArrowRight className="categories-flow-arrow" size={20} />
-          <div className="categories-flow-step reserve"><i><ShieldCheck size={20} /></i><span><small>{isEstimated ? t("categories.estimatedReserve") : t("categories.reserve")}</small><strong>{hasPlannedIncome ? formatMoney(reserveAmount, language) : "—"}</strong><em>{budgetPlan?.reserve_rule?.rule_type === "fixed" ? t("categories.fixedRule") : t("categories.percentageRule", { value: Number(budgetPlan?.reserve_rule?.value || 0).toFixed(0) })}</em></span></div>
+          <div className="categories-flow-step reserve"><i><ShieldCheck size={20} /></i><span><small>{isEstimated ? t("categories.estimatedReserve") : t("categories.reserve")}</small><strong>{hasPlanningConfigured ? formatMoney(reserveAmount, language) : "—"}</strong><em>{budgetPlan?.reserve_rule?.rule_type === "fixed" ? t("categories.fixedRule") : t("categories.percentageRule", { value: Number(budgetPlan?.reserve_rule?.value || 0).toFixed(0) })}</em></span></div>
           <ArrowRight className="categories-flow-arrow" size={20} />
-          <div className="categories-flow-step available"><i><WalletCards size={20} /></i><span><small>{isEstimated ? t("categories.estimatedAvailable") : t("categories.availableToSpend")}</small><strong>{hasPlannedIncome ? formatMoney(availableBudget, language) : "—"}</strong><em>{hasPlannedIncome ? t("categories.afterReserve") : t("categories.budgetNotDefined")}</em></span></div>
+          <div className="categories-flow-step available"><i><WalletCards size={20} /></i><span><small>{isEstimated ? t("categories.estimatedAvailable") : t("categories.availableToSpend")}</small><strong>{hasPlanningConfigured ? formatMoney(availableBudget, language) : "—"}</strong><em>{hasPlanningConfigured ? t("categories.afterReserve") : t("categories.budgetNotDefined")}</em></span></div>
         </div>
-        <div className="categories-planning-footer"><p>{budgetPlan?.reserve_capped ? t("categories.reserveCapped") : isEstimated ? t("categories.expectedIncomeDisclaimer") : !hasActualIncome ? t("categories.noIncomeExplanation") : t("categories.actualIncomeExplanation")}</p><button className="btn compact" type="button" onClick={() => setPlanningOpen((value) => !value)}>{planningOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}{planningOpen ? t("categories.closePlanning") : t("categories.changePlanning")}</button></div>
+        <div className="categories-planning-footer"><p>{budgetPlan?.reserve_capped ? t("categories.reserveCapped") : isEstimated ? t("categories.expectedIncomeDisclaimer") : hasPlanningConfigured && !hasActualIncome ? t("categories.zeroBudgetExplanation") : !hasActualIncome ? t("categories.noIncomeExplanation") : t("categories.actualIncomeExplanation")}</p><button className="btn compact" type="button" onClick={() => setPlanningOpen((value) => !value)}>{planningOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}{planningOpen ? t("categories.closePlanning") : t("categories.changePlanning")}</button></div>
 
         {planningOpen && (
           <div className="categories-planning-editor">
@@ -500,21 +560,34 @@ export default function CategoriesPage({
         )}
       </section>
 
-      <section className="card categories-usage-card">
+      <section className="card categories-usage-card categories-desktop-usage">
         <div className="categories-card-heading"><div><p className="eyebrow">{t("categories.moneyUsageEyebrow")}</p><h2>{t("categories.moneyUsage")}</h2></div>{isEstimated && <span className="categories-estimate-badge"><Clock3 size={13} /> {t("categories.estimate")}</span>}</div>
-        <div className="categories-usage-values"><div><span>{isEstimated ? t("categories.estimatedBudget") : t("categories.availableBudget")}</span><strong>{hasPlannedIncome ? formatMoney(availableBudget, language) : "—"}</strong></div><div><span>{t("categories.registeredExpenses")}</span><strong>{formatMoney(totalExpenses, language)}</strong></div><div className={hasActualIncome && budgetBalance < 0 ? "negative" : ""}><span>{isEstimated ? t("categories.estimatedBalance") : t("categories.budgetBalance")}</span><strong>{hasPlannedIncome ? formatMoney(budgetBalance, language) : "—"}</strong></div></div>
-        {hasPlannedIncome ? <div className={`categories-usage-progress ${budgetOverrun ? "danger" : spendingUsage >= 80 ? "warning" : ""}`}><div><span style={{ width: `${Math.min(spendingUsage, 100)}%` }} /></div><p><span>{t("categories.usedBudget", { spent: formatMoney(totalExpenses, language), budget: formatMoney(availableBudget, language) })}</span><strong>{spendingUsage.toFixed(1)}%</strong></p></div> : <div className="categories-budget-undefined"><Clock3 size={17} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}
+        <div className="categories-usage-values"><div><span>{isEstimated ? t("categories.estimatedBudget") : t("categories.availableBudget")}</span><strong>{hasPlanningConfigured ? formatMoney(availableBudget, language) : "—"}</strong></div><div><span>{t("categories.registeredExpenses")}</span><strong>{formatMoney(totalExpenses, language)}</strong></div><div className={hasActualIncome && budgetBalance < 0 ? "negative" : ""}><span>{isEstimated ? t("categories.estimatedBalance") : t("categories.budgetBalance")}</span><strong>{hasPlanningConfigured ? formatMoney(budgetBalance, language) : "—"}</strong></div></div>
+        {hasPlanningConfigured ? <div className={`categories-usage-progress ${budgetOverrun ? "danger" : spendingUsage >= 80 ? "warning" : ""}`}><div><span style={{ width: `${Math.min(spendingUsage, 100)}%` }} /></div><p><span>{t("categories.usedBudget", { spent: formatMoney(totalExpenses, language), budget: formatMoney(availableBudget, language) })}</span><strong>{spendingUsage.toFixed(1)}%</strong></p></div> : <div className="categories-budget-undefined"><Clock3 size={17} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}
         {selectedMonthEnded && hasActualIncome && budgetBalance > 0 && <div className="categories-month-remainder"><div><CheckCircle2 size={17} /><span><strong>{t("categories.unusedAtMonthEnd", { value: formatMoney(budgetBalance, language) })}</strong><small>{t("categories.remainderKeptNeutral")}</small></span></div><div><button className="btn compact" type="button" disabled>{t("categories.carryNextMonth")}</button><button className="btn compact" type="button" disabled>{t("categories.addToReserve")}</button></div></div>}
       </section>
 
-      <section className="card categories-budget-card">
-        <div className="categories-card-heading categories-budget-heading"><div><p className="eyebrow">{t("categories.limitsEyebrow")}</p><h2>{t("categories.limits")}</h2><span>{t("categories.limitsDescription")}</span></div><div className="categories-budget-heading-actions"><small>{t("categories.configuredCount", { configured: budgetedRows.length, total: categories.length })}</small>{categories.length > 0 && <button className="btn compact" type="button" onClick={openLimitForm} disabled={addingLimit || !availableRows.length}><Plus size={15} /> {t("categories.addLimit")}</button>}</div></div>
-        <div className={`categories-limit-allocation ${limitsOverBudget ? hasActualIncome ? "danger" : "warning" : ""}`}><div><span>{isEstimated ? t("categories.estimatedBudget") : t("categories.availableBudget")}</span><strong>{hasPlannedIncome ? formatMoney(availableBudget, language) : "—"}</strong></div><ArrowRight size={17} /><div><span>{t("categories.distributedLimits")}</span><strong>{formatMoney(totalLimits, language)}</strong></div><ArrowRight size={17} /><div><span>{limitsOverBudget ? t("categories.aboveBudget") : t("categories.notDistributed")}</span><strong>{hasPlannedIncome ? formatMoney(Math.abs(undistributedBudget), language) : "—"}</strong></div><div className="categories-allocation-progress"><div><span style={{ width: `${Math.min(limitsUsage, 100)}%` }} /></div><small>{hasPlannedIncome ? t("categories.distributedBudget", { limits: formatMoney(totalLimits, language), budget: formatMoney(availableBudget, language), value: limitsUsage.toFixed(0) }) : t("categories.defineBudgetToCompare")}</small></div></div>
+      <section id="budget-panel-categories" role="tabpanel" aria-labelledby="budget-tab-categories" className="card categories-budget-card">
+        <div className="categories-card-heading categories-budget-heading"><div><p className="eyebrow">{t("categories.limitsEyebrow")}</p><h2>{t("categories.limits")}</h2><span>{t("categories.limitsDescription")}</span></div><div className="categories-budget-heading-actions"><small>{t("categories.configuredCount", { configured: budgetedRows.length, total: categories.length })}</small>{categories.length > 0 && <button className="btn compact categories-desktop-add-limit" type="button" onClick={openLimitForm} disabled={addingLimit || !availableRows.length}><Plus size={15} /> {t("categories.addLimit")}</button>}</div></div>
+        <div className={`categories-mobile-limit-summary ${limitsOverBudget ? "danger" : ""}`}>
+          <div><span>{t("categories.distributedLimits")}</span><strong>{formatMoney(totalLimits, language)}</strong></div>
+          <div><span>{limitsOverBudget ? t("categories.excessDistributed") : t("categories.remainingToDistribute")}</span><strong>{hasPlanningConfigured ? formatMoney(Math.abs(undistributedBudget), language) : "—"}</strong></div>
+          {categories.length > 0 && <button className="btn btn-primary" type="button" onClick={openLimitForm} disabled={addingLimit || !availableRows.length}><Plus size={16} /> {t("categories.addLimit")}</button>}
+          {!hasPlanningConfigured && <small><Clock3 size={14} /> {t("categories.defineBudgetToCompare")}</small>}
+          {limitsOverBudget && <small><AlertTriangle size={14} /> {isEstimated ? t("categories.limitsAboveEstimate", { value: formatMoney(totalLimits - availableBudget, language) }) : t("categories.limitsAboveBudget", { value: formatMoney(totalLimits - availableBudget, language) })}</small>}
+        </div>
+        <div className={`categories-limit-allocation ${limitsOverBudget ? hasActualIncome ? "danger" : "warning" : ""}`}><div><span>{isEstimated ? t("categories.estimatedBudget") : t("categories.availableBudget")}</span><strong>{hasPlanningConfigured ? formatMoney(availableBudget, language) : "—"}</strong></div><ArrowRight size={17} /><div><span>{t("categories.distributedLimits")}</span><strong>{formatMoney(totalLimits, language)}</strong></div><ArrowRight size={17} /><div><span>{limitsOverBudget ? t("categories.aboveBudget") : t("categories.notDistributed")}</span><strong>{hasPlanningConfigured ? formatMoney(Math.abs(undistributedBudget), language) : "—"}</strong></div><div className="categories-allocation-progress"><div><span style={{ width: `${Math.min(limitsUsage, 100)}%` }} /></div><small>{hasPlanningConfigured ? t("categories.distributedBudget", { limits: formatMoney(totalLimits, language), budget: formatMoney(availableBudget, language), value: limitsUsage.toFixed(0) }) : t("categories.defineBudgetToCompare")}</small></div></div>
         {limitsOverBudget && <div className={`categories-allocation-alert ${hasActualIncome ? "danger" : "warning"}`}><AlertTriangle size={16} /> {isEstimated ? t("categories.limitsAboveEstimate", { value: formatMoney(totalLimits - availableBudget, language) }) : t("categories.limitsAboveBudget", { value: formatMoney(totalLimits - availableBudget, language) })}</div>}
-        {budgetedRows.length ? <div className="categories-budget-list">{budgetedRows.map((row) => { const status = row.usage > 100 ? "danger" : row.usage >= 80 ? "warning" : "success"; const changed = String(drafts[row.id] ?? "").trim() !== moneyDraft(row.monthly_limit, language); return <div className="categories-budget-row" key={row.id}><div className="categories-budget-name"><i style={{ "--category-color": row.color }} /><span><strong>{row.name}</strong><small>{formatMoney(row.spent, language)} {t("categories.spent")}</small></span></div><div className={`categories-budget-progress ${status}`}><div><span style={{ width: `${Math.min(row.usage, 100)}%` }} /></div><small>{Math.round(row.usage)}%</small></div><div className="categories-limit-form"><label className="categories-money-field"><span>R$</span><input inputMode="decimal" aria-label={t("categories.limitFor", { name: row.name })} value={drafts[row.id] ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [row.id]: formatTypedMoneyForEditing(event.target.value, language) }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveLimit(row); } }} /></label><div className="categories-limit-actions"><button className="icon-btn small" type="button" disabled={!changed || savingId === row.id} onClick={() => saveLimit(row)} aria-label={t("categories.saveLimit")}>{savingId === row.id ? <Loader2 className="spin" size={15} /> : <Save size={15} />}</button><button className="icon-btn small danger" type="button" disabled={savingId === row.id} onClick={() => removeLimit(row)} aria-label={t("categories.removeLimit")}><Trash2 size={15} /></button></div></div></div>; })}</div> : <div className="categories-empty categories-limits-empty"><Target size={30} /><strong>{categories.length ? t("categories.noLimitsTitle") : t("categories.noCategories")}</strong>{categories.length > 0 && <><p>{t("categories.noLimitsHint")}</p><button className="btn btn-primary compact" type="button" onClick={openLimitForm}><Plus size={15} /> {t("categories.addFirstLimit")}</button></>}</div>}
+        {budgetedRows.length ? <div className="categories-budget-list categories-budget-list-desktop">{budgetedRows.map((row) => { const status = row.usage > 100 ? "danger" : row.usage >= 80 ? "warning" : "success"; const changed = String(drafts[row.id] ?? "").trim() !== moneyDraft(row.monthly_limit, language); return <div className="categories-budget-row" key={row.id}><div className="categories-budget-name"><i style={{ "--category-color": row.color }} /><span><strong>{row.name}</strong><small>{formatMoney(row.spent, language)} {t("categories.spent")}</small></span></div><div className={`categories-budget-progress ${status}`}><div><span style={{ width: `${Math.min(row.usage, 100)}%` }} /></div><small>{Math.round(row.usage)}%</small></div><div className="categories-limit-form"><label className="categories-money-field"><span>R$</span><input inputMode="decimal" aria-label={t("categories.limitFor", { name: row.name })} value={drafts[row.id] ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [row.id]: formatTypedMoneyForEditing(event.target.value, language) }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveLimit(row); } }} /></label><div className="categories-limit-actions"><button className="icon-btn small" type="button" disabled={!changed || savingId === row.id} onClick={() => saveLimit(row)} aria-label={t("categories.saveLimit")}>{savingId === row.id ? <Loader2 className="spin" size={15} /> : <Save size={15} />}</button><button className="icon-btn small danger" type="button" disabled={savingId === row.id} onClick={() => removeLimit(row)} aria-label={t("categories.removeLimit")}><Trash2 size={15} /></button></div></div></div>; })}</div> : <div className="categories-empty categories-limits-empty categories-limits-empty-desktop"><Target size={30} /><strong>{categories.length ? t("categories.noLimitsTitle") : t("categories.noCategories")}</strong>{categories.length > 0 && <><p>{t("categories.noLimitsHint")}</p><button className="btn btn-primary compact" type="button" onClick={openLimitForm}><Plus size={15} /> {t("categories.addFirstLimit")}</button></>}</div>}
+        {budgetedRows.length ? <div className="categories-mobile-budget-list">{budgetedRows.map((row) => { const overLimit = row.spent > row.limit; const status = overLimit ? "danger" : row.usage >= 80 ? "warning" : "success"; return <article className={`categories-mobile-budget-item ${status}`} key={row.id}>
+          <header><i style={{ "--category-color": row.color }}><Tags size={17} /></i><strong>{row.name}</strong><button type="button" onClick={() => setEditingLimit(row)} aria-label={t("categories.editLimitFor", { name: row.name })}><Edit3 size={15} /> {t("actions.edit")}</button></header>
+          <div className="categories-mobile-budget-values"><strong>{t("categories.spentOfLimit", { spent: formatMoney(row.spent, language), limit: formatMoney(row.limit, language) })}</strong><small>{Math.round(row.usage)}%</small></div>
+          <div className="categories-mobile-budget-progress"><span style={{ width: `${Math.min(row.usage, 100)}%` }} /></div>
+          <p>{overLimit ? <><AlertTriangle size={14} /> {t("categories.overLimitBy", { value: formatMoney(row.spent - row.limit, language) })}</> : <>{t("categories.remainingLimit", { value: formatMoney(row.limit - row.spent, language) })}</>}</p>
+        </article>; })}</div> : <div className="categories-empty categories-limits-empty categories-limits-empty-mobile"><Target size={28} /><strong>{categories.length ? t("categories.noLimitsTitle") : t("categories.noCategories")}</strong>{categories.length > 0 && <><p>{t("categories.noLimitsHint")}</p><button className="btn btn-primary" type="button" onClick={openLimitForm}><Plus size={16} /> {t("categories.addFirstLimit")}</button></>}</div>}
       </section>
 
-      <section className="categories-main-grid">
+      <section id="budget-panel-analysis" role="tabpanel" aria-labelledby="budget-tab-analysis" className="categories-main-grid">
         <article className="card categories-chart-card">
           <div className="categories-card-heading">
             <div><p className="eyebrow">{t("categories.distributionEyebrow")}</p><h2>{viewingIncome ? t("categories.incomeDistribution") : t("categories.distribution")}</h2></div>
@@ -563,13 +636,14 @@ export default function CategoriesPage({
               {nearCategoryLimit.length > 0 && <div className="categories-insight warning"><Target size={19} /><span><strong>{t("categories.nearLimitCount", { count: nearCategoryLimit.length })}</strong><small>{nearCategoryLimit.map((row) => row.name).join(", ")}</small></span></div>}
               {uncategorized > 0 && <div className="categories-insight neutral"><Tags size={19} /><span><strong>{t("categories.uncategorizedValue", { value: formatMoney(uncategorized, language) })}</strong><small>{t("categories.uncategorizedHint")}</small></span></div>}
               {monthChange !== 0 && <div className={`categories-insight ${monthChange > 0 ? "warning" : "success"}`}>{monthChange > 0 ? <TrendingUp size={19} /> : <TrendingDown size={19} />}<span><strong>{monthChange > 0 ? t("categories.spendingIncreased", { value: Math.abs(monthChange).toFixed(1) }) : t("categories.spendingDecreased", { value: Math.abs(monthChange).toFixed(1) })}</strong><small>{t("categories.previousTotal", { value: formatMoney(previousExpenses, language) })}</small></span></div>}
-              {!hasPlannedIncome && totalExpenses > 0 && <div className="categories-insight neutral"><WalletCards size={19} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}
+              {!hasPlanningConfigured && totalExpenses > 0 && <div className="categories-insight neutral"><WalletCards size={19} /><span><strong>{t("categories.budgetNotDefined")}</strong><small>{t("categories.expensesBeforeBudget", { value: formatMoney(totalExpenses, language) })}</small></span></div>}
               {!overCategoryLimit.length && !nearCategoryLimit.length && !uncategorized && monthChange === 0 && <div className="categories-insight success"><CheckCircle2 size={19} /><span><strong>{t("categories.allGood")}</strong><small>{t("categories.allGoodHint")}</small></span></div>}
             </>}
           </div>
         </article>
       </section>
       {addingLimit && <CategoryLimitModal categories={availableRows} language={language} t={t} onSave={addLimit} onClose={closeLimitForm} />}
+      {editingLimit && <CategoryLimitModal key={editingLimit.id} category={editingLimit} categories={[editingLimit]} language={language} t={t} onSave={addLimit} onRemove={(categoryId) => onUpdateCategory(categoryId, { monthly_limit: null })} onClose={() => setEditingLimit(null)} />}
       {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} categories={categories} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
     </div>
   );

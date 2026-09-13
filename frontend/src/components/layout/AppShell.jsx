@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
-import { CalendarClock, Menu, Plus } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Menu, Plus } from "lucide-react";
 import Dashboard from "../Dashboard.jsx";
 import { MonthField } from "../DateField.jsx";
 import TransactionForm from "../TransactionForm.jsx";
@@ -101,6 +101,7 @@ export default function AppShell() {
   const [receivableToDelete, setReceivableToDelete] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [pageOverlayOpen, setPageOverlayOpen] = useState(false);
+  const [budgetMobileTab, setBudgetMobileTab] = useState("categories");
   const monthLoadSequence = useRef(0);
   const selectedPeriodRef = useRef({ year, month, language });
   selectedPeriodRef.current = { year, month, language };
@@ -109,6 +110,7 @@ export default function AppShell() {
   const viewingCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
+  const viewingBudget = location.pathname === "/categorias";
   const loadingVariant = location.pathname === "/meses" ? "months" : location.pathname === "/categorias" ? "categories" : "dashboard";
   const loadingLabel = language === "en-US"
     ? `Loading ${formatMonthLabel(year, month, language)}`
@@ -881,10 +883,10 @@ export default function AppShell() {
       <main className="content">
         <div className="content-inner">
           {showMonthHeader && (
-            <header className="page-header">
+            <header className={`page-header ${viewingBudget ? "budget-page-header" : ""}`}>
               <div>
                 <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
-                <h1>{t("app.title")}</h1>
+                <h1><span className="page-title-default">{t("app.title")}</span>{viewingBudget && <span className="budget-mobile-title">{t("categories.mobileTitle")}</span>}</h1>
               </div>
               <div className="toolbar" data-months-tour={location.pathname === "/meses" ? "period" : undefined}>
                 {!viewingCurrentMonth && (
@@ -892,9 +894,9 @@ export default function AppShell() {
                     <CalendarClock size={16} /> {t("actions.currentMonth")}
                   </button>
                 )}
-                <button className="btn" onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}>{t("actions.previous")}</button>
-                <MonthField value={monthInputValue} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-                <button className="btn" onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}>{t("actions.next")}</button>
+                <button className="btn month-nav-button" type="button" aria-label={t("actions.previous")} onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}><ChevronLeft className="month-nav-icon" size={22} /><span>{t("actions.previous")}</span></button>
+                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : ""} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
+                <button className="btn month-nav-button" type="button" aria-label={t("actions.next")} onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}><ChevronRight className="month-nav-icon" size={22} /><span>{t("actions.next")}</span></button>
                 <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
@@ -904,7 +906,7 @@ export default function AppShell() {
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} onNewTransaction={() => openAddForm()} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
-              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
+              <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />

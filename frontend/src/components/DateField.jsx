@@ -245,7 +245,7 @@ function formatMonthDisplay(value, locale) {
   return date.toLocaleDateString(locale, { month: "2-digit", year: "numeric" });
 }
 
-export function MonthField({ value, onChange }) {
+export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "" }) {
   const { language } = useI18n();
   const rootRef = useRef(null);
   const popoverRef = useRef(null);
@@ -329,8 +329,9 @@ export function MonthField({ value, onChange }) {
 
   return (
     <div className={`date-field month-field ${open ? "open" : ""}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
-      <button type="button" className="date-input-shell month-trigger" onClick={() => setOpen((current) => !current)}>
-        <span>{formatMonthDisplay(value, language)}</span>
+      <button type="button" className="date-input-shell month-trigger" onClick={() => setOpen((current) => !current)} aria-label={ariaLabel || undefined}>
+        <span className={displayLabel ? "month-display-default" : undefined}>{formatMonthDisplay(value, language)}</span>
+        {displayLabel && <span className="month-display-alternate">{displayLabel}</span>}
         <CalendarDays size={16} />
       </button>
 

@@ -66,6 +66,7 @@ class MonthlyBudgetPlanningTests(unittest.TestCase):
 
     def test_only_selected_received_income_transactions_compose_budget(self):
         initial = get_monthly_budget_plan(self.year, self.month, self.db, self.user)
+        self.assertFalse(initial.is_configured)
         self.assertEqual([item.description for item in initial.income_candidates], ["Salário", "Renda extra"])
         self.assertEqual(initial.received_income, Decimal("0.00"))
 
@@ -81,6 +82,20 @@ class MonthlyBudgetPlanningTests(unittest.TestCase):
         self.assertEqual(result.selected_income_count, 2)
         self.assertTrue(result.has_actual_income)
         self.assertFalse(result.is_estimated)
+
+    def test_zero_budget_is_distinct_from_missing_planning(self):
+        result = update_monthly_budget_plan(
+            self.year,
+            self.month,
+            MonthlyBudgetPlanUpdate(income_mode="manual", manual_income=Decimal("0.00")),
+            self.db,
+            self.user,
+        )
+
+        self.assertTrue(result.is_configured)
+        self.assertFalse(result.has_actual_income)
+        self.assertFalse(result.is_estimated)
+        self.assertEqual(result.available_budget, Decimal("0.00"))
 
     def test_only_chosen_income_sources_compose_the_reserve_base(self):
         selected = update_monthly_budget_plan(

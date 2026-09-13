@@ -25,6 +25,7 @@ class BudgetReserveRuleOut(APIModel):
 class MonthlyBudgetPlanOut(APIModel):
     year: int
     month: int
+    is_configured: bool = False
     income_mode: Literal["transactions", "manual"] = "transactions"
     manual_income: Optional[Decimal] = None
     expected_income: Optional[Decimal] = None
