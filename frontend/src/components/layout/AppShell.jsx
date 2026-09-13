@@ -55,6 +55,7 @@ export default function AppShell() {
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [receivableExpenseOptions, setReceivableExpenseOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dashboardLoadError, setDashboardLoadError] = useState(false);
   const [menuOpen, setMenuOpen] = useState(() => {
     if (isMobileViewport()) return false;
     try {
@@ -160,7 +161,11 @@ export default function AppShell() {
         && requestedPeriod.month === selectedPeriod.month
         && requestedPeriod.language === selectedPeriod.language;
     };
-    if (showLoading) setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+      if (location.pathname === "/") setDashboardLoadError(false);
+    }
+    let dashboardPriorityLoaded = false;
     try {
       const offsets = [-5, -4, -3, -2, -1, 0];
       const previousTarget = shiftMonth(year, month, -1);
@@ -213,6 +218,7 @@ export default function AppShell() {
         setInvoices(priorityPayloads.invoices);
         setCategoryBreakdown(priorityPayloads.categoryBreakdown);
         setComparisons(priorityPayloads.comparison);
+        dashboardPriorityLoaded = true;
         setLoading(false);
       }
 
@@ -279,7 +285,10 @@ export default function AppShell() {
       setMonthCards(monthCardsPayload);
       setComparisons(comparisonPayload);
     } catch (error) {
-      if (isCurrentPeriod()) toast.error(t("toasts.loadDataError"));
+      if (isCurrentPeriod()) {
+        if (location.pathname === "/" && !dashboardPriorityLoaded) setDashboardLoadError(true);
+        toast.error(t("toasts.loadDataError"));
+      }
     } finally {
       if (showLoading && isCurrentPeriod()) setLoading(false);
     }
@@ -365,7 +374,7 @@ export default function AppShell() {
     ]);
   };
 
-  const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance })) || [], [monthData]);
+  const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance, hasFuture: day.has_future })) || [], [monthData]);
 
   const loadCategoryExpenseDetails = (targetYear = year, targetMonth = month) => getCategoryBreakdown(targetYear, targetMonth, { includeDetails: true });
 
@@ -904,7 +913,7 @@ export default function AppShell() {
 
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Routes>
-              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} onNewTransaction={() => openAddForm()} />} />
+              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categoryBreakdown={categoryBreakdown} loadError={dashboardLoadError} onRetry={() => refresh()} onOpenTransaction={(transaction) => { setEditing(transaction); setDrawerOpen(true); }} onNewTransaction={() => openAddForm()} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} setEditing={setEditing} setDrawerOpen={setDrawerOpen} removeTransaction={setTransactionToDelete} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
