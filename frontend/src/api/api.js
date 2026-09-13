@@ -308,6 +308,20 @@ export function listInstallments() {
   return request("/installments");
 }
 
+export function listInstallmentPage({ tab = "active", search = "", categoryId = "", invoiceTemplateId = "", situation = "all", sortBy = "nextDue", page = 1, pageSize = 12 } = {}) {
+  const params = new URLSearchParams({
+    tab,
+    search,
+    situation,
+    sort_by: sortBy,
+    page: String(page),
+    page_size: String(pageSize)
+  });
+  if (categoryId) params.set("category_id", String(categoryId));
+  if (invoiceTemplateId) params.set("invoice_template_id", String(invoiceTemplateId));
+  return request(`/installments/page?${params}`);
+}
+
 export function listReceivables() {
   return request("/receivables");
 }

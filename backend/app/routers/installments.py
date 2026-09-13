@@ -1,12 +1,13 @@
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, User
-from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPurchaseOut
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, User
+from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPageOut, InstallmentPurchaseOut
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
@@ -172,6 +173,178 @@ def list_installments(
         .all()
     )
     return [_purchase_summary(purchase) for purchase in purchases]
+
+
+@router.get("/page", response_model=InstallmentPageOut)
+def list_installments_page(
+    tab: str = Query(default="active", pattern="^(active|paid)$"),
+    search: str = Query(default="", max_length=255),
+    category_id: int | None = Query(default=None, ge=1),
+    invoice_template_id: int | None = Query(default=None, ge=1),
+    situation: str = Query(default="all", pattern="^(all|regular|soon|overdue)$"),
+    sort_by: str = Query(default="nextDue", pattern="^(nextDue|remaining|installment|progress|newest|oldest|alphabetical)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=12, ge=1, le=48),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return one filtered page while keeping overview totals independent from filters."""
+    today = date.today()
+    soon_limit = today + timedelta(days=7)
+    current_month_start = date(today.year, today.month, 1)
+    current_month_end = _add_months(current_month_start, 1)
+
+    paid_count = (
+        select(func.count(InstallmentItem.id))
+        .join(Invoice, Invoice.id == InstallmentItem.invoice_id)
+        .where(
+            InstallmentItem.purchase_id == InstallmentPurchase.id,
+            InstallmentItem.status == "pending",
+            Invoice.paid.is_(True),
+        )
+        .correlate(InstallmentPurchase)
+        .scalar_subquery()
+    )
+    next_due = (
+        select(func.min(Invoice.due_date))
+        .join(InstallmentItem, InstallmentItem.invoice_id == Invoice.id)
+        .where(
+            InstallmentItem.purchase_id == InstallmentPurchase.id,
+            InstallmentItem.status == "pending",
+            Invoice.paid.is_(False),
+        )
+        .correlate(InstallmentPurchase)
+        .scalar_subquery()
+    )
+    remaining_value = (
+        select(func.coalesce(func.sum(InstallmentItem.amount), 0))
+        .select_from(InstallmentItem)
+        .outerjoin(Invoice, Invoice.id == InstallmentItem.invoice_id)
+        .where(
+            InstallmentItem.purchase_id == InstallmentPurchase.id,
+            InstallmentItem.status == "pending",
+            or_(InstallmentItem.invoice_id.is_(None), Invoice.paid.is_(False)),
+        )
+        .correlate(InstallmentPurchase)
+        .scalar_subquery()
+    )
+    has_overdue = InstallmentPurchase.items.any(
+        (InstallmentItem.status == "pending")
+        & InstallmentItem.invoice.has((Invoice.paid.is_(False)) & (Invoice.due_date < today))
+    )
+    has_soon = InstallmentPurchase.items.any(
+        (InstallmentItem.status == "pending")
+        & InstallmentItem.invoice.has(
+            (Invoice.paid.is_(False))
+            & (Invoice.due_date >= today)
+            & (Invoice.due_date <= soon_limit)
+        )
+    )
+
+    paid_off_expression = paid_count == InstallmentPurchase.installment_count
+    query = db.query(InstallmentPurchase).filter(InstallmentPurchase.user_id == current_user.id)
+    query = query.filter(paid_off_expression if tab == "paid" else ~paid_off_expression)
+    if search.strip():
+        query = query.filter(InstallmentPurchase.description.ilike(f"%{search.strip()}%"))
+    if category_id:
+        query = query.filter(or_(
+            InstallmentPurchase.category_id == category_id,
+            InstallmentPurchase.categories.any(Category.id == category_id),
+        ))
+    if invoice_template_id:
+        query = query.filter(InstallmentPurchase.items.any(
+            InstallmentItem.invoice.has(Invoice.template_id == invoice_template_id)
+        ))
+    if situation == "overdue":
+        query = query.filter(has_overdue)
+    elif situation == "soon":
+        query = query.filter(~has_overdue, has_soon)
+    elif situation == "regular":
+        query = query.filter(~has_overdue, ~has_soon)
+
+    total = query.count()
+    order_map = {
+        "nextDue": (next_due.is_(None), next_due.asc(), InstallmentPurchase.id.desc()),
+        "remaining": (remaining_value.desc(), InstallmentPurchase.id.desc()),
+        "installment": (InstallmentPurchase.installment_value.desc(), InstallmentPurchase.id.desc()),
+        "progress": ((paid_count / func.nullif(InstallmentPurchase.installment_count, 0)).desc(), InstallmentPurchase.id.desc()),
+        "newest": (InstallmentPurchase.created_at.desc(), InstallmentPurchase.id.desc()),
+        "oldest": (InstallmentPurchase.created_at.asc(), InstallmentPurchase.id.asc()),
+        "alphabetical": (InstallmentPurchase.description.asc(), InstallmentPurchase.id.desc()),
+    }
+    purchases = (
+        query.options(
+            selectinload(InstallmentPurchase.items)
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.template),
+            selectinload(InstallmentPurchase.categories),
+        )
+        .order_by(*order_map[sort_by])
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    active_count = db.query(func.count(InstallmentPurchase.id)).filter(
+        InstallmentPurchase.user_id == current_user.id,
+        ~paid_off_expression,
+    ).scalar() or 0
+    paid_off_count = db.query(func.count(InstallmentPurchase.id)).filter(
+        InstallmentPurchase.user_id == current_user.id,
+        paid_off_expression,
+    ).scalar() or 0
+    pending_item_query = (
+        db.query(InstallmentItem)
+        .join(InstallmentPurchase, InstallmentPurchase.id == InstallmentItem.purchase_id)
+        .outerjoin(Invoice, Invoice.id == InstallmentItem.invoice_id)
+        .filter(
+            InstallmentPurchase.user_id == current_user.id,
+            InstallmentItem.status == "pending",
+            or_(InstallmentItem.invoice_id.is_(None), Invoice.paid.is_(False)),
+        )
+    )
+    remaining_amount = pending_item_query.with_entities(func.coalesce(func.sum(InstallmentItem.amount), 0)).scalar() or 0
+    current_month_count, current_month_amount = (
+        pending_item_query.filter(
+            Invoice.due_date >= current_month_start,
+            Invoice.due_date < current_month_end,
+        )
+        .with_entities(func.count(InstallmentItem.id), func.coalesce(func.sum(InstallmentItem.amount), 0))
+        .one()
+    )
+    overdue_count, overdue_amount = (
+        pending_item_query.filter(Invoice.due_date < today)
+        .with_entities(func.count(InstallmentItem.id), func.coalesce(func.sum(InstallmentItem.amount), 0))
+        .one()
+    )
+    forecast = []
+    for offset in range(6):
+        start = _add_months(current_month_start, offset)
+        end = _add_months(current_month_start, offset + 1)
+        amount = (
+            pending_item_query.filter(Invoice.due_date >= start, Invoice.due_date < end)
+            .with_entities(func.coalesce(func.sum(InstallmentItem.amount), 0))
+            .scalar()
+        ) or 0
+        forecast.append({"month": start.strftime("%Y-%m"), "amount": _money(amount)})
+
+    return {
+        "items": [_purchase_summary(purchase) for purchase in purchases],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+        "summary": {
+            "active_count": active_count,
+            "paid_off_count": paid_off_count,
+            "current_month_count": current_month_count,
+            "current_month_amount": _money(current_month_amount),
+            "remaining_amount": _money(remaining_amount),
+            "overdue_count": overdue_count,
+            "overdue_amount": _money(overdue_amount),
+            "forecast": forecast,
+        },
+    }
 
 
 @router.get("/{purchase_id}", response_model=InstallmentPurchaseOut)

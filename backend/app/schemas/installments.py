@@ -66,3 +66,28 @@ class InstallmentPurchaseOut(APIModel):
     category_ids: List[int] = []
     category: Optional[CategoryOut] = None
     categories: List[CategoryOut] = []
+
+
+class InstallmentForecastOut(APIModel):
+    month: str
+    amount: Decimal = Decimal("0.00")
+
+
+class InstallmentSummaryOut(APIModel):
+    active_count: int = 0
+    paid_off_count: int = 0
+    current_month_count: int = 0
+    current_month_amount: Decimal = Decimal("0.00")
+    remaining_amount: Decimal = Decimal("0.00")
+    overdue_count: int = 0
+    overdue_amount: Decimal = Decimal("0.00")
+    forecast: List[InstallmentForecastOut] = []
+
+
+class InstallmentPageOut(APIModel):
+    items: List[InstallmentPurchaseOut] = []
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+    summary: InstallmentSummaryOut
