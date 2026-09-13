@@ -90,8 +90,8 @@ function WalletEditor({ wallet, language, onClose, onSaved }) {
         {editing && <p className="wallet-form-note">O saldo inicial não é sobrescrito. Use “Ajustar saldo” para manter a alteração registrada no histórico.</p>}
         <label><span>Início do acompanhamento</span><DateField value={form.tracking_started_on} onChange={(value) => setForm({ ...form, tracking_started_on: value })} /></label>
         <label className="wallet-color-field"><span>Cor</span><input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} /></label>
-        <div className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> Salvando</> : "Salvar carteira"}</button></div>
       </div>
+      <footer className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> Salvando</> : "Salvar carteira"}</button></footer>
     </form>
   </div>;
 }
@@ -117,8 +117,8 @@ function BalanceAdjustment({ wallet, language, onClose, onSaved }) {
       {form.actual_balance && <div className={`wallet-adjustment-preview ${difference < 0 ? "negative" : "positive"}`}><span>Ajuste que será registrado</span><strong>{difference > 0 ? "+" : ""}{formatMoney(difference, language)}</strong></div>}
       <label><span>Data</span><DateField value={form.date} onChange={(value) => setForm({ ...form, date: value })} /></label>
       <label><span>Observação <small>(opcional)</small></span><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Ex: conciliação do extrato" /></label>
-      <div className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || !form.actual_balance}>Registrar ajuste</button></div>
     </div>
+    <footer className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || !form.actual_balance}>Registrar ajuste</button></footer>
   </form></div>;
 }
 
@@ -160,8 +160,8 @@ function TransferEditor({ wallets, initialSource, language, onClose, onSaved }) 
       </div>
       <label><span>Observação <small>(opcional)</small></span><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
       <p className="wallet-form-note">A saída e a entrada serão registradas nas duas carteiras. O patrimônio total permanece igual.</p>
-      <div className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || active.length < 2}>Transferir</button></div>
     </div>
+    <footer className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || active.length < 2}>Transferir</button></footer>
   </form></div>;
 }
 
@@ -244,8 +244,8 @@ function ConsolidationEditor({ wallets, initialSource, language, onClose, onSave
       </>}
 
       <p className="wallet-form-note">Datas, valores, categorias, vínculos e recorrências serão preservados. A carteira de origem ficará zerada e poderá ser arquivada depois.</p>
-      <div className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || loading || !preview || !preservesTotal}>{busy ? <><Loader2 className="spin" size={16} /> Consolidando...</> : "Consolidar carteira"}</button></div>
     </div>
+    <footer className="wallet-modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || loading || !preview || !preservesTotal}>{busy ? <><Loader2 className="spin" size={16} /> Consolidando...</> : "Consolidar carteira"}</button></footer>
   </form></div>;
 }
 

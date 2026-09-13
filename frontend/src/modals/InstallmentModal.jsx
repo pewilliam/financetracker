@@ -174,11 +174,11 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
               </div>
             </div>
             <div className="review-footer">
-              <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button><button className="btn btn-primary" disabled={!canCreate}>Confirmar {drafts.length} parcelas</button></div>
               <p>
                 {tt("installmentModal.totalConfirmed", "Valor total confirmado:")} <strong>{formatMoney(confirmedTotal)}</strong>
                 {invoiceCount > 1 ? ` • ${tt("installmentModal.installmentsDifferentInvoices", `Parcelas em ${invoiceCount} faturas diferentes`, { count: invoiceCount })}` : ""}
               </p>
+              <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button><button className="btn btn-primary" disabled={!canCreate}>Confirmar {drafts.length} parcelas</button></div>
             </div>
           </>
         )}

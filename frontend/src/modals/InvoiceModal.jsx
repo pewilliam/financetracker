@@ -245,13 +245,13 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
             </div>
 
             <div className="review-footer">
+              <p>Total comprometido: <strong>{formatMoney(totalCommitted)}</strong></p>
               <div className="modal-actions">
                 <button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button>
                 <button className="btn btn-primary" disabled={!canCreate}>
                   {tt("invoiceModal.createInvoices", `Criar ${drafts.length} ${drafts.length === 1 ? "fatura" : "faturas"}`, { count: drafts.length, label: drafts.length === 1 ? t("invoiceModal.invoice") : t("invoiceModal.invoices") })}
                 </button>
               </div>
-              <p>Total comprometido: <strong>{formatMoney(totalCommitted)}</strong></p>
             </div>
           </>
         )}

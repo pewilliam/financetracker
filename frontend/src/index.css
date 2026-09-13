@@ -1853,10 +1853,13 @@ select {
 .segmented .active.success { background: #DCFAF0; color: #007864; }
 
 .modal-card.transaction-modal {
+  display: flex;
+  flex-direction: column;
   width: min(620px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   margin: 7vh auto;
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
   animation: modal-pop .2s ease both;
 }
 .transaction-modal .modal-titlebar {
@@ -1934,8 +1937,12 @@ select {
 }
 .transaction-modal-body {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px;
 }
 .transaction-modal-body > label,
@@ -2210,12 +2217,15 @@ select {
 }
 .exclusive-hint { color: var(--primary); }
 .transaction-modal-actions {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  flex: 0 0 auto;
+  display: flex;
   gap: 10px;
-  padding-top: 4px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 96%, var(--border));
 }
-.transaction-modal-actions .btn { width: 100%; }
+.transaction-modal-actions .btn { flex: 1 1 0; min-width: 0; width: 100%; }
+.transaction-modal-actions .btn:last-child { flex-grow: 1.4; }
 .transaction-save {
   color: #fff;
   border-color: transparent;
@@ -3486,6 +3496,9 @@ select {
   padding: 22px;
 }
 .template-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
   padding: 0;
   overflow: hidden;
 }
@@ -3499,6 +3512,7 @@ select {
 }
 .invoice-modal.step-2 { width: min(860px, calc(100% - 32px)); }
 .modal-titlebar {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) 38px;
   align-items: center;
@@ -3525,6 +3539,7 @@ select {
   background: #D97706;
 }
 .invoice-stepper {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
   align-items: center;
@@ -3885,12 +3900,17 @@ select {
   }
 }
 .modal-actions {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  display: flex;
   gap: 10px;
-  padding: 0 22px 22px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 96%, var(--border));
 }
-.modal-actions .btn { width: 100%; }
+.modal-actions .btn { flex: 1 1 0; min-width: 0; width: 100%; }
+.modal-actions .btn:last-child { flex-grow: 1.4; }
 .btn:disabled {
   cursor: not-allowed;
   opacity: .55;
@@ -5049,7 +5069,10 @@ select {
   font-weight: 900;
 }
 .simulation-name-modal {
+  display: flex;
+  flex-direction: column;
   width: min(460px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   padding: 0;
   overflow: hidden;
 }
@@ -5077,8 +5100,11 @@ select {
   flex: 0 0 auto;
 }
 .simulation-name-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   gap: 12px;
+  overflow-y: auto;
   padding: 18px 20px;
 }
 .simulation-name-body label {
@@ -5114,11 +5140,11 @@ select {
   font-size: 12px;
   font-weight: 800;
 }
-.simulation-name-modal .modal-actions {
-  padding: 0 20px 20px;
-}
 .simulation-decision-modal {
+  display: flex;
+  flex-direction: column;
   width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   padding: 0;
   overflow: hidden;
 }
@@ -5134,6 +5160,9 @@ select {
   line-height: 1.25;
 }
 .simulation-decision-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 18px 20px;
 }
 .simulation-decision-body p {
@@ -5142,9 +5171,6 @@ select {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.55;
-}
-.simulation-decision-modal .modal-actions {
-  padding: 0 20px 20px;
 }
 .simulation-items {
   display: grid;
@@ -6014,9 +6040,16 @@ select {
   color: var(--primary);
 }
 .simulation-confirm-modal {
+  display: flex;
+  flex-direction: column;
   width: min(680px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
 }
 .simulation-confirm-list {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   gap: 10px;
   max-height: min(52vh, 420px);
@@ -6209,8 +6242,12 @@ select {
   .simulation-tutorial-spotlight { transition: none; }
 }
 .confirm-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 22px;
 }
 .confirm-modal-body p {
@@ -6247,12 +6284,14 @@ select {
   background: #D97706;
   border-color: #D97706;
 }
-.details-actions { padding-top: 18px; }
 .danger-text { color: var(--expense); }
 
 .entry-details-modal {
   --detail-tone: var(--primary);
+  display: flex;
+  flex-direction: column;
   width: min(620px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   padding: 0;
   overflow: hidden;
   animation: modal-pop .2s ease both;
@@ -6262,6 +6301,7 @@ select {
 .entry-details-modal.installment { --detail-tone: #8B5CF6; }
 .entry-details-header {
   position: relative;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -6283,7 +6323,7 @@ select {
 .entry-details-heading { min-width: 0; }
 .entry-details-heading .eyebrow { margin: 0 0 3px; color: var(--muted); }
 .entry-details-heading h2 { margin: 0; overflow-wrap: anywhere; font-size: 20px; line-height: 1.25; }
-.entry-details-body { display: grid; gap: 16px; padding: 20px; }
+.entry-details-body { display: grid; flex: 1 1 auto; gap: 16px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
 .entry-details-amount {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6374,6 +6414,7 @@ select {
 .entry-linked-expense small { color: var(--muted); font-size: 11px; }
 .entry-linked-expense > strong { color: var(--expense); white-space: nowrap; }
 .entry-details-footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -6381,6 +6422,7 @@ select {
   padding: 14px 20px;
   background: color-mix(in srgb, var(--card) 94%, var(--border));
 }
+.entry-details-footer .btn { flex: 1 1 0; min-width: 0; }
 .entry-details-edit {
   border: 1px solid color-mix(in srgb, var(--text) 16%, var(--border));
   background: color-mix(in srgb, var(--text) 9%, var(--card));
@@ -6399,13 +6441,13 @@ select {
 .review-footer {
   display: grid;
   flex: 0 0 auto;
-  gap: 8px;
-  padding-top: 18px;
+  gap: 0;
   border-top: 1px solid var(--border);
   background: var(--card);
 }
 .review-footer p {
-  margin: 0 22px 22px;
+  margin: 0;
+  padding: 11px 20px;
   color: var(--muted);
   text-align: right;
   font-size: 13px;
@@ -6961,7 +7003,7 @@ select {
   }
   .invoice-stepper i { display: none; }
   .stepper-item:last-child { justify-content: flex-start; }
-  .modal-actions, .review-toolbar { grid-template-columns: 1fr; }
+  .review-toolbar { grid-template-columns: 1fr; }
   .transaction-modal-body {
     flex: 1 1 auto;
     width: 100%;
@@ -7003,9 +7045,6 @@ select {
     white-space: nowrap;
   }
   .installment-form-row {
-    grid-template-columns: 1fr;
-  }
-  .transaction-modal-actions {
     grid-template-columns: 1fr;
   }
   .review-table {
@@ -7751,13 +7790,17 @@ select {
 }
 
 .invoice-item-edit-modal {
+  display: flex;
+  flex-direction: column;
   width: min(580px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   margin: 8vh auto;
   padding: 0;
   overflow: hidden;
   animation: modal-pop .2s ease both;
 }
 .invoice-item-modal-header {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -7777,8 +7820,12 @@ select {
 }
 .invoice-item-modal-body {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 22px 20px;
 }
 .invoice-item-modal-body label { display: grid; gap: 7px; min-width: 0; }
@@ -7846,6 +7893,7 @@ select {
 .invoice-item-money.expense:focus-within { border-color: var(--expense); box-shadow: 0 0 0 3px color-mix(in srgb, var(--expense) 14%, transparent); }
 .invoice-item-money.refund:focus-within { border-color: var(--income); box-shadow: 0 0 0 3px color-mix(in srgb, var(--income) 14%, transparent); }
 .invoice-item-modal-footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -7853,6 +7901,8 @@ select {
   padding: 14px 20px;
   background: color-mix(in srgb, var(--card) 94%, var(--border));
 }
+.invoice-item-modal-footer .btn { flex: 1 1 0; min-width: 0; }
+.invoice-item-modal-footer .btn:last-child { flex-grow: 1.4; }
 
 @media (max-width: 600px) {
   .invoice-item-edit-modal {
@@ -7945,13 +7995,17 @@ select {
 
 .category-modal-layer { z-index: 70; }
 .category-create-modal {
+  display: flex;
+  flex-direction: column;
   width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   margin: 8vh auto;
   padding: 0;
   overflow: hidden;
   animation: modal-pop .2s ease both;
 }
 .category-modal-header {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -7969,7 +8023,7 @@ select {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--primary);
 }
-.category-modal-body { display: grid; gap: 20px; padding: 22px 20px; }
+.category-modal-body { display: grid; flex: 1 1 auto; gap: 20px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 20px; }
 .category-modal-body label { display: grid; gap: 7px; }
 .category-modal-body label > span,
 .category-modal-body legend {
@@ -8035,6 +8089,7 @@ select {
 }
 .category-preview strong i { width: 8px; height: 8px; border-radius: 50%; background: var(--category-color); }
 .category-modal-footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -8042,6 +8097,8 @@ select {
   padding: 14px 20px;
   background: color-mix(in srgb, var(--card) 94%, var(--border));
 }
+.category-modal-footer .btn { flex: 1 1 0; min-width: 0; }
+.category-modal-footer .btn:last-child { flex-grow: 1.4; }
 
 @media (max-width: 600px) {
   .category-create-modal {
@@ -8425,20 +8482,22 @@ select {
 .wallet-history-more button:disabled { cursor: wait; opacity: .65; }
 .wallet-history-more small { color: var(--muted); font-size: .65rem; }
 .wallet-detail-loading { display: flex; justify-content: center; gap: 8px; align-items: center; min-height: 180px; color: var(--muted); }
-.wallet-modal { width: min(540px, calc(100vw - 24px)); }
+.wallet-modal { display: flex; flex-direction: column; width: min(540px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: hidden; }
 .wallet-editor-modal, .wallet-adjustment-modal { padding: 0; overflow: hidden; }
 .wallet-editor-modal .wallet-modal-body, .wallet-adjustment-modal .wallet-modal-body { margin-top: 0; }
-.wallet-modal-body { padding: 20px; }
+.wallet-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
 .wallet-modal-body label > span { display: inline-flex; gap: 5px; align-items: center; }
 .wallet-modal-body label small { color: var(--muted); font-weight: 400; }
-.wallet-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.wallet-modal-actions { flex: 0 0 auto; display: flex; gap: 8px; margin: 0; padding: 13px 20px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--card) 96%, var(--border)); }
+.wallet-modal-actions .btn { flex: 1 1 0; min-width: 0; }
+.wallet-modal-actions .btn:last-child { flex-grow: 1.4; }
 .wallet-color-field input { width: 64px; min-height: 40px; padding: 4px; }
 .wallet-form-note { margin: 0; padding: 11px 13px; border-radius: 10px; color: var(--muted); background: var(--surface); font-size: .82rem; line-height: 1.5; }
 .wallet-calculated-balance, .wallet-adjustment-preview { display: flex; justify-content: space-between; align-items: center; padding: 13px; border-radius: 11px; background: var(--surface); }
 .wallet-adjustment-preview.positive strong { color: #0a8f68; }
 .wallet-adjustment-preview.negative strong { color: #d95050; }
 .wallet-transfer-modal { width: min(620px, calc(100vw - 24px)); padding: 0; overflow: hidden; }
-.wallet-transfer-header { display: grid; grid-template-columns: 42px minmax(0, 1fr) 34px; gap: 12px; align-items: center; padding: 20px; border-bottom: 1px solid var(--border); background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary) 15%, transparent), transparent 48%), var(--card); }
+.wallet-transfer-header { flex: 0 0 auto; display: grid; grid-template-columns: 42px minmax(0, 1fr) 34px; gap: 12px; align-items: center; padding: 20px; border-bottom: 1px solid var(--border); background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary) 15%, transparent), transparent 48%), var(--card); }
 .wallet-transfer-header > i { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .wallet-transfer-header > div { min-width: 0; }
 .wallet-transfer-header small { color: var(--primary); font-size: .61rem; font-weight: 800; letter-spacing: .08em; }
@@ -8504,7 +8563,7 @@ select {
   .wallet-modal-layer .wallet-modal {
     width: 100vw;
     max-width: none;
-    overflow-y: auto;
+    overflow: hidden;
     overscroll-behavior: contain;
   }
   .wallet-detail-backdrop {
@@ -8600,12 +8659,50 @@ select {
   .wallet-consolidation-summary { grid-template-columns: 1fr 1fr; }
   .wallet-consolidation-summary > div:first-child { grid-column: 1 / -1; padding-bottom: 7px; border-bottom: 1px solid var(--border); }
   .wallet-consolidation-summary > div:nth-child(2) { padding-left: 0; border-left: 0; }
-  .wallet-transfer-modal { overflow-y: auto; }
+  .wallet-transfer-modal { overflow: hidden; }
   .wallet-transfer-header { grid-template-columns: 36px minmax(0, 1fr) 32px; gap: 10px; padding: 16px; }
   .wallet-transfer-header > i { width: 36px; height: 36px; border-radius: 11px; }
   .wallet-transfer-header h2 { font-size: 1.05rem; }
   .wallet-transfer-header p { font-size: .7rem; }
-  .wallet-transfer-modal .wallet-modal-body { padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .wallet-transfer-modal .wallet-modal-body { padding: 18px 16px; }
+}
+
+@media (max-width: 767px) {
+  .modal-actions,
+  .transaction-modal-actions,
+  .wallet-modal-actions,
+  .category-modal-footer,
+  .invoice-item-modal-footer,
+  .entry-details-footer {
+    gap: 8px;
+    padding: 11px 14px calc(11px + env(safe-area-inset-bottom, 0px));
+  }
+  .modal-actions .btn,
+  .transaction-modal-actions .btn,
+  .wallet-modal-actions .btn,
+  .category-modal-footer .btn,
+  .invoice-item-modal-footer .btn,
+  .entry-details-footer .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+  }
+  .modal-actions .btn:last-child,
+  .transaction-modal-actions .btn:last-child,
+  .wallet-modal-actions .btn:last-child,
+  .category-modal-footer .btn:last-child,
+  .invoice-item-modal-footer .btn:last-child {
+    flex-grow: 1.4;
+  }
+  .review-footer p { padding: 10px 14px; }
+}
+
+@media (max-width: 1366px), (max-height: 900px) {
+  .modal-card.transaction-modal,
+  .invoice-item-edit-modal,
+  .category-create-modal {
+    margin: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -450,13 +450,13 @@ export default function TransactionForm({
             </section>
           )}
 
-          <div className="transaction-modal-actions">
-            <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
-            <button className={`btn transaction-save ${isExpense ? "danger" : "success"}`} type="submit" disabled={saving}>
-              {saving ? <><Loader2 className="spin" size={16} /> {tt("transactionModal.saving", "Salvando...")}</> : tt("actions.save", "Salvar")}
-            </button>
-          </div>
         </div>
+        <footer className="transaction-modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
+          <button className={`btn transaction-save ${isExpense ? "danger" : "success"}`} type="submit" disabled={saving}>
+            {saving ? <><Loader2 className="spin" size={16} /> {tt("transactionModal.saving", "Salvando...")}</> : tt("actions.save", "Salvar")}
+          </button>
+        </footer>
       </form>
     </div>
   );

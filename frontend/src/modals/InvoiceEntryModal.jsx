@@ -110,13 +110,13 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
             />
           </label>
 
-          <div className="transaction-modal-actions">
-            <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>{copy("Cancelar", "Cancel")}</button>
-            <button className={`btn transaction-save ${isRefund ? "success" : "danger"}`} type="submit" disabled={!canSave}>
-              {saving ? <><Loader2 className="spin" size={16} /> {copy("Adicionando...", "Adding...")}</> : title}
-            </button>
-          </div>
         </div>
+        <footer className="transaction-modal-actions">
+          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>{copy("Cancelar", "Cancel")}</button>
+          <button className={`btn transaction-save ${isRefund ? "success" : "danger"}`} type="submit" disabled={!canSave}>
+            {saving ? <><Loader2 className="spin" size={16} /> {copy("Adicionando...", "Adding...")}</> : title}
+          </button>
+        </footer>
       </form>
     </div>,
     document.body,
