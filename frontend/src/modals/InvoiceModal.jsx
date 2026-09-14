@@ -159,7 +159,7 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
               <label><span>{tt("invoiceModal.initialAmount", "Valor inicial (opcional)")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
               <label><span>Categorias do valor inicial</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
-              <label><span><WalletCards size={15} /> Carteira da fatura</span><WalletSelect wallets={wallets.filter((wallet) => wallet.active)} value={form.wallet_id} onChange={(value) => updateForm({ wallet_id: value })} ariaLabel="Carteiras da fatura" /></label>
+              <label><span>Carteira da fatura</span><WalletSelect wallets={wallets.filter((wallet) => wallet.active)} value={form.wallet_id} onChange={(value) => updateForm({ wallet_id: value })} ariaLabel="Carteiras da fatura" /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input
