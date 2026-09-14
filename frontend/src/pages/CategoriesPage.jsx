@@ -62,7 +62,7 @@ export default function CategoriesPage({
   const [expectedIncome, setExpectedIncome] = useState("");
   const [reserveType, setReserveType] = useState("percentage");
   const [reserveValue, setReserveValue] = useState("0");
-  const [categoryAnalysisView, setCategoryAnalysisView] = useState("expenses");
+  const [categoryAnalysisView, setCategoryAnalysisView] = useState("income");
   const [selectedExpenseGroup, setSelectedExpenseGroup] = useState(null);
   const [detailedExpenseGroups, setDetailedExpenseGroups] = useState(null);
   const [expenseDetailsLoading, setExpenseDetailsLoading] = useState(false);

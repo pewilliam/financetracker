@@ -43,7 +43,7 @@ function initialForm(year, month) {
   return {
     start_date: isoDate(year, month, 1),
     end_date: isoDate(year, month, lastDay),
-    type: "expense",
+    type: "income",
     category_ids: [],
     wallet_id: "",
     rules: [defaultRule()],

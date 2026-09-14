@@ -117,7 +117,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const safeSummary = summary || {};
   const safeCategoryBreakdown = categoryBreakdown || EMPTY_CATEGORY_BREAKDOWN;
   const [activeSection, setActiveSection] = useState("overview");
-  const [categoryView, setCategoryView] = useState("expenses");
+  const [categoryView, setCategoryView] = useState("income");
   const [selectedExpenseGroup, setSelectedExpenseGroup] = useState(null);
   const [detailedExpenseGroups, setDetailedExpenseGroups] = useState(null);
   const [expenseDetailsLoading, setExpenseDetailsLoading] = useState(false);

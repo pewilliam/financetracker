@@ -265,7 +265,7 @@ export default function TransactionForm({
     }
   };
 
-  const isExpense = form.type === "expense";
+  const isExpense = form.type === "income";
   const isReceivableCategory = !isExpense && categories.some((category) => form.category_ids.includes(String(category.id)) && ["recebivel", "receivable"].includes(normalizedCategoryName(category.name)));
   const recurrenceMonths = clampNumber(form.recurrence_months, 1, 60, 12);
   const recurrenceDay = clampNumber(form.day_of_month || getDayFromDate(form.date), 1, 31, 1);
