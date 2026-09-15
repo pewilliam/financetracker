@@ -339,7 +339,7 @@ export default function TransactionForm({
           </label>
 
           <label className={errors.wallet_id ? "has-error" : ""}>
-            <span><WalletCards size={15} /> Carteira</span>
+            <span>Carteira</span>
             <WalletSelect wallets={wallets.filter((wallet) => wallet.active || String(wallet.id) === String(form.wallet_id))} value={form.wallet_id} onChange={(value) => setField("wallet_id", value)} ariaLabel="Carteiras do lançamento" />
             {errors.wallet_id && <small className="field-error">{errors.wallet_id}</small>}
           </label>
