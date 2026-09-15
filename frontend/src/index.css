@@ -3838,7 +3838,7 @@ select {
   padding: 0;
   overflow: hidden;
 }
-.invoice-modal.step-2 { width: min(860px, calc(100% - 32px)); }
+.invoice-modal.step-2 { width: min(720px, calc(100% - 32px)); }
 .modal-titlebar {
   flex: 0 0 auto;
   display: grid;
@@ -4282,6 +4282,9 @@ select {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
+}
+.invoice-review-row {
+  grid-template-columns: 36px 96px minmax(160px, 1fr) minmax(150px, 1fr) 34px;
 }
 .review-head {
   background: rgba(20,160,120,0.09);
@@ -7402,6 +7405,10 @@ select {
     grid-template-columns: 28px 78px minmax(118px, 1fr) minmax(100px, 1fr) minmax(112px, 1fr) 32px;
     gap: 6px;
     padding: 8px;
+  }
+  .invoice-review-row {
+    min-width: 520px;
+    grid-template-columns: 28px 78px minmax(130px, 1fr) minmax(112px, 1fr) 32px;
   }
   .installment-review-head,
   .installment-review-row {

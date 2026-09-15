@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { CalendarPlus, Check, CreditCard, Trash2, WalletCards, X } from "lucide-react";
+import { CalendarPlus, Check, CreditCard, Trash2, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
 import InvoiceTemplateModal from "./InvoiceTemplateModal.jsx";
-import CategorySelect from "../components/CategorySelect.jsx";
 import WalletSelect from "../components/WalletSelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { CREATE_TEMPLATE_VALUE } from "../app/constants.js";
 import { addMonthsToDate, formatMonthShort, isMobileViewport, nextDueDateFromDay, normalizeInvoiceColor } from "../app/helpers.js";
-import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InvoiceModal({ form, setForm, templates, categories = [], wallets = [], onCreateCategory, onCreateTemplate, onSubmit, onClose }) {
+export default function InvoiceModal({ form, setForm, templates, wallets = [], onCreateTemplate, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
@@ -64,8 +62,6 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
     template_name: selectedTemplate?.name || "",
     template_color: normalizeInvoiceColor(selectedTemplate?.color),
     due_date: addMonthsToDate(form.due_date, index),
-    initial_amount: form.initial_amount,
-    category_ids: form.category_ids || [],
     wallet_id: form.wallet_id,
   }));
 
@@ -84,11 +80,6 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
     setDrafts((current) => current.filter((draft) => draft.id !== id));
   };
 
-  const matchFirstValue = () => {
-    const first = drafts[0]?.initial_amount || "";
-    setDrafts((current) => current.map((draft) => ({ ...draft, initial_amount: first })));
-  };
-
   const resetAutomaticDates = () => {
     const firstDate = drafts[0]?.due_date;
     if (!firstDate) return;
@@ -102,18 +93,12 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
 
   const validDrafts = drafts.filter((draft) => !rowError(draft));
   const canCreate = drafts.length > 0 && validDrafts.length === drafts.length;
-  const totalCommitted = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.initial_amount, language), 0);
 
   const submitDrafts = (event) => {
     event.preventDefault();
     if (!canCreate) return;
     onSubmit(drafts);
   };
-
-  const handleMoneyChange = (value, setter) => {
-    setter(formatTypedMoneyForEditing(value, language));
-  };
-  const normalizeMoneyValue = (value) => formatTypedMoneyAsCurrency(value, language);
 
   return (
     <div className="modal-layer">
@@ -157,8 +142,6 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
                 </div>
               </label>
               <label><span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
-              <label><span>{tt("invoiceModal.initialAmount", "Valor inicial (opcional)")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateForm({ initial_amount: value }))} onBlur={() => updateForm({ initial_amount: normalizeMoneyValue(form.initial_amount) })} /></label>
-              <label><span>Categorias do valor inicial</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
               <label><span>Carteira da fatura</span><WalletSelect wallets={wallets.filter((wallet) => wallet.active)} value={form.wallet_id} onChange={(value) => updateForm({ wallet_id: value })} ariaLabel="Carteiras da fatura" /></label>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
@@ -213,16 +196,14 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
           <>
             <div className="invoice-review">
               <div className="review-toolbar">
-                <button className="btn btn-ghost compact" type="button" onClick={matchFirstValue}>Igualar todos os valores ao primeiro</button>
                 <button className="btn btn-ghost compact" type="button" onClick={resetAutomaticDates}>Resetar datas automáticas</button>
               </div>
 
               <div className="review-table">
-                <div className="review-row review-head">
+                <div className="review-row invoice-review-row review-head">
                   <span>#</span>
                   <span>{tt("invoiceModal.month", "Mês")}</span>
                   <span>{tt("invoiceModal.dueDate", "Data de venc.")}</span>
-                  <span>{tt("invoiceModal.amount", "Valor")}</span>
                   <span>{tt("invoiceModal.model", "Modelo")}</span>
                   <span />
                 </div>
@@ -230,11 +211,10 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
                   {drafts.map((draft, index) => {
                     const error = rowError(draft);
                     return (
-                      <div className={`review-row ${error ? "has-error" : ""}`} key={draft.id} title={error}>
+                      <div className={`review-row invoice-review-row ${error ? "has-error" : ""}`} key={draft.id} title={error}>
                         <span>{index + 1}</span>
                         <strong>{draft.due_date ? formatMonthShort(draft.due_date) : "-"}</strong>
                         <DateField className="compact" value={draft.due_date} onChange={(value) => updateDraft(draft.id, { due_date: value })} />
-                        <input inputMode="decimal" value={draft.initial_amount} onChange={(event) => handleMoneyChange(event.target.value, (value) => updateDraft(draft.id, { initial_amount: value }))} onBlur={() => updateDraft(draft.id, { initial_amount: normalizeMoneyValue(draft.initial_amount) })} />
                         <span className="review-template-name"><i style={{ "--invoice-color": draft.template_color }} />{draft.template_name}</span>
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover fatura"><Trash2 size={15} /></button>
                       </div>
@@ -245,7 +225,6 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
             </div>
 
             <div className="review-footer">
-              <p>Total comprometido: <strong>{formatMoney(totalCommitted)}</strong></p>
               <div className="modal-actions">
                 <button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button>
                 <button className="btn btn-primary" disabled={!canCreate}>
@@ -265,5 +244,3 @@ export default function InvoiceModal({ form, setForm, templates, categories = []
     </div>
   );
 }
-
-

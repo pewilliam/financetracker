@@ -127,10 +127,11 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
   const canAddToInvoice = invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
   const canEditDueDate = canAddToInvoice;
   const totalItemCount = regularItems.length + installmentItems.length;
+  const isEmptyInvoice = totalItemCount === 0;
   const singleMainItem = totalItemCount === 1
     && regularItems.length === 1
     && normalizeName(regularItems[0].description) === normalizeName(invoice.name);
-  const canToggleItems = totalItemCount !== 1 || !singleMainItem;
+  const canToggleItems = !isEmptyInvoice && (totalItemCount !== 1 || !singleMainItem);
   const itemsExpanded = itemsOpen;
   const viewItemsLabel = language === "en-US" ? `View items (${totalItemCount})` : `Ver itens (${totalItemCount})`;
   const hideItemsLabel = language === "en-US" ? "Hide items" : "Ocultar itens";
@@ -268,6 +269,12 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         <span>{tt("invoices.total", "Total")}</span>
         <strong>{formatMoney(invoice.total_amount)}</strong>
       </div>
+
+      {isEmptyInvoice && (
+        <div className="invoice-items">
+          <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>
+        </div>
+      )}
 
       {canToggleItems && (
         <button className={`invoice-items-toggle ${itemsExpanded ? "open" : ""}`} type="button" onClick={() => setItemsOpen((current) => !current)} aria-expanded={itemsExpanded}>
