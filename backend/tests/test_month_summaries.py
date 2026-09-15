@@ -88,6 +88,43 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         self.assertEqual(result[0].current_balance, Decimal("700.00"))
         self.assertEqual(result[0].closing_balance, Decimal("625.00"))
 
+    def test_dashboard_ignores_transactions_from_archived_wallets(self):
+        class FixedDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 2, 15)
+
+        primary = Wallet(
+            user_id=self.user.id,
+            name="Conta ativa",
+            type="checking",
+            initial_balance=Decimal("1000.00"),
+            tracking_started_on=date(2026, 1, 1),
+            is_primary=True,
+        )
+        archived = Wallet(
+            user_id=self.user.id,
+            name="Conta arquivada",
+            type="checking",
+            initial_balance=Decimal("0.00"),
+            tracking_started_on=date(2026, 1, 1),
+            active=False,
+        )
+        self.db.add_all([primary, archived])
+        self.db.flush()
+        self.db.add_all([
+            Transaction(user_id=self.user.id, wallet_id=primary.id, date=date(2026, 2, 14), type="income", amount=Decimal("6.11")),
+            Transaction(user_id=self.user.id, wallet_id=archived.id, date=date(2026, 2, 14), type="expense", amount=Decimal("26.00")),
+        ])
+        self.db.commit()
+
+        with patch("app.routers.months.date", FixedDate):
+            summary = _build_month_summary(self.db, 2026, 2, self.user.id)
+            month = get_month(2026, 2, self.db, type("CurrentUser", (), {"id": self.user.id})())
+
+        self.assertEqual(summary.current_balance, Decimal("1006.11"))
+        self.assertEqual(summary.current_balance, month.days[14].balance)
+
     def test_wallet_month_summaries_use_a_fixed_number_of_queries(self):
         primary = Wallet(
             user_id=self.user.id,
