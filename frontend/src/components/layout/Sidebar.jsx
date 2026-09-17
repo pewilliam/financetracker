@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { BarChart3, CalendarDays, ChartNoAxesCombined, ChartPie, CreditCard, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun, Wallet } from "lucide-react";
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Receipt,
+  Wallet,
+  ChartPie,
+  Layers,
+  Calculator,
+  Coins
+} from "lucide-react";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
