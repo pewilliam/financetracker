@@ -12,14 +12,14 @@ function SidebarContent({ open, setOpen, onClose }) {
   const { theme, setTheme } = useTheme();
   const { t } = useI18n();
   const links = [
-    [t("sidebar.dashboard"), "/", BarChart3],
+    [t("sidebar.dashboard"), "/", LayoutDashboard],
     [t("sidebar.months"), "/meses", CalendarDays],
+    [t("sidebar.invoices"), "/faturas", Receipt],
     [t("sidebar.wallets"), "/carteiras", Wallet],
     [t("sidebar.categories"), "/categorias", ChartPie],
-    [t("sidebar.invoices"), "/faturas", CreditCard],
-    [t("sidebar.installments"), "/parcelamentos", CreditCard],
-    [t("sidebar.simulator"), "/simulador", ChartNoAxesCombined],
-    [t("sidebar.receivables"), "/recebiveis", Wallet]
+    [t("sidebar.installments"), "/parcelamentos", Layers],
+    [t("sidebar.simulator"), "/simulador", Calculator],
+    [t("sidebar.receivables"), "/recebiveis", Coins]
   ];
 
   return (
