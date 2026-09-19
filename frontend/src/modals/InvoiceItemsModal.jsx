@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronDown, CircleDollarSign, CircleMinus, CreditCard, LayoutList, Pencil, Plus, Receipt, Search, Tag, Trash2, X } from "lucide-react";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import DeleteInvoiceEntryModal from "./DeleteInvoiceEntryModal.jsx";
@@ -26,7 +27,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const layerRef = useRef(null);
   const searchRef = useRef(null);
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("newest");
+  const [sort, setSort] = useState("recent");
   const [grouped, setGrouped] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState(null);
   const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
@@ -47,8 +48,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   }, []);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Scroll lock fica no AppShell (position:fixed); overflow:hidden aqui esvazia a tela.
     const closeOnEscape = (event) => {
       if (event.key !== "Escape") return;
       const layers = [...document.querySelectorAll(".modal-layer")];
@@ -56,10 +56,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
       onClose();
     };
     document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
+    return () => document.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
   useEffect(() => {
@@ -207,7 +204,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
     );
   };
 
-  return (
+  return createPortal(
     <div className="modal-layer invoice-items-layer" ref={layerRef}>
       <button className="modal-backdrop" onClick={onClose} aria-label={copy("Fechar itens da fatura", "Close invoice items")} />
       <section className="modal-card invoice-items-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-items-title" style={{ "--invoice-color": normalizeInvoiceColor(invoice.color) }}>
@@ -357,6 +354,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
           onClose={() => setEntryToDelete(null)}
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

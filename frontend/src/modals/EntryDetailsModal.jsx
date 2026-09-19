@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -158,7 +159,7 @@ export default function EntryDetailsModal({
         ? { label: copy("Paga", "Paid"), tone: "paid" }
         : { label: copy("Pendente", "Pending"), tone: "pending" };
 
-  return (
+  return createPortal(
     <div className="modal-layer entry-details-layer">
       <button className="modal-backdrop" type="button" onClick={onClose} aria-label={copy("Fechar detalhes", "Close details")} />
       <section className={`modal-card entry-details-modal ${tone}`} role="dialog" aria-modal="true" aria-labelledby="entry-details-title">
@@ -327,6 +328,7 @@ export default function EntryDetailsModal({
           onClose={closeCategoryDetails}
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
