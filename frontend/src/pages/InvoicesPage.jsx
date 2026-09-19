@@ -7,6 +7,7 @@ import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 import InstallmentModal from "../modals/InstallmentModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { defaultInstallmentForm, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
+import { formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 
 export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, onViewInstallment }) {
@@ -291,6 +292,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
             <div className="invoice-groups">
               {invoiceGroups.map((group) => {
                 const expanded = expandedGroups[group.id];
+                const groupTotal = group.items.reduce((total, invoice) => total + Number(invoice.total_amount || 0), 0);
                 return (
                   <section className={`invoice-group ${expanded ? "expanded" : "collapsed"}`} key={group.id}>
                     <button className="invoice-group-toggle" type="button" onClick={() => toggleGroup(group.id)} aria-expanded={expanded}>
@@ -298,7 +300,10 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
                         <h3>{group.label}</h3>
                         <small>{group.items.length}</small>
                       </div>
-                      <ChevronDown size={18} />
+                      <div className="invoice-group-meta">
+                        {group.items.length > 0 && <strong>{formatMoney(groupTotal)}</strong>}
+                        <ChevronDown size={18} />
+                      </div>
                     </button>
                     {expanded && (
                       group.items.length ? (

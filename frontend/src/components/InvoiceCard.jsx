@@ -127,6 +127,7 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
   const canAddToInvoice = invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
   const canEditDueDate = canAddToInvoice;
   const totalItemCount = regularItems.length + installmentItems.length;
+  const refundTotal = regularItems.reduce((total, item) => Number(item.amount) < 0 ? total + Math.abs(Number(item.amount)) : total, 0);
   const isEmptyInvoice = totalItemCount === 0;
   const singleMainItem = totalItemCount === 1
     && regularItems.length === 1
@@ -227,48 +228,45 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
   };
 
   return (
-    <article className={`invoice-card card ${invoice.paid ? "paid" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
+    <article className={`invoice-card card ${invoice.paid ? "paid" : ""} ${overdue ? "overdue" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
-        <div className="invoice-header-main">
+        <div className="invoice-header-top">
           <h3><span className="invoice-color-dot" />{invoice.name}</h3>
-          {editingDueDate ? (
-            <div className="invoice-due-editor">
-              <DateField className="compact" value={dueDateDraft} onChange={setDueDateDraft} />
-              <button className="icon-btn small" type="button" onClick={saveDueDate} disabled={savingDueDate || !dueDateDraft} aria-label={language === "en-US" ? "Save due date" : "Salvar vencimento"}>
-                <Check size={15} />
-              </button>
-              <button className="icon-btn small" type="button" onClick={cancelEditingDueDate} disabled={savingDueDate} aria-label={language === "en-US" ? "Cancel date edit" : "Cancelar edicao de data"}>
-                <X size={15} />
-              </button>
-            </div>
-          ) : (
-            <div className="invoice-due-summary">
-              <p className="invoice-due-line">
-                <CalendarDays size={14} />
-                <span className="invoice-due-copy">
-                  <small>{tt("invoices.dueOn", "Vencimento em")}</small>
-                  <strong>{formatDateShort(invoice.due_date)}</strong>
-                </span>
-              </p>
-              {canEditDueDate && (
-                <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
-                  <Pencil size={13} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="invoice-status-actions">
           <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
             {invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
           </span>
         </div>
+        <p className="invoice-amount">
+          <small>{tt("invoices.total", "Total")}</small>
+          <strong>{formatMoney(invoice.total_amount)}</strong>
+        </p>
+        {editingDueDate ? (
+          <div className="invoice-due-editor">
+            <DateField className="compact" value={dueDateDraft} onChange={setDueDateDraft} />
+            <button className="icon-btn small" type="button" onClick={saveDueDate} disabled={savingDueDate || !dueDateDraft} aria-label={language === "en-US" ? "Save due date" : "Salvar vencimento"}>
+              <Check size={15} />
+            </button>
+            <button className="icon-btn small" type="button" onClick={cancelEditingDueDate} disabled={savingDueDate} aria-label={language === "en-US" ? "Cancel date edit" : "Cancelar edicao de data"}>
+              <X size={15} />
+            </button>
+          </div>
+        ) : (
+          <div className="invoice-due-summary">
+            <p className="invoice-due-line">
+              <CalendarDays size={14} />
+              <span className="invoice-due-copy">
+                <small>{tt("invoices.dueOn", "Vencimento em")}</small>
+                <strong>{formatDateShort(invoice.due_date)}</strong>
+              </span>
+            </p>
+            {canEditDueDate && (
+              <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
+                <Pencil size={13} />
+              </button>
+            )}
+          </div>
+        )}
       </header>
-
-      <div className="invoice-total-row">
-        <span>{tt("invoices.total", "Total")}</span>
-        <strong>{formatMoney(invoice.total_amount)}</strong>
-      </div>
 
       {isEmptyInvoice && (
         <div className="invoice-items">
@@ -280,6 +278,11 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         <button className={`invoice-items-toggle ${itemsExpanded ? "open" : ""}`} type="button" onClick={() => setItemsOpen((current) => !current)} aria-expanded={itemsExpanded}>
           <ChevronRight size={16} />
           <span>{itemsExpanded ? hideItemsLabel : viewItemsLabel}</span>
+          {refundTotal > 0 && (
+            <em className="invoice-refund-chip" title={`${refundLabel}: ${formatMoney(refundTotal)}`}>
+              <CircleMinus size={12} />{formatMoney(refundTotal)}
+            </em>
+          )}
         </button>
       )}
 
@@ -331,13 +334,14 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         </div>
       )}
 
-      {canAddToInvoice && renderQuickAddActions()}
-
-      <div className="invoice-actions">
-        <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
-          {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
-          {invoice.paid ? tt("invoices.markAsPending", "Marcar pendente") : tt("invoices.markAsPaid", "Marcar paga")}
-        </button>
+      <div className="invoice-card-footer">
+        {canAddToInvoice && renderQuickAddActions()}
+        <div className="invoice-actions">
+          <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
+            {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
+            {invoice.paid ? tt("invoices.markAsPending", "Marcar pendente") : tt("invoices.markAsPaid", "Marcar paga")}
+          </button>
+        </div>
       </div>
     </article>
   );
