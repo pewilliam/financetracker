@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Layers3, Loader2, Pencil, Trash2, X } from "lucide-react";
 import CategorySelect from "../components/CategorySelect.jsx";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
@@ -15,6 +15,10 @@ function itemStatus(item, invoice = item.invoice, copy = (pt) => pt) {
     return { label: copy("Atrasada", "Overdue"), tone: "danger" };
   }
   return { label: copy("Pendente", "Pending"), tone: "pending" };
+}
+
+function isPaidInstallment(item) {
+  return item.status !== "canceled" && Boolean(item.invoice?.paid);
 }
 
 function purchaseCategories(purchase) {
@@ -46,6 +50,35 @@ export default function InstallmentDetailsModal({
   const firstInvoice = purchase.items?.find((entry) => entry.invoice)?.invoice;
   const purchaseDate = purchase.created_at ? formatDateShort(purchase.created_at.slice(0, 10), language) : null;
 
+  const itemGroups = useMemo(() => {
+    const open = [];
+    const paid = [];
+    (purchase.items || []).forEach((item) => {
+      if (isPaidInstallment(item)) paid.push(item);
+      else open.push(item);
+    });
+    const groups = [];
+    if (open.length) {
+      groups.push({
+        id: "open",
+        tone: "open",
+        title: copy("Em aberto", "Open"),
+        items: open,
+        total: open.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      });
+    }
+    if (paid.length) {
+      groups.push({
+        id: "paid",
+        tone: "paid",
+        title: copy("Pagas", "Paid"),
+        items: paid,
+        total: paid.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      });
+    }
+    return groups;
+  }, [language, purchase.items]);
+
   useModalLifecycle({
     onClose,
     busy: Boolean(editingItem) || savingCategory,
@@ -74,6 +107,62 @@ export default function InstallmentDetailsModal({
     } finally {
       setSavingCategory(false);
     }
+  };
+
+  const renderItem = (item) => {
+    const status = itemStatus(item, item.invoice, copy);
+    const dueDate = item.invoice?.due_date ? formatDateShort(item.invoice.due_date, language) : "—";
+    const openEdit = () => setEditingItem(item);
+    return (
+      <div
+        className={`installment-details-item is-clickable ${item.id === nextId ? "is-next" : ""} ${editingItem?.id === item.id ? "is-editing" : ""}`}
+        role="row"
+        tabIndex="0"
+        key={item.id}
+        onClick={openEdit}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openEdit();
+          }
+        }}
+        aria-label={copy(`Editar parcela ${item.installment_number}`, `Edit installment ${item.installment_number}`)}
+      >
+        <span className="installment-item-number" role="cell">
+          <small>{copy("Parcela", "Installment")}</small>
+          <strong>{item.installment_number}/{purchase.installment_count}</strong>
+          {item.id === nextId && <em>{copy("Próxima", "Next")}</em>}
+        </span>
+        <span role="cell">
+          <small>{copy("Valor", "Amount")}</small>
+          <strong>{formatMoney(item.amount)}</strong>
+        </span>
+        <span role="cell">
+          <small>{copy("Fatura", "Invoice")}</small>
+          <span>{item.invoice?.name || copy("Fatura removida", "Invoice removed")}</span>
+        </span>
+        <span role="cell">
+          <small>{copy("Vencimento", "Due date")}</small>
+          <span>{dueDate}</span>
+        </span>
+        <span role="cell">
+          <small>{copy("Status", "Status")}</small>
+          <span className={`installment-status ${status.tone}`}>{status.label}</span>
+        </span>
+        <span className="installment-row-actions" role="cell">
+          <button
+            className="icon-btn small"
+            type="button"
+            onClick={(event) => { event.stopPropagation(); openEdit(); }}
+            aria-label={copy(`Editar parcela ${item.installment_number}`, `Edit installment ${item.installment_number}`)}
+            title={copy("Editar valor, fatura ou status", "Edit amount, invoice, or status")}
+          >
+            <Pencil size={15} />
+          </button>
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -155,61 +244,18 @@ export default function InstallmentDetailsModal({
                 <span role="columnheader" className="sr-only">{copy("Ações", "Actions")}</span>
               </div>
               <div className="installment-details-list">
-                {purchase.items.map((item) => {
-                  const status = itemStatus(item, item.invoice, copy);
-                  const dueDate = item.invoice?.due_date ? formatDateShort(item.invoice.due_date, language) : "—";
-                  const openEdit = () => setEditingItem(item);
-                  return (
-                    <div
-                      className={`installment-details-item is-clickable ${item.id === nextId ? "is-next" : ""} ${editingItem?.id === item.id ? "is-editing" : ""}`}
-                      role="row"
-                      tabIndex="0"
-                      key={item.id}
-                      onClick={openEdit}
-                      onKeyDown={(event) => {
-                        if (event.target !== event.currentTarget) return;
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openEdit();
-                        }
-                      }}
-                      aria-label={copy(`Editar parcela ${item.installment_number}`, `Edit installment ${item.installment_number}`)}
-                    >
-                      <span className="installment-item-number" role="cell">
-                        <small>{copy("Parcela", "Installment")}</small>
-                        <strong>{item.installment_number}/{purchase.installment_count}</strong>
-                        {item.id === nextId && <em>{copy("Próxima", "Next")}</em>}
-                      </span>
-                      <span role="cell">
-                        <small>{copy("Valor", "Amount")}</small>
-                        <strong>{formatMoney(item.amount)}</strong>
-                      </span>
-                      <span role="cell">
-                        <small>{copy("Fatura", "Invoice")}</small>
-                        <span>{item.invoice?.name || copy("Fatura removida", "Invoice removed")}</span>
-                      </span>
-                      <span role="cell">
-                        <small>{copy("Vencimento", "Due date")}</small>
-                        <span>{dueDate}</span>
-                      </span>
-                      <span role="cell">
-                        <small>{copy("Status", "Status")}</small>
-                        <span className={`installment-status ${status.tone}`}>{status.label}</span>
-                      </span>
-                      <span className="installment-row-actions" role="cell">
-                        <button
-                          className="icon-btn small"
-                          type="button"
-                          onClick={(event) => { event.stopPropagation(); openEdit(); }}
-                          aria-label={copy(`Editar parcela ${item.installment_number}`, `Edit installment ${item.installment_number}`)}
-                          title={copy("Editar valor, fatura ou status", "Edit amount, invoice, or status")}
-                        >
-                          <Pencil size={15} />
-                        </button>
-                      </span>
+                {itemGroups.map((group) => (
+                  <section className={`installment-details-group ${group.tone}`} key={group.id} aria-labelledby={`installment-group-${group.id}`}>
+                    <header className="installment-details-group-head">
+                      <span id={`installment-group-${group.id}`}><i aria-hidden="true" />{group.title}</span>
+                      <small>{group.items.length}</small>
+                      <strong>{formatMoney(group.total)}</strong>
+                    </header>
+                    <div className="installment-details-group-list">
+                      {group.items.map(renderItem)}
                     </div>
-                  );
-                })}
+                  </section>
+                ))}
               </div>
             </div>
           </section>

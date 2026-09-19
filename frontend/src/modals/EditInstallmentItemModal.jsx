@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CreditCard, Loader2, Pencil, X } from "lucide-react";
+import FilterSelect from "../components/common/FilterSelect.jsx";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useI18n } from "../i18n/index.ts";
-import { invoiceAcceptsNewCharges, isMobileViewport } from "../app/helpers.js";
+import { invoiceAcceptsNewCharges, isMobileViewport, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 const cents = (value) => Math.round(Math.abs(Number(value || 0)) * 100);
@@ -43,12 +44,44 @@ export default function EditInstallmentItemModal({
   const [saving, setSaving] = useState(false);
 
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
-  const invoiceOptions = useMemo(
-    () => [...invoices]
-      .filter((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits) || invoice.id === item.invoice_id)
-      .sort((left, right) => left.due_date.localeCompare(right.due_date)),
-    [allowOverdueInvoiceEdits, invoices, item.invoice_id],
-  );
+
+  const invoiceOptions = useMemo(() => {
+    const openInvoices = [...invoices]
+      .filter((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits))
+      .sort((left, right) => left.due_date.localeCompare(right.due_date) || left.name.localeCompare(right.name, language));
+
+    const options = [
+      {
+        value: "",
+        label: copy("Sem fatura", "No invoice"),
+        description: copy("Parcela sem vínculo", "Unlinked installment"),
+        color: "var(--muted)",
+      },
+      ...openInvoices.map((invoice) => ({
+        value: String(invoice.id),
+        label: invoice.name,
+        description: copy(`Vence ${formatDateShort(invoice.due_date, language)}`, `Due ${formatDateShort(invoice.due_date, language)}`),
+        searchText: `${invoice.name} ${invoice.due_date}`,
+        color: normalizeInvoiceColor(invoice.color),
+      })),
+    ];
+
+    const currentId = form.status === "canceled" ? "" : form.invoice_id;
+    const currentInvoice = currentId ? invoicesById.get(String(currentId)) : null;
+    if (currentInvoice && !options.some((option) => option.value === String(currentInvoice.id))) {
+      options.splice(1, 0, {
+        value: String(currentInvoice.id),
+        label: currentInvoice.name,
+        description: currentInvoice.paid
+          ? copy(`Paga · venceu ${formatDateShort(currentInvoice.due_date, language)}`, `Paid · due ${formatDateShort(currentInvoice.due_date, language)}`)
+          : copy(`Vence ${formatDateShort(currentInvoice.due_date, language)}`, `Due ${formatDateShort(currentInvoice.due_date, language)}`),
+        searchText: `${currentInvoice.name} ${currentInvoice.due_date}`,
+        color: normalizeInvoiceColor(currentInvoice.color),
+      });
+    }
+
+    return options;
+  }, [allowOverdueInvoiceEdits, form.invoice_id, form.status, invoices, invoicesById, language]);
 
   const selectedInvoice = form.status === "canceled" ? null : invoicesById.get(String(form.invoice_id));
   const amount = parseTypedMoneyInput(form.amount, language);
@@ -58,6 +91,7 @@ export default function EditInstallmentItemModal({
   const invalidRefund = form.status === "refunded" && !form.invoice_id;
   const invalidInvoice = Boolean(form.invoice_id) && !selectedInvoice && form.status !== "canceled";
   const canSave = amount > 0 && changed && !invalidRefund && !invalidInvoice && !saving;
+  const invoiceDisabled = form.status === "canceled" || saving;
 
   useModalLifecycle({
     onClose,
@@ -134,19 +168,18 @@ export default function EditInstallmentItemModal({
             </div>
           </label>
 
-          <label className="edit-installment-field">
+          <label className={`edit-installment-field edit-installment-invoice ${invoiceDisabled ? "is-disabled" : ""}`}>
             <span>{copy("Fatura", "Invoice")}</span>
-            <select
-              aria-label={copy(`Fatura da parcela ${item.installment_number}`, `Invoice for installment ${item.installment_number}`)}
+            <FilterSelect
               value={form.status === "canceled" ? "" : form.invoice_id}
-              disabled={form.status === "canceled" || saving}
-              onChange={(event) => setForm((current) => ({ ...current, invoice_id: event.target.value }))}
-            >
-              <option value="">{copy("Sem fatura", "No invoice")}</option>
-              {invoiceOptions.map((invoice) => (
-                <option value={invoice.id} key={invoice.id}>{invoice.name}</option>
-              ))}
-            </select>
+              options={invoiceOptions}
+              disabled={invoiceDisabled}
+              searchable
+              searchPlaceholder={copy("Buscar fatura em aberto...", "Search open invoice...")}
+              emptyLabel={copy("Nenhuma fatura em aberto encontrada.", "No open invoices found.")}
+              ariaLabel={copy(`Fatura da parcela ${item.installment_number}`, `Invoice for installment ${item.installment_number}`)}
+              onChange={(invoiceId) => setForm((current) => ({ ...current, invoice_id: invoiceId }))}
+            />
           </label>
 
           <div className="edit-installment-due" aria-live="polite">

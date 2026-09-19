@@ -8567,6 +8567,13 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .category-multi-options > button > i { width: 9px; height: 9px; border-radius: 3px; background: var(--category-color); }
 .category-multi-options > button > span { overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.category-multi-options > button.has-description { align-items: start; padding-block: 8px; }
+.category-multi-options > button.has-description > span,
+.category-multi-options > button > span.filter-select-option-text.has-description {
+  display: grid;
+  gap: 2px;
+  white-space: normal;
+}
 .category-multi-options > button > b { display: grid; place-items: center; color: var(--primary); }
 .category-multi-options > p { margin: 8px; color: var(--muted); font-size: 12px; }
 .category-multi-create {
@@ -10100,6 +10107,32 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .filter-select-value { overflow: hidden; color: var(--text); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .installment-filter-fields .category-multi-placeholder { color: var(--muted); }
 .filter-select-menu .category-multi-options > button > i { border-radius: 999px; }
+.filter-select-option-text {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.filter-select-option-text > strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filter-select-option-text > small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filter-select.is-disabled { opacity: .62; pointer-events: none; }
+.filter-select .category-multi-trigger:disabled { cursor: not-allowed; }
+.edit-installment-invoice .filter-select,
+.edit-installment-invoice .category-multi-trigger { width: 100%; }
+.edit-installment-invoice .category-multi-trigger { min-height: 42px; }
+.edit-installment-invoice .filter-select-menu { z-index: 80; }
 .installment-view-toggle { height: 40px; }
 .installment-view-toggle button { min-height: 38px; font-size: 12px; }
 .installment-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: -5px; }
@@ -10197,6 +10230,54 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-details-table-head, .installment-details-item { display: grid; grid-template-columns: 74px 120px minmax(160px, 1fr) 116px 110px 74px; align-items: center; gap: 8px; padding: 8px 10px; }
 .installment-details-table-head { background: color-mix(in srgb, var(--surface) 66%, var(--card)); color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .03em; text-transform: uppercase; }
 .installment-details-list { max-height: min(42vh, 350px); overflow-y: auto; overscroll-behavior: contain; }
+.installment-details-group + .installment-details-group { border-top: 1px solid var(--border); }
+.installment-details-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface) 72%, var(--card));
+  border-top: 1px solid var(--border);
+}
+.installment-details-group:first-child .installment-details-group-head { border-top: 0; }
+.installment-details-group-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+}
+.installment-details-group-head > span > i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: color-mix(in srgb, #d99a18 80%, var(--muted));
+}
+.installment-details-group.paid .installment-details-group-head > span > i {
+  background: color-mix(in srgb, var(--primary) 80%, var(--muted));
+}
+.installment-details-group-head > small {
+  min-width: 22px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.installment-details-group-head > strong {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.installment-details-group-list { display: contents; }
 .installment-details-item { position: relative; min-height: 54px; border-top: 1px solid var(--border); font-size: 11px; transition: background .16s ease, box-shadow .16s ease; }
 .installment-details-item.is-clickable { cursor: pointer; }
 .installment-details-item.is-clickable:hover { background: color-mix(in srgb, var(--primary) 5%, var(--card)); }
@@ -10329,7 +10410,17 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .installment-details-scroll { gap: 13px; padding: 14px; padding-bottom: 18px; }
   .installment-financial-summary { grid-template-columns: 1fr 1fr; }.installment-financial-summary > div { padding: 11px; }.installment-financial-summary > div + div { border-left: 1px solid var(--border); }.installment-financial-summary > div:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--border); border-left: 0; }.installment-financial-summary strong { font-size: 15px; }
   .installment-purchase-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }.installment-purchase-meta div { display: grid; gap: 2px; }
-  .installment-details-table { overflow: visible; border: 0; }.installment-details-table-head { display: none; }.installment-details-list { max-height: none; display: grid; gap: 8px; overflow: visible; }
+  .installment-details-table { overflow: visible; border: 0; }.installment-details-table-head { display: none; }.installment-details-list { max-height: none; display: grid; gap: 12px; overflow: visible; }
+  .installment-details-group { display: grid; gap: 8px; }
+  .installment-details-group + .installment-details-group { border-top: 0; }
+  .installment-details-group-head {
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: color-mix(in srgb, var(--surface) 55%, var(--card));
+  }
+  .installment-details-group:first-child .installment-details-group-head { border-top: 0; }
+  .installment-details-group-list { display: grid; gap: 8px; }
   .installment-details-item { grid-template-columns: 1fr 1fr auto; gap: 10px; min-height: 0; border: 1px solid var(--border); border-radius: 9px; padding: 11px; background: var(--card); }
   .installment-details-item.is-next::before { inset: 8px auto 8px 0; }
   .installment-details-item.is-editing { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 34%, transparent); }
