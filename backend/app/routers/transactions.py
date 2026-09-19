@@ -8,6 +8,7 @@ from app.schemas.receivables import ReceivableExpenseLinkIn
 from app.schemas.transactions import TransactionBatchCreate, TransactionBatchOut, TransactionCreate, TransactionOut, TransactionUpdate
 from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
+from app.services.invoices import INVOICE_TRANSACTION_CREATE_DETAIL, INVOICE_TRANSACTION_EDIT_DETAIL
 from app.services.wallets import user_wallet
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
@@ -90,6 +91,16 @@ def _apply_expense_link(
     setattr(transaction, target_field, source.id)
 
 
+def _reject_invoice_transaction_create(invoice_id: int | None) -> None:
+    if invoice_id:
+        raise HTTPException(status_code=400, detail=INVOICE_TRANSACTION_CREATE_DETAIL)
+
+
+def _reject_invoice_transaction_edit(transaction: Transaction, invoice_id: int | None = None) -> None:
+    if transaction.invoice_id or invoice_id:
+        raise HTTPException(status_code=400, detail=INVOICE_TRANSACTION_EDIT_DETAIL)
+
+
 def _current_expense_link(transaction: Transaction) -> ReceivableExpenseLinkIn | None:
     if transaction.linked_expense_transaction_id:
         return ReceivableExpenseLinkIn(source_type="transaction", source_id=transaction.linked_expense_transaction_id)
@@ -110,14 +121,7 @@ def create_transaction(
     if not is_future and payload.date > date.today():
         is_future = True
 
-    if payload.invoice_id:
-        invoice = (
-            db.query(Invoice)
-            .filter(Invoice.id == payload.invoice_id, Invoice.user_id == current_user.id)
-            .first()
-        )
-        if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+    _reject_invoice_transaction_create(payload.invoice_id)
 
     if payload.recurrence_id:
         recurrence = (
@@ -233,6 +237,8 @@ def update_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    _reject_invoice_transaction_edit(transaction, payload.invoice_id)
+
     data = payload.model_dump(exclude_unset=True)
     expense_link_set = "expense_link" in data
     data.pop("expense_link", None)
@@ -249,15 +255,6 @@ def update_transaction(
         if not selected_wallet.active and selected_wallet.id != transaction.wallet_id:
             raise HTTPException(status_code=400, detail="Archived wallet cannot receive movements")
         transaction.wallet_id = selected_wallet.id
-
-    if payload.invoice_id:
-        invoice = (
-            db.query(Invoice)
-            .filter(Invoice.id == payload.invoice_id, Invoice.user_id == current_user.id)
-            .first()
-        )
-        if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
 
     if payload.recurrence_id:
         recurrence = (

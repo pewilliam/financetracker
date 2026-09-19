@@ -1,11 +1,13 @@
-import { Trash2, X } from "lucide-react";
+import { Receipt, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
+import { isInvoiceTransaction } from "../app/helpers.js";
 
 export default function DeleteTransactionModal({ transaction, onClose, onConfirm }) {
   const { t, language } = useI18n();
   const tt = (key, pt) => language === "en-US" ? t(key) : pt;
   const isIncome = transaction.type === "income";
+  const isInvoice = isInvoiceTransaction(transaction);
 
   return (
     <div className="modal-layer">
@@ -26,7 +28,9 @@ export default function DeleteTransactionModal({ transaction, onClose, onConfirm
             <div>
               <small>{formatDateShort(transaction.date, language)} · {isIncome ? tt("monthlyTable.incomeChip", "GANHO") : tt("monthlyTable.expenseChip", "GASTO")}</small>
               <strong>{transaction.description || tt("monthlyTable.noDescription", "Sem descrição")}</strong>
-              {transaction.category && (
+              {isInvoice ? (
+                <span className="invoice-pill"><Receipt size={12} /> {tt("monthlyTable.invoice", "Fatura")}</span>
+              ) : transaction.category && (
                 <span className="transaction-category-pill" style={{ "--category-color": transaction.category.color }}>{transaction.category.name}</span>
               )}
             </div>

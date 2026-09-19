@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Filter, Plus } from "lucide-react";
+import { toast } from "react-hot-toast";
 import InvoiceCard from "../components/InvoiceCard.jsx";
 import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
 import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
@@ -16,6 +18,8 @@ import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, openModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const location = useLocation();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -62,6 +66,20 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
     onOverlayChange?.(invoiceOverlayOpen);
     return () => onOverlayChange?.(false);
   }, [invoiceOverlayOpen, onOverlayChange]);
+
+  useEffect(() => {
+    const invoiceId = Number(location.state?.openInvoiceItemsId);
+    if (!invoiceId) return;
+    const target = invoices.find((invoice) => Number(invoice.id) === invoiceId);
+    if (target) {
+      setCreatingEntry(null);
+      setEditingItem(null);
+      setViewingItem(null);
+      setItemsInvoiceId(target.id);
+      return;
+    }
+    if (invoices.length) toast.error(language === "en-US" ? "Invoice not found." : "Fatura não encontrada.");
+  }, [invoices, language, location.state?.openInvoiceItemsId]);
 
   const toggleStatus = (status) => {
     setFilters((current) => {
@@ -143,6 +161,11 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
     if (created === false) return;
     setCreatingEntry(null);
     setInstallmentForm(defaultInstallmentForm());
+  };
+
+  const closeInvoiceItems = () => {
+    setItemsInvoiceId(null);
+    if (location.state?.openInvoiceItemsId) navigate("/faturas", { replace: true, state: {} });
   };
 
   const openEntryModal = (invoice, kind) => {
@@ -351,7 +374,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
           onDeleteInstallmentItem={deleteInstallmentItem}
           onManageReceivable={manageReceivable}
           onViewInstallment={onViewInstallment}
-          onClose={() => setItemsInvoiceId(null)}
+          onClose={closeInvoiceItems}
         />
       )}
       {dueDateInvoice && (
