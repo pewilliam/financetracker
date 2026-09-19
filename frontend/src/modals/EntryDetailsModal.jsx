@@ -144,12 +144,12 @@ export default function EntryDetailsModal({
         : copy("Gasto", "Expense");
 
   const installmentStatus = item.status === "refunded"
-    ? copy("Reembolsada", "Refunded")
+    ? { label: copy("Reembolsada", "Refunded"), tone: "refunded" }
     : item.status === "canceled"
-      ? copy("Cancelada", "Canceled")
+      ? { label: copy("Cancelada", "Canceled"), tone: "danger" }
       : invoice?.paid
-        ? copy("Paga", "Paid")
-        : copy("Pendente", "Pending");
+        ? { label: copy("Paga", "Paid"), tone: "paid" }
+        : { label: copy("Pendente", "Pending"), tone: "pending" };
 
   return (
     <div className="modal-layer entry-details-layer">
@@ -216,7 +216,7 @@ export default function EntryDetailsModal({
             {isInstallment && (
               <div className="entry-detail-field">
                 <span><CheckCircle2 size={15} /> {copy("Status", "Status")}</span>
-                <strong>{installmentStatus}</strong>
+                <strong><span className={`installment-status ${installmentStatus.tone}`}>{installmentStatus.label}</span></strong>
               </div>
             )}
             {item.recurrence_id && (
