@@ -13,7 +13,7 @@ from app.models import (
 )
 from app.schemas.invoice_templates import InvoiceTemplateCreate, InvoiceTemplateOut, InvoiceTemplateUpdate
 from app.security import get_current_user
-from app.services.invoices import normalize_invoice_color
+from app.services.invoices import invoice_transaction_description, normalize_invoice_color
 
 router = APIRouter(prefix="/api/invoice-templates", tags=["invoice-templates"])
 
@@ -128,6 +128,18 @@ def update_invoice_template(
         if not name:
             raise HTTPException(status_code=400, detail="Name is required")
         template.name = name
+        linked_ids = [
+            invoice.linked_transaction_id
+            for invoice in db.query(Invoice)
+            .filter(Invoice.user_id == current_user.id, Invoice.template_id == template.id)
+            .all()
+            if invoice.linked_transaction_id
+        ]
+        if linked_ids:
+            db.query(Transaction).filter(Transaction.id.in_(linked_ids)).update(
+                {Transaction.description: invoice_transaction_description(name)},
+                synchronize_session=False,
+            )
     if payload.color is not None:
         template.color = normalize_invoice_color(payload.color)
     if payload.default_due_day is not None:

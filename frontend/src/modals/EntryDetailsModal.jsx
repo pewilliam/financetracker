@@ -8,6 +8,7 @@ import {
   CreditCard,
   Link2,
   Pencil,
+  Receipt,
   ReceiptText,
   Repeat2,
   Tag,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
+import { isInvoiceTransaction } from "../app/helpers.js";
 import CategoryExpenseDetailsModal from "./CategoryExpenseDetailsModal.jsx";
 
 function categoriesFor(item) {
@@ -60,6 +62,7 @@ export default function EntryDetailsModal({
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const isTransaction = context === "transaction";
   const isInstallment = context === "installment";
+  const isInvoiceEntry = isTransaction && isInvoiceTransaction(item);
   const isIncome = isTransaction && item.type === "income";
   const isRefund = !isTransaction && Number(item.amount) < 0;
   const tone = isInstallment ? "installment" : isIncome || isRefund ? "income" : "expense";
@@ -67,7 +70,7 @@ export default function EntryDetailsModal({
   const categories = categoriesFor(item);
   const createdAt = formatCreatedAt(item.created_at, language);
   const detailDate = isTransaction ? item.date : invoice?.due_date;
-  const canOpenCategory = categories.length > 0 && Boolean(detailDate && onLoadCategoryDetails);
+  const canOpenCategory = !isInvoiceEntry && categories.length > 0 && Boolean(detailDate && onLoadCategoryDetails);
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -127,14 +130,18 @@ export default function EntryDetailsModal({
 
   const Icon = isInstallment
     ? CreditCard
-    : isIncome || isRefund
-      ? ArrowUpRight
-      : ArrowDownLeft;
+    : isInvoiceEntry
+      ? Receipt
+      : isIncome || isRefund
+        ? ArrowUpRight
+        : ArrowDownLeft;
   const eyebrow = isInstallment
     ? copy("Compra parcelada", "Installment purchase")
-    : isTransaction
-      ? copy("Detalhes do lançamento", "Entry details")
-      : copy("Item da fatura", "Invoice item");
+    : isInvoiceEntry
+      ? copy("Fatura", "Invoice")
+      : isTransaction
+        ? copy("Detalhes do lançamento", "Entry details")
+        : copy("Item da fatura", "Invoice item");
   const nature = isInstallment
     ? copy("Parcela", "Installment")
     : isIncome
@@ -237,6 +244,14 @@ export default function EntryDetailsModal({
                 <strong>{createdAt}</strong>
               </div>
             )}
+            {isInvoiceEntry ? (
+              <section className="entry-detail-field entry-detail-categories">
+                <span><Receipt size={15} /> {copy("Identificação", "Identification")}</span>
+                <div>
+                  <span className="invoice-pill"><Receipt size={12} /> {copy("Fatura", "Invoice")}</span>
+                </div>
+              </section>
+            ) : (
             <section
               ref={categoryCardRef}
               className={`entry-detail-field entry-detail-categories ${insight ? "has-insight" : ""} ${canOpenCategory ? "is-clickable" : ""}`}
@@ -267,6 +282,7 @@ export default function EntryDetailsModal({
                 </div>
               )}
             </section>
+            )}
           </div>
 
           {item.linked_expense && (
@@ -293,7 +309,9 @@ export default function EntryDetailsModal({
           )}
           {!isInstallment && onEdit && (
             <button className="btn entry-details-edit" type="button" onClick={onEdit}>
-              <Pencil size={16} /> {isTransaction ? copy("Editar lançamento", "Edit entry") : copy("Editar item", "Edit item")}
+              {isInvoiceEntry
+                ? <><Receipt size={16} /> {copy("Ver itens da fatura", "View invoice items")}</>
+                : <><Pencil size={16} /> {isTransaction ? copy("Editar lançamento", "Edit entry") : copy("Editar item", "Edit item")}</>}
             </button>
           )}
         </footer>

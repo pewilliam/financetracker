@@ -7,6 +7,12 @@ from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, T
 from app.services.wallets import user_wallet
 
 DEFAULT_INVOICE_COLOR = "#3B82F6"
+INVOICE_TRANSACTION_EDIT_DETAIL = "Invoice entries cannot be edited as standalone transactions"
+INVOICE_TRANSACTION_CREATE_DETAIL = "Invoice entries cannot be created as standalone transactions"
+
+
+def invoice_transaction_description(invoice_name: str) -> str:
+    return f"Fatura: {invoice_name}"
 
 
 def normalize_invoice_color(color: str | None) -> str:
@@ -38,7 +44,7 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
         if linked:
             linked.amount = invoice.total_amount
             linked.date = invoice.due_date
-            linked.description = f"Fatura: {invoice.name}"
+            linked.description = invoice_transaction_description(invoice.name)
             linked.is_future = False if invoice.paid else invoice.due_date > date.today()
 
     return invoice
@@ -61,7 +67,7 @@ def create_invoice_with_transaction(db: Session, user_id: int, template: Invoice
         date=invoice.due_date,
         type="expense",
         amount=invoice.total_amount,
-        description=f"Fatura: {template.name}",
+        description=invoice_transaction_description(template.name),
         is_future=invoice.due_date > date.today(),
         invoice_id=invoice.id,
         wallet_id=wallet.id,

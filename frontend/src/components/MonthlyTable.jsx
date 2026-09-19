@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, Edit3, Link2, Plus, Repeat2, Trash2 } from "lucide-react";
+import { Clock3, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
+import { isInvoiceTransaction } from "../app/helpers.js";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 
 function isFutureDate(dateString) {
@@ -11,7 +12,7 @@ function isFutureDate(dateString) {
   return new Date(`${dateString}T00:00:00`) > today;
 }
 
-export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd, onEdit, onDelete, onLoadCategoryDetails, onOverlayChange }) {
+export default function MonthlyTable({ days, summary, invoices = [], expenseOptions = [], onAdd, onEdit, onDelete, onLoadCategoryDetails, onOverlayChange }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [viewingTransaction, setViewingTransaction] = useState(null);
@@ -22,6 +23,7 @@ export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd
   }, [viewingTransaction, onOverlayChange]);
 
   const transactionInsight = (transaction) => {
+    if (isInvoiceTransaction(transaction)) return null;
     const category = (transaction.categories?.length ? transaction.categories : transaction.category ? [transaction.category] : [])[0];
     if (!category) return null;
     if (transaction.type === "expense") {
@@ -68,6 +70,8 @@ export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd
       setViewingTransaction(transaction);
     }
   };
+
+  const invoiceFor = (transaction) => invoices.find((invoice) => invoice.id === transaction.invoice_id) || null;
 
   if (!days.length) {
     return (
@@ -116,14 +120,16 @@ export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd
                         <span className="tx-badges">
                           {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
                           {tx.linked_expense && <span className="transaction-expense-pill" title={`Associado a ${tx.linked_expense.description}`}><Link2 size={12} /> {tt("receivables.linkedExpense", "Gasto associado")}</span>}
-                          {(tx.categories?.length ? tx.categories : tx.category ? [tx.category] : []).map((category) => (
+                          {isInvoiceTransaction(tx) ? (
+                            <span className="invoice-pill"><Receipt size={12} /> {tt("monthlyTable.invoice", "Fatura")}</span>
+                          ) : (tx.categories?.length ? tx.categories : tx.category ? [tx.category] : []).map((category) => (
                             <span className="transaction-category-pill" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
                           ))}
                         </span>
                         <span className="tx-description-text">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
                       </span>
                       <div className="row-actions">
-                        <button className="icon-btn small" onClick={(event) => { event.stopPropagation(); onEdit(tx); }} aria-label="Editar">
+                        <button className="icon-btn small" onClick={(event) => { event.stopPropagation(); onEdit(tx); }} aria-label={isInvoiceTransaction(tx) ? tt("monthlyTable.viewInvoiceItems", "Ver itens da fatura") : "Editar"}>
                           <Edit3 size={15} />
                         </button>
                         <button className="icon-btn small danger" onClick={(event) => { event.stopPropagation(); onDelete(tx); }} aria-label="Excluir">
@@ -161,6 +167,7 @@ export default function MonthlyTable({ days, summary, expenseOptions = [], onAdd
       {viewingTransaction && (
         <EntryDetailsModal
           item={viewingTransaction}
+          invoice={invoiceFor(viewingTransaction)}
           insight={viewingInsight}
           onLoadCategoryDetails={onLoadCategoryDetails}
           onClose={() => setViewingTransaction(null)}

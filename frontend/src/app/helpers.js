@@ -69,6 +69,10 @@ export function invoiceAcceptsNewCharges(invoice, allowOverdue = false) {
   return allowOverdue || String(invoice.due_date || "").slice(0, 10) >= todayIsoDate();
 }
 
+export function isInvoiceTransaction(entry) {
+  return Boolean(entry?.invoice_id);
+}
+
 export function entryCategories(entry) {
   return entry?.categories?.length ? entry.categories : entry?.category ? [entry.category] : [];
 }

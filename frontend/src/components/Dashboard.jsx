@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/format.js";
+import { isInvoiceTransaction } from "../app/helpers.js";
 import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
 
@@ -328,8 +329,11 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
               <div className="dashboard-card-head list-head"><div><p className="eyebrow">{copy("Ranking do mês", "Monthly ranking")}</p><h2>{t("dashboard.biggestExpenses")}</h2></div><span className="dashboard-list-count">{allExpenses.length} {copy(allExpenses.length === 1 ? "gasto" : "gastos", allExpenses.length === 1 ? "expense" : "expenses")}</span></div>
               {visibleExpenses.length ? <div className="dashboard-ranked-list">
                 {visibleExpenses.map((transaction, index) => {
+                  const invoiceExpense = isInvoiceTransaction(transaction);
                   const categoryName = transaction.categories?.length ? transaction.categories.map((category) => category.name).join(" + ") : transaction.category?.name;
-                  const context = [categoryName, transaction.wallet?.name].filter(Boolean).join(" · ") || copy("Sem categoria", "Uncategorized");
+                  const context = invoiceExpense
+                    ? copy("Fatura", "Invoice")
+                    : ([categoryName, transaction.wallet?.name].filter(Boolean).join(" · ") || copy("Sem categoria", "Uncategorized"));
                   return <button className="dashboard-expense-row" type="button" onClick={() => onOpenTransaction?.(transaction)} key={transaction.id}><span className="dashboard-rank">{index + 1}</span><span className="dashboard-row-main"><strong>{transaction.description || t("dashboard.noDescription")}</strong><small>{context} · {formatDateShort(transaction.date, language)}</small><i><b style={{ width: `${(toNumber(transaction.amount) / maxExpense) * 100}%` }} /></i></span><strong className="dashboard-row-value expense">{formatMoney(transaction.amount, language)}</strong></button>;
                 })}
               </div> : <DashboardEmpty compact icon={CircleDollarSign} title={copy("Nenhum gasto neste mês", "No expenses this month")} description={copy("Os maiores gastos aparecerão aqui após o primeiro lançamento.", "Your largest expenses will appear here after the first entry.")} />}

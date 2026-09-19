@@ -272,7 +272,7 @@ export default function TransactionForm({
   const recurrenceEnd = form.date ? formatMonthShort(addMonths(form.date, recurrenceMonths)) : "";
   const recurrenceTotal = recurrenceMonths + 1;
 
-  if (!open) return null;
+  if (!open || initial?.invoice_id) return null;
 
   return (
     <div className="modal-layer transaction-modal-layer">

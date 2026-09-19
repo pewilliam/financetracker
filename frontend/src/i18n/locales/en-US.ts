@@ -399,6 +399,8 @@ export const enUS = {
     balanceChip: "BALANCE",
     noDescription: "No description",
     recurring: "Recurring",
+    invoice: "Invoice",
+    viewInvoiceItems: "View invoice items",
     entry: "Entry",
     deleteEntry: "Delete entry",
     deleteEntryMessage: "Do you really want to delete this entry? This action cannot be undone."
