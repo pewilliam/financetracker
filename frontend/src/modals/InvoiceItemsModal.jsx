@@ -13,6 +13,13 @@ function normalize(value) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
 }
 
+function installmentRowStatus(item, invoicePaid, copy) {
+  if (item.status === "refunded") return { label: copy("Reembolsada", "Refunded"), tone: "refunded" };
+  if (item.status === "canceled") return { label: copy("Cancelada", "Canceled"), tone: "danger" };
+  if (invoicePaid) return { label: copy("Paga", "Paid"), tone: "paid" };
+  return { label: copy("Pendente", "Pending"), tone: "pending" };
+}
+
 export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAddToInvoice = false, onAddEntry, onEditItem, onViewItem, onDeleteItem, onDeleteInstallmentItem, onManageReceivable, onViewInstallment, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
@@ -120,9 +127,12 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const renderRow = (entry) => {
     const refund = entry.context === "invoice" && entry.amount < 0;
     const item = entry.item;
+    const installmentStatus = entry.context === "installment"
+      ? installmentRowStatus(item, invoice.paid, copy)
+      : null;
     return (
       <div
-        className={`invoice-items-row ${refund ? "refund" : ""}`}
+        className={`invoice-items-row ${refund ? "refund" : ""} ${entry.context === "installment" ? "is-installment" : ""}`}
         role="button"
         tabIndex="0"
         onClick={() => onViewItem?.(invoice, item, entry.context)}
@@ -140,21 +150,26 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
           <span className="invoice-items-row-title">
             {refund && <em className="refund-badge">{copy("Reembolso", "Refund")}</em>}
             {entry.context === "installment" && (
-              onViewInstallment ? (
-                <button
-                  className="installment-badge"
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); onViewInstallment(item.purchase_id); }}
-                  title={copy("Ver compra parcelada", "View installment purchase")}
-                  aria-label={copy(`Parcela ${item.installment_number} de ${item.installment_count}`, `Installment ${item.installment_number} of ${item.installment_count}`)}
-                >
-                  <CreditCard size={11} />{item.installment_number}/{item.installment_count}
-                </button>
-              ) : (
-                <em className="installment-badge" title={copy("Compra parcelada", "Installment purchase")}>
-                  <CreditCard size={11} />{item.installment_number}/{item.installment_count}
-                </em>
-              )
+              <span className="invoice-items-row-installment-meta">
+                {onViewInstallment ? (
+                  <button
+                    className="installment-badge"
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onViewInstallment(item.purchase_id); }}
+                    title={copy("Ver compra parcelada", "View installment purchase")}
+                    aria-label={copy(`Parcela ${item.installment_number} de ${item.installment_count}`, `Installment ${item.installment_number} of ${item.installment_count}`)}
+                  >
+                    <CreditCard size={11} />{item.installment_number}/{item.installment_count}
+                  </button>
+                ) : (
+                  <em className="installment-badge" title={copy("Compra parcelada", "Installment purchase")}>
+                    <CreditCard size={11} />{item.installment_number}/{item.installment_count}
+                  </em>
+                )}
+                {installmentStatus && (
+                  <span className={`installment-status ${installmentStatus.tone}`}>{installmentStatus.label}</span>
+                )}
+              </span>
             )}
             <strong>{entry.description}</strong>
           </span>
