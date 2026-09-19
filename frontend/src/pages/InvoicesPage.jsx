@@ -3,10 +3,11 @@ import { ChevronDown, Filter, Plus } from "lucide-react";
 import InvoiceCard from "../components/InvoiceCard.jsx";
 import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
 import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
+import InvoiceItemsModal from "../modals/InvoiceItemsModal.jsx";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 import InstallmentModal from "../modals/InstallmentModal.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { defaultInstallmentForm, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
+import { defaultInstallmentForm, invoiceAcceptsNewCharges, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 import { formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 
@@ -20,9 +21,11 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   const [editingItem, setEditingItem] = useState(null);
   const [viewingItem, setViewingItem] = useState(null);
   const [creatingEntry, setCreatingEntry] = useState(null);
+  const [itemsInvoiceId, setItemsInvoiceId] = useState(null);
   const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
   const statusMenuRef = useRef(null);
-  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem || viewingItem);
+  const itemsInvoice = itemsInvoiceId === null ? null : invoices.find((invoice) => invoice.id === itemsInvoiceId) || null;
+  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem || viewingItem || itemsInvoice);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
@@ -307,7 +310,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
                     </button>
                     {expanded && (
                       group.items.length ? (
-                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} expenseOptions={expenseOptions} onManageReceivable={manageReceivable} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddEntry={openEntryModal} onEditItem={(targetInvoice, item) => { setCreatingEntry(null); setViewingItem(null); setEditingItem({ invoice: targetInvoice, item }); }} onViewItem={(targetInvoice, item, context) => { setCreatingEntry(null); setEditingItem(null); setViewingItem({ invoice: targetInvoice, item, context }); }} onUpdateDueDate={updateDueDate} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onViewInstallment={onViewInstallment} />)}</div>
+                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} expenseOptions={expenseOptions} onManageReceivable={manageReceivable} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddEntry={openEntryModal} onEditItem={(targetInvoice, item) => { setCreatingEntry(null); setViewingItem(null); setEditingItem({ invoice: targetInvoice, item }); }} onViewItem={(targetInvoice, item, context) => { setCreatingEntry(null); setEditingItem(null); setViewingItem({ invoice: targetInvoice, item, context }); }} onOpenItems={(targetInvoice) => { setCreatingEntry(null); setEditingItem(null); setViewingItem(null); setItemsInvoiceId(targetInvoice.id); }} onUpdateDueDate={updateDueDate} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onViewInstallment={onViewInstallment} />)}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
                     )}
                   </section>
@@ -318,6 +321,20 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
         </>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
+      {itemsInvoice && (
+        <InvoiceItemsModal
+          invoice={itemsInvoice}
+          expenseOptions={expenseOptions}
+          canAddToInvoice={invoiceAcceptsNewCharges(itemsInvoice, allowOverdueInvoiceEdits)}
+          onAddEntry={openEntryModal}
+          onEditItem={(targetInvoice, item) => setEditingItem({ invoice: targetInvoice, item })}
+          onViewItem={(targetInvoice, item, context) => setViewingItem({ invoice: targetInvoice, item, context })}
+          onDeleteItem={deleteItem}
+          onDeleteInstallmentItem={deleteInstallmentItem}
+          onManageReceivable={manageReceivable}
+          onClose={() => setItemsInvoiceId(null)}
+        />
+      )}
       {creatingEntry?.entryMode === "single" && (
         <InvoiceEntryModal
           kind={creatingEntry.kind}

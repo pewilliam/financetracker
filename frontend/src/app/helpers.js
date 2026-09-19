@@ -69,6 +69,19 @@ export function invoiceAcceptsNewCharges(invoice, allowOverdue = false) {
   return allowOverdue || String(invoice.due_date || "").slice(0, 10) >= todayIsoDate();
 }
 
+export function invoiceCategoryTotals(invoice) {
+  const entries = [...(invoice?.items || []), ...(invoice?.installment_items || [])];
+  const totals = new Map();
+  entries.forEach((entry) => {
+    const category = entry.categories?.length ? entry.categories[0] : entry.category || null;
+    const key = category ? String(category.id) : "none";
+    const current = totals.get(key) || { id: key, name: category?.name || null, color: category?.color || null, amount: 0 };
+    current.amount += Number(entry.amount || 0);
+    totals.set(key, current);
+  });
+  return [...totals.values()].filter((entry) => entry.amount > 0).sort((left, right) => right.amount - left.amount);
+}
+
 export function normalizeTransactionPayload(data) {
   const parsedAmount = Number(data?.amount);
   const normalized = {

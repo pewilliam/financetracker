@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import { CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Tag, Trash2, X } from "lucide-react";
 import DateField from "./DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { invoiceAcceptsNewCharges } from "../app/helpers.js";
-import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/format.js";
+import { invoiceAcceptsNewCharges, invoiceCategoryTotals } from "../app/helpers.js";
+import { daysUntil, formatDateShort, formatDateWithWeekday, formatMoney, getDaysUntil } from "../utils/format.js";
+
+const INLINE_ITEMS_LIMIT = 8;
 
 function invoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#14A078";
@@ -113,7 +115,7 @@ function InstallmentBadge({ item, language, onView }) {
   );
 }
 
-export default function InvoiceCard({ invoice, expenseOptions = [], onManageReceivable, allowOverdueInvoiceEdits = false, onAddEntry, onEditItem, onViewItem, onUpdateDueDate, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onViewInstallment }) {
+export default function InvoiceCard({ invoice, expenseOptions = [], onManageReceivable, allowOverdueInvoiceEdits = false, onAddEntry, onEditItem, onViewItem, onOpenItems, onUpdateDueDate, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [itemsOpen, setItemsOpen] = useState(false);
@@ -133,14 +135,26 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
     && regularItems.length === 1
     && normalizeName(regularItems[0].description) === normalizeName(invoice.name);
   const canToggleItems = !isEmptyInvoice && (totalItemCount !== 1 || !singleMainItem);
-  const itemsExpanded = itemsOpen;
+  const opensItemsInModal = canToggleItems && totalItemCount > INLINE_ITEMS_LIMIT;
+  const itemsExpanded = itemsOpen && !opensItemsInModal;
+  const categoryTotals = opensItemsInModal ? invoiceCategoryTotals(invoice) : [];
+  const breakdownTotal = categoryTotals.reduce((total, entry) => total + entry.amount, 0);
+  const topCategories = categoryTotals.slice(0, 3);
+  const remainingCategories = categoryTotals.length - topCategories.length;
   const viewItemsLabel = language === "en-US" ? `View items (${totalItemCount})` : `Ver itens (${totalItemCount})`;
+  const viewAllItemsLabel = language === "en-US" ? `View all ${totalItemCount} items` : `Ver todos os ${totalItemCount} itens`;
+  const noCategoryLabel = language === "en-US" ? "Uncategorized" : "Sem categoria";
   const hideItemsLabel = language === "en-US" ? "Hide items" : "Ocultar itens";
   const addItemLabel = language === "en-US" ? "Add item" : "Adicionar item";
   const addRefundLabel = language === "en-US" ? "Add refund" : "Adicionar reembolso";
   const addItemShortLabel = language === "en-US" ? "New item" : "Novo item";
   const addRefundShortLabel = language === "en-US" ? "Refund" : "Reembolso";
   const refundLabel = language === "en-US" ? "Refund" : "Reembolso";
+  const dueLabel = language === "en-US" ? "Due" : "Vence";
+  const dueYear = Number(String(invoice.due_date).slice(0, 4));
+  const dueDateLabel = dueYear === new Date().getFullYear()
+    ? formatDateWithWeekday(invoice.due_date)
+    : `${formatDateWithWeekday(invoice.due_date)} ${dueYear}`;
 
   const startEditingDueDate = () => {
     if (!canEditDueDate) return;
@@ -250,21 +264,29 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
               <X size={15} />
             </button>
           </div>
+        ) : canEditDueDate ? (
+          <button
+            className="invoice-due-summary is-editable"
+            type="button"
+            onClick={startEditingDueDate}
+            aria-label={`${language === "en-US" ? "Edit due date" : "Editar vencimento"}: ${formatDateShort(invoice.due_date)}`}
+            title={formatDateShort(invoice.due_date)}
+          >
+            <CalendarDays size={14} />
+            <span className="invoice-due-copy">
+              <small>{dueLabel}</small>
+              <strong>{dueDateLabel}</strong>
+            </span>
+            <Pencil size={12} className="invoice-due-pencil" />
+          </button>
         ) : (
-          <div className="invoice-due-summary">
-            <p className="invoice-due-line">
-              <CalendarDays size={14} />
-              <span className="invoice-due-copy">
-                <small>{tt("invoices.dueOn", "Vencimento em")}</small>
-                <strong>{formatDateShort(invoice.due_date)}</strong>
-              </span>
-            </p>
-            {canEditDueDate && (
-              <button className="invoice-date-edit" type="button" onClick={startEditingDueDate} aria-label={language === "en-US" ? "Edit due date" : "Editar vencimento"}>
-                <Pencil size={13} />
-              </button>
-            )}
-          </div>
+          <p className="invoice-due-summary" title={formatDateShort(invoice.due_date)}>
+            <CalendarDays size={14} />
+            <span className="invoice-due-copy">
+              <small>{dueLabel}</small>
+              <strong>{dueDateLabel}</strong>
+            </span>
+          </p>
         )}
       </header>
 
@@ -274,10 +296,31 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         </div>
       )}
 
+      {opensItemsInModal && topCategories.length > 0 && (
+        <div className="invoice-category-summary">
+          {topCategories.map((entry) => (
+            <div className="invoice-category-row" style={{ "--category-color": entry.color || "var(--muted)" }} key={entry.id}>
+              <span>{entry.name || noCategoryLabel}</span>
+              <strong>{formatMoney(entry.amount)}</strong>
+              <i><b style={{ width: `${breakdownTotal ? Math.max((entry.amount / breakdownTotal) * 100, 2) : 0}%` }} /></i>
+            </div>
+          ))}
+          {remainingCategories > 0 && (
+            <p>{language === "en-US" ? `+${remainingCategories} more categories` : `+${remainingCategories} outras categorias`}</p>
+          )}
+        </div>
+      )}
+
       {canToggleItems && (
-        <button className={`invoice-items-toggle ${itemsExpanded ? "open" : ""}`} type="button" onClick={() => setItemsOpen((current) => !current)} aria-expanded={itemsExpanded}>
+        <button
+          className={`invoice-items-toggle ${itemsExpanded ? "open" : ""} ${opensItemsInModal ? "opens-modal" : ""}`}
+          type="button"
+          onClick={() => opensItemsInModal ? onOpenItems?.(invoice) : setItemsOpen((current) => !current)}
+          aria-expanded={opensItemsInModal ? undefined : itemsExpanded}
+          aria-haspopup={opensItemsInModal ? "dialog" : undefined}
+        >
           <ChevronRight size={16} />
-          <span>{itemsExpanded ? hideItemsLabel : viewItemsLabel}</span>
+          <span>{opensItemsInModal ? viewAllItemsLabel : itemsExpanded ? hideItemsLabel : viewItemsLabel}</span>
           {refundTotal > 0 && (
             <em className="invoice-refund-chip" title={`${refundLabel}: ${formatMoney(refundTotal)}`}>
               <CircleMinus size={12} />{formatMoney(refundTotal)}
@@ -286,7 +329,7 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         </button>
       )}
 
-      {canToggleItems && (
+      {canToggleItems && !opensItemsInModal && (
         <div className={`invoice-items-panel ${itemsExpanded ? "open" : ""}`}>
           <div className="invoice-items-panel-inner">
             <div className="invoice-items">
