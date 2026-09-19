@@ -1,5 +1,6 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
@@ -129,6 +130,45 @@ def set_invoice_paid(
     db.commit()
     db.refresh(invoice)
     return invoice
+
+
+@router.delete("/{invoice_id}", status_code=204)
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    invoice = (
+        db.query(Invoice)
+        .options(
+            selectinload(Invoice.items),
+            selectinload(Invoice.installment_items),
+        )
+        .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.items or invoice.installment_items:
+        raise HTTPException(status_code=409, detail="Remova os itens da fatura antes de excluí-la.")
+
+    # A fatura vazia só carrega a transação de valor zero criada junto com ela.
+    linked_transaction_id = invoice.linked_transaction_id
+    invoice.linked_transaction_id = None
+    db.flush()
+
+    transactions = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+    if linked_transaction_id:
+        transactions = transactions.filter(
+            or_(Transaction.invoice_id == invoice.id, Transaction.id == linked_transaction_id)
+        )
+    else:
+        transactions = transactions.filter(Transaction.invoice_id == invoice.id)
+    transactions.delete(synchronize_session=False)
+
+    db.delete(invoice)
+    db.commit()
+    return None
 
 
 @router.post("/{invoice_id}/items", response_model=InvoiceOut)

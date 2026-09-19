@@ -1,127 +1,15 @@
-import { useState } from "react";
-import { createPortal } from "react-dom";
-import { CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, CircleMinus, CreditCard, Pencil, Plus, RotateCcw, Tag, Trash2, X } from "lucide-react";
-import DateField from "./DateField.jsx";
+import { CalendarDays, CheckCircle2, ChevronRight, CircleMinus, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { invoiceAcceptsNewCharges, invoiceCategoryTotals } from "../app/helpers.js";
 import { daysUntil, formatDateShort, formatDateWithWeekday, formatMoney, getDaysUntil } from "../utils/format.js";
-
-const INLINE_ITEMS_LIMIT = 8;
 
 function invoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : "#14A078";
 }
 
-function normalizeName(value) {
-  return String(value || "").trim().toLocaleLowerCase();
-}
-
-function InvoiceCategoryIcons({ categories = [] }) {
-  const [tooltip, setTooltip] = useState(null);
-
-  const showTooltip = (event, category) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const below = rect.top < 70;
-    setTooltip({
-      category,
-      below,
-      left: Math.min(window.innerWidth - 110, Math.max(110, rect.left + rect.width / 2)),
-      top: below ? rect.bottom + 9 : rect.top - 9,
-    });
-  };
-
-  return (
-    <>
-      <span className="invoice-item-category-icons">
-        {categories.map((category) => (
-          <span
-            className="invoice-category-icon"
-            style={{ "--category-color": category.color }}
-            onMouseEnter={(event) => showTooltip(event, category)}
-            onMouseLeave={() => setTooltip(null)}
-            onFocus={(event) => showTooltip(event, category)}
-            onBlur={() => setTooltip(null)}
-            aria-label={`Categoria: ${category.name}`}
-            tabIndex="0"
-            key={category.id}
-          >
-            <Tag size={12} />
-          </span>
-        ))}
-      </span>
-      {tooltip && createPortal(
-        <span
-          className={`invoice-category-tooltip ${tooltip.below ? "below" : "above"}`}
-          style={{ "--category-color": tooltip.category.color, left: tooltip.left, top: tooltip.top }}
-          role="tooltip"
-        >
-          <Tag size={13} />
-          <strong>{tooltip.category.name}</strong>
-        </span>,
-        document.body,
-      )}
-    </>
-  );
-}
-
-function InstallmentBadge({ item, language, onView }) {
-  const [tooltip, setTooltip] = useState(null);
-
-  const showTooltip = (event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const below = rect.top < 110;
-    setTooltip({
-      below,
-      left: Math.min(window.innerWidth - 120, Math.max(120, rect.left + rect.width / 2)),
-      top: below ? rect.bottom + 9 : rect.top - 9,
-    });
-  };
-
-  return (
-    <>
-      <button
-        className="installment-badge"
-        type="button"
-        onClick={(event) => { event.stopPropagation(); setTooltip(null); onView?.(item.purchase_id); }}
-        onMouseEnter={showTooltip}
-        onMouseLeave={() => setTooltip(null)}
-        onFocus={showTooltip}
-        onBlur={() => setTooltip(null)}
-        aria-label={`Parcela ${item.installment_number} de ${item.installment_count}`}
-      >
-        <span className="installment-badge-full">{item.installment_number}/{item.installment_count}</span>
-        <span className="installment-badge-short">{item.installment_number}/{item.installment_count}</span>
-      </button>
-      {tooltip && createPortal(
-        <span
-          className={`installment-detail-tooltip ${tooltip.below ? "below" : "above"}`}
-          style={{ left: tooltip.left, top: tooltip.top }}
-          role="tooltip"
-        >
-          <span className="installment-detail-tooltip-icon"><CreditCard size={15} /></span>
-          <span>
-            <small>{language === "en-US" ? "INSTALLMENT PURCHASE" : "COMPRA PARCELADA"}</small>
-            <strong>{language === "en-US" ? `Installment ${item.installment_number} of ${item.installment_count}` : `Parcela ${item.installment_number} de ${item.installment_count}`}</strong>
-            <em>
-              {language === "en-US"
-                ? `${item.remaining_installments} remaining · Total ${formatMoney(item.purchase_total_amount, language)}`
-                : `${item.remaining_installments} restante(s) · Total ${formatMoney(item.purchase_total_amount, language)}`}
-            </em>
-          </span>
-        </span>,
-        document.body,
-      )}
-    </>
-  );
-}
-
-export default function InvoiceCard({ invoice, expenseOptions = [], onManageReceivable, allowOverdueInvoiceEdits = false, onAddEntry, onEditItem, onViewItem, onOpenItems, onUpdateDueDate, onDeleteItem, onDeleteInstallmentItem, onTogglePaid, onViewInstallment }) {
+export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false, onAddEntry, onOpenItems, onEditDueDate, onTogglePaid, onDelete }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
-  const [itemsOpen, setItemsOpen] = useState(false);
-  const [editingDueDate, setEditingDueDate] = useState(false);
-  const [dueDateDraft, setDueDateDraft] = useState(invoice.due_date);
-  const [savingDueDate, setSavingDueDate] = useState(false);
   const status = daysUntil(invoice.due_date);
   const overdue = !invoice.paid && getDaysUntil(invoice.due_date) <= 0;
   const regularItems = invoice.items || [];
@@ -130,68 +18,27 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
   const canEditDueDate = canAddToInvoice;
   const totalItemCount = regularItems.length + installmentItems.length;
   const refundTotal = regularItems.reduce((total, item) => Number(item.amount) < 0 ? total + Math.abs(Number(item.amount)) : total, 0);
-  const isEmptyInvoice = totalItemCount === 0;
-  const singleMainItem = totalItemCount === 1
-    && regularItems.length === 1
-    && normalizeName(regularItems[0].description) === normalizeName(invoice.name);
-  const canToggleItems = !isEmptyInvoice && (totalItemCount !== 1 || !singleMainItem);
-  const opensItemsInModal = canToggleItems && totalItemCount > INLINE_ITEMS_LIMIT;
-  const itemsExpanded = itemsOpen && !opensItemsInModal;
-  const categoryTotals = opensItemsInModal ? invoiceCategoryTotals(invoice) : [];
+  const categoryTotals = invoiceCategoryTotals(invoice);
+  const showCategorySummary = categoryTotals.length > 1;
   const breakdownTotal = categoryTotals.reduce((total, entry) => total + entry.amount, 0);
   const topCategories = categoryTotals.slice(0, 3);
   const remainingCategories = categoryTotals.length - topCategories.length;
-  const viewItemsLabel = language === "en-US" ? `View items (${totalItemCount})` : `Ver itens (${totalItemCount})`;
-  const viewAllItemsLabel = language === "en-US" ? `View all ${totalItemCount} items` : `Ver todos os ${totalItemCount} itens`;
+  const viewItemsLabel = language === "en-US"
+    ? `View items (${totalItemCount})`
+    : `Ver itens (${totalItemCount})`;
   const noCategoryLabel = language === "en-US" ? "Uncategorized" : "Sem categoria";
-  const hideItemsLabel = language === "en-US" ? "Hide items" : "Ocultar itens";
   const addItemLabel = language === "en-US" ? "Add item" : "Adicionar item";
   const addRefundLabel = language === "en-US" ? "Add refund" : "Adicionar reembolso";
   const addItemShortLabel = language === "en-US" ? "New item" : "Novo item";
   const addRefundShortLabel = language === "en-US" ? "Refund" : "Reembolso";
   const refundLabel = language === "en-US" ? "Refund" : "Reembolso";
+  const deleteLabel = language === "en-US" ? "Delete invoice" : "Excluir fatura";
+  const canDelete = totalItemCount === 0 && Boolean(onDelete);
   const dueLabel = language === "en-US" ? "Due" : "Vence";
   const dueYear = Number(String(invoice.due_date).slice(0, 4));
   const dueDateLabel = dueYear === new Date().getFullYear()
     ? formatDateWithWeekday(invoice.due_date)
     : `${formatDateWithWeekday(invoice.due_date)} ${dueYear}`;
-
-  const startEditingDueDate = () => {
-    if (!canEditDueDate) return;
-    setDueDateDraft(invoice.due_date);
-    setEditingDueDate(true);
-  };
-
-  const cancelEditingDueDate = () => {
-    setDueDateDraft(invoice.due_date);
-    setEditingDueDate(false);
-  };
-
-  const saveDueDate = async () => {
-    if (!dueDateDraft || dueDateDraft === invoice.due_date || savingDueDate) {
-      setEditingDueDate(false);
-      return;
-    }
-    setSavingDueDate(true);
-    try {
-      await onUpdateDueDate(invoice.id, dueDateDraft);
-      setEditingDueDate(false);
-    } finally {
-      setSavingDueDate(false);
-    }
-  };
-
-  const startEditingItem = (item) => {
-    onEditItem?.(invoice, item);
-  };
-
-  const openItemWithKeyboard = (event, item, context) => {
-    if (event.target !== event.currentTarget) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onViewItem?.(invoice, item, context);
-    }
-  };
 
   const renderQuickAddActions = () => (
     <div className="invoice-quick-add-actions">
@@ -208,39 +55,6 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
     </div>
   );
 
-  const renderRegularItem = (item) => {
-    const refund = Number(item.amount) < 0;
-    const itemCategories = item.categories?.length ? item.categories : item.category ? [item.category] : [];
-    return (
-      <div
-        className={`invoice-item is-clickable ${refund ? "refund-line" : ""}`}
-        key={`item-${item.id}`}
-        role="button"
-        tabIndex="0"
-        onClick={() => onViewItem?.(invoice, item, "invoice")}
-        onKeyDown={(event) => openItemWithKeyboard(event, item, "invoice")}
-        aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${item.description}`}
-      >
-        <div className="invoice-item-main">
-          <span className="invoice-item-description">
-            {refund && <em className="refund-badge">{refundLabel}</em>}
-            <span className="invoice-item-name">{item.description}</span>
-            <InvoiceCategoryIcons categories={itemCategories} />
-          </span>
-        </div>
-        <strong>{formatMoney(item.amount)}</strong>
-        <span className="invoice-item-actions">
-          <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); startEditingItem(item); }} aria-label={language === "en-US" ? "Edit item" : "Editar item"}>
-            <Pencil size={15} />
-          </button>
-          <button className="icon-btn small danger" type="button" onClick={(event) => { event.stopPropagation(); onDeleteItem(invoice.id, item.id); }} aria-label={refund ? (language === "en-US" ? "Remove refund" : "Remover reembolso") : tt("invoiceModels.delete", "Remover item")}>
-            <Trash2 size={15} />
-          </button>
-        </span>
-      </div>
-    );
-  };
-
   return (
     <article className={`invoice-card card ${invoice.paid ? "paid" : ""} ${overdue ? "overdue" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
@@ -254,21 +68,12 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
           <small>{tt("invoices.total", "Total")}</small>
           <strong>{formatMoney(invoice.total_amount)}</strong>
         </p>
-        {editingDueDate ? (
-          <div className="invoice-due-editor">
-            <DateField className="compact" value={dueDateDraft} onChange={setDueDateDraft} />
-            <button className="icon-btn small" type="button" onClick={saveDueDate} disabled={savingDueDate || !dueDateDraft} aria-label={language === "en-US" ? "Save due date" : "Salvar vencimento"}>
-              <Check size={15} />
-            </button>
-            <button className="icon-btn small" type="button" onClick={cancelEditingDueDate} disabled={savingDueDate} aria-label={language === "en-US" ? "Cancel date edit" : "Cancelar edicao de data"}>
-              <X size={15} />
-            </button>
-          </div>
-        ) : canEditDueDate ? (
+        {canEditDueDate ? (
           <button
             className="invoice-due-summary is-editable"
             type="button"
-            onClick={startEditingDueDate}
+            onClick={() => onEditDueDate?.(invoice)}
+            aria-haspopup="dialog"
             aria-label={`${language === "en-US" ? "Edit due date" : "Editar vencimento"}: ${formatDateShort(invoice.due_date)}`}
             title={formatDateShort(invoice.due_date)}
           >
@@ -290,17 +95,17 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         )}
       </header>
 
-      {isEmptyInvoice && (
+      {totalItemCount === 0 && (
         <div className="invoice-items">
           <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>
         </div>
       )}
 
-      {opensItemsInModal && topCategories.length > 0 && (
+      {showCategorySummary && (
         <div className="invoice-category-summary">
           {topCategories.map((entry) => (
             <div className="invoice-category-row" style={{ "--category-color": entry.color || "var(--muted)" }} key={entry.id}>
-              <span>{entry.name || noCategoryLabel}</span>
+              <span title={entry.name || noCategoryLabel}>{entry.name || noCategoryLabel}</span>
               <strong>{formatMoney(entry.amount)}</strong>
               <i><b style={{ width: `${breakdownTotal ? Math.max((entry.amount / breakdownTotal) * 100, 2) : 0}%` }} /></i>
             </div>
@@ -311,16 +116,15 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         </div>
       )}
 
-      {canToggleItems && (
+      {totalItemCount > 0 && (
         <button
-          className={`invoice-items-toggle ${itemsExpanded ? "open" : ""} ${opensItemsInModal ? "opens-modal" : ""}`}
+          className="invoice-items-toggle"
           type="button"
-          onClick={() => opensItemsInModal ? onOpenItems?.(invoice) : setItemsOpen((current) => !current)}
-          aria-expanded={opensItemsInModal ? undefined : itemsExpanded}
-          aria-haspopup={opensItemsInModal ? "dialog" : undefined}
+          onClick={() => onOpenItems?.(invoice)}
+          aria-haspopup="dialog"
         >
           <ChevronRight size={16} />
-          <span>{opensItemsInModal ? viewAllItemsLabel : itemsExpanded ? hideItemsLabel : viewItemsLabel}</span>
+          <span>{viewItemsLabel}</span>
           {refundTotal > 0 && (
             <em className="invoice-refund-chip" title={`${refundLabel}: ${formatMoney(refundTotal)}`}>
               <CircleMinus size={12} />{formatMoney(refundTotal)}
@@ -329,62 +133,22 @@ export default function InvoiceCard({ invoice, expenseOptions = [], onManageRece
         </button>
       )}
 
-      {canToggleItems && !opensItemsInModal && (
-        <div className={`invoice-items-panel ${itemsExpanded ? "open" : ""}`}>
-          <div className="invoice-items-panel-inner">
-            <div className="invoice-items">
-              {totalItemCount ? (
-                <>
-                  {regularItems.map(renderRegularItem)}
-                  {installmentItems.map((item) => (
-                    <div
-                      className="invoice-item installment-line is-clickable"
-                      key={`installment-${item.id}`}
-                      role="button"
-                      tabIndex="0"
-                      onClick={() => onViewItem?.(invoice, item, "installment")}
-                      onKeyDown={(event) => openItemWithKeyboard(event, item, "installment")}
-                      aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${item.purchase_description || item.description}`}
-                    >
-                      <div className="invoice-item-main">
-                        <span className="invoice-item-description">
-                          <InstallmentBadge item={item} language={language} onView={onViewInstallment} />
-                          <span className="invoice-item-name">{item.purchase_description || item.description}</span>
-                          <InvoiceCategoryIcons categories={item.categories?.length ? item.categories : item.category ? [item.category] : []} />
-                        </span>
-                      </div>
-                      <strong>{formatMoney(item.amount)}</strong>
-                      <span className="invoice-item-actions">
-                        <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); onManageReceivable?.(expenseOptions.find((option) => option.source_type === "installment_item" && option.source_id === item.id)); }} aria-label="Associar recebível" title="Associar recebível">
-                          <CircleDollarSign size={15} />
-                        </button>
-                        <button className="icon-btn small danger" type="button" onClick={(event) => { event.stopPropagation(); onDeleteInstallmentItem(item.id); }} aria-label="Remover parcela">
-                          <Trash2 size={15} />
-                        </button>
-                      </span>
-                    </div>
-                  ))}
-                </>
-              ) : <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!canToggleItems && (
-        <div className="invoice-single-item-panel">
-          {regularItems.map(renderRegularItem)}
-        </div>
-      )}
-
       <div className="invoice-card-footer">
         {canAddToInvoice && renderQuickAddActions()}
-        <div className="invoice-actions">
-          <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
-            {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
-            {invoice.paid ? tt("invoices.markAsPending", "Marcar pendente") : tt("invoices.markAsPaid", "Marcar paga")}
-          </button>
-        </div>
+        {(totalItemCount > 0 || canDelete) && (
+          <div className="invoice-actions">
+            {totalItemCount > 0 ? (
+              <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
+                {invoice.paid ? <RotateCcw size={16} /> : <CheckCircle2 size={16} />}
+                {invoice.paid ? tt("invoices.markAsPending", "Marcar pendente") : tt("invoices.markAsPaid", "Marcar paga")}
+              </button>
+            ) : (
+              <button className="btn btn-ghost invoice-delete-btn" type="button" onClick={() => onDelete(invoice)}>
+                <Trash2 size={16} /> {deleteLabel}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );

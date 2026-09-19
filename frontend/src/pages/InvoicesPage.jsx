@@ -4,6 +4,8 @@ import InvoiceCard from "../components/InvoiceCard.jsx";
 import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
 import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
 import InvoiceItemsModal from "../modals/InvoiceItemsModal.jsx";
+import InvoiceDueDateModal from "../modals/InvoiceDueDateModal.jsx";
+import DeleteInvoiceModal from "../modals/DeleteInvoiceModal.jsx";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 import InstallmentModal from "../modals/InstallmentModal.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -11,7 +13,7 @@ import { defaultInstallmentForm, invoiceAcceptsNewCharges, normalizeInvoiceColor
 import { formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 
-export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, openModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, openModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", statuses: ["open", "paid"], color: "all" });
@@ -22,10 +24,15 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   const [viewingItem, setViewingItem] = useState(null);
   const [creatingEntry, setCreatingEntry] = useState(null);
   const [itemsInvoiceId, setItemsInvoiceId] = useState(null);
+  const [dueDateInvoiceId, setDueDateInvoiceId] = useState(null);
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState(null);
   const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
   const statusMenuRef = useRef(null);
-  const itemsInvoice = itemsInvoiceId === null ? null : invoices.find((invoice) => invoice.id === itemsInvoiceId) || null;
-  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem || viewingItem || itemsInvoice);
+  const findInvoice = (invoiceId) => invoiceId === null ? null : invoices.find((invoice) => invoice.id === invoiceId) || null;
+  const itemsInvoice = findInvoice(itemsInvoiceId);
+  const dueDateInvoice = findInvoice(dueDateInvoiceId);
+  const deletingInvoice = findInvoice(deletingInvoiceId);
+  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem || viewingItem || itemsInvoice || dueDateInvoice || deletingInvoice);
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
@@ -310,7 +317,18 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
                     </button>
                     {expanded && (
                       group.items.length ? (
-                        <div className="invoice-grid">{group.items.map((invoice) => <InvoiceCard key={invoice.id} invoice={invoice} expenseOptions={expenseOptions} onManageReceivable={manageReceivable} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onAddEntry={openEntryModal} onEditItem={(targetInvoice, item) => { setCreatingEntry(null); setViewingItem(null); setEditingItem({ invoice: targetInvoice, item }); }} onViewItem={(targetInvoice, item, context) => { setCreatingEntry(null); setEditingItem(null); setViewingItem({ invoice: targetInvoice, item, context }); }} onOpenItems={(targetInvoice) => { setCreatingEntry(null); setEditingItem(null); setViewingItem(null); setItemsInvoiceId(targetInvoice.id); }} onUpdateDueDate={updateDueDate} onDeleteItem={deleteItem} onDeleteInstallmentItem={deleteInstallmentItem} onTogglePaid={togglePaid} onViewInstallment={onViewInstallment} />)}</div>
+                        <div className="invoice-grid">{group.items.map((invoice) => (
+                          <InvoiceCard
+                            key={invoice.id}
+                            invoice={invoice}
+                            allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
+                            onAddEntry={openEntryModal}
+                            onOpenItems={(targetInvoice) => { setCreatingEntry(null); setEditingItem(null); setViewingItem(null); setItemsInvoiceId(targetInvoice.id); }}
+                            onEditDueDate={(targetInvoice) => setDueDateInvoiceId(targetInvoice.id)}
+                            onTogglePaid={togglePaid}
+                            onDelete={deleteInvoice ? (targetInvoice) => setDeletingInvoiceId(targetInvoice.id) : undefined}
+                          />
+                        ))}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
                     )}
                   </section>
@@ -332,7 +350,28 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
           onDeleteItem={deleteItem}
           onDeleteInstallmentItem={deleteInstallmentItem}
           onManageReceivable={manageReceivable}
+          onViewInstallment={onViewInstallment}
           onClose={() => setItemsInvoiceId(null)}
+        />
+      )}
+      {dueDateInvoice && (
+        <InvoiceDueDateModal
+          invoice={dueDateInvoice}
+          onSave={async (dueDate) => {
+            await updateDueDate(dueDateInvoice.id, dueDate);
+            setDueDateInvoiceId(null);
+          }}
+          onClose={() => setDueDateInvoiceId(null)}
+        />
+      )}
+      {deletingInvoice && (
+        <DeleteInvoiceModal
+          invoice={deletingInvoice}
+          onConfirm={async () => {
+            await deleteInvoice(deletingInvoice.id);
+            setDeletingInvoiceId(null);
+          }}
+          onClose={() => setDeletingInvoiceId(null)}
         />
       )}
       {creatingEntry?.entryMode === "single" && (

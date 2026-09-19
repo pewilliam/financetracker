@@ -277,6 +277,10 @@ export function updateInvoice(id, payload) {
   });
 }
 
+export function deleteInvoice(invoiceId) {
+  return request(`/invoices/${invoiceId}`, { method: "DELETE" });
+}
+
 export function addInvoiceItem(invoiceId, payload) {
   return request(`/invoices/${invoiceId}/items`, {
     method: "POST",

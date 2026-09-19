@@ -1,24 +1,45 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CircleMinus, Link2, Loader2, Pencil, ShoppingBag, X } from "lucide-react";
 
+import { isMobileViewport } from "../app/helpers.js";
 import CategorySelect from "../components/CategorySelect.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
+const categoryKey = (ids) => [...ids].map(Number).sort((left, right) => left - right).join(",");
+const cents = (value) => Math.round(Math.abs(Number(value || 0)) * 100);
+
 export default function InvoiceItemModal({ invoice, item, categories = [], expenseOption, onManageReceivable, onCreateCategory, onSave, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
-  const [form, setForm] = useState(() => ({
+  const original = {
     description: item.description || "",
-    amount: formatMoney(Math.abs(Number(item.amount || 0)), language),
-    category_ids: (item.category_ids?.length ? item.category_ids : item.category_id ? [item.category_id] : []).map(String),
     kind: Number(item.amount) < 0 ? "refund" : "expense",
+    amount: Math.abs(Number(item.amount || 0)),
+    category_ids: (item.category_ids?.length ? item.category_ids : item.category_id ? [item.category_id] : []).map(String),
+  };
+  const [form, setForm] = useState(() => ({
+    description: original.description,
+    amount: formatMoney(original.amount, language),
+    category_ids: original.category_ids,
+    kind: original.kind,
   }));
   const [saving, setSaving] = useState(false);
+  const amountInputRef = useRef(null);
   const isRefund = form.kind === "refund";
   const amount = parseTypedMoneyInput(form.amount, language);
-  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving);
+  const changed = form.description.trim() !== original.description.trim()
+    || form.kind !== original.kind
+    || cents(amount) !== cents(original.amount)
+    || categoryKey(form.category_ids) !== categoryKey(original.category_ids);
+  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && changed && !saving);
+
+  useEffect(() => {
+    if (isMobileViewport()) return undefined;
+    const focusFrame = requestAnimationFrame(() => amountInputRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(focusFrame);
+  }, []);
 
   useEffect(() => {
     const closeOnEscape = (event) => {
@@ -47,70 +68,106 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
   };
 
   return createPortal(
-    <div className="modal-layer invoice-item-modal-layer">
+    <div className="modal-layer transaction-modal-layer invoice-entry-modal-layer">
       <button className="modal-backdrop" type="button" onClick={saving ? undefined : onClose} aria-label={copy("Fechar", "Close")} />
-      <form className={`modal-card invoice-item-edit-modal editing ${isRefund ? "refund" : "expense"}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="invoice-item-modal-title">
-        <div className="invoice-item-modal-header">
-          <div className="invoice-item-modal-icon"><Pencil size={20} /></div>
-          <div>
-            <p className="eyebrow">{invoice.name}</p>
-            <h2 id="invoice-item-modal-title">{copy("Editar item da fatura", "Edit invoice item")}</h2>
+      <form
+        className={`modal-card transaction-modal invoice-entry-modal invoice-item-edit-modal ${isRefund ? "refund" : "expense"}`}
+        onSubmit={submit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invoice-item-modal-title"
+      >
+        <header className="transaction-entry-titlebar invoice-entry-titlebar">
+          <span className="transaction-entry-icon"><Pencil size={20} /></span>
+          <div className="transaction-entry-heading">
+            <p>{copy(`FATURA · ${invoice.name}`, `INVOICE · ${invoice.name}`)}</p>
+            <h2 id="invoice-item-modal-title">{copy("Editar item", "Edit item")}</h2>
           </div>
-          <button className="icon-btn" type="button" onClick={onClose} disabled={saving} aria-label={copy("Fechar", "Close")}><X size={18} /></button>
-        </div>
-
-        <div className="invoice-item-modal-body">
-          <div className="invoice-item-kind" aria-label={copy("Tipo do item", "Item type")}>
-            <button className={form.kind === "expense" ? "active expense" : ""} type="button" onClick={() => setForm((current) => ({ ...current, kind: "expense" }))}>
-              <ShoppingBag size={16} /> {copy("Gasto", "Expense")}
+          <div className="transaction-mode-switch" aria-label={copy("Tipo do item", "Item type")}>
+            <button
+              className={isRefund ? "" : "active"}
+              type="button"
+              aria-pressed={!isRefund}
+              onClick={() => setForm((current) => ({ ...current, kind: "expense" }))}
+            >
+              <ShoppingBag size={15} /> {copy("Gasto", "Expense")}
             </button>
-            <button className={form.kind === "refund" ? "active refund" : ""} type="button" onClick={() => setForm((current) => ({ ...current, kind: "refund" }))}>
-              <CircleMinus size={16} /> {copy("Reembolso", "Refund")}
+            <button
+              className={isRefund ? "active" : ""}
+              type="button"
+              aria-pressed={isRefund}
+              onClick={() => setForm((current) => ({ ...current, kind: "refund" }))}
+            >
+              <CircleMinus size={15} /> {copy("Reembolso", "Refund")}
             </button>
           </div>
+          <button className="icon-btn" type="button" onClick={onClose} disabled={saving} aria-label={copy("Fechar", "Close")}>
+            <X size={18} />
+          </button>
+        </header>
 
-          <label className="invoice-item-description-field">
-            <span>{copy("Descrição", "Description")}</span>
-            <input maxLength={255} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={isRefund ? copy("Opcional. Ex: estorno ou devolução", "Optional. Ex: reversal or return") : copy("Ex: supermercado, restaurante...", "Ex: groceries, restaurant...")} />
-          </label>
-
-          <label>
-            <span>{copy("Categoria", "Category")}</span>
-            <CategorySelect categories={categories} values={form.category_ids} onChange={(category_ids) => setForm((current) => ({ ...current, category_ids }))} onCreate={onCreateCategory} />
-          </label>
-
-          <label>
+        <div className="transaction-modal-body invoice-entry-modal-body">
+          <label className="amount-field">
             <span>{copy("Valor", "Amount")}</span>
-            <div className={`invoice-item-money ${form.kind}`}>
+            <div className={`money-input ${isRefund ? "success" : "danger"}`}>
               <span>R$</span>
               <input
+                ref={amountInputRef}
                 inputMode="decimal"
                 value={form.amount.replace(/^R\$\s?/, "")}
                 onChange={(event) => setForm((current) => ({ ...current, amount: formatTypedMoneyForEditing(event.target.value, language) }))}
                 onBlur={() => setForm((current) => ({ ...current, amount: formatTypedMoneyAsCurrency(current.amount, language) }))}
+                onFocus={(event) => event.target.select()}
+                aria-label={copy("Valor", "Amount")}
               />
             </div>
           </label>
 
-          {Number(item.amount) > 0 && expenseOption && (
+          <label className="invoice-entry-description">
+            <span>{copy("Descrição", "Description")}</span>
+            <input
+              maxLength={255}
+              value={form.description}
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+              placeholder={isRefund ? copy("Opcional. Ex: estorno ou devolução", "Optional. Ex: reversal or return") : copy("Ex: supermercado, restaurante...", "Ex: groceries, restaurant...")}
+            />
+          </label>
+
+          <label className="invoice-entry-category">
+            <span>{copy("Categoria", "Category")}</span>
+            <CategorySelect
+              categories={categories}
+              values={form.category_ids}
+              onChange={(category_ids) => setForm((current) => ({ ...current, category_ids }))}
+              onCreate={onCreateCategory}
+            />
+          </label>
+
+          {!isRefund && expenseOption && (
             <section className="expense-receivable-action">
               <div>
-                <strong><Link2 size={16} /> Recebimento associado</strong>
-                <small>{expenseOption.receivable_ids?.length ? `${formatMoney(expenseOption.linked_amount, language)} já associado` : "Outra pessoa pagará todo ou parte deste gasto?"}</small>
+                <strong><Link2 size={16} /> {copy("Recebimento associado", "Linked receivable")}</strong>
+                <small>
+                  {expenseOption.receivable_ids?.length
+                    ? copy(`${formatMoney(expenseOption.linked_amount, language)} já associado`, `${formatMoney(expenseOption.linked_amount, language)} already linked`)
+                    : copy("Outra pessoa pagará todo ou parte deste gasto?", "Will someone else pay part of this expense?")}
+                </small>
               </div>
               <button className="btn btn-ghost compact" type="button" onClick={() => onManageReceivable?.(expenseOption)}>
-                {expenseOption.receivable_ids?.length ? "Editar recebível" : "Associar recebível"}
+                {expenseOption.receivable_ids?.length ? copy("Editar recebível", "Edit receivable") : copy("Associar recebível", "Link receivable")}
               </button>
             </section>
           )}
         </div>
 
-        <div className="invoice-item-modal-footer">
+        <footer className="transaction-modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>{copy("Cancelar", "Cancel")}</button>
-          <button className="btn btn-primary" type="submit" disabled={!canSave}>
-            {saving ? <><Loader2 className="spin" size={16} /> {copy("Salvando...", "Saving...")}</> : copy("Salvar alterações", "Save changes")}
+          <button className="btn btn-primary transaction-save" type="submit" disabled={!canSave}>
+            {saving
+              ? <><Loader2 className="spin" size={16} /> {copy("Salvando...", "Saving...")}</>
+              : copy("Salvar alterações", "Save changes")}
           </button>
-        </div>
+        </footer>
       </form>
     </div>,
     document.body,

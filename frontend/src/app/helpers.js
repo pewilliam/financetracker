@@ -69,15 +69,31 @@ export function invoiceAcceptsNewCharges(invoice, allowOverdue = false) {
   return allowOverdue || String(invoice.due_date || "").slice(0, 10) >= todayIsoDate();
 }
 
+export function entryCategories(entry) {
+  return entry?.categories?.length ? entry.categories : entry?.category ? [entry.category] : [];
+}
+
+// Uma combinação de categorias vira um grupo próprio, como nos gráficos do dashboard:
+// "Alimentação + Saídas" não soma em "Alimentação".
+export function categoryCombination(categories = []) {
+  const unique = [...new Map(categories.map((category) => [Number(category.id), category])).values()];
+  if (!unique.length) return { id: "uncategorized", name: null, color: null };
+  const byName = [...unique].sort((left, right) => String(left.name || "").localeCompare(String(right.name || "")));
+  return {
+    id: unique.map((category) => Number(category.id)).sort((left, right) => left - right).join("-"),
+    name: byName.map((category) => category.name).join(" + "),
+    color: byName[0]?.color || null,
+  };
+}
+
 export function invoiceCategoryTotals(invoice) {
   const entries = [...(invoice?.items || []), ...(invoice?.installment_items || [])];
   const totals = new Map();
   entries.forEach((entry) => {
-    const category = entry.categories?.length ? entry.categories[0] : entry.category || null;
-    const key = category ? String(category.id) : "none";
-    const current = totals.get(key) || { id: key, name: category?.name || null, color: category?.color || null, amount: 0 };
+    const group = categoryCombination(entryCategories(entry));
+    const current = totals.get(group.id) || { ...group, amount: 0 };
     current.amount += Number(entry.amount || 0);
-    totals.set(key, current);
+    totals.set(group.id, current);
   });
   return [...totals.values()].filter((entry) => entry.amount > 0).sort((left, right) => right.amount - left.amount);
 }
