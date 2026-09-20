@@ -35,9 +35,9 @@ export default function ReceivablePaymentModal({ data, setData, categories = [],
             <span>{tt("receivables.remaining", "Restante")}</span>
             <strong>{formatMoney(remaining, language)}</strong>
           </div>
-          <label><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
-          <label><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></label>
-          <label><span>Categorias do recebimento</span><CategorySelect categories={categories} values={data.category_ids || []} onChange={(value) => updateData({ category_ids: value })} onCreate={onCreateCategory} /></label>
+          <div className="field-label"><span>{tt("receivables.amountPaid", "Valor pago")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={isFullPayment ? formatMoney(remaining, language) : data.amount} readOnly={isFullPayment} onChange={(event) => updateData({ amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></div>
+          <div className="field-label"><span>{tt("receivables.paidAt", "Data do pagamento")}</span><DateField value={data.paid_at} onChange={(value) => updateData({ paid_at: value })} /></div>
+          <div className="invoice-field"><span>Categorias do recebimento</span><CategorySelect categories={categories} values={data.category_ids || []} onChange={(value) => updateData({ category_ids: value })} onCreate={onCreateCategory} /></div>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>

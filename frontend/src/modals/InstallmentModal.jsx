@@ -122,11 +122,11 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
         {step === 1 ? (
           <>
             <div className="invoice-modal-body">
-              <label><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
-              <label><span>Categorias</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
+              <div className="field-label"><span>{tt("installmentModal.purchaseDescription", "Descrição da compra")}</span><input placeholder={tt("installmentModal.purchaseDescriptionPlaceholder", "Ex: PlayStation 5, iPhone, Notebook...")} value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></div>
+              <div className="invoice-field"><span>Categorias</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></div>
               <div className="installment-form-row">
-                <label><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></label>
-                <label><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={form.installment_count ?? ""} onChange={(event) => updateForm({ installment_count: event.target.value })} onBlur={() => updateForm({ installment_count: count })} required /></label>
+                <div className="field-label"><span>{tt("installmentModal.totalPurchaseAmount", "Valor total da compra")}</span><input inputMode="decimal" placeholder="R$ 0,00" value={form.total_amount} onChange={(event) => handleMoneyChange(event.target.value)} onBlur={() => normalizeMoneyField("total_amount")} required /></div>
+                <div className="field-label"><span>{tt("installmentModal.numberOfInstallments", "Número de parcelas")}</span><input type="number" min="1" max="48" value={form.installment_count ?? ""} onChange={(event) => updateForm({ installment_count: event.target.value })} onBlur={() => updateForm({ installment_count: count })} required /></div>
               </div>
               <div className="installment-per-value" aria-live="polite">
                 <strong>{tt("installmentModal.perInstallment", `= ${formatMoney(installmentAmount)} por parcela`, { value: formatMoney(installmentAmount) })}</strong>

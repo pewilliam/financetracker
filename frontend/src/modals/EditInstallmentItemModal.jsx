@@ -152,7 +152,7 @@ export default function EditInstallmentItemModal({
         </header>
 
         <div className="transaction-modal-body invoice-entry-modal-body edit-installment-item-body">
-          <label className="amount-field">
+          <div className="amount-field">
             <span>{copy("Valor", "Amount")}</span>
             <div className="money-input danger">
               <span>R$</span>
@@ -166,9 +166,9 @@ export default function EditInstallmentItemModal({
                 aria-label={copy(`Valor da parcela ${item.installment_number}`, `Amount for installment ${item.installment_number}`)}
               />
             </div>
-          </label>
+          </div>
 
-          <label className={`edit-installment-field edit-installment-invoice ${invoiceDisabled ? "is-disabled" : ""}`}>
+          <div className={`edit-installment-field edit-installment-invoice ${invoiceDisabled ? "is-disabled" : ""}`}>
             <span>{copy("Fatura", "Invoice")}</span>
             <FilterSelect
               value={form.status === "canceled" ? "" : form.invoice_id}
@@ -180,14 +180,14 @@ export default function EditInstallmentItemModal({
               ariaLabel={copy(`Fatura da parcela ${item.installment_number}`, `Invoice for installment ${item.installment_number}`)}
               onChange={(invoiceId) => setForm((current) => ({ ...current, invoice_id: invoiceId }))}
             />
-          </label>
+          </div>
 
           <div className="edit-installment-due" aria-live="polite">
             <span>{copy("Vencimento", "Due date")}</span>
             <strong>{selectedInvoice?.due_date ? formatDateShort(selectedInvoice.due_date, language) : "—"}</strong>
           </div>
 
-          <label className="edit-installment-field">
+          <div className="edit-installment-field">
             <span>{copy("Status", "Status")}</span>
             <select
               aria-label={copy(`Status da parcela ${item.installment_number}`, `Status for installment ${item.installment_number}`)}
@@ -206,7 +206,7 @@ export default function EditInstallmentItemModal({
               <option value="refunded">{copy("Reembolsada", "Refunded")}</option>
               <option value="canceled">{copy("Cancelada", "Canceled")}</option>
             </select>
-          </label>
+          </div>
 
           {invalidRefund && (
             <p className="edit-installment-hint error" role="alert">

@@ -77,13 +77,13 @@ export default function CategoryLimitModal({ categories, category = null, langua
 
         <div className={`wallet-modal-body form-stack category-limit-modal-body ${confirmingRemove ? "confirming-remove" : ""}`}>
           {confirmingRemove ? <div className="category-limit-remove-confirm"><i><AlertTriangle size={21} /></i><div><strong>{t("categories.confirmRemoveLimitTitle")}</strong><p>{t("categories.confirmRemoveLimitMessage", { name: selectedCategory?.name || "" })}</p></div></div> : <>
-            {editing ? <div className="category-limit-category"><i style={{ "--category-color": selectedCategory?.color }}><Target size={17} /></i><div><span>{t("categories.chooseCategory")}</span><strong>{selectedCategory?.name}</strong></div></div> : <label>
+            {editing ? <div className="category-limit-category"><i style={{ "--category-color": selectedCategory?.color }}><Target size={17} /></i><div><span>{t("categories.chooseCategory")}</span><strong>{selectedCategory?.name}</strong></div></div> : <div className="field-label">
               <span>{t("categories.chooseCategory")}</span>
               <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} disabled={busy}>
                 {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
-            </label>}
-            <label>
+            </div>}
+            <div className="field-label">
               <span>{t("categories.monthlyLimit")}</span>
               <span className="category-limit-money-field">
                 <b>R$</b>
@@ -97,7 +97,7 @@ export default function CategoryLimitModal({ categories, category = null, langua
                 />
               </span>
               <small>{t("categories.limitRepeatsHint")}</small>
-            </label>
+            </div>
             {editing && <button className="category-limit-remove" type="button" onClick={() => setConfirmingRemove(true)} disabled={busy}><Trash2 size={16} /> {t("categories.removeLimit")}</button>}
           </>}
         </div>

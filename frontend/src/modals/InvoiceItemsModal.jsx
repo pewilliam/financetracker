@@ -224,7 +224,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
 
         {showToolbar && (
           <div className="invoice-items-toolbar">
-            <label className="invoice-items-search">
+            <div className="invoice-items-search">
               <Search size={15} />
               <input
                 ref={searchRef}
@@ -234,7 +234,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
                 placeholder={copy("Buscar por descrição ou categoria", "Search by description or category")}
                 aria-label={copy("Buscar itens", "Search items")}
               />
-            </label>
+            </div>
             <FilterSelect value={sort} options={sortOptions} onChange={setSort} ariaLabel={copy("Ordenar itens", "Sort items")} />
             <button
               className={`btn btn-ghost invoice-items-group-toggle ${grouped ? "active" : ""}`}

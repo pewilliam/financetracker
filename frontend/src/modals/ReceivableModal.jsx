@@ -87,7 +87,7 @@ export default function ReceivableModal({ form, setForm, editing, people, catego
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
         </div>
         <div className="invoice-modal-body">
-          <label>
+          <div className="field-label">
             <span>{tt("receivables.person", "Pessoa")}</span>
             <select
               value={form.person_id || ""}
@@ -98,11 +98,11 @@ export default function ReceivableModal({ form, setForm, editing, people, catego
               {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
               <option value={CREATE_RECEIVABLE_PERSON_VALUE}>{tt("receivables.createPerson", "+ Cadastrar nova pessoa")}</option>
             </select>
-          </label>
+          </div>
           {form.person_id === CREATE_RECEIVABLE_PERSON_VALUE && (
-            <label><span>{tt("receivables.newPersonName", "Nome da pessoa")}</span><input value={form.person_name} onChange={(event) => updateForm({ person_name: event.target.value })} required /></label>
+            <div className="field-label"><span>{tt("receivables.newPersonName", "Nome da pessoa")}</span><input value={form.person_name} onChange={(event) => updateForm({ person_name: event.target.value })} required /></div>
           )}
-          <label><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></label>
+          <div className="field-label"><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></div>
           <section className={`receivable-expense-link ${selectedExpense ? "active" : ""}`}>
             <div className="receivable-link-heading">
               <span><Link2 size={16} /> Associar a um gasto</span>
@@ -143,11 +143,11 @@ export default function ReceivableModal({ form, setForm, editing, people, catego
             )}
           </section>
           <div className="receivable-form-row">
-            <label><span>{tt("receivables.amount", "Valor")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></label>
-            <label><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></label>
+            <div className="field-label"><span>{tt("receivables.amount", "Valor")}</span><input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required /></div>
+            <div className="field-label"><span>{tt("receivables.dueDate", "Vencimento")}</span><DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} /></div>
           </div>
-          <label><span>Categorias do recebimento</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></label>
-          <label><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></label>
+          <div className="invoice-field"><span>Categorias do recebimento</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></div>
+          <div className="field-label"><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></div>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>

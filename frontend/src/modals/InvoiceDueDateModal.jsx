@@ -52,10 +52,10 @@ export default function InvoiceDueDateModal({ invoice, onSave, onClose }) {
         </header>
 
         <div className="transaction-modal-body invoice-due-date-body">
-          <label className="invoice-due-date-field">
+          <div className="invoice-due-date-field">
             <span>{copy("Data de vencimento", "Due date")}</span>
             <DateField value={dueDate} onChange={setDueDate} ariaInvalid={!dueDate} />
-          </label>
+          </div>
 
           <div className={`invoice-due-date-preview ${overdue ? "overdue" : ""}`}>
             <CalendarDays size={16} />

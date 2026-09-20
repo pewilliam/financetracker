@@ -48,12 +48,12 @@ export default function InvoiceTemplateModal({ initial, onSubmit, onClose }) {
           <button className="icon-btn" type="button" onClick={onClose} disabled={submitting} aria-label={tt("actions.close", "Fechar modal")}><X size={18} /></button>
         </div>
         <div className="wallet-modal-body form-stack invoice-template-editor-body">
-          <label><span>{tt("invoiceModels.name", "Nome")}</span><input ref={nameInputRef} maxLength={100} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder={tt("invoiceModels.namePlaceholder", "Ex: Nubank, Cartão principal...")} disabled={submitting} required /></label>
+          <div className="field-label"><span>{tt("invoiceModels.name", "Nome")}</span><input ref={nameInputRef} maxLength={100} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder={tt("invoiceModels.namePlaceholder", "Ex: Nubank, Cartão principal...")} disabled={submitting} required /></div>
           <div className="shared-color-field">
             <span>{tt("invoiceModels.color", "Cor")}</span>
             <ColorPickerField value={form.color} onChange={(color) => setForm({ ...form, color })} label={tt("invoiceModels.customColor", "Cor personalizada")} ariaLabel={tt("invoiceModels.chooseColor", "Escolher a cor do modelo")} disabled={submitting} />
           </div>
-          <label><span>{tt("invoiceModels.defaultDueDay", "Dia de vencimento padrão")}</span><input type="number" min="1" max="31" value={form.default_due_day ?? ""} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} onBlur={() => setForm({ ...form, default_due_day: dueDay })} disabled={submitting} required /><small>{tt("invoiceModels.defaultDueDayHint", "Usaremos este dia ao sugerir o vencimento de novas faturas.")}</small></label>
+          <div className="field-label"><span>{tt("invoiceModels.defaultDueDay", "Dia de vencimento padrão")}</span><input type="number" min="1" max="31" value={form.default_due_day ?? ""} onChange={(event) => setForm({ ...form, default_due_day: event.target.value })} onBlur={() => setForm({ ...form, default_due_day: dueDay })} disabled={submitting} required /><small>{tt("invoiceModels.defaultDueDayHint", "Usaremos este dia ao sugerir o vencimento de novas faturas.")}</small></div>
         </div>
         <footer className="wallet-modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose} disabled={submitting}>{tt("actions.cancel", "Cancelar")}</button>

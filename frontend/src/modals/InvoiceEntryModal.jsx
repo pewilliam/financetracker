@@ -74,7 +74,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
         </header>
 
         <div className="transaction-modal-body invoice-entry-modal-body">
-          <label className="amount-field">
+          <div className="amount-field">
             <span>{copy("Valor", "Amount")}</span>
             <div className={`money-input ${isRefund ? "success" : "danger"}`}>
               <span>R$</span>
@@ -88,9 +88,9 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
                 aria-label={copy("Valor", "Amount")}
               />
             </div>
-          </label>
+          </div>
 
-          <label className="invoice-entry-description">
+          <div className="invoice-entry-description">
             <span>{copy("Descrição", "Description")}</span>
             <input
               maxLength={255}
@@ -98,9 +98,9 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
               placeholder={isRefund ? copy("Opcional. Ex: estorno ou devolução", "Optional. Ex: reversal or return") : copy("Ex: supermercado, restaurante...", "Ex: groceries, restaurant...")}
             />
-          </label>
+          </div>
 
-          <label className="invoice-entry-category">
+          <div className="invoice-entry-category">
             <span>{copy("Categoria", "Category")}</span>
             <CategorySelect
               categories={categories}
@@ -108,7 +108,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
               onChange={(category_ids) => setForm((current) => ({ ...current, category_ids }))}
               onCreate={onCreateCategory}
             />
-          </label>
+          </div>
 
         </div>
         <footer className="transaction-modal-actions">

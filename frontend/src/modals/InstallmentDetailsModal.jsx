@@ -214,13 +214,13 @@ export default function InstallmentDetailsModal({
 
           {editingPurchase && (
             <section className="installment-purchase-editor">
-              <label>
+              <div className="installment-purchase-field">
                 <span>{copy("Categorias da compra", "Purchase categories")}</span>
                 <div>
                   <CategorySelect className="compact" categories={categories} values={categoryIds} onChange={saveCategory} onCreate={onCreateCategory} />
                   {savingCategory && <Loader2 className="spin" size={15} />}
                 </div>
-              </label>
+              </div>
               <p>{copy("Para alterar valor, fatura ou status de uma parcela, use o botão de editar na lista.", "To change an installment amount, invoice, or status, use the edit button in the list.")}</p>
             </section>
           )}

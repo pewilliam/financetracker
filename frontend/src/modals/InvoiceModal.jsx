@@ -166,7 +166,7 @@ export default function InvoiceModal({ form, setForm, templates, wallets = [], o
         {step === 1 ? (
           <>
             <div className="invoice-modal-body">
-              <label>
+              <div className="invoice-field">
                 <span>{tt("invoiceModal.invoiceModel", "Modelo de fatura")}</span>
                 <FilterSelect
                   value={form.template_id}
@@ -178,12 +178,12 @@ export default function InvoiceModal({ form, setForm, templates, wallets = [], o
                   emptyLabel={tt("invoiceModal.noModelFound", "Nenhum modelo encontrado.")}
                   ariaLabel={tt("invoiceModal.invoiceModel", "Modelo de fatura")}
                 />
-              </label>
-              <label>
+              </div>
+              <div className="field-label">
                 <span>{tt("invoiceModal.firstDueDate", "Data de vencimento da primeira fatura")}</span>
                 <DateField value={form.due_date} onChange={(value) => updateForm({ due_date: value })} />
-              </label>
-              <label>
+              </div>
+              <div className="invoice-field">
                 <span>{tt("invoiceModal.wallet", "Carteira da fatura")}</span>
                 <WalletSelect
                   wallets={wallets.filter((wallet) => wallet.active)}
@@ -191,7 +191,7 @@ export default function InvoiceModal({ form, setForm, templates, wallets = [], o
                   onChange={(value) => updateForm({ wallet_id: value })}
                   ariaLabel={tt("invoiceModal.wallet", "Carteira da fatura")}
                 />
-              </label>
+              </div>
 
               <label className={`duplicate-option ${form.duplicate_next_month ? "active" : ""}`}>
                 <input

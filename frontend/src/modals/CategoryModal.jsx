@@ -52,11 +52,11 @@ export default function CategoryModal({ category = null, onSave, onClose }) {
         </div>
 
         <div className="wallet-modal-body form-stack category-modal-body">
-          <label>
+          <div className="field-label">
             <span>Nome da categoria</span>
             <input autoFocus={shouldAutoFocusName} maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex: Alimentação, Transporte, Lazer..." />
             <small>Use um nome curto para facilitar a leitura no dashboard.</small>
-          </label>
+          </div>
 
           <fieldset className="category-color-field">
             <legend>Cor de identificação</legend>

@@ -189,30 +189,30 @@ export default function BatchTransactionModal({ open, year, month, categories = 
                 <div><strong>{copy("Período e tipo", "Period and type")}</strong><small>{copy("Defina quando as regras serão aplicadas.", "Set when the rules will be applied.")}</small></div>
               </div>
               <div className="batch-period-grid">
-                <label className={errors.start_date ? "has-error" : ""}>
+                <div className={errors.start_date ? "has-error" : ""}>
                   <span>{copy("Começa em", "Starts on")}</span>
                   <DateField value={form.start_date} onChange={(value) => { setForm({ ...form, start_date: value }); setErrors({ ...errors, start_date: null, batch: null }); }} ariaInvalid={!!errors.start_date} />
                   {errors.start_date && <small className="field-error">{errors.start_date}</small>}
-                </label>
-                <label className={errors.end_date ? "has-error" : ""}>
+                </div>
+                <div className={errors.end_date ? "has-error" : ""}>
                   <span>{copy("Termina em", "Ends on")}</span>
                   <DateField value={form.end_date} onChange={(value) => { setForm({ ...form, end_date: value }); setErrors({ ...errors, end_date: null, batch: null }); }} ariaInvalid={!!errors.end_date} />
                   {errors.end_date && <small className="field-error">{errors.end_date}</small>}
-                </label>
+                </div>
               </div>
               <div className="batch-kind" aria-label={copy("Tipo dos lançamentos", "Entry type")}>
                 <button type="button" className={form.type === "income" ? "active success" : ""} onClick={() => setForm({ ...form, type: "income" })}><ArrowUpCircle size={16} /> {copy("GANHOS", "INCOME")}</button>
                 <button type="button" className={form.type === "expense" ? "active danger" : ""} onClick={() => setForm({ ...form, type: "expense" })}><ArrowDownCircle size={16} /> {copy("GASTOS", "EXPENSES")}</button>
               </div>
-              <label className="batch-category-field">
+              <div className="batch-category-field">
                 <span>{copy("Categoria para todos", "Category for all")}</span>
                 <CategorySelect categories={categories} values={form.category_ids} onChange={(value) => setForm({ ...form, category_ids: value })} onCreate={onCreateCategory} />
-              </label>
-              <label className={`batch-category-field ${errors.wallet_id ? "has-error" : ""}`}>
+              </div>
+              <div className={`batch-category-field ${errors.wallet_id ? "has-error" : ""}`}>
                 <span><WalletCards size={15} /> {copy("Carteira para todos", "Wallet for all")}</span>
                 <WalletSelect wallets={wallets.filter((wallet) => wallet.active)} value={form.wallet_id} onChange={(value) => { setForm({ ...form, wallet_id: value }); setErrors({ ...errors, wallet_id: null }); }} ariaLabel={copy("Carteiras dos lançamentos", "Entry wallets")} />
                 {errors.wallet_id && <small className="field-error">{errors.wallet_id}</small>}
-              </label>
+              </div>
             </section>
 
             <section className="batch-section">
@@ -228,19 +228,19 @@ export default function BatchTransactionModal({ open, year, month, categories = 
                       {form.rules.length > 1 && <button type="button" onClick={() => removeRule(rule.id)} aria-label={copy("Remover regra", "Remove rule")}><Trash2 size={15} /></button>}
                     </div>
                     <div className="batch-rule-fields">
-                      <label className={errors[`rule_${rule.id}_description`] ? "has-error" : ""}>
+                      <div className={errors[`rule_${rule.id}_description`] ? "has-error" : ""}>
                         <span>{copy("Descrição", "Description")}</span>
                         <input value={rule.description} placeholder={copy("Ex: Ônibus — ida", "Ex: Bus — outbound")} onChange={(event) => updateRule(rule.id, "description", event.target.value)} />
                         {errors[`rule_${rule.id}_description`] && <small className="field-error">{errors[`rule_${rule.id}_description`]}</small>}
-                      </label>
-                      <label className={errors[`rule_${rule.id}_amount`] ? "has-error" : ""}>
+                      </div>
+                      <div className={errors[`rule_${rule.id}_amount`] ? "has-error" : ""}>
                         <span>{copy("Valor", "Amount")}</span>
                         <div className="batch-money-input">
                           <b>R$</b>
                           <input inputMode="decimal" value={rule.amount.replace(/^R\$\s?/, "")} placeholder="0,00" onChange={(event) => updateRule(rule.id, "amount", formatTypedMoneyForEditing(event.target.value))} onBlur={() => updateRule(rule.id, "amount", formatTypedMoneyAsCurrency(rule.amount))} />
                         </div>
                         {errors[`rule_${rule.id}_amount`] && <small className="field-error">{errors[`rule_${rule.id}_amount`]}</small>}
-                      </label>
+                      </div>
                     </div>
                     <fieldset className={errors[`rule_${rule.id}_weekdays`] ? "has-error" : ""}>
                       <legend>{copy("Repete em", "Repeats on")}</legend>

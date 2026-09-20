@@ -305,7 +305,7 @@ export default function TransactionForm({
             </button>
           </div>
 
-          <label className={`amount-field ${errors.amount ? "has-error" : ""}`}>
+          <div className={`amount-field ${errors.amount ? "has-error" : ""}`}>
             <span>{tt("transactionModal.amount", "Valor")}</span>
             <div className={`money-input ${isExpense ? "danger" : "success"}`}>
               <span>R$</span>
@@ -320,29 +320,29 @@ export default function TransactionForm({
               />
             </div>
             {errors.amount && <small className="field-error">{errors.amount}</small>}
-          </label>
+          </div>
 
-          <label className={errors.date ? "has-error" : ""}>
+          <div className={errors.date ? "has-error" : ""}>
             <span>{tt("transactionModal.date", "Data")}</span>
             <DateField value={form.date} onBlur={() => handleBlur("date")} onChange={(value) => setField("date", value)} ariaInvalid={!!errors.date} />
             {errors.date && <small className="field-error">{errors.date}</small>}
-          </label>
+          </div>
 
-          <label>
+          <div className="field-label">
             <span>{tt("transactionModal.description", "Descrição")}</span>
             <input placeholder={tt("transactionModal.descriptionPlaceholder", "Ex: mercado, salário, aluguel")} value={form.description} onChange={(event) => setField("description", event.target.value)} />
-          </label>
+          </div>
 
-          <label>
+          <div>
             <span>Categoria</span>
             <CategorySelect categories={categories} values={form.category_ids} onChange={(value) => setField("category_ids", value)} onCreate={onCreateCategory} />
-          </label>
+          </div>
 
-          <label className={errors.wallet_id ? "has-error" : ""}>
+          <div className={errors.wallet_id ? "has-error" : ""}>
             <span>Carteira</span>
             <WalletSelect wallets={wallets.filter((wallet) => wallet.active || String(wallet.id) === String(form.wallet_id))} value={form.wallet_id} onChange={(value) => setField("wallet_id", value)} ariaLabel="Carteiras do lançamento" />
             {errors.wallet_id && <small className="field-error">{errors.wallet_id}</small>}
-          </label>
+          </div>
 
           {isReceivableCategory && (
             <section className={`transaction-expense-link ${errors.expense_link ? "has-error" : ""}`}>
@@ -424,15 +424,15 @@ export default function TransactionForm({
               </button>
               <div className={`conditional-content ${form.recurrence ? "open" : ""}`}>
                 <div className="recurrence-grid">
-                  <label>
+                  <div className="field-label">
                     <span>{tt("transactionModal.repeatFor", "Parcelas adicionais")}</span>
                     <input type="number" min="1" max="60" value={form.recurrence_months} disabled={!form.recurrence} onChange={(event) => setField("recurrence_months", event.target.value)} />
-                  </label>
-                  <label className={errors.day_of_month ? "has-error" : ""}>
+                  </div>
+                  <div className={errors.day_of_month ? "has-error" : ""}>
                     <span>{tt("transactionModal.dayOfMonth", "Dia do mês")}</span>
                     <input type="number" min="1" max="31" value={form.day_of_month} disabled={!form.recurrence} onBlur={() => handleBlur("day_of_month")} onChange={(event) => setField("day_of_month", event.target.value)} aria-invalid={!!errors.day_of_month} />
                     {errors.day_of_month && <small className="field-error">{errors.day_of_month}</small>}
-                  </label>
+                  </div>
                 </div>
                 <p className="recurrence-summary">
                   {tt(
