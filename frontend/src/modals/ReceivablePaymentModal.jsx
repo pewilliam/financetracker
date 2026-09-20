@@ -22,14 +22,19 @@ export default function ReceivablePaymentModal({ data, setData, categories = [],
   };
 
   return (
-    <div className="modal-layer">
+    <div className="modal-layer receivable-action-layer">
       <button className="modal-backdrop" onClick={onClose} />
-      <form className="modal-card template-modal receivable-payment-modal" onSubmit={submit}>
-        <div className="modal-titlebar">
-          <div className="modal-icon"><Wallet size={22} /></div>
-          <div><p className="eyebrow">{data.receivable.person_name}</p><h2>{isFullPayment ? tt("receivables.markPaid", "Marcar como pago") : tt("receivables.partialPayment", "Pagamento parcial")}</h2></div>
-          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
-        </div>
+      <form className="modal-card invoice-modal receivable-payment-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="receivable-payment-title">
+        <header className="transaction-entry-titlebar compact">
+          <span className="transaction-entry-icon"><Wallet size={21} /></span>
+          <div className="transaction-entry-heading">
+            <p>{data.receivable.person_name}</p>
+            <h2 id="receivable-payment-title">{isFullPayment ? tt("receivables.markPaid", "Marcar como pago") : tt("receivables.partialPayment", "Pagamento parcial")}</h2>
+          </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close modal" : "Fechar modal"}>
+            <X size={18} />
+          </button>
+        </header>
         <div className="invoice-modal-body">
           <div className="receivable-payment-context">
             <span>{tt("receivables.remaining", "Restante")}</span>

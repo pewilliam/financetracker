@@ -11,7 +11,7 @@ import MonthsPage from "../../pages/MonthsPage.jsx";
 import InvoicesPage from "../../pages/InvoicesPage.jsx";
 import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
 import SimulationPage from "../../pages/SimulationPage.jsx";
-import ReceivablesPage from "../../pages/ReceivablesPage.jsx";
+import ReceivablesPage, { receivableGroupForId } from "../../pages/ReceivablesPage.jsx";
 import CategoriesPage from "../../pages/CategoriesPage.jsx";
 import WalletsPage from "../../pages/WalletsPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
@@ -19,6 +19,7 @@ import InvoiceModal from "../../modals/InvoiceModal.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
 import ReceivableModal from "../../modals/ReceivableModal.jsx";
+import ReceivableDetailsModal from "../../modals/ReceivableDetailsModal.jsx";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
@@ -104,6 +105,7 @@ export default function AppShell() {
   const [receivablePayment, setReceivablePayment] = useState(null);
   const [paymentToCancel, setPaymentToCancel] = useState(null);
   const [receivableToDelete, setReceivableToDelete] = useState(null);
+  const [receivableDetailsId, setReceivableDetailsId] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [pageOverlayOpen, setPageOverlayOpen] = useState(false);
   const [budgetMobileTab, setBudgetMobileTab] = useState("categories");
@@ -122,7 +124,11 @@ export default function AppShell() {
     ? `Loading ${formatMonthLabel(year, month, language)}`
     : `Carregando dados de ${formatMonthLabel(year, month, language)}`;
   const loadingHint = language === "en-US" ? "Please wait while the values are updated." : "Aguarde enquanto atualizamos os valores.";
-  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen;
+  const receivableDetailsGroup = useMemo(
+    () => receivableGroupForId(receivables, receivableDetailsId),
+    [receivableDetailsId, receivables]
+  );
+  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen;
   const bodyLocked = overlayOpen;
 
   useEffect(() => {
@@ -149,6 +155,14 @@ export default function AppShell() {
       if (scrollY) window.scrollTo(0, scrollY);
     };
   }, [bodyLocked]);
+
+  useEffect(() => {
+    if (receivableDetailsId && !receivableDetailsGroup) setReceivableDetailsId(null);
+  }, [receivableDetailsId, receivableDetailsGroup]);
+
+  useEffect(() => {
+    if (location.pathname !== "/meses") setReceivableDetailsId(null);
+  }, [location.pathname]);
 
   async function refresh({ showLoading = true } = {}) {
     const requestedPeriod = { year, month, language };
@@ -319,6 +333,19 @@ export default function AppShell() {
     setInvoices(invoicesPayload);
   };
 
+  const syncReceivableCollections = async () => {
+    const [receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload] = await Promise.all([
+      listReceivables(),
+      listLinkedReceivableTransactions(),
+      listReceivablePeople(),
+      listReceivableExpenseOptions()
+    ]);
+    setReceivables(receivablesPayload);
+    setLinkedReceivableTransactions(linkedReceivablesPayload);
+    setReceivablePeople(peoplePayload);
+    setReceivableExpenseOptions(expenseOptionsPayload);
+  };
+
   const syncMonthCollections = async () => {
     const requestedPeriod = { year, month, language };
     const selectedAtStart = selectedPeriodRef.current;
@@ -387,6 +414,16 @@ export default function AppShell() {
     setDrawerOpen(false);
     setEditing(null);
     navigate("/faturas", { state: { openInvoiceItemsId: invoiceId } });
+  };
+
+  const openReceivableDetails = (receivable) => {
+    if (!receivable?.id) return;
+    const group = receivableGroupForId(receivables, receivable.id);
+    if (!group) {
+      toast.error(language === "en-US" ? "Receivable not found." : "Recebível não encontrado.");
+      return;
+    }
+    setReceivableDetailsId(receivable.id);
   };
 
   const openTransactionEditor = (transaction) => {
@@ -771,34 +808,63 @@ export default function AppShell() {
 
   const openReceivableModal = (receivable = null, expenseOption = null) => {
     if (receivable) {
+      const linked = receivable.linked_expense;
+      const purchaseId = linked?.purchase_id;
+      const purchaseOption = purchaseId
+        ? receivableExpenseOptions.find((option) => option.source_type === "installment_purchase" && option.source_id === purchaseId)
+        : null;
+      const seriesMates = (receivable.series_id
+        ? receivables.filter((item) => item.series_id === receivable.series_id)
+        : [receivable]
+      ).slice().sort((left, right) => (
+        Number(left.series_installment_number || 0) - Number(right.series_installment_number || 0)
+        || Number(left.id) - Number(right.id)
+      ));
+      const editAmount = seriesMates.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+      const seriesCount = Math.max(
+        Number(receivable.series_installment_count || seriesMates.length || purchaseOption?.installment_count || linked?.installment_count || 1),
+        1
+      );
+      const expenseKey = purchaseOption
+        ? `installment_purchase:${purchaseOption.source_id}`
+        : linked
+          ? `${linked.source_type}:${linked.source_id}`
+          : "";
       setEditingReceivable(receivable);
       setReceivableForm({
         person_id: String(receivable.person_id || ""),
         person_name: receivable.person_name || "",
         description: receivable.description,
-        total_amount: formatMoney(receivable.total_amount, language),
-        due_date: receivable.due_date,
+        total_amount: formatMoney(editAmount || receivable.total_amount, language),
+        due_date: seriesMates[0]?.due_date || receivable.due_date,
         category_ids: (receivable.category_ids?.length ? receivable.category_ids : receivable.category_id ? [receivable.category_id] : []).map(String),
         notes: receivable.notes || "",
-        expense_source_key: receivable.linked_expense ? `${receivable.linked_expense.source_type}:${receivable.linked_expense.source_id}` : "",
-        installment_scope: "single",
-        allocation_mode: "total"
+        expense_source_key: expenseKey,
+        installment_scope: purchaseOption ? "all" : linked?.source_type === "installment_item" ? "remaining" : "single",
+        allocation_mode: "total",
+        series_count: seriesCount,
+        installment_amounts: seriesMates.map((item) => formatMoney(item.total_amount, language))
       });
     } else {
       setEditingReceivable(null);
       const initial = defaultReceivableForm();
       if (expenseOption) {
-        const installmentRemainder = expenseOption.source_type === "installment_item"
+        const purchaseOption = expenseOption.source_type === "installment_item" && expenseOption.purchase_id
+          ? receivableExpenseOptions.find((option) => option.source_type === "installment_purchase" && option.source_id === expenseOption.purchase_id)
+          : expenseOption.source_type === "installment_purchase" ? expenseOption : null;
+        const resolved = purchaseOption || expenseOption;
+        const installmentRemainder = expenseOption.source_type === "installment_item" && !purchaseOption
           ? receivableExpenseOptions
               .filter((option) => option.source_type === "installment_item" && option.purchase_id === expenseOption.purchase_id && Number(option.installment_number) >= Number(expenseOption.installment_number))
               .reduce((sum, option) => sum + Number(option.available_amount || 0), 0)
           : null;
-        initial.description = expenseOption.description || "";
-        initial.total_amount = formatMoney(installmentRemainder || expenseOption.available_amount || expenseOption.amount, language);
-        initial.due_date = expenseOption.date || initial.due_date;
-        initial.category_ids = (expenseOption.category_ids?.length ? expenseOption.category_ids : expenseOption.category_id ? [expenseOption.category_id] : []).map(String);
-        initial.expense_source_key = `${expenseOption.source_type}:${expenseOption.source_id}`;
-        initial.installment_scope = expenseOption.source_type === "installment_item" ? "remaining" : expenseOption.source_type === "installment_purchase" ? "all" : "single";
+        initial.description = resolved.description || "";
+        initial.total_amount = formatMoney(purchaseOption?.available_amount || installmentRemainder || resolved.available_amount || resolved.amount, language);
+        initial.due_date = resolved.date || initial.due_date;
+        initial.category_ids = (resolved.category_ids?.length ? resolved.category_ids : resolved.category_id ? [resolved.category_id] : []).map(String);
+        initial.expense_source_key = `${resolved.source_type}:${resolved.source_id}`;
+        initial.installment_scope = resolved.source_type === "installment_purchase" ? "all" : resolved.source_type === "installment_item" ? "remaining" : "single";
+        initial.series_count = Math.max(Number(resolved.installment_count || 1), 1);
       }
       setReceivableForm(initial);
     }
@@ -832,12 +898,17 @@ export default function AppShell() {
         due_date: payload.due_date,
         category_ids: (payload.category_ids || []).map(Number),
         notes: payload.notes?.trim() || null,
+        series_count: Math.max(Number(payload.series_count) || 1, 1),
+        allocation_mode: payload.allocation_mode || "total",
+        ...(Array.isArray(payload.installment_amounts) && payload.installment_amounts.length > 1
+          ? { installment_amounts: payload.installment_amounts }
+          : {}),
         expense_link: payload.expense_source_key ? (() => {
           const [sourceType, sourceId] = payload.expense_source_key.split(":");
           return {
             source_type: sourceType,
             source_id: Number(sourceId),
-            installment_scope: payload.installment_scope || "single",
+            installment_scope: payload.installment_scope || (sourceType === "installment_purchase" ? "all" : "single"),
             allocation_mode: payload.allocation_mode || "total"
           };
         })() : null
@@ -848,7 +919,7 @@ export default function AppShell() {
       setEditingReceivable(null);
       setReceivableForm(defaultReceivableForm());
       toast.success(editingReceivable ? "Conta a receber atualizada" : "Conta a receber criada");
-      await refresh();
+      await syncReceivableCollections();
     } catch (error) {
       toast.error(error?.message?.includes("exceeds expense amount") ? "O valor excede a parte disponível deste gasto." : "Erro ao salvar conta a receber");
     }
@@ -887,7 +958,7 @@ export default function AppShell() {
       }
       setReceivablePayment(null);
       toast.success(payload.mode === "paid" ? "Conta marcada como paga" : "Pagamento parcial registrado");
-      await refresh();
+      await Promise.all([syncReceivableCollections(), syncMonthCollections()]);
     } catch {
       toast.error("Erro ao registrar pagamento");
     }
@@ -902,7 +973,7 @@ export default function AppShell() {
       await deleteReceivable(receivable.id);
       setReceivableToDelete(null);
       toast.success("Recebível excluído");
-      await refresh();
+      await syncReceivableCollections();
     } catch {
       toast.error("Erro ao excluir recebível");
     }
@@ -913,7 +984,7 @@ export default function AppShell() {
       await deleteReceivablePayment(receivable.id, payment.id);
       setPaymentToCancel(null);
       toast.success("Pagamento cancelado");
-      await refresh();
+      await Promise.all([syncReceivableCollections(), syncMonthCollections()]);
     } catch {
       toast.error("Erro ao cancelar pagamento");
     }
@@ -957,14 +1028,14 @@ export default function AppShell() {
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage categories={categories} invoices={invoices} revision={installmentsRevision} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} onRequestDelete={requestInstallmentDelete} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
-              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} />} />
+              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} invoiceTemplates={invoiceTemplates} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} onSaveInvoiceTemplate={saveInvoiceTemplate} onToggleInvoiceTemplate={toggleTemplate} onDeleteInvoiceTemplate={removeTemplate} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -979,7 +1050,19 @@ export default function AppShell() {
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onRequestDelete={requestInstallmentDelete} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
       {installmentToDelete && <DeleteInstallmentModal purchase={installmentToDelete} deleting={deletingInstallment} onClose={() => setInstallmentToDelete(null)} onConfirm={() => removeInstallment(installmentToDelete.id)} />}
-      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} people={receivablePeople} categories={categories} expenseOptions={receivableExpenseOptions} onCreateCategory={saveCategory} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
+      {receivableDetailsGroup && (
+        <ReceivableDetailsModal
+          group={receivableDetailsGroup}
+          busy={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete}
+          onClose={() => setReceivableDetailsId(null)}
+          onEdit={openReceivableModal}
+          onPaid={openReceivablePaidModal}
+          onPayment={openReceivablePaymentModal}
+          onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)}
+          onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })}
+        />
+      )}
+      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} receivables={receivables} people={receivablePeople} categories={categories} expenseOptions={receivableExpenseOptions} onCreateCategory={saveCategory} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} categories={categories} onCreateCategory={saveCategory} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
       {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}
       {receivableToDelete && <DeleteReceivableModal receivable={receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={() => removeReceivable(receivableToDelete)} />}

@@ -67,11 +67,21 @@ function MovementIcon({ value, size = 15 }) {
 
 function BalanceTooltip({ active, payload, label, language }) {
   if (!active || !payload?.length) return null;
-  const balance = payload.find((item) => item.value != null)?.value;
+  const row = payload[0]?.payload;
+  const realized = row?.realizedBalance;
+  const projected = row?.projectedBalance ?? row?.balance;
   return (
     <div className="dashboard-chart-tooltip">
       <strong>{formatDateShort(label, language)}</strong>
-      <span><i className="balance" />{language === "en-US" ? "Balance" : "Saldo"}<b>{formatMoney(balance, language)}</b></span>
+      {realized != null && (
+        <span><i className="balance" />{language === "en-US" ? "Actual balance" : "Saldo realizado"}<b>{formatMoney(realized, language)}</b></span>
+      )}
+      {projected != null && (
+        <span><i className="balance" />{language === "en-US" ? "Projected balance" : "Saldo projetado"}<b>{formatMoney(projected, language)}</b></span>
+      )}
+      {toNumber(row?.plannedReceivable) > 0 && (
+        <span><i className="income" />{language === "en-US" ? "Planned receivable" : "Recebível previsto"}<b>{formatMoney(row.plannedReceivable, language)}</b></span>
+      )}
     </div>
   );
 }
@@ -143,6 +153,10 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const expenseChange = previous ? percentChange(safeSummary.total_expenses, previous.total_expenses) : null;
   const balanceChange = previous ? percentChange(safeSummary.current_balance, previous.projected_closing) : null;
   const hasProjection = safeSummary.projected_closing !== null && safeSummary.projected_closing !== undefined;
+  const plannedReceivablesTotal = toNumber(safeSummary.planned_receivables_total);
+  const transactionsProjectedClosing = toNumber(
+    safeSummary.transactions_projected_closing ?? (toNumber(safeSummary.projected_closing) - plannedReceivablesTotal)
+  );
 
   const transactions = (monthData?.days || []).flatMap((day) => day.transactions || []);
   const allExpenses = transactions.filter((transaction) => transaction.type === "expense").sort((left, right) => toNumber(right.amount) - toNumber(left.amount));
@@ -155,19 +169,46 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
 
   const todayIso = localTodayIso();
   const balanceChartData = useMemo(() => {
-    const normalized = balanceSeries.map((item) => ({ ...item, balance: toNumber(item.balance) }));
-    const firstProjectedIndex = normalized.findIndex((item) => item.date > todayIso);
-    return normalized.map((item, index) => ({
-      ...item,
-      realizedBalance: firstProjectedIndex === -1 || index < firstProjectedIndex ? item.balance : null,
-      projectedBalance: firstProjectedIndex >= 0 && index >= Math.max(0, firstProjectedIndex - 1) ? item.balance : null
-    }));
-  }, [balanceSeries, todayIso]);
-  const balanceDomain = chartDomain(balanceChartData.map((item) => item.balance));
+    const days = monthData?.days?.length
+      ? monthData.days
+      : balanceSeries.map((item) => ({ date: item.date, balance: item.balance, planned_receivables: [] }));
+
+    let runningPlanned = 0;
+    const series = days.map((day) => {
+      const dayPlanned = (day.planned_receivables || []).reduce((total, item) => total + toNumber(item.remaining_amount), 0);
+      runningPlanned += dayPlanned;
+      return {
+        date: day.date,
+        balance: toNumber(day.balance),
+        plannedReceivable: dayPlanned,
+        cumulativePlanned: runningPlanned,
+      };
+    });
+
+    const firstProjectedIndex = series.findIndex((item) => item.date > todayIso);
+    const hasOpenPlanned = series.some((item) => item.plannedReceivable > 0);
+
+    return series.map((item, index) => {
+      const bridgeFromYesterday = firstProjectedIndex >= 0 && index >= Math.max(0, firstProjectedIndex - 1);
+      const isFutureOrToday = item.date >= todayIso;
+      const projectedBalance = bridgeFromYesterday || (firstProjectedIndex === -1 && hasOpenPlanned && isFutureOrToday)
+        ? item.balance + (isFutureOrToday ? item.cumulativePlanned : 0)
+        : null;
+
+      return {
+        ...item,
+        realizedBalance: firstProjectedIndex === -1 || index < firstProjectedIndex ? item.balance : null,
+        projectedBalance,
+      };
+    });
+  }, [balanceSeries, monthData, todayIso]);
+  const balanceDomain = chartDomain(balanceChartData.flatMap((item) => [item.balance, item.projectedBalance].filter((value) => value != null)));
   const balanceVariation = toNumber(safeSummary.current_balance) - toNumber(monthData?.opening_balance);
   const containsToday = balanceChartData.some((item) => item.date === todayIso);
   const containsProjection = balanceChartData.some((item) => item.projectedBalance != null);
-  const hasBalanceActivity = transactions.length > 0 || balanceChartData.some((item, index) => index > 0 && item.balance !== balanceChartData[index - 1].balance);
+  const hasBalanceActivity = transactions.length > 0
+    || plannedReceivablesTotal > 0
+    || balanceChartData.some((item, index) => index > 0 && item.balance !== balanceChartData[index - 1].balance);
 
   const historyData = comparisons.map((item, index) => ({
     ...item,
@@ -233,11 +274,25 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
     }
   };
 
+  const projectionMeta = !hasProjection
+    ? copy("Sem projeção para este período", "No projection for this period")
+    : plannedReceivablesTotal > 0
+      ? (
+        <>
+          <span>{t("dashboard.realizedVsProjected", {
+            realized: formatMoney(transactionsProjectedClosing, language),
+            projected: formatMoney(safeSummary.projected_closing, language),
+          })}</span>
+          <span className="stat-meta-secondary">{t("dashboard.plannedReceivables", { value: formatMoney(plannedReceivablesTotal, language) })}</span>
+        </>
+      )
+      : t("dashboard.futureNet", { value: formatMoney(safeSummary.future_net, language) });
+
   const cards = [
     { id: "balance", label: t("dashboard.currentBalance"), value: formatMoney(safeSummary.current_balance, language), tone: "balance", icon: WalletCards, comparison: <ComparisonMeta value={balanceChange} language={language} /> },
     { id: "income", label: t("dashboard.monthIncome"), value: formatMoney(safeSummary.total_income, language), tone: "income", icon: TrendingUp, comparison: <ComparisonMeta value={incomeChange} language={language} /> },
     { id: "expense", label: t("dashboard.monthExpenses"), value: formatMoney(safeSummary.total_expenses, language), tone: "expense", icon: TrendingDown, comparison: <ComparisonMeta value={expenseChange} inverse language={language} /> },
-    { id: "projection", label: t("dashboard.closingProjection"), value: hasProjection ? formatMoney(safeSummary.projected_closing, language) : copy("Indisponível", "Unavailable"), tone: "projection", icon: CalendarClock, badge: copy("Projeção", "Projection"), meta: hasProjection ? t("dashboard.futureNet", { value: formatMoney(safeSummary.future_net, language) }) : copy("Sem projeção para este período", "No projection for this period") }
+    { id: "projection", label: t("dashboard.closingProjection"), value: hasProjection ? formatMoney(safeSummary.projected_closing, language) : copy("Indisponível", "Unavailable"), tone: "projection", icon: CalendarClock, badge: copy("Projeção", "Projection"), meta: projectionMeta }
   ];
   const sections = [
     { id: "overview", label: copy("Visão geral", "Overview") },
@@ -270,7 +325,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
               <div className="dashboard-stat-head"><span className="dashboard-stat-icon"><Icon size={17} /></span>{card.badge && <span className="projection-badge"><Clock3 size={12} /> {card.badge}</span>}</div>
               <p className="stat-label">{card.label}</p>
               <p className="stat-value">{card.value}</p>
-              {card.comparison || <p className="stat-meta">{card.meta}</p>}
+              {card.comparison || <div className="stat-meta">{card.meta}</div>}
             </article>
           );
         })}

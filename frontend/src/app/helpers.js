@@ -55,7 +55,9 @@ export function defaultReceivableForm() {
     notes: "",
     expense_source_key: "",
     installment_scope: "all",
-    allocation_mode: "total"
+    allocation_mode: "total",
+    series_count: 1,
+    installment_amounts: []
   };
 }
 

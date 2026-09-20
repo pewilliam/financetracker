@@ -6,8 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
-from app.schemas.months import CategoryBreakdownOut, CategoryExpenseOut, MonthCardSummaryOut, MonthDayOut, MonthResponse, MonthSummaryOut, OpeningBalancePayload
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
+from app.schemas.months import (
+    CategoryBreakdownOut,
+    CategoryExpenseOut,
+    MonthCardSummaryOut,
+    MonthDayOut,
+    MonthPlannedReceivableOut,
+    MonthResponse,
+    MonthSummaryOut,
+    OpeningBalancePayload,
+)
 from app.security import get_current_user
 from app.services.wallets import money, wallet_balance
 
@@ -108,6 +117,61 @@ def _wallet_balance_effects(db: Session, start: date, end: date, user_id: int) -
     return effects
 
 
+def _remaining_amount(receivable: Receivable) -> Decimal:
+    return max(_to_decimal(receivable.total_amount) - _to_decimal(receivable.received_amount), Decimal("0.00"))
+
+
+def _planned_receivable_out(receivable: Receivable) -> MonthPlannedReceivableOut:
+    return MonthPlannedReceivableOut(
+        id=receivable.id,
+        person_name=receivable.person_name or "",
+        description=receivable.description,
+        remaining_amount=_remaining_amount(receivable),
+        total_amount=_to_decimal(receivable.total_amount),
+        status=receivable.status,
+        due_date=receivable.due_date,
+        series_installment_number=receivable.series_installment_number,
+        series_installment_count=receivable.series_installment_count,
+    )
+
+
+def _open_receivables_by_due_date(db: Session, start: date, end: date, user_id: int) -> dict[date, list[Receivable]]:
+    receivables = (
+        db.query(Receivable)
+        .options(selectinload(Receivable.person))
+        .filter(
+            Receivable.user_id == user_id,
+            Receivable.due_date >= start,
+            Receivable.due_date <= end,
+            Receivable.status != "paid",
+        )
+        .order_by(Receivable.due_date, Receivable.id)
+        .all()
+    )
+    by_date: dict[date, list[Receivable]] = {}
+    for receivable in receivables:
+        if _remaining_amount(receivable) <= 0:
+            continue
+        by_date.setdefault(receivable.due_date, []).append(receivable)
+    return by_date
+
+
+def _planned_receivables_total_for_projection(
+    planned_by_date: dict[date, list[Receivable]],
+    start: date,
+    end: date,
+    current_date: date,
+) -> Decimal:
+    """Open remaining amounts that should still count toward closing projection."""
+    if end < current_date:
+        return Decimal("0.00")
+    total = Decimal("0.00")
+    for due_date, receivables in planned_by_date.items():
+        if start <= due_date <= end:
+            total += sum((_remaining_amount(item) for item in receivables), Decimal("0.00"))
+    return total
+
+
 def _build_month_data(db: Session, year: int, month: int, user_id: int) -> MonthResponse:
     start, end, last_day = _month_bounds(year, month)
     transactions = (
@@ -133,6 +197,7 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
 
     opening_balance = _opening_balance(db, start, user_id)
     balance_effects = _wallet_balance_effects(db, start, end, user_id)
+    planned_by_date = _open_receivables_by_due_date(db, start, end, user_id)
 
     by_date: dict[date, list[Transaction]] = {}
     for tx in transactions:
@@ -142,10 +207,12 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
     total_income = Decimal("0.00")
     total_expenses = Decimal("0.00")
     days: list[MonthDayOut] = []
+    today = date.today()
 
     for day in range(1, last_day + 1):
         current_date = date(year, month, day)
         day_transactions = by_date.get(current_date, [])
+        day_planned = [_planned_receivable_out(item) for item in planned_by_date.get(current_date, [])]
         income = sum(
             (tx.amount for tx in day_transactions if tx.type == "income"),
             Decimal("0.00"),
@@ -159,8 +226,8 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
         total_expenses += expenses
         notes = "; ".join([tx.description for tx in day_transactions if tx.description])
         has_future = any(
-            tx.is_future and tx.date > date.today() for tx in day_transactions
-        )
+            tx.is_future and tx.date > today for tx in day_transactions
+        ) or (bool(day_planned) and current_date > today)
 
         days.append(
             MonthDayOut(
@@ -171,6 +238,7 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int) -> Month
                 notes=notes or None,
                 has_future=has_future,
                 transactions=day_transactions,
+                planned_receivables=day_planned,
             )
         )
 
@@ -192,9 +260,18 @@ def _summarize_month_data(data: MonthResponse, today: date | None = None) -> Mon
     if end < current_date:
         current_balance = data.closing_balance
         future_net = Decimal("0.00")
+        planned_receivables_total = Decimal("0.00")
     elif start > current_date:
         current_balance = data.opening_balance
         future_net = data.total_income - data.total_expenses
+        planned_receivables_total = sum(
+            (
+                item.remaining_amount
+                for day in data.days
+                for item in day.planned_receivables
+            ),
+            Decimal("0.00"),
+        )
     else:
         current_index = min(current_date.day, len(data.days)) - 1
         current_balance = data.days[current_index].balance if data.days else data.opening_balance
@@ -202,7 +279,16 @@ def _summarize_month_data(data: MonthResponse, today: date | None = None) -> Mon
             (day.income - day.expenses for day in data.days[current_index + 1 :]),
             Decimal("0.00"),
         )
+        planned_receivables_total = sum(
+            (
+                item.remaining_amount
+                for day in data.days
+                for item in day.planned_receivables
+            ),
+            Decimal("0.00"),
+        )
 
+    transactions_projected_closing = current_balance + future_net
     return MonthSummaryOut(
         year=data.year,
         month=data.month,
@@ -210,8 +296,10 @@ def _summarize_month_data(data: MonthResponse, today: date | None = None) -> Mon
         total_income=data.total_income,
         difference=data.total_expenses - data.total_income,
         current_balance=current_balance,
-        projected_closing=current_balance + future_net,
+        projected_closing=transactions_projected_closing + planned_receivables_total,
         future_net=future_net,
+        planned_receivables_total=planned_receivables_total,
+        transactions_projected_closing=transactions_projected_closing,
     )
 
 
@@ -226,6 +314,7 @@ def _build_month_summary(
     current_date = today or date.today()
     opening_balance = _opening_balance(db, start, user_id)
     balance_effects = _wallet_balance_effects(db, start, end, user_id)
+    planned_by_date = _open_receivables_by_due_date(db, start, end, user_id)
     transaction_rows = (
         db.query(Transaction.date, Transaction.type, Transaction.amount)
         .filter(
@@ -240,6 +329,9 @@ def _build_month_summary(
     total_expenses = sum((row.amount for row in transaction_rows if row.type == "expense"), Decimal("0.00"))
     total_net = total_income - total_expenses
     total_balance_effect = sum(balance_effects.values(), Decimal("0.00"))
+    planned_receivables_total = _planned_receivables_total_for_projection(
+        planned_by_date, start, end, current_date
+    )
 
     if end < current_date:
         current_balance = opening_balance + total_balance_effect + total_net
@@ -261,6 +353,7 @@ def _build_month_summary(
         future_net = total_net - current_net + future_balance_effect
         current_balance = opening_balance + current_net + current_balance_effect
 
+    transactions_projected_closing = current_balance + future_net
     return MonthSummaryOut(
         year=year,
         month=month,
@@ -268,8 +361,10 @@ def _build_month_summary(
         total_income=total_income,
         difference=total_expenses - total_income,
         current_balance=current_balance,
-        projected_closing=current_balance + future_net,
+        projected_closing=transactions_projected_closing + planned_receivables_total,
         future_net=future_net,
+        planned_receivables_total=planned_receivables_total,
+        transactions_projected_closing=transactions_projected_closing,
     )
 
 

@@ -1,14 +1,165 @@
-import { useState } from "react";
-import { Check, Filter, Link2, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Filter, Plus } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney, formatMonthLabel } from "../utils/format.js";
 import { receivableStatusText, todayIsoDate } from "../app/helpers.js";
+import ReceivableDetailsModal from "../modals/ReceivableDetailsModal.jsx";
 
-export default function ReceivablesPage({ receivables, linkedTransactions = [], onNew, onEdit, onEditLinkedTransaction, onPaid, onPayment, onDelete, onDeletePayment }) {
+export function originGroupKey(item) {
+  if (item.record_kind === "linked_transaction") {
+    return `linked_transaction:${item.id}`;
+  }
+  if (item.series_id) {
+    return `series:${item.series_id}`;
+  }
+  const expense = item.linked_expense;
+  if (expense?.source_type && expense?.source_id != null) {
+    if (expense.source_type === "installment_item" && expense.purchase_id != null) {
+      return `purchase:${expense.purchase_id}:person:${item.person_id ?? item.person_name}`;
+    }
+    return `${expense.source_type}:${expense.source_id}`;
+  }
+  return `receivable:${item.id}`;
+}
+
+function groupStatus(items) {
+  if (items.some((item) => item.status === "overdue")) return "overdue";
+  if (items.every((item) => item.status === "paid")) return "paid";
+  if (items.some((item) => item.status === "partial")) return "partial";
+  if (items.some((item) => item.status === "pending")) return "pending";
+  return items[0]?.status || "pending";
+}
+
+function sortReceivableItems(items) {
+  return [...items].sort((left, right) => {
+    const seriesDiff = (left.series_installment_number || 0) - (right.series_installment_number || 0);
+    if (seriesDiff) return seriesDiff;
+    return String(left.due_date).localeCompare(String(right.due_date)) || left.id - right.id;
+  });
+}
+
+export function buildReceivableGroups(items) {
+  const buckets = new Map();
+  for (const item of items) {
+    const key = originGroupKey(item);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(item);
+  }
+
+  return [...buckets.entries()].map(([key, members]) => {
+    const sorted = sortReceivableItems(members);
+    const totalAmount = sorted.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+    const receivedAmount = sorted.reduce((sum, item) => sum + Number(item.received_amount || 0), 0);
+    const remainingAmount = sorted.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0);
+    const earliestDue = sorted.reduce((min, item) => (!min || item.due_date < min ? item.due_date : min), null);
+    return {
+      key,
+      items: sorted,
+      isGroup: sorted.length > 1,
+      person_name: sorted[0].person_name,
+      description: sorted[0].description,
+      linked_expense: sorted.find((item) => item.linked_expense)?.linked_expense || null,
+      categories: sorted[0].categories?.length ? sorted[0].categories : sorted[0].category ? [sorted[0].category] : [],
+      status: groupStatus(sorted),
+      total_amount: totalAmount,
+      received_amount: receivedAmount,
+      remaining_amount: remainingAmount,
+      due_date: earliestDue,
+      count: sorted.length
+    };
+  }).sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || left.key.localeCompare(right.key));
+}
+
+export function receivableGroupForId(receivables, receivableId) {
+  if (!receivableId) return null;
+  const items = (receivables || []).map((item) => ({ ...item, record_kind: "receivable" }));
+  const match = items.find((item) => Number(item.id) === Number(receivableId));
+  if (!match) return null;
+  const key = originGroupKey(match);
+  return buildReceivableGroups(items).find((group) => group.key === key) || null;
+}
+
+function ReceivableSummaryCard({ group, language, tt, onOpen }) {
+  const progress = Math.min((Number(group.received_amount || 0) / Math.max(Number(group.total_amount || 1), 1)) * 100, 100);
+  const countLabel = group.isGroup
+    ? (group.count === 1
+      ? tt("receivables.groupCountOne", "1 parcela")
+      : tt("receivables.groupCount", `${group.count} parcelas`, { count: group.count }))
+    : null;
+  const primaryAmount = group.isGroup ? group.total_amount : group.remaining_amount;
+  const amountHint = group.isGroup
+    ? tt("receivables.total", "Total")
+    : group.status === "paid"
+      ? tt("receivables.total", "Total")
+      : tt("receivables.remaining", "Restante");
+  const displayAmount = group.isGroup || group.status !== "paid" ? primaryAmount : group.total_amount;
+
+  return (
+    <article
+      className={`receivable-card receivable-summary-card card ${group.status} ${!group.isGroup && group.items[0].record_kind === "linked_transaction" ? "linked-transaction" : ""}`}
+      tabIndex={0}
+      role="button"
+      onClick={() => onOpen(group.key)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(group.key);
+        }
+      }}
+    >
+      <header>
+        <div>
+          <h3>{group.person_name}</h3>
+          <p>{group.description}</p>
+        </div>
+        <span className={`due-badge compact ${group.status === "overdue" ? "danger" : group.status === "paid" ? "paid" : ""}`}>
+          {receivableStatusText(group.status, language)}
+        </span>
+      </header>
+
+      <div className="receivable-summary-main">
+        <div>
+          <small>{amountHint}</small>
+          <strong>{formatMoney(displayAmount, language)}</strong>
+        </div>
+        <div>
+          <small>{group.isGroup ? tt("receivables.nextDue", "Próximo vencimento") : tt("receivables.dueDate", "Vencimento")}</small>
+          <strong>{formatDateShort(group.due_date, language)}</strong>
+        </div>
+      </div>
+
+      {(countLabel || group.categories.length > 0) && (
+        <div className="receivable-group-meta">
+          {group.categories.slice(0, 2).map((category) => (
+            <span className="category-badge receivable-category-badge" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
+          ))}
+          {countLabel && <span className="receivable-series-badge">{countLabel}</span>}
+        </div>
+      )}
+
+      <div className="installment-progress receivable-progress"><span style={{ width: `${progress}%` }} /></div>
+    </article>
+  );
+}
+
+export default function ReceivablesPage({
+  receivables,
+  linkedTransactions = [],
+  onNew,
+  onEdit,
+  onEditLinkedTransaction,
+  onPaid,
+  onPayment,
+  onDelete,
+  onDeletePayment,
+  onOverlayChange,
+  actionOverlayOpen = false
+}) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "", status: "all" });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [detailsKey, setDetailsKey] = useState(null);
   const today = todayIsoDate();
   const currentMonth = today.slice(0, 7);
   const linkedReceivables = linkedTransactions.map((transaction) => {
@@ -65,7 +216,18 @@ export default function ReceivablesPage({ receivables, linkedTransactions = [], 
     const matchesStatus = filters.status === "all" || item.status === filters.status;
     return matchesSearch && matchesStatus;
   });
+  const groups = buildReceivableGroups(filtered);
+  const detailsGroup = detailsKey ? groups.find((group) => group.key === detailsKey) || null : null;
   const hasActiveFilters = filters.search || filters.status !== "all";
+
+  useEffect(() => {
+    onOverlayChange?.(Boolean(detailsGroup));
+    return () => onOverlayChange?.(false);
+  }, [detailsGroup, onOverlayChange]);
+
+  useEffect(() => {
+    if (detailsKey && !detailsGroup) setDetailsKey(null);
+  }, [detailsKey, detailsGroup]);
 
   return (
     <section>
@@ -126,74 +288,35 @@ export default function ReceivablesPage({ receivables, linkedTransactions = [], 
         )}
       </div>}
 
-      {filtered.length ? (
+      {groups.length ? (
         <div className="receivable-list">
-          {filtered.map((item) => {
-            const progress = Math.min((Number(item.received_amount || 0) / Math.max(Number(item.total_amount || 1), 1)) * 100, 100);
-            return (
-              <article className={`receivable-card card ${item.status} ${item.record_kind === "linked_transaction" ? "linked-transaction" : ""}`} key={`${item.record_kind}-${item.id}`}>
-                <header>
-                  <div>
-                    <h3>{item.person_name}</h3>
-                    <p>{item.description}</p>
-                  </div>
-                  <span className={`due-badge compact ${item.status === "overdue" ? "danger" : item.status === "paid" ? "paid" : ""}`}>{receivableStatusText(item.status, language)}</span>
-                </header>
-                {item.record_kind === "linked_transaction" && <span className="receivable-origin-badge"><Link2 size={12} /> {tt("receivables.linkedEntryBadge", "Vinculado por um lançamento")}</span>}
-                {(item.categories?.length ? item.categories : item.category ? [item.category] : []).map((category) => (
-                  <span className="category-badge receivable-category-badge" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
-                ))}
-                {item.linked_expense && (
-                  <div className="receivable-linked-expense">
-                    <Link2 size={14} />
-                    <span>
-                      {item.linked_expense.origin === "months" ? (language === "en-US" ? "Monthly control" : "Controle mensal") : item.linked_expense.invoice_name || (language === "en-US" ? "Invoice" : "Fatura")}
-                      {item.linked_expense.installment_number ? ` · parcela ${item.linked_expense.installment_number}/${item.linked_expense.installment_count}` : ""}
-                    </span>
-                    <strong>{item.linked_expense.description}</strong>
-                  </div>
-                )}
-                {item.series_installment_count > 1 && <span className="receivable-series-badge">Recebível {item.series_installment_number}/{item.series_installment_count}</span>}
-                <div className="receivable-money-grid">
-                  <div className="metric-block"><span>{tt("receivables.total", "Total")}</span><strong>{formatMoney(item.total_amount, language)}</strong></div>
-                  <div className="metric-block"><span>{tt("receivables.received", "Recebido")}</span><strong className="money-income">{formatMoney(item.received_amount, language)}</strong></div>
-                  <div className="metric-block"><span>{tt("receivables.remaining", "Restante")}</span><strong>{formatMoney(item.remaining_amount, language)}</strong></div>
-                  <div className="metric-block"><span>{tt("receivables.dueDate", "Vencimento")}</span><strong>{formatDateShort(item.due_date, language)}</strong></div>
-                </div>
-                <div className="installment-progress receivable-progress"><span style={{ width: `${progress}%` }} /></div>
-                {item.notes && <p className="receivable-notes">{item.notes}</p>}
-                {item.payments?.length > 0 && (
-                  <div className="receivable-payments">
-                    {item.payments.map((payment) => (
-                      <button key={payment.id} type="button" onClick={() => onDeletePayment(item, payment)} title={tt("receivables.cancelPayment", "Cancelar pagamento")}>
-                        <span>{formatDateShort(payment.paid_at, language)} · {formatMoney(payment.amount, language)}</span>
-                        <X size={13} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <footer>
-                  {item.record_kind === "linked_transaction" ? (
-                    <button className="btn btn-ghost compact" onClick={() => onEditLinkedTransaction(item.transaction)}>{tt("receivables.editLinkedEntry", "Editar lançamento")}</button>
-                  ) : <>
-                    <button className="btn btn-ghost compact" onClick={() => onEdit(item)}>{tt("actions.edit", "Editar")}</button>
-                    <button className="btn btn-ghost compact danger-text" onClick={() => onDelete(item)}><Trash2 size={15} /> {tt("actions.delete", "Excluir")}</button>
-                  </>}
-                  {item.record_kind === "receivable" && item.status !== "paid" && (
-                    <>
-                      <button className="btn btn-ghost compact" onClick={() => onPayment(item)}>{tt("receivables.partialPayment", "Pagamento parcial")}</button>
-                      <button className="btn btn-primary compact" onClick={() => onPaid(item)}><Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}</button>
-                    </>
-                  )}
-                </footer>
-              </article>
-            );
-          })}
+          {groups.map((group) => (
+            <ReceivableSummaryCard
+              key={group.key}
+              group={group}
+              language={language}
+              tt={tt}
+              onOpen={setDetailsKey}
+            />
+          ))}
         </div>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>{tt("receivables.empty", "Nenhuma conta a receber encontrada.")}</h3><p>{tt("receivables.emptyHint", "Cadastre uma nova conta ou ajuste os filtros.")}</p></div>}
+
       <button className="fab" onClick={onNew} aria-label="Criar recebível"><Plus /></button>
+
+      {detailsGroup && (
+        <ReceivableDetailsModal
+          group={detailsGroup}
+          busy={actionOverlayOpen}
+          onClose={() => setDetailsKey(null)}
+          onEdit={onEdit}
+          onEditLinkedTransaction={onEditLinkedTransaction}
+          onPaid={onPaid}
+          onPayment={onPayment}
+          onDelete={onDelete}
+          onDeletePayment={onDeletePayment}
+        />
+      )}
     </section>
   );
 }
-
-

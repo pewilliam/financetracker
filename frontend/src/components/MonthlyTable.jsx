@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
+import { Clock3, Coins, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
@@ -12,7 +12,18 @@ function isFutureDate(dateString) {
   return new Date(`${dateString}T00:00:00`) > today;
 }
 
-export default function MonthlyTable({ days, summary, invoices = [], expenseOptions = [], onAdd, onEdit, onDelete, onLoadCategoryDetails, onOverlayChange }) {
+export default function MonthlyTable({
+  days,
+  summary,
+  invoices = [],
+  expenseOptions = [],
+  onAdd,
+  onEdit,
+  onDelete,
+  onOpenReceivable,
+  onLoadCategoryDetails,
+  onOverlayChange,
+}) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [viewingTransaction, setViewingTransaction] = useState(null);
@@ -63,15 +74,22 @@ export default function MonthlyTable({ days, summary, invoices = [], expenseOpti
     [days, expenseOptions, language, viewingTransaction],
   );
 
-  const openWithKeyboard = (event, transaction) => {
+  const openWithKeyboard = (event, action) => {
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      setViewingTransaction(transaction);
+      action();
     }
   };
 
   const invoiceFor = (transaction) => invoices.find((invoice) => invoice.id === transaction.invoice_id) || null;
+  const plannedTotal = Number(summary?.planned_receivables_total || 0);
+  const hasPlannedGap = plannedTotal > 0;
+  const transactionsClosing = summary?.transactions_projected_closing ?? (
+    summary
+      ? Number(summary.projected_closing || 0) - plannedTotal
+      : null
+  );
 
   if (!days.length) {
     return (
@@ -88,6 +106,8 @@ export default function MonthlyTable({ days, summary, invoices = [], expenseOpti
       {days.map((day, index) => {
         const dayDate = new Date(`${day.date}T00:00:00`);
         const weekSeparator = index > 0 && dayDate.getDay() === 1;
+        const plannedReceivables = day.planned_receivables || [];
+        const hasEntries = day.transactions.length || plannedReceivables.length;
         const future = day.has_future || isFutureDate(day.date);
         return (
           <div key={day.date} className={weekSeparator ? "week-block" : ""}>
@@ -99,45 +119,80 @@ export default function MonthlyTable({ days, summary, invoices = [], expenseOpti
               </div>
 
               <div className="day-transactions">
-                {day.transactions.length ? (
-                  day.transactions.map((tx) => (
-                    <div
-                      className="transaction-line is-clickable"
-                      key={tx.id}
-                      role="button"
-                      tabIndex="0"
-                      onClick={() => setViewingTransaction(tx)}
-                      onKeyDown={(event) => openWithKeyboard(event, tx)}
-                      aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${tx.description || tt("monthlyTable.noDescription", "Sem descrição")}`}
-                    >
-                      <span className={`type-chip ${tx.type === "income" ? "income" : "expense"}`}>
-                        {tx.type === "income" ? tt("monthlyTable.incomeChip", "GANHO") : tt("monthlyTable.expenseChip", "GASTO")}
-                      </span>
-                      <strong className={tx.type === "income" ? "money-income" : "money-expense"}>
-                        {formatMoney(tx.amount)}
-                      </strong>
-                      <span className="tx-description">
-                        <span className="tx-badges">
-                          {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
-                          {tx.linked_expense && <span className="transaction-expense-pill" title={`Associado a ${tx.linked_expense.description}`}><Link2 size={12} /> {tt("receivables.linkedExpense", "Gasto associado")}</span>}
-                          {isInvoiceTransaction(tx) ? (
-                            <span className="invoice-pill"><Receipt size={12} /> {tt("monthlyTable.invoice", "Fatura")}</span>
-                          ) : (tx.categories?.length ? tx.categories : tx.category ? [tx.category] : []).map((category) => (
-                            <span className="transaction-category-pill" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
-                          ))}
+                {hasEntries ? (
+                  <>
+                    {day.transactions.map((tx) => (
+                      <div
+                        className="transaction-line is-clickable"
+                        key={tx.id}
+                        role="button"
+                        tabIndex="0"
+                        onClick={() => setViewingTransaction(tx)}
+                        onKeyDown={(event) => openWithKeyboard(event, () => setViewingTransaction(tx))}
+                        aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${tx.description || tt("monthlyTable.noDescription", "Sem descrição")}`}
+                      >
+                        <span className={`type-chip ${tx.type === "income" ? "income" : "expense"}`}>
+                          {tx.type === "income" ? tt("monthlyTable.incomeChip", "GANHO") : tt("monthlyTable.expenseChip", "GASTO")}
                         </span>
-                        <span className="tx-description-text">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
-                      </span>
-                      <div className="row-actions">
-                        <button className="icon-btn small" onClick={(event) => { event.stopPropagation(); onEdit(tx); }} aria-label={isInvoiceTransaction(tx) ? tt("monthlyTable.viewInvoiceItems", "Ver itens da fatura") : "Editar"}>
-                          <Edit3 size={15} />
-                        </button>
-                        <button className="icon-btn small danger" onClick={(event) => { event.stopPropagation(); onDelete(tx); }} aria-label="Excluir">
-                          <Trash2 size={15} />
-                        </button>
+                        <strong className={tx.type === "income" ? "money-income" : "money-expense"}>
+                          {formatMoney(tx.amount)}
+                        </strong>
+                        <span className="tx-description">
+                          <span className="tx-badges">
+                            {tx.recurrence_id && <span className="recurrence-pill"><Repeat2 size={12} /> {tt("monthlyTable.recurring", "Recorrente")}</span>}
+                            {tx.linked_expense && <span className="transaction-expense-pill" title={`Associado a ${tx.linked_expense.description}`}><Link2 size={12} /> {tt("receivables.linkedExpense", "Gasto associado")}</span>}
+                            {isInvoiceTransaction(tx) ? (
+                              <span className="invoice-pill"><Receipt size={12} /> {tt("monthlyTable.invoice", "Fatura")}</span>
+                            ) : (tx.categories?.length ? tx.categories : tx.category ? [tx.category] : []).map((category) => (
+                              <span className="transaction-category-pill" style={{ "--category-color": category.color }} key={category.id}>{category.name}</span>
+                            ))}
+                          </span>
+                          <span className="tx-description-text">{tx.description || tt("monthlyTable.noDescription", "Sem descrição")}</span>
+                        </span>
+                        <div className="row-actions">
+                          <button className="icon-btn small" onClick={(event) => { event.stopPropagation(); onEdit(tx); }} aria-label={isInvoiceTransaction(tx) ? tt("monthlyTable.viewInvoiceItems", "Ver itens da fatura") : "Editar"}>
+                            <Edit3 size={15} />
+                          </button>
+                          <button className="icon-btn small danger" onClick={(event) => { event.stopPropagation(); onDelete(tx); }} aria-label="Excluir">
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                    {plannedReceivables.map((receivable) => {
+                      const installment = receivable.series_installment_count > 1
+                        ? ` · ${receivable.series_installment_number}/${receivable.series_installment_count}`
+                        : "";
+                      return (
+                        <div
+                          className="transaction-line is-clickable planned-receivable-line"
+                          key={`receivable-${receivable.id}`}
+                          role="button"
+                          tabIndex="0"
+                          onClick={() => onOpenReceivable?.(receivable)}
+                          onKeyDown={(event) => openWithKeyboard(event, () => onOpenReceivable?.(receivable))}
+                          aria-label={`${tt("monthlyTable.plannedReceivable", "Recebível previsto")}: ${receivable.description}`}
+                        >
+                          <span className="type-chip planned">
+                            {tt("monthlyTable.plannedChip", "PREVISTO")}
+                          </span>
+                          <strong className="money-planned">
+                            {formatMoney(receivable.remaining_amount)}
+                          </strong>
+                          <span className="tx-description">
+                            <span className="tx-badges">
+                              <span className="planned-pill"><Coins size={12} /> {tt("monthlyTable.receivable", "Recebível")}</span>
+                            </span>
+                            <span className="tx-description-text">
+                              {receivable.person_name ? `${receivable.person_name} · ` : ""}
+                              {receivable.description}
+                              {installment}
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </>
                 ) : (
                   <span className="tx-description">{tt("monthlyTable.nextDayWithoutEntries", "Sem lançamentos")}</span>
                 )}
@@ -160,7 +215,22 @@ export default function MonthlyTable({ days, summary, invoices = [], expenseOpti
           <div className="month-totals">
             <span>{tt("monthlyTable.income", "Ganhos")} {formatMoney(summary.total_income)}</span>
             <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
-            <strong>{tt("monthlyTable.closing", "Fechamento")} {formatMoney(summary.projected_closing)}</strong>
+            {hasPlannedGap && (
+              <>
+                <span className="month-total-planned">
+                  {tt("monthlyTable.plannedReceivables", "Recebíveis previstos")} {formatMoney(plannedTotal)}
+                </span>
+                <span>
+                  {tt("monthlyTable.realizedClosing", "Fechamento real")} {formatMoney(transactionsClosing)}
+                </span>
+              </>
+            )}
+            <strong>
+              {hasPlannedGap
+                ? tt("monthlyTable.projectedClosing", "Fechamento previsto")
+                : tt("monthlyTable.closing", "Fechamento")}{" "}
+              {formatMoney(summary.projected_closing)}
+            </strong>
           </div>
         )}
       </div>

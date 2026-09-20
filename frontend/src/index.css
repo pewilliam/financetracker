@@ -31,6 +31,9 @@
   --focus-border: var(--color-primary);
   --focus-ring: inset 0 0 0 1px var(--color-primary);
   --error-ring: inset 0 0 0 1px rgba(220,38,38,0.65);
+  --planned: #C98A12;
+  --planned-text: #8A5A00;
+  --planned-soft: #FFF3D6;
 }
 
 [data-theme="dark"],
@@ -48,6 +51,9 @@
   --border: var(--color-border);
   --surface: var(--color-bg);
   --shadow: 0 12px 28px rgba(0,0,0,0.22);
+  --planned: #E8C36A;
+  --planned-text: #F2D98A;
+  --planned-soft: color-mix(in srgb, #E8C36A 16%, transparent);
 }
 
 * { box-sizing: border-box; }
@@ -795,6 +801,12 @@ select {
 .stat-card-expense { border-left: 3px solid #FF4D6A; }
 .stat-value { font-size: 30px; line-height: 1.1; font-weight: 800; margin: 10px 0; }
 .stat-meta { color: var(--muted); margin: 0; font-size: 13px; }
+.stat-meta .stat-meta-secondary,
+.stat-meta-secondary {
+  display: block;
+  margin-top: 2px;
+  color: var(--planned-text);
+}
 .progress { height: 8px; overflow: hidden; border-radius: 999px; background: #E4F4EC; }
 .progress span { display: block; height: 100%; border-radius: inherit; }
 .progress .expense { background: var(--color-primary); }
@@ -1507,8 +1519,36 @@ select {
 }
 .type-chip.income { color: #007864; background: #DCFAF0; }
 .type-chip.expense { color: #CC2244; background: #FFE8ED; }
+.type-chip.planned {
+  color: var(--planned-text);
+  background: var(--planned-soft);
+  border: 1px dashed color-mix(in srgb, var(--planned) 50%, transparent);
+}
 .money-income { color: var(--income); }
 .money-expense { color: var(--expense); }
+.money-planned { color: var(--planned); }
+.planned-receivable-line {
+  border: 1px dashed color-mix(in srgb, var(--planned) 35%, var(--border));
+  background: var(--planned-soft);
+  padding: 4px 6px;
+}
+.planned-receivable-line .tx-description {
+  color: var(--muted);
+}
+.planned-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: color-mix(in srgb, var(--planned) 14%, transparent);
+  color: var(--planned-text);
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: middle;
+}
+.month-total-planned { color: var(--planned-text); }
 .tx-description { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx-badges:empty { display: none; }
 .recurrence-pill {
@@ -5175,10 +5215,12 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 20px;
+  align-items: start;
 }
 .receivable-card {
   display: grid;
   gap: 16px;
+  align-content: start;
 }
 .receivable-card header,
 .receivable-card footer {
@@ -5245,6 +5287,10 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-payments button:hover {
   background: rgba(255,77,106,0.12);
   color: var(--expense);
+}
+.receivable-payments button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
 }
 .receivable-form-row {
   display: grid;
@@ -7810,7 +7856,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   }
   .transaction-line > .type-chip { grid-area: type; }
   .transaction-line > .money-income,
-  .transaction-line > .money-expense { grid-area: amount; }
+  .transaction-line > .money-expense,
+  .transaction-line > .money-planned { grid-area: amount; }
   .tx-description {
     grid-area: description;
     display: flex;
@@ -9127,6 +9174,106 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .receivable-source-summary small { grid-column: 1 / -1; color: var(--muted); }
 .receivable-installment-settings { display: grid; gap: 10px; }
+.receivable-series-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  max-width: 420px;
+  margin-inline: auto;
+  width: 100%;
+}
+.receivable-series-controls .field-label { min-width: 0; }
+.receivable-series-count,
+.receivable-series-allocation {
+  text-align: center;
+}
+.receivable-series-count > span,
+.receivable-series-allocation > span {
+  justify-self: center;
+}
+.receivable-count-stepper {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: stretch;
+  width: 100%;
+  max-width: 220px;
+  margin-inline: auto;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+}
+.receivable-count-stepper button {
+  flex: 0 0 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.receivable-count-stepper button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.receivable-count-stepper button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.receivable-count-stepper input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  border: 0 !important;
+  border-left: 1px solid var(--border) !important;
+  border-right: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+}
+.receivable-allocation-toggle {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 !important;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+}
+.receivable-allocation-toggle button,
+.receivable-choice-row.receivable-allocation-toggle button {
+  height: 100%;
+  min-height: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.receivable-allocation-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+.receivable-allocation-toggle button.active,
+.receivable-choice-row.receivable-allocation-toggle button.active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-weight: 700;
+}
 .receivable-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .receivable-choice-row button {
   padding: 9px 10px;
@@ -9144,6 +9291,252 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   font-weight: 700;
 }
 .receivable-installment-preview { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+.person-picker { position: relative; display: grid; gap: 8px; }
+.person-picker-trigger {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+}
+.person-picker-trigger:hover,
+.person-picker.open .person-picker-trigger {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+}
+.person-picker-trigger.selected {
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+.person-picker-trigger > svg:last-child {
+  color: var(--muted);
+  transition: transform .18s ease;
+}
+.person-picker.open .person-picker-trigger > svg:last-child {
+  transform: rotate(180deg);
+}
+.person-picker-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+}
+.person-picker-copy { min-width: 0; display: grid; gap: 3px; }
+.person-picker-copy strong,
+.person-picker-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.person-picker-copy strong { font-size: 13px; }
+.person-picker-copy small { color: var(--muted); font-size: 11px; font-weight: 500; }
+.person-picker-panel {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .16);
+}
+.person-picker-search {
+  min-width: 0;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+}
+.invoice-modal-body .person-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: inherit;
+  font-weight: inherit;
+}
+.person-picker-search input,
+.invoice-modal-body .person-picker-search input {
+  min-width: 0;
+  width: auto;
+  height: 38px;
+  flex: 1 1 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+}
+.person-picker-search input:focus,
+.invoice-modal-body .person-picker-search input:focus { box-shadow: none; }
+.person-picker-search button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.person-picker-search svg {
+  flex: 0 0 auto;
+}
+.person-picker-results {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  gap: 4px;
+}
+.person-picker-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.person-picker-option:hover,
+.person-picker-option.active {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+}
+.person-picker-option strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.person-picker-option svg { color: var(--primary); }
+.person-picker-empty {
+  margin: 0;
+  padding: 12px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.person-picker-create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+.person-picker-name { margin: 0; }
+
+.receivable-preview {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+.receivable-preview > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.receivable-preview > header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+.receivable-preview > header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.receivable-preview > header strong {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.receivable-preview-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+.receivable-preview-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+.receivable-preview-row > span,
+.receivable-preview-row > label {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.receivable-preview-row small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.receivable-preview-row strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.receivable-preview-row > label,
+.receivable-preview-row > span:last-child {
+  justify-items: end;
+  text-align: right;
+}
+.receivable-preview-row input {
+  width: 8.75rem;
+  max-width: 100%;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--bg, var(--card));
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.receivable-preview-row input:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: 1px;
+}
+
 .expense-receivable-action {
   grid-column: 1 / -1;
   display: flex;
@@ -9173,14 +9566,17 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-linked-expense strong { margin-left: auto; color: var(--text); }
 .receivable-series-badge {
   display: inline-flex;
+  align-items: center;
   width: fit-content;
   margin-top: 8px;
-  padding: 4px 8px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
   color: var(--primary);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 .receivable-origin-badge {
   display: inline-flex;
@@ -9196,11 +9592,141 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .receivable-card.linked-transaction { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); }
 
+.receivable-summary-card {
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.receivable-summary-card:hover,
+.receivable-summary-card:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  outline: none;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 12%, transparent);
+  transform: translateY(-1px);
+}
+.receivable-summary-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.receivable-summary-main small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.receivable-summary-main strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 800;
+}
+.receivable-group-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+.receivable-group-meta .receivable-series-badge,
+.receivable-group-meta .receivable-category-badge {
+  margin: 0;
+}
+.receivable-details-modal .installment-details-table-head,
+.receivable-details-modal .receivable-details-row {
+  grid-template-columns: 84px 110px 110px 116px 110px minmax(108px, auto);
+}
+.receivable-row-actions {
+  gap: 4px;
+}
+.receivable-row-actions .icon-btn.success {
+  color: var(--primary);
+}
+.receivable-installment-payments {
+  grid-column: 1 / -1;
+  padding: 0 4px 4px;
+}
+.receivable-installment-payments .receivable-payments {
+  justify-content: flex-start;
+  margin: 0;
+}
+.receivable-row-amount > em {
+  display: none;
+}
+.receivable-action-layer {
+  z-index: 70;
+}
+.receivable-details-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+.receivable-details-link svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--primary);
+}
+.receivable-details-link > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.receivable-details-link span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.receivable-details-link strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.receivable-details-notes {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.receivable-details-payments {
+  display: grid;
+  gap: 8px;
+}
+.receivable-details-payments h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
 @media (max-width: 600px) {
   .expense-receivable-action { align-items: stretch; flex-direction: column; }
   .receivable-choice-row { grid-template-columns: 1fr; }
+  .receivable-allocation-toggle,
+  .receivable-choice-row.receivable-allocation-toggle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .receivable-linked-expense { align-items: flex-start; flex-wrap: wrap; }
   .receivable-linked-expense strong { width: 100%; margin-left: 21px; }
+  .receivable-summary-main { grid-template-columns: 1fr; }
+  .receivable-preview-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .receivable-preview-row > label,
+  .receivable-preview-row > span:last-child {
+    grid-column: 1 / -1;
+    justify-items: start;
+    text-align: left;
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+  .receivable-preview-row input {
+    width: 100%;
+    text-align: left;
+  }
 }
 
 .transaction-expense-link {
@@ -9793,6 +10319,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .stat-card-expense .stat-value { color: color-mix(in srgb, var(--expense) 83%, var(--text)); }
 .stat-card-projection .stat-value { color: color-mix(in srgb, var(--text) 72%, var(--muted)); font-size: clamp(21px, 2vw, 27px); }
 .dashboard-stat-card .stat-meta { min-height: 20px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.dashboard-stat-card .stat-meta .stat-meta-secondary { margin-top: 3px; color: var(--planned-text); font-weight: 700; }
 .stat-comparison {
   min-height: 20px;
   display: inline-flex;
@@ -10142,7 +10669,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-details-actions .btn { flex: 0 0 auto; width: auto; }
 .transaction-entry-icon.danger { border-color: color-mix(in srgb, var(--expense) 28%, var(--border)); background: color-mix(in srgb, var(--expense) 10%, var(--card)); color: var(--expense); }
 .installment-delete-modal { width: min(500px, calc(100% - 32px)); }
-.installment-delete-titlebar .transaction-entry-heading p { color: var(--expense); }
+.installment-delete-titlebar .transaction-entry-heading p,
+.receivable-action-layer .confirm-modal .transaction-entry-heading p { color: var(--expense); }
 .installment-delete-body { display: grid; gap: 13px; padding: 18px 20px; }
 .installment-delete-warning { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 9px; border: 1px solid color-mix(in srgb, var(--expense) 24%, var(--border)); border-radius: 10px; padding: 11px; background: color-mix(in srgb, var(--expense) 6%, var(--card)); color: var(--expense); }
 .installment-delete-warning p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
@@ -10577,6 +11105,99 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .installment-details-item > span:nth-child(3) { grid-column: 1 / 3; }.installment-details-item > span:nth-child(4) { grid-column: 1; }.installment-details-item > span:nth-child(5) { grid-column: 2; }.installment-details-item > span:nth-child(6) { grid-column: 3; grid-row: 1; }
   .installment-item-number { display: grid; grid-template-columns: 1fr auto; }.installment-item-number small { grid-column: 1 / -1; }.installment-item-number em { align-self: center; }
   .installment-details-actions { display: grid; grid-template-columns: 1fr 1fr auto; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }.installment-details-actions .btn { min-width: 0; justify-content: center; padding: 0 9px; }.installment-details-actions .danger-text { width: 38px; font-size: 0; }.installment-details-actions .danger-text svg { width: 16px; }
+
+  .receivable-details-modal .receivable-details-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    align-items: center;
+  }
+  .receivable-details-modal .receivable-details-row > span {
+    min-width: 0;
+  }
+  .receivable-details-modal .installment-item-number {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .receivable-details-modal .installment-item-number small {
+    display: none;
+  }
+  .receivable-details-modal .receivable-row-status {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    justify-self: end;
+    align-items: center;
+  }
+  .receivable-details-modal .receivable-row-status > small {
+    display: none;
+  }
+  .receivable-details-modal .receivable-row-amount {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex !important;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .receivable-details-modal .receivable-row-amount > small {
+    display: none;
+  }
+  .receivable-details-modal .receivable-row-amount > strong {
+    font-size: 15px;
+  }
+  .receivable-details-modal .receivable-row-amount > em {
+    display: inline;
+    color: var(--muted);
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 600;
+  }
+  .receivable-details-modal .receivable-row-amount > em::before {
+    content: "·";
+    margin-right: 10px;
+    color: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+  .receivable-details-modal .receivable-row-remaining,
+  .receivable-details-modal .receivable-row-due {
+    display: none !important;
+  }
+  .receivable-details-modal .receivable-row-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: flex !important;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+  .receivable-details-modal .receivable-details-row.has-payments .receivable-row-actions {
+    grid-row: 4;
+  }
+  .receivable-details-modal .receivable-installment-payments {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    padding: 6px 0 0;
+  }
+  .receivable-details-modal .receivable-row-actions > small {
+    display: none;
+  }
+  .receivable-details-modal .installment-details-actions {
+    grid-template-columns: 1fr;
+  }
+  .receivable-details-modal .installment-details-actions .btn {
+    width: 100%;
+  }
+  .receivable-details-modal .installment-details-actions .danger-text {
+    width: 100%;
+    font-size: inherit;
+  }
 
   .edit-installment-item-layer {
     padding: 0;

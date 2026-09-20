@@ -5,6 +5,18 @@ from app.schemas.base import APIModel, MoneyValue
 from app.schemas.transactions import TransactionOut
 
 
+class MonthPlannedReceivableOut(APIModel):
+    id: int
+    person_name: str
+    description: str
+    remaining_amount: Decimal
+    total_amount: Decimal
+    status: str
+    due_date: date
+    series_installment_number: Optional[int] = None
+    series_installment_count: Optional[int] = None
+
+
 class MonthDayOut(APIModel):
     date: date
     expenses: Decimal
@@ -13,6 +25,7 @@ class MonthDayOut(APIModel):
     notes: Optional[str] = None
     has_future: bool = False
     transactions: List[TransactionOut] = []
+    planned_receivables: List[MonthPlannedReceivableOut] = []
 
 
 class MonthResponse(APIModel):
@@ -34,6 +47,8 @@ class MonthSummaryOut(APIModel):
     current_balance: Decimal
     projected_closing: Decimal
     future_net: Decimal
+    planned_receivables_total: Decimal = Decimal("0.00")
+    transactions_projected_closing: Decimal = Decimal("0.00")
 
 
 class MonthCardSummaryOut(APIModel):

@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
@@ -26,6 +27,14 @@ router = APIRouter(prefix="/api/receivables", tags=["receivables"])
 
 def _money(value) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _add_months(source: date, amount: int) -> date:
+    month_index = source.year * 12 + source.month - 1 + amount
+    year = month_index // 12
+    month = month_index % 12 + 1
+    day = min(source.day, monthrange(year, month)[1])
+    return date(year, month, day)
 
 
 def _status_for(receivable: Receivable) -> str:
@@ -93,10 +102,24 @@ def _set_expense_source(receivable: Receivable, source_type: str, source_id: int
         receivable.source_installment_item_id = source_id
 
 
-def _linked_amount(db: Session, field, source_id: int, exclude_id: int | None = None) -> Decimal:
+def _normalize_exclude_ids(exclude_ids: int | set[int] | list[int] | None = None) -> set[int]:
+    if exclude_ids is None:
+        return set()
+    if isinstance(exclude_ids, int):
+        return {exclude_ids}
+    return {item for item in exclude_ids if item is not None}
+
+
+def _linked_amount(
+    db: Session,
+    field,
+    source_id: int,
+    exclude_ids: int | set[int] | list[int] | None = None,
+) -> Decimal:
     query = db.query(Receivable).filter(field == source_id)
-    if exclude_id:
-        query = query.filter(Receivable.id != exclude_id)
+    excluded = _normalize_exclude_ids(exclude_ids)
+    if excluded:
+        query = query.filter(~Receivable.id.in_(excluded))
     total = sum((_money(item.total_amount) for item in query.all()), Decimal("0.00"))
     transaction_field = {
         "source_transaction_id": Transaction.linked_expense_transaction_id,
@@ -117,9 +140,9 @@ def _validate_source_amount(
     source_id: int,
     source_amount,
     requested_amount: Decimal,
-    exclude_id: int | None = None,
+    exclude_ids: int | set[int] | list[int] | None = None,
 ) -> None:
-    available = max(_money(source_amount) - _linked_amount(db, field, source_id, exclude_id), Decimal("0.00"))
+    available = max(_money(source_amount) - _linked_amount(db, field, source_id, exclude_ids), Decimal("0.00"))
     if requested_amount > available:
         raise HTTPException(status_code=400, detail=f"Receivable amount exceeds expense amount available ({available})")
 
@@ -199,6 +222,29 @@ def _installment_sources(db: Session, user_id: int, link: ReceivableExpenseLinkI
     return items
 
 
+def _expense_link_from_receivable(receivable: Receivable) -> ReceivableExpenseLinkIn | None:
+    if receivable.source_transaction_id:
+        return ReceivableExpenseLinkIn(
+            source_type="transaction",
+            source_id=receivable.source_transaction_id,
+            installment_scope="single",
+        )
+    if receivable.source_invoice_item_id:
+        return ReceivableExpenseLinkIn(
+            source_type="invoice_item",
+            source_id=receivable.source_invoice_item_id,
+            installment_scope="single",
+        )
+    if receivable.source_installment_item_id:
+        scope = "remaining" if receivable.series_installment_count and receivable.series_installment_count > 1 else "single"
+        return ReceivableExpenseLinkIn(
+            source_type="installment_item",
+            source_id=receivable.source_installment_item_id,
+            installment_scope=scope,
+        )
+    return None
+
+
 def _allocate_installments(total: Decimal, items: list[InstallmentItem], mode: str) -> list[Decimal]:
     if mode == "per_installment":
         return [_money(total) for _ in items]
@@ -214,23 +260,84 @@ def _allocate_installments(total: Decimal, items: list[InstallmentItem], mode: s
     return allocated
 
 
+def _allocate_series_amounts(total: Decimal, count: int, mode: str) -> list[Decimal]:
+    count = max(int(count or 1), 1)
+    if mode == "per_installment":
+        return [_money(total) for _ in range(count)]
+    if count == 1:
+        return [_money(total)]
+    base = _money(total / count)
+    values = [base for _ in range(count)]
+    values[-1] = _money(total - sum(values[:-1], Decimal("0.00")))
+    return values
+
+
+def _requested_series_count(series_count: int | None, installment_amounts: list[Decimal] | None) -> int | None:
+    if installment_amounts is not None:
+        return max(len(installment_amounts), 1)
+    if series_count is not None:
+        return max(int(series_count), 1)
+    return None
+
+
+def _series_amounts_for(
+    receivable: Receivable,
+    *,
+    series_count: int | None,
+    allocation_mode: str,
+    installment_amounts: list[Decimal] | None = None,
+) -> list[Decimal]:
+    if installment_amounts is not None:
+        return [_money(amount) for amount in installment_amounts]
+    count = _requested_series_count(series_count, None) or 1
+    return _allocate_series_amounts(_money(receivable.total_amount), count, allocation_mode)
+
+
+def _series_siblings(db: Session, user_id: int, receivable: Receivable) -> list[Receivable]:
+    if not receivable.series_id:
+        return [receivable]
+    return (
+        db.query(Receivable)
+        .filter(Receivable.user_id == user_id, Receivable.series_id == receivable.series_id)
+        .order_by(Receivable.series_installment_number.asc(), Receivable.id.asc())
+        .all()
+    )
+
+
 def _apply_expense_link(
     db: Session,
     user_id: int,
     receivable: Receivable,
     link: ReceivableExpenseLinkIn | None,
+    *,
+    series_count: int | None = None,
+    allocation_mode: str | None = None,
+    installment_amounts: list[Decimal] | None = None,
 ) -> list[Receivable]:
+    mode = allocation_mode or (link.allocation_mode if link else "total") or "total"
+    amounts = _series_amounts_for(
+        receivable,
+        series_count=series_count if link is not None else (series_count or 1),
+        allocation_mode=mode,
+        installment_amounts=installment_amounts,
+    )
+
     if link is None:
-        _clear_expense_link(receivable)
-        receivable.series_id = None
-        receivable.series_installment_number = None
-        receivable.series_installment_count = None
-        return []
+        return _sync_series_rows(
+            db,
+            user_id,
+            receivable,
+            amounts=amounts,
+            source_bindings=[(None, None)] * len(amounts),
+        )
 
     single = _single_source(db, user_id, link)
-    if single:
-        source_type, source, due_date, field = single
-        amount = _money(receivable.total_amount)
+    requested_count = _requested_series_count(series_count, installment_amounts)
+
+    if single and (requested_count or 1) <= 1:
+        source_type, source, _source_due_date, field = single
+        amount = amounts[0]
+        receivable.total_amount = amount
         _validate_source_amount(db, field, source.id, source.amount, amount, receivable.id)
         stays_in_series = source_type == "installment_item" and receivable.source_installment_item_id == source.id and receivable.series_id
         if not stays_in_series:
@@ -238,53 +345,180 @@ def _apply_expense_link(
             receivable.series_installment_number = None
             receivable.series_installment_count = None
         _set_expense_source(receivable, source_type, source.id)
-        receivable.due_date = due_date
         return []
 
+    if single:
+        count = len(amounts)
+        source_type, source, _source_due_date, field = single
+        exclude_ids = {item.id for item in _series_siblings(db, user_id, receivable)} | {receivable.id}
+        _validate_source_amount(
+            db,
+            field,
+            source.id,
+            source.amount,
+            sum(amounts, Decimal("0.00")),
+            exclude_ids,
+        )
+        return _sync_series_rows(
+            db,
+            user_id,
+            receivable,
+            amounts=amounts,
+            source_bindings=[(source_type, source.id)] * count,
+        )
+
     items = _installment_sources(db, user_id, link)
-    allocations = _allocate_installments(_money(receivable.total_amount), items, link.allocation_mode)
-    for item, amount in zip(items, allocations):
+    if installment_amounts is None and requested_count is None:
+        amounts = _allocate_series_amounts(_money(receivable.total_amount), max(len(items), 1), mode)
+    count = len(amounts)
+    if count == len(items):
+        bindings = [("installment_item", item.id) for item in items]
+    else:
+        bindings = [("installment_item", items[min(index, len(items) - 1)].id) for index in range(count)]
+
+    reusable_by_item_id: dict[int, Receivable] = {}
+    exclude_ids = {receivable.id}
+    for sibling in _series_siblings(db, user_id, receivable):
+        exclude_ids.add(sibling.id)
+        if sibling.source_installment_item_id:
+            reusable_by_item_id[sibling.source_installment_item_id] = sibling
+    if receivable.source_installment_item_id:
+        reusable_by_item_id[receivable.source_installment_item_id] = receivable
+
+    # Validate capacity per linked installment item (grouped).
+    grouped: dict[int, Decimal] = {}
+    for (_source_type, source_id), amount in zip(bindings, amounts):
+        grouped[source_id] = grouped.get(source_id, Decimal("0.00")) + amount
+    item_by_id = {item.id: item for item in items}
+    for source_id, amount in grouped.items():
+        item = item_by_id[source_id]
         _validate_source_amount(
             db,
             Receivable.source_installment_item_id,
             item.id,
             item.amount,
             amount,
-            receivable.id if receivable.source_installment_item_id == item.id else None,
+            exclude_ids,
         )
-    if _money(receivable.received_amount) > allocations[0]:
-        raise HTTPException(status_code=400, detail="First installment amount cannot be lower than amount already received")
 
-    series_id = receivable.series_id or str(uuid4())
-    count = len(items)
-    first_item = items[0]
-    receivable.total_amount = allocations[0]
-    receivable.due_date = first_item.invoice.due_date
-    receivable.series_id = series_id if count > 1 else None
-    receivable.series_installment_number = 1 if count > 1 else None
-    receivable.series_installment_count = count if count > 1 else None
-    _set_expense_source(receivable, "installment_item", first_item.id)
+    return _sync_series_rows(
+        db,
+        user_id,
+        receivable,
+        amounts=amounts,
+        source_bindings=bindings,
+        reusable_by_item_id=reusable_by_item_id,
+    )
 
-    created = []
-    for index, (item, amount) in enumerate(zip(items[1:], allocations[1:]), start=2):
+
+def _sync_series_rows(
+    db: Session,
+    user_id: int,
+    receivable: Receivable,
+    *,
+    amounts: list[Decimal],
+    source_bindings: list[tuple[str | None, int | None]],
+    reusable_by_item_id: dict[int, Receivable] | None = None,
+) -> list[Receivable]:
+    count = len(amounts)
+    if count != len(source_bindings):
+        raise HTTPException(status_code=400, detail="Series allocation mismatch")
+
+    reusable_by_item_id = reusable_by_item_id or {}
+    prior_series_id = receivable.series_id
+    existing = [item for item in _series_siblings(db, user_id, receivable) if item.id != receivable.id]
+    series_id = prior_series_id or (str(uuid4()) if count > 1 else None)
+    base_due_date = receivable.due_date
+    categories = list(receivable.categories)
+    touched_ids = {receivable.id}
+    created: list[Receivable] = []
+
+    def ensure_amount_ok(target: Receivable, amount: Decimal) -> None:
+        if _money(target.received_amount) > amount:
+            raise HTTPException(
+                status_code=400,
+                detail="Installment amount cannot be lower than amount already received",
+            )
+
+    def apply_row(target: Receivable, amount: Decimal, index: int, source_type: str | None, source_id: int | None) -> None:
+        ensure_amount_ok(target, amount)
+        target.person_id = receivable.person_id
+        target.description = receivable.description
+        target.total_amount = amount
+        target.due_date = base_due_date if index == 1 else _add_months(base_due_date, index - 1)
+        target.notes = receivable.notes
+        target.category_id = receivable.category_id
+        set_item_categories(target, categories)
+        target.series_id = series_id if count > 1 else None
+        target.series_installment_number = index if count > 1 else None
+        target.series_installment_count = count if count > 1 else None
+        if source_type and source_id is not None:
+            _set_expense_source(target, source_type, source_id)
+        else:
+            _clear_expense_link(target)
+        _sync_status(target)
+
+    first_source_type, first_source_id = source_bindings[0]
+    apply_row(receivable, amounts[0], 1, first_source_type, first_source_id)
+
+    for index, (amount, (source_type, source_id)) in enumerate(zip(amounts[1:], source_bindings[1:]), start=2):
+        existing_row = None
+        if source_type == "installment_item" and source_id is not None:
+            candidate = reusable_by_item_id.get(source_id)
+            if candidate and candidate.id != receivable.id and candidate.id not in touched_ids:
+                existing_row = candidate
+        if existing_row is None and existing:
+            existing_row = existing.pop(0)
+            while existing_row and existing_row.id in touched_ids:
+                existing_row = existing.pop(0) if existing else None
+
+        if existing_row:
+            apply_row(existing_row, amount, index, source_type, source_id)
+            touched_ids.add(existing_row.id)
+            continue
+
         sibling = Receivable(
             user_id=user_id,
             person_id=receivable.person_id,
             description=receivable.description,
             total_amount=amount,
             received_amount=Decimal("0.00"),
-            due_date=item.invoice.due_date,
+            due_date=_add_months(base_due_date, index - 1),
             notes=receivable.notes,
             category_id=receivable.category_id,
-            series_id=series_id,
-            series_installment_number=index,
-            series_installment_count=count,
-            source_installment_item_id=item.id,
+            series_id=series_id if count > 1 else None,
+            series_installment_number=index if count > 1 else None,
+            series_installment_count=count if count > 1 else None,
         )
-        set_item_categories(sibling, list(receivable.categories))
+        set_item_categories(sibling, categories)
+        if source_type and source_id is not None:
+            _set_expense_source(sibling, source_type, source_id)
         _sync_status(sibling)
         db.add(sibling)
         created.append(sibling)
+
+    if created:
+        db.flush()
+        touched_ids.update(sibling.id for sibling in created)
+
+    cleanup_series_id = series_id or prior_series_id
+    if cleanup_series_id:
+        for sibling in (
+            db.query(Receivable)
+            .filter(Receivable.user_id == user_id, Receivable.series_id == cleanup_series_id)
+            .all()
+        ):
+            if sibling.id in touched_ids:
+                continue
+            if _money(sibling.received_amount) > 0:
+                raise HTTPException(status_code=400, detail="Cannot replace series installment with payments")
+            db.delete(sibling)
+
+    if count <= 1:
+        receivable.series_id = None
+        receivable.series_installment_number = None
+        receivable.series_installment_count = None
+
     return created
 
 
@@ -648,8 +882,15 @@ def create_receivable(
     _sync_status(receivable)
     db.add(receivable)
     db.flush()
-    if payload.expense_link is not None:
-        _apply_expense_link(db, current_user.id, receivable, payload.expense_link)
+    _apply_expense_link(
+        db,
+        current_user.id,
+        receivable,
+        payload.expense_link,
+        series_count=payload.series_count,
+        allocation_mode=payload.allocation_mode,
+        installment_amounts=payload.installment_amounts,
+    )
     db.commit()
     return _load_receivable(db, receivable.id, current_user.id)
 
@@ -681,8 +922,34 @@ def update_receivable(
     selected_category_ids = category_ids_from_payload(payload)
     if selected_category_ids is not None:
         _set_receivable_categories(db, current_user.id, receivable, selected_category_ids)
-    if "expense_link" in data:
-        _apply_expense_link(db, current_user.id, receivable, payload.expense_link)
+
+    should_sync_series = (
+        "expense_link" in data
+        or "series_count" in data
+        or "allocation_mode" in data
+        or "total_amount" in data
+        or "installment_amounts" in data
+    )
+    if should_sync_series:
+        link = payload.expense_link if "expense_link" in data else _expense_link_from_receivable(receivable)
+        installment_amounts = payload.installment_amounts if "installment_amounts" in data else None
+        series_count = (
+            len(installment_amounts) if installment_amounts is not None
+            else payload.series_count if "series_count" in data
+            else (receivable.series_installment_count or 1)
+        )
+        allocation_mode = payload.allocation_mode if "allocation_mode" in data else (
+            (payload.expense_link.allocation_mode if payload.expense_link else None) or "total"
+        )
+        _apply_expense_link(
+            db,
+            current_user.id,
+            receivable,
+            link,
+            series_count=series_count,
+            allocation_mode=allocation_mode,
+            installment_amounts=installment_amounts,
+        )
 
     if not receivable.description:
         raise HTTPException(status_code=400, detail="Description is required")

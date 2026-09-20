@@ -9,17 +9,19 @@ export default function CancelReceivablePaymentModal({ data, onClose, onConfirm 
   const receivable = data.receivable;
 
   return (
-    <div className="modal-layer">
+    <div className="modal-layer receivable-action-layer">
       <button className="modal-backdrop" onClick={onClose} />
-      <div className="modal-card template-modal confirm-modal">
-        <div className="modal-titlebar">
-          <div className="modal-icon danger"><Trash2 size={22} /></div>
-          <div>
-            <p className="eyebrow">{receivable.person_name}</p>
-            <h2>{tt("receivables.cancelPayment", "Cancelar pagamento")}</h2>
+      <div className="modal-card invoice-modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="cancel-receivable-payment-title">
+        <header className="transaction-entry-titlebar compact">
+          <span className="transaction-entry-icon danger"><Trash2 size={20} /></span>
+          <div className="transaction-entry-heading">
+            <p>{receivable.person_name}</p>
+            <h2 id="cancel-receivable-payment-title">{tt("receivables.cancelPayment", "Cancelar pagamento")}</h2>
           </div>
-          <button className="icon-btn" type="button" onClick={onClose} aria-label="Fechar modal"><X size={18} /></button>
-        </div>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close modal" : "Fechar modal"}>
+            <X size={18} />
+          </button>
+        </header>
         <div className="confirm-modal-body">
           <p>{tt("receivables.cancelPaymentMessage", "Deseja realmente cancelar este pagamento? O lançamento de ganho vinculado também será removido.")}</p>
           <div className="receivable-payment-context">
@@ -35,5 +37,3 @@ export default function CancelReceivablePaymentModal({ data, onClose, onConfirm 
     </div>
   );
 }
-
-
