@@ -113,11 +113,10 @@ function ComparisonMeta({ value, inverse = false, language }) {
   );
 }
 
-export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction }) {
+export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction, activeSection = "overview", onActiveSectionChange }) {
   const { t, language } = useI18n();
   const safeSummary = summary || {};
   const safeCategoryBreakdown = categoryBreakdown || EMPTY_CATEGORY_BREAKDOWN;
-  const [activeSection, setActiveSection] = useState("overview");
   const [categoryView, setCategoryView] = useState("income");
   const [selectedExpenseGroup, setSelectedExpenseGroup] = useState(null);
   const [detailedExpenseGroups, setDetailedExpenseGroups] = useState(null);
@@ -253,7 +252,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       : event.key === 'End'
         ? sections.length - 1
         : (index + (event.key === 'ArrowRight' ? 1 : -1) + sections.length) % sections.length;
-    setActiveSection(sections[nextIndex].id);
+    onActiveSectionChange?.(sections[nextIndex].id);
     requestAnimationFrame(() => document.getElementById(`dashboard-tab-${sections[nextIndex].id}`)?.focus());
   };
 
@@ -279,7 +278,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
 
       <div className="categories-budget-tabs dashboard-section-tabs" role="tablist" aria-label={copy("Seções do dashboard", "Dashboard sections")}>
         {sections.map((section, index) => (
-          <button id={`dashboard-tab-${section.id}`} className={activeSection === section.id ? "active" : ""} type="button" role="tab" aria-selected={activeSection === section.id} aria-controls={`dashboard-panel-${section.id}`} tabIndex={activeSection === section.id ? 0 : -1} onClick={() => setActiveSection(section.id)} onKeyDown={(event) => selectSectionFromKeyboard(event, index)} key={section.id}>{section.label}</button>
+          <button id={`dashboard-tab-${section.id}`} className={activeSection === section.id ? "active" : ""} type="button" role="tab" aria-selected={activeSection === section.id} aria-controls={`dashboard-panel-${section.id}`} tabIndex={activeSection === section.id ? 0 : -1} onClick={() => onActiveSectionChange?.(section.id)} onKeyDown={(event) => selectSectionFromKeyboard(event, index)} key={section.id}>{section.label}</button>
         ))}
       </div>
 
