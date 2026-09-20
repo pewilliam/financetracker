@@ -84,6 +84,16 @@ class InstallmentPaginationTests(unittest.TestCase):
         self.assertEqual(result["total"], 1)
         self.assertEqual(result["items"][0].description, "Compra ativa 01")
 
+    def test_summary_respects_applied_filters(self):
+        by_search = self._page(search="ativa 12")
+        by_category = self._page(category_ids=[self.category.id])
+
+        self.assertEqual(by_search["summary"]["active_count"], 1)
+        self.assertEqual(by_search["summary"]["paid_off_count"], 0)
+        self.assertEqual(by_search["summary"]["remaining_amount"], Decimal("100.00"))
+        self.assertEqual(by_category["summary"]["active_count"], 1)
+        self.assertEqual(by_category["summary"]["remaining_amount"], Decimal("100.00"))
+        self.assertEqual(by_category["total"], 1)
 
 if __name__ == "__main__":
     unittest.main()
