@@ -25,6 +25,7 @@ export default function CategorySelect({
   className = "",
   multiple = true,
   clearable = true,
+  showBulkActions = false,
   placeholder = "Sem categoria",
   searchPlaceholder = "Buscar categoria...",
   ariaLabel = "Categorias",
@@ -43,6 +44,8 @@ export default function CategorySelect({
     if (!normalizedSearch) return categories;
     return categories.filter((category) => normalizeSearch(category.name).includes(normalizedSearch));
   }, [categories, search]);
+  const filteredIds = filteredCategories.map((category) => String(category.id));
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
 
   useEffect(() => {
     if (!open) return undefined;
@@ -87,6 +90,15 @@ export default function CategorySelect({
     onChange?.(selectedIds.includes(id)
       ? selectedIds.filter((current) => current !== id)
       : [...selectedIds, id]);
+  };
+
+  const selectAllVisible = () => {
+    if (!filteredIds.length) return;
+    if (search.trim()) {
+      onChange?.([...new Set([...selectedIds, ...filteredIds])]);
+      return;
+    }
+    onChange?.(filteredIds);
   };
 
   const create = async (payload) => {
@@ -190,6 +202,13 @@ export default function CategorySelect({
     toggle(nextValue);
   };
 
+  const renderBulkActions = () => (multiple && showBulkActions ? (
+    <div className="category-multi-bulk-actions">
+      <button type="button" disabled={!filteredIds.length || allFilteredSelected} onClick={selectAllVisible}>Selecionar todas</button>
+      <button className="subtle" type="button" disabled={!selectedIds.length} onClick={() => onChange?.([])}>Limpar seleção</button>
+    </div>
+  ) : null);
+
   const selectedValues = selected.length ? selected.map((category) => (
     <span className="category-choice-chip" style={{ "--category-color": category.color }} key={category.id}>
       {category.name}
@@ -207,22 +226,25 @@ export default function CategorySelect({
       </div>
 
       <div className="category-multi-native-control">
-        <div className="category-multi-native-picker">
-          <div className="category-multi-trigger" aria-hidden="true">
-            <span className="category-multi-values">{selectedValues}</span>
-            <ChevronDown className="category-multi-chevron" size={15} />
+        <div className="category-multi-native-row">
+          <div className="category-multi-native-picker">
+            <div className="category-multi-trigger" aria-hidden="true">
+              <span className="category-multi-values">{selectedValues}</span>
+              <ChevronDown className="category-multi-chevron" size={15} />
+            </div>
+            <select value={multiple ? "" : String(value || "")} onChange={handleNativeSelect} aria-label={`Selecionar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}>
+              {multiple && <option value="">Selecionar categoria...</option>}
+              {categories.map((category) => (
+                <option value={category.id} key={category.id}>
+                  {selectedIds.includes(String(category.id)) ? "✓ " : ""}{category.name}
+                </option>
+              ))}
+              {onCreate && <option value="__create__">+ Nova categoria</option>}
+            </select>
           </div>
-          <select value={multiple ? "" : String(value || "")} onChange={handleNativeSelect} aria-label={`Selecionar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}>
-            {multiple && <option value="">Selecionar categoria...</option>}
-            {categories.map((category) => (
-              <option value={category.id} key={category.id}>
-                {selectedIds.includes(String(category.id)) ? "✓ " : ""}{category.name}
-              </option>
-            ))}
-            {onCreate && <option value="__create__">+ Nova categoria</option>}
-          </select>
+          {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
         </div>
-        {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
+        {renderBulkActions()}
       </div>
 
       {open && createPortal(
@@ -239,6 +261,7 @@ export default function CategorySelect({
               aria-label={searchPlaceholder.replace(/\.\.\.$/, "")}
             />
           </div>
+          {renderBulkActions()}
           <div className="category-multi-options" role="listbox" aria-label={ariaLabel} aria-multiselectable={multiple}>
             {filteredCategories.map((category, index) => {
               const checked = selectedIds.includes(String(category.id));

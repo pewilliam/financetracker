@@ -156,6 +156,36 @@ def _update_purchase_totals(purchase: InstallmentPurchase, items: list[Installme
     purchase.installment_value = _money(purchase.total_amount / purchase.installment_count) if purchase.installment_count else Decimal("0.00")
 
 
+def _apply_installment_filters(
+    query,
+    *,
+    search: str = "",
+    category_ids: list[int] | None = None,
+    invoice_template_id: int | None = None,
+    situation: str = "all",
+    has_overdue=None,
+    has_soon=None,
+):
+    if search.strip():
+        query = query.filter(InstallmentPurchase.description.ilike(f"%{search.strip()}%"))
+    if category_ids:
+        query = query.filter(or_(
+            InstallmentPurchase.category_id.in_(category_ids),
+            InstallmentPurchase.categories.any(Category.id.in_(category_ids)),
+        ))
+    if invoice_template_id:
+        query = query.filter(InstallmentPurchase.items.any(
+            InstallmentItem.invoice.has(Invoice.template_id == invoice_template_id)
+        ))
+    if situation == "overdue" and has_overdue is not None:
+        query = query.filter(has_overdue)
+    elif situation == "soon" and has_overdue is not None and has_soon is not None:
+        query = query.filter(~has_overdue, has_soon)
+    elif situation == "regular" and has_overdue is not None and has_soon is not None:
+        query = query.filter(~has_overdue, ~has_soon)
+    return query
+
+
 @router.get("", response_model=list[InstallmentPurchaseOut])
 def list_installments(
     db: Session = Depends(get_db),
@@ -188,11 +218,17 @@ def list_installments_page(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return one filtered page while keeping overview totals independent from filters."""
+    """Return one filtered page with overview totals recalculated for the same filters."""
     today = date.today()
     soon_limit = today + timedelta(days=7)
     current_month_start = date(today.year, today.month, 1)
     current_month_end = _add_months(current_month_start, 1)
+    filter_kwargs = {
+        "search": search,
+        "category_ids": category_ids,
+        "invoice_template_id": invoice_template_id,
+        "situation": situation,
+    }
 
     paid_count = (
         select(func.count(InstallmentItem.id))
@@ -240,27 +276,15 @@ def list_installments_page(
             & (Invoice.due_date <= soon_limit)
         )
     )
+    filter_kwargs["has_overdue"] = has_overdue
+    filter_kwargs["has_soon"] = has_soon
 
     paid_off_expression = paid_count == InstallmentPurchase.installment_count
-    query = db.query(InstallmentPurchase).filter(InstallmentPurchase.user_id == current_user.id)
-    query = query.filter(paid_off_expression if tab == "paid" else ~paid_off_expression)
-    if search.strip():
-        query = query.filter(InstallmentPurchase.description.ilike(f"%{search.strip()}%"))
-    if category_ids:
-        query = query.filter(or_(
-            InstallmentPurchase.category_id.in_(category_ids),
-            InstallmentPurchase.categories.any(Category.id.in_(category_ids)),
-        ))
-    if invoice_template_id:
-        query = query.filter(InstallmentPurchase.items.any(
-            InstallmentItem.invoice.has(Invoice.template_id == invoice_template_id)
-        ))
-    if situation == "overdue":
-        query = query.filter(has_overdue)
-    elif situation == "soon":
-        query = query.filter(~has_overdue, has_soon)
-    elif situation == "regular":
-        query = query.filter(~has_overdue, ~has_soon)
+    base_query = _apply_installment_filters(
+        db.query(InstallmentPurchase).filter(InstallmentPurchase.user_id == current_user.id),
+        **filter_kwargs,
+    )
+    query = base_query.filter(paid_off_expression if tab == "paid" else ~paid_off_expression)
 
     total = query.count()
     order_map = {
@@ -285,15 +309,25 @@ def list_installments_page(
         .all()
     )
 
-    active_count = db.query(func.count(InstallmentPurchase.id)).filter(
-        InstallmentPurchase.user_id == current_user.id,
-        ~paid_off_expression,
-    ).scalar() or 0
-    paid_off_count = db.query(func.count(InstallmentPurchase.id)).filter(
-        InstallmentPurchase.user_id == current_user.id,
-        paid_off_expression,
-    ).scalar() or 0
-    pending_item_query = (
+    active_count = (
+        _apply_installment_filters(
+            db.query(InstallmentPurchase).filter(InstallmentPurchase.user_id == current_user.id),
+            **filter_kwargs,
+        )
+        .filter(~paid_off_expression)
+        .with_entities(func.count(InstallmentPurchase.id))
+        .scalar()
+    ) or 0
+    paid_off_count = (
+        _apply_installment_filters(
+            db.query(InstallmentPurchase).filter(InstallmentPurchase.user_id == current_user.id),
+            **filter_kwargs,
+        )
+        .filter(paid_off_expression)
+        .with_entities(func.count(InstallmentPurchase.id))
+        .scalar()
+    ) or 0
+    pending_item_query = _apply_installment_filters(
         db.query(InstallmentItem)
         .join(InstallmentPurchase, InstallmentPurchase.id == InstallmentItem.purchase_id)
         .outerjoin(Invoice, Invoice.id == InstallmentItem.invoice_id)
@@ -301,7 +335,8 @@ def list_installments_page(
             InstallmentPurchase.user_id == current_user.id,
             InstallmentItem.status == "pending",
             or_(InstallmentItem.invoice_id.is_(None), Invoice.paid.is_(False)),
-        )
+        ),
+        **filter_kwargs,
     )
     remaining_amount = pending_item_query.with_entities(func.coalesce(func.sum(InstallmentItem.amount), 0)).scalar() or 0
     current_month_count, current_month_amount = (
