@@ -31,6 +31,9 @@
   --focus-border: var(--color-primary);
   --focus-ring: inset 0 0 0 1px var(--color-primary);
   --error-ring: inset 0 0 0 1px rgba(220,38,38,0.65);
+  --planned: #C98A12;
+  --planned-text: #8A5A00;
+  --planned-soft: #FFF3D6;
 }
 
 [data-theme="dark"],
@@ -48,6 +51,9 @@
   --border: var(--color-border);
   --surface: var(--color-bg);
   --shadow: 0 12px 28px rgba(0,0,0,0.22);
+  --planned: #E8C36A;
+  --planned-text: #F2D98A;
+  --planned-soft: color-mix(in srgb, #E8C36A 16%, transparent);
 }
 
 * { box-sizing: border-box; }
@@ -795,6 +801,12 @@ select {
 .stat-card-expense { border-left: 3px solid #FF4D6A; }
 .stat-value { font-size: 30px; line-height: 1.1; font-weight: 800; margin: 10px 0; }
 .stat-meta { color: var(--muted); margin: 0; font-size: 13px; }
+.stat-meta .stat-meta-secondary,
+.stat-meta-secondary {
+  display: block;
+  margin-top: 2px;
+  color: var(--planned-text);
+}
 .progress { height: 8px; overflow: hidden; border-radius: 999px; background: #E4F4EC; }
 .progress span { display: block; height: 100%; border-radius: inherit; }
 .progress .expense { background: var(--color-primary); }
@@ -1507,8 +1519,36 @@ select {
 }
 .type-chip.income { color: #007864; background: #DCFAF0; }
 .type-chip.expense { color: #CC2244; background: #FFE8ED; }
+.type-chip.planned {
+  color: var(--planned-text);
+  background: var(--planned-soft);
+  border: 1px dashed color-mix(in srgb, var(--planned) 50%, transparent);
+}
 .money-income { color: var(--income); }
 .money-expense { color: var(--expense); }
+.money-planned { color: var(--planned); }
+.planned-receivable-line {
+  border: 1px dashed color-mix(in srgb, var(--planned) 35%, var(--border));
+  background: var(--planned-soft);
+  padding: 4px 6px;
+}
+.planned-receivable-line .tx-description {
+  color: var(--muted);
+}
+.planned-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: color-mix(in srgb, var(--planned) 14%, transparent);
+  color: var(--planned-text);
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: middle;
+}
+.month-total-planned { color: var(--planned-text); }
 .tx-description { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx-badges:empty { display: none; }
 .recurrence-pill {
@@ -7812,7 +7852,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   }
   .transaction-line > .type-chip { grid-area: type; }
   .transaction-line > .money-income,
-  .transaction-line > .money-expense { grid-area: amount; }
+  .transaction-line > .money-expense,
+  .transaction-line > .money-planned { grid-area: amount; }
   .tx-description {
     grid-area: description;
     display: flex;
@@ -10240,6 +10281,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .stat-card-expense .stat-value { color: color-mix(in srgb, var(--expense) 83%, var(--text)); }
 .stat-card-projection .stat-value { color: color-mix(in srgb, var(--text) 72%, var(--muted)); font-size: clamp(21px, 2vw, 27px); }
 .dashboard-stat-card .stat-meta { min-height: 20px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.dashboard-stat-card .stat-meta .stat-meta-secondary { margin-top: 3px; color: var(--planned-text); font-weight: 700; }
 .stat-comparison {
   min-height: 20px;
   display: inline-flex;
