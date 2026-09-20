@@ -8,9 +8,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Transaction, User
-from app.routers.receivables import create_receivable, list_linked_receivable_transactions, list_receivable_expense_options
+from app.routers.receivables import create_receivable, list_linked_receivable_transactions, list_receivable_expense_options, update_receivable
 from app.routers.transactions import create_transaction, update_transaction
-from app.schemas.receivables import ReceivableCreate, ReceivableExpenseLinkIn
+from app.schemas.receivables import ReceivableCreate, ReceivableExpenseLinkIn, ReceivableUpdate
 from app.schemas.transactions import TransactionCreate, TransactionOut, TransactionUpdate
 
 
@@ -28,12 +28,12 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def payload(self, amount, link):
+    def payload(self, amount, link, due_date=date(2026, 9, 1)):
         return ReceivableCreate(
             person_id=self.person.id,
             description="Reembolso",
             total_amount=Decimal(amount),
-            due_date=date(2026, 9, 10),
+            due_date=due_date,
             expense_link=link,
         )
 
@@ -131,6 +131,57 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
             )
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_single_installment_receivable_keeps_selected_due_date(self):
+        template = InvoiceTemplate(
+            user_id=self.user.id,
+            name="Cartão",
+            color="#3B82F6",
+            default_due_day=10,
+            active=True,
+        )
+        self.db.add(template)
+        self.db.flush()
+        invoice = Invoice(user_id=self.user.id, template_id=template.id, due_date=date(2026, 9, 30), total_amount=Decimal("0.00"))
+        self.db.add(invoice)
+        self.db.flush()
+        purchase = InstallmentPurchase(
+            user_id=self.user.id,
+            description="Presente",
+            total_amount=Decimal("75.00"),
+            installment_count=3,
+            installment_value=Decimal("25.00"),
+            first_invoice_id=invoice.id,
+        )
+        self.db.add(purchase)
+        self.db.flush()
+        item = InstallmentItem(
+            purchase_id=purchase.id,
+            invoice_id=invoice.id,
+            installment_number=1,
+            amount=Decimal("25.00"),
+            description="Presente (1/3)",
+            status="pending",
+        )
+        self.db.add(item)
+        self.db.commit()
+
+        result = create_receivable(
+            self.payload(
+                "25.00",
+                ReceivableExpenseLinkIn(
+                    source_type="installment_item",
+                    source_id=item.id,
+                    installment_scope="single",
+                ),
+                due_date=date(2026, 9, 1),
+            ),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(result.due_date, date(2026, 9, 1))
+        self.assertEqual(result.source_installment_item_id, item.id)
+
     def test_partial_total_is_distributed_across_purchase_installments(self):
         template = InvoiceTemplate(
             user_id=self.user.id,
@@ -185,10 +236,119 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         rows = self.db.query(Receivable).order_by(Receivable.series_installment_number).all()
         self.assertEqual(len(rows), 3)
         self.assertEqual(sum((row.total_amount for row in rows), Decimal("0.00")), Decimal("200.00"))
-        self.assertEqual([row.due_date for row in rows], [invoice.due_date for invoice in invoices])
+        self.assertEqual([row.due_date for row in rows], [date(2026, 9, 1), date(2026, 10, 1), date(2026, 11, 1)])
         self.assertTrue(rows[0].series_id)
         self.assertEqual([row.series_installment_number for row in rows], [1, 2, 3])
         self.assertEqual(len({row.series_id for row in rows}), 1)
+
+    def test_update_remaining_scope_rewrites_existing_series_instead_of_duplicating(self):
+        template = InvoiceTemplate(
+            user_id=self.user.id,
+            name="Cartão",
+            color="#3B82F6",
+            default_due_day=10,
+            active=True,
+        )
+        self.db.add(template)
+        self.db.flush()
+        invoices = [
+            Invoice(user_id=self.user.id, template_id=template.id, due_date=date(2026, month, 10), total_amount=Decimal("0.00"))
+            for month in (9, 10, 11)
+        ]
+        self.db.add_all(invoices)
+        self.db.flush()
+        purchase = InstallmentPurchase(
+            user_id=self.user.id,
+            description="Presente Clarinha",
+            total_amount=Decimal("149.04"),
+            installment_count=3,
+            installment_value=Decimal("49.68"),
+            first_invoice_id=invoices[0].id,
+        )
+        self.db.add(purchase)
+        self.db.flush()
+        items = []
+        for number, invoice in enumerate(invoices, start=1):
+            item = InstallmentItem(
+                purchase_id=purchase.id,
+                invoice_id=invoice.id,
+                installment_number=number,
+                amount=Decimal("49.68"),
+                description=f"Presente Clarinha ({number}/3)",
+                status="pending",
+            )
+            self.db.add(item)
+            items.append(item)
+        self.db.commit()
+
+        created = create_receivable(
+            self.payload(
+                "75.00",
+                ReceivableExpenseLinkIn(
+                    source_type="installment_item",
+                    source_id=items[0].id,
+                    installment_scope="remaining",
+                    allocation_mode="total",
+                ),
+            ),
+            self.db,
+            self.user,
+        )
+        before = self.db.query(Receivable).order_by(Receivable.series_installment_number).all()
+        self.assertEqual(len(before), 3)
+
+        update_receivable(
+            created.id,
+            ReceivableUpdate(
+                total_amount=Decimal("120.00"),
+                due_date=date(2026, 9, 1),
+                expense_link=ReceivableExpenseLinkIn(
+                    source_type="installment_item",
+                    source_id=items[0].id,
+                    installment_scope="remaining",
+                    allocation_mode="total",
+                ),
+            ),
+            self.db,
+            self.user,
+        )
+
+        rows = self.db.query(Receivable).order_by(Receivable.series_installment_number).all()
+        self.assertEqual(len(rows), 3)
+        self.assertEqual({row.id for row in rows}, {row.id for row in before})
+        self.assertEqual(sum((row.total_amount for row in rows), Decimal("0.00")), Decimal("120.00"))
+        self.assertEqual(len({row.series_id for row in rows}), 1)
+
+    def test_series_count_can_split_single_expense_into_multiple_receivables(self):
+        expense = Transaction(
+            user_id=self.user.id,
+            date=date(2026, 8, 28),
+            type="expense",
+            amount=Decimal("100.00"),
+            description="Jantar",
+        )
+        self.db.add(expense)
+        self.db.commit()
+
+        created = create_receivable(
+            ReceivableCreate(
+                person_id=self.person.id,
+                description="Reembolso jantar",
+                total_amount=Decimal("100.00"),
+                due_date=date(2026, 9, 1),
+                series_count=2,
+                allocation_mode="total",
+                expense_link=ReceivableExpenseLinkIn(source_type="transaction", source_id=expense.id),
+            ),
+            self.db,
+            self.user,
+        )
+
+        rows = self.db.query(Receivable).order_by(Receivable.series_installment_number).all()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([row.total_amount for row in rows], [Decimal("50.00"), Decimal("50.00")])
+        self.assertEqual({row.source_transaction_id for row in rows}, {expense.id})
+        self.assertEqual(created.series_installment_count, 2)
 
     def test_income_transaction_can_link_to_expense_and_consumes_available_amount(self):
         expense = Transaction(

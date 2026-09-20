@@ -78,6 +78,8 @@ class ReceivableCreate(APIModel):
     notes: Optional[str] = None
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    series_count: Optional[int] = None
+    allocation_mode: Literal["total", "per_installment"] = "total"
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
@@ -90,6 +92,8 @@ class ReceivableUpdate(APIModel):
     notes: Optional[str] = None
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    series_count: Optional[int] = None
+    allocation_mode: Optional[Literal["total", "per_installment"]] = None
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
