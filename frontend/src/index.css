@@ -5288,6 +5288,10 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   background: rgba(255,77,106,0.12);
   color: var(--expense);
 }
+.receivable-payments button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
 .receivable-form-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9639,6 +9643,14 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-row-actions .icon-btn.success {
   color: var(--primary);
 }
+.receivable-installment-payments {
+  grid-column: 1 / -1;
+  padding: 0 4px 4px;
+}
+.receivable-installment-payments .receivable-payments {
+  justify-content: flex-start;
+  margin: 0;
+}
 .receivable-row-amount > em {
   display: none;
 }
@@ -11164,6 +11176,14 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     margin-top: 2px;
     padding-top: 8px;
     border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+  .receivable-details-modal .receivable-details-row.has-payments .receivable-row-actions {
+    grid-row: 4;
+  }
+  .receivable-details-modal .receivable-installment-payments {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    padding: 6px 0 0;
   }
   .receivable-details-modal .receivable-row-actions > small {
     display: none;

@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Check, Link2, Pencil, Trash2, Wallet, X } from "lucide-react";
+import { Check, Link2, Pencil, Trash2, Undo2, Wallet, X } from "lucide-react";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
@@ -109,16 +109,40 @@ export default function ReceivableDetailsModal({
   };
 
   const handleDeletePayment = (target, payment) => {
+    if (!onDeletePayment || !payment) return;
     onDeletePayment(target, payment);
+  };
+
+  const renderPaymentChips = (entry) => {
+    if (!entry.payments?.length) return null;
+    return (
+      <div className="receivable-payments">
+        {entry.payments.map((payment) => (
+          <button
+            key={payment.id}
+            type="button"
+            disabled={busy}
+            onClick={() => handleDeletePayment(entry, payment)}
+            title={tt("receivables.cancelPayment", "Cancelar pagamento")}
+            aria-label={tt("receivables.cancelPayment", "Cancelar pagamento")}
+          >
+            <span>{formatDateShort(payment.paid_at, language)} · {formatMoney(payment.amount, language)}</span>
+            <X size={13} />
+          </button>
+        ))}
+      </div>
+    );
   };
 
   const renderItem = (entry) => {
     const label = installmentLabelFor(entry, tt);
     const isNext = nextOpen && entry.id === nextOpen.id && entry.record_kind === nextOpen.record_kind;
     const dueLabel = formatDateShort(entry.due_date, language);
+    const payments = entry.payments || [];
+    const latestPayment = payments[payments.length - 1];
     return (
       <div
-        className={`installment-details-item receivable-details-row ${isNext ? "is-next" : ""}`}
+        className={`installment-details-item receivable-details-row ${isNext ? "is-next" : ""} ${payments.length > 1 ? "has-payments" : ""}`}
         role="row"
         key={`${entry.record_kind}-${entry.id}`}
       >
@@ -194,19 +218,38 @@ export default function ReceivableDetailsModal({
                   </button>
                 </>
               )}
-              <button
-                className="icon-btn small danger"
-                type="button"
-                disabled={busy}
-                onClick={() => runAction("delete", entry)}
-                title={tt("actions.delete", "Excluir")}
-                aria-label={tt("actions.delete", "Excluir")}
-              >
-                <Trash2 size={15} />
-              </button>
+              {payments.length === 1 && (
+                <button
+                  className="icon-btn small danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleDeletePayment(entry, latestPayment)}
+                  title={tt("receivables.cancelPayment", "Cancelar pagamento")}
+                  aria-label={tt("receivables.cancelPayment", "Cancelar pagamento")}
+                >
+                  <Undo2 size={15} />
+                </button>
+              )}
+              {!payments.length && (
+                <button
+                  className="icon-btn small danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => runAction("delete", entry)}
+                  title={tt("actions.delete", "Excluir")}
+                  aria-label={tt("actions.delete", "Excluir")}
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </>
           )}
         </span>
+        {payments.length > 1 && (
+          <div className="receivable-installment-payments" role="cell">
+            {renderPaymentChips(entry)}
+          </div>
+        )}
       </div>
     );
   };
@@ -321,19 +364,7 @@ export default function ReceivableDetailsModal({
           {!isGroup && item?.payments?.length > 0 && (
             <section className="receivable-details-payments">
               <h3>{tt("receivables.payments", "Pagamentos")}</h3>
-              <div className="receivable-payments">
-                {item.payments.map((payment) => (
-                  <button
-                    key={payment.id}
-                    type="button"
-                    onClick={() => handleDeletePayment(item, payment)}
-                    title={tt("receivables.cancelPayment", "Cancelar pagamento")}
-                  >
-                    <span>{formatDateShort(payment.paid_at, language)} · {formatMoney(payment.amount, language)}</span>
-                    <X size={13} />
-                  </button>
-                ))}
-              </div>
+              {renderPaymentChips(item)}
             </section>
           )}
 
@@ -397,9 +428,15 @@ export default function ReceivableDetailsModal({
                     </button>
                   </>
                 )}
-                <button className="btn btn-ghost danger-text" type="button" disabled={busy} onClick={() => runAction("delete", item)}>
-                  <Trash2 size={15} /> {tt("actions.delete", "Excluir")}
-                </button>
+                {item.payments?.length === 1 ? (
+                  <button className="btn btn-ghost danger-text" type="button" disabled={busy} onClick={() => handleDeletePayment(item, item.payments[0])}>
+                    <Undo2 size={15} /> {tt("receivables.cancelPayment", "Cancelar pagamento")}
+                  </button>
+                ) : !item.payments?.length ? (
+                  <button className="btn btn-ghost danger-text" type="button" disabled={busy} onClick={() => runAction("delete", item)}>
+                    <Trash2 size={15} /> {tt("actions.delete", "Excluir")}
+                  </button>
+                ) : null}
               </>
             )
           )}
