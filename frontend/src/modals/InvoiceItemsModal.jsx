@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, ChevronDown, CircleDollarSign, CircleMinus, CreditCard, LayoutList, Pencil, Plus, Receipt, Search, Tag, Trash2, X } from "lucide-react";
+import { CalendarDays, ChevronDown, CircleDollarSign, CircleMinus, CreditCard, Filter, LayoutList, Pencil, Plus, Receipt, Search, Tag, Trash2, X } from "lucide-react";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import DeleteInvoiceEntryModal from "./DeleteInvoiceEntryModal.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -31,8 +31,9 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const [grouped, setGrouped] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState(null);
   const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
-  // No mobile o resumo por categoria nasce recolhido para sobrar espaço aos itens.
-  const [compactBreakdown, setCompactBreakdown] = useState(isMobileViewport);
+  // No mobile a toolbar e o resumo por categoria nascem recolhidos para sobrar espaço aos itens.
+  const [compactChrome, setCompactChrome] = useState(isMobileViewport);
+  const [toolbarOpen, setToolbarOpen] = useState(() => !isMobileViewport());
   const [breakdownOpen, setBreakdownOpen] = useState(() => !isMobileViewport());
   const [entryToDelete, setEntryToDelete] = useState(null);
   const noCategoryLabel = copy("Sem categoria", "Uncategorized");
@@ -40,7 +41,8 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   useEffect(() => {
     const query = window.matchMedia(MOBILE_MEDIA_QUERY);
     const sync = (event) => {
-      setCompactBreakdown(event.matches);
+      setCompactChrome(event.matches);
+      setToolbarOpen(!event.matches);
       setBreakdownOpen(!event.matches);
     };
     query.addEventListener("change", sync);
@@ -109,6 +111,8 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const searching = Boolean(search.trim());
   const showToolbar = entries.length > 4;
   const showBreakdown = showToolbar && categoryTotals.length > 1;
+  const toolbarActiveCount = [searching, sort !== "recent", grouped].filter(Boolean).length;
+  const showToolbarControls = !compactChrome || toolbarOpen;
   const collapsedCategories = categoryTotals.slice(0, BREAKDOWN_PREVIEW);
   const hiddenCategories = categoryTotals.length - collapsedCategories.length;
   const visibleCategories = allCategoriesOpen ? categoryTotals : collapsedCategories;
@@ -223,33 +227,50 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
         </header>
 
         {showToolbar && (
-          <div className="invoice-items-toolbar">
-            <div className="invoice-items-search">
-              <Search size={15} />
-              <input
-                ref={searchRef}
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={copy("Buscar por descrição ou categoria", "Search by description or category")}
-                aria-label={copy("Buscar itens", "Search items")}
-              />
-            </div>
-            <FilterSelect value={sort} options={sortOptions} onChange={setSort} ariaLabel={copy("Ordenar itens", "Sort items")} />
-            <button
-              className={`btn btn-ghost invoice-items-group-toggle ${grouped ? "active" : ""}`}
-              type="button"
-              onClick={() => setGrouped((current) => !current)}
-              aria-pressed={grouped}
-            >
-              <LayoutList size={15} />{copy("Agrupar por categoria", "Group by category")}
-            </button>
+          <div className={`invoice-items-toolbar ${showToolbarControls ? "" : "collapsed"}`}>
+            {compactChrome && (
+              <button
+                className={`invoice-items-toolbar-toggle ${toolbarOpen ? "open" : ""}`}
+                type="button"
+                onClick={() => setToolbarOpen((current) => !current)}
+                aria-expanded={toolbarOpen}
+              >
+                <Filter size={13} />
+                <span>{copy("Busca e filtros", "Search and filters")}</span>
+                {toolbarActiveCount > 0 && <em>{toolbarActiveCount}</em>}
+                <ChevronDown size={15} />
+              </button>
+            )}
+            {showToolbarControls && (
+              <>
+                <div className="invoice-items-search">
+                  <Search size={15} />
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={copy("Buscar por descrição ou categoria", "Search by description or category")}
+                    aria-label={copy("Buscar itens", "Search items")}
+                  />
+                </div>
+                <FilterSelect value={sort} options={sortOptions} onChange={setSort} ariaLabel={copy("Ordenar itens", "Sort items")} />
+                <button
+                  className={`btn btn-ghost invoice-items-group-toggle ${grouped ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setGrouped((current) => !current)}
+                  aria-pressed={grouped}
+                >
+                  <LayoutList size={15} />{copy("Agrupar por categoria", "Group by category")}
+                </button>
+              </>
+            )}
           </div>
         )}
 
         {showBreakdown && (
           <div className={`invoice-items-breakdown ${breakdownOpen ? "" : "collapsed"}`} aria-label={copy("Gastos por categoria", "Spending by category")}>
-            {compactBreakdown && (
+            {compactChrome && (
               <button
                 className={`invoice-items-breakdown-toggle ${breakdownOpen ? "open" : ""}`}
                 type="button"

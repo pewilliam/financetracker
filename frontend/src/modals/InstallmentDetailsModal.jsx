@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Layers3, Loader2, Pencil, Trash2, X } from "lucide-react";
 import CategorySelect from "../components/CategorySelect.jsx";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
@@ -165,7 +166,7 @@ export default function InstallmentDetailsModal({
     );
   };
 
-  return (
+  return createPortal(
     <div className="modal-layer installment-details-layer">
       <button className="modal-backdrop" type="button" onClick={editingItem ? undefined : onClose} aria-label={copy("Fechar detalhes", "Close details")} />
       <div className="modal-card invoice-modal installment-details-modal" role="dialog" aria-modal="true" aria-labelledby="installment-details-title">
@@ -287,6 +288,7 @@ export default function InstallmentDetailsModal({
           onClose={() => setEditingItem(null)}
         />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
