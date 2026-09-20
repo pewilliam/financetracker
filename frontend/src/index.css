@@ -3723,6 +3723,31 @@ select {
   padding: 12px 18px;
   background: color-mix(in srgb, var(--surface) 40%, var(--card));
 }
+.invoice-items-toolbar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.invoice-items-toolbar-toggle > span { flex: 1 1 auto; text-align: left; }
+.invoice-items-toolbar-toggle > em {
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.invoice-items-toolbar-toggle > svg:last-child { transition: transform .18s ease; }
+.invoice-items-toolbar-toggle.open { color: var(--text); }
+.invoice-items-toolbar-toggle.open > svg:last-child { transform: rotate(180deg); }
 .invoice-items-search {
   min-width: 0;
   min-height: 40px;
@@ -4084,6 +4109,8 @@ select {
   .invoice-items-icon { width: 36px; height: 36px; }
   .invoice-items-heading h2 { font-size: 16px; }
   .invoice-items-toolbar { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 14px; }
+  .invoice-items-toolbar.collapsed { padding-block: 10px; }
+  .invoice-items-toolbar-toggle { grid-column: 1 / -1; }
   .invoice-items-search { grid-column: 1 / -1; }
   .invoice-items-breakdown { padding: 11px 14px; }
   .invoice-items-breakdown.collapsed { padding-block: 10px; }
@@ -10320,7 +10347,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-empty-results .btn { margin-top: 8px; }
 .installment-empty-results.primary-empty { min-height: 360px; border-style: solid; background: var(--card); }
 .installment-empty-results.error > span { background: color-mix(in srgb, var(--expense) 11%, var(--card)); color: var(--expense); }
-.installment-details-layer { padding: 16px; }
+.installment-details-layer { z-index: 60; padding: 16px; }
+.installment-delete-layer { z-index: 70; }
 .installment-details-modal { width: min(980px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 12px; }
 .installment-details-head { flex: 0 0 auto; display: grid; grid-template-columns: 42px minmax(0, 1fr) 36px; align-items: start; gap: 12px; border-bottom: 1px solid var(--border); padding: 16px 18px; background: color-mix(in srgb, var(--surface) 45%, var(--card)); }
 .installment-details-head .modal-icon { width: 42px; height: 42px; }

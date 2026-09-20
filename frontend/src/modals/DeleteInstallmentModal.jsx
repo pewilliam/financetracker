@@ -1,8 +1,9 @@
+import { createPortal } from "react-dom";
 import { AlertTriangle, CreditCard, Loader2, Trash2, X } from "lucide-react";
 import { formatMoney } from "../utils/format.js";
 
 export default function DeleteInstallmentModal({ purchase, deleting = false, onClose, onConfirm }) {
-  return (
+  return createPortal(
     <div className="modal-layer installment-delete-layer">
       <button className="modal-backdrop" type="button" onClick={deleting ? undefined : onClose} aria-label="Cancelar exclusão" />
       <div className="modal-card template-modal confirm-modal installment-delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-installment-title" aria-describedby="delete-installment-description">
@@ -29,6 +30,7 @@ export default function DeleteInstallmentModal({ purchase, deleting = false, onC
           <button className="btn btn-primary danger-action" type="button" onClick={onConfirm} disabled={deleting}>{deleting ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />} {deleting ? "Removendo..." : "Remover compra"}</button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
