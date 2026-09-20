@@ -276,28 +276,27 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
               <span><Layers3 size={16} /> {tt("receivables.howPaid", "Como será o pagamento?")}</span>
               <small>{tt("receivables.howPaidHint", "Defina em quantas vezes a pessoa vai te pagar.")}</small>
             </div>
-            <div className="receivable-form-row receivable-series-row">
-              <div className="field-label">
+            <div className="receivable-series-controls">
+              <div className="field-label receivable-series-count">
                 <span>{tt("receivables.seriesCount", "Quantidade de recebíveis")}</span>
-                <div className="receivable-count-stepper">
-                  <button type="button" className="icon-btn" onClick={() => setSeriesCount(seriesCount - 1)} aria-label={tt("receivables.decreaseCount", "Diminuir quantidade")} disabled={seriesCount <= 1}>
+                <div className="receivable-count-stepper" role="group" aria-label={tt("receivables.seriesCount", "Quantidade de recebíveis")}>
+                  <button type="button" onClick={() => setSeriesCount(seriesCount - 1)} aria-label={tt("receivables.decreaseCount", "Diminuir quantidade")} disabled={seriesCount <= 1}>
                     <Minus size={16} />
                   </button>
                   <input
                     inputMode="numeric"
                     value={seriesCount}
                     onChange={(event) => setSeriesCount(event.target.value.replace(/\D/g, ""))}
-                    aria-label={tt("receivables.seriesCount", "Quantidade de recebíveis")}
                   />
-                  <button type="button" className="icon-btn" onClick={() => setSeriesCount(seriesCount + 1)} aria-label={tt("receivables.increaseCount", "Aumentar quantidade")}>
+                  <button type="button" onClick={() => setSeriesCount(seriesCount + 1)} aria-label={tt("receivables.increaseCount", "Aumentar quantidade")}>
                     <Plus size={16} />
                   </button>
                 </div>
               </div>
               {seriesCount > 1 && (
-                <div className="field-label">
+                <div className="field-label receivable-series-allocation">
                   <span>{tt("receivables.allocation", "Distribuição")}</span>
-                  <div className="receivable-choice-row">
+                  <div className="receivable-choice-row receivable-allocation-toggle">
                     <button className={form.allocation_mode === "total" ? "active" : ""} type="button" onClick={() => setAllocationMode("total")}>{tt("receivables.splitTotal", "Dividir o valor total")}</button>
                     <button className={form.allocation_mode === "per_installment" ? "active" : ""} type="button" onClick={() => setAllocationMode("per_installment")}>{tt("receivables.samePerInstallment", "Mesmo valor por parcela")}</button>
                   </div>

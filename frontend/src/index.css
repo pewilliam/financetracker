@@ -9129,6 +9129,94 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .receivable-source-summary small { grid-column: 1 / -1; color: var(--muted); }
 .receivable-installment-settings { display: grid; gap: 10px; }
+.receivable-series-controls {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.receivable-series-controls .field-label { min-width: 0; }
+.receivable-count-stepper {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: stretch;
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+}
+.receivable-count-stepper button {
+  flex: 0 0 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.receivable-count-stepper button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.receivable-count-stepper button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.receivable-count-stepper input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  border: 0 !important;
+  border-left: 1px solid var(--border) !important;
+  border-right: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+}
+.receivable-allocation-toggle {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 !important;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+}
+.receivable-allocation-toggle button,
+.receivable-choice-row.receivable-allocation-toggle button {
+  height: 100%;
+  min-height: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.receivable-allocation-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+.receivable-allocation-toggle button.active,
+.receivable-choice-row.receivable-allocation-toggle button.active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-weight: 700;
+}
 .receivable-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .receivable-choice-row button {
   padding: 9px 10px;
@@ -9146,18 +9234,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   font-weight: 700;
 }
 .receivable-installment-preview { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
-.receivable-count-stepper {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
-  gap: 8px;
-  align-items: center;
-}
-.receivable-count-stepper input {
-  text-align: center;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.receivable-series-row { align-items: start; }
 
 .person-picker { position: relative; display: grid; gap: 8px; }
 .person-picker-trigger {
@@ -9544,6 +9620,9 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 @media (max-width: 600px) {
   .expense-receivable-action { align-items: stretch; flex-direction: column; }
   .receivable-choice-row { grid-template-columns: 1fr; }
+  .receivable-series-controls { grid-template-columns: 1fr; }
+  .receivable-allocation-toggle,
+  .receivable-choice-row.receivable-allocation-toggle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .receivable-linked-expense { align-items: flex-start; flex-wrap: wrap; }
   .receivable-linked-expense strong { width: 100%; margin-left: 21px; }
   .receivable-summary-main { grid-template-columns: 1fr; }
