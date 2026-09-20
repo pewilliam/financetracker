@@ -37,7 +37,6 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
     template = (
         db.query(InvoiceTemplate)
         .filter(InvoiceTemplate.id == payload.template_id, InvoiceTemplate.user_id == current_user.id, InvoiceTemplate.active.is_(True))
@@ -47,18 +46,6 @@ def create_invoice(
         raise HTTPException(status_code=404, detail="Invoice template not found")
 
     invoice = create_invoice_with_transaction(db, current_user.id, template, payload.due_date, payload.wallet_id)
-
-    if payload.initial_amount and payload.initial_amount > 0:
-        item = InvoiceItem(
-            invoice_id=invoice.id,
-            description=template.name,
-            amount=payload.initial_amount,
-            category_id=payload.category_id,
-        )
-        set_item_categories(item, selected_categories)
-        db.add(item)
-        db.flush()
-        recalculate_invoice_total(db, invoice)
 
     db.commit()
     db.refresh(invoice)
