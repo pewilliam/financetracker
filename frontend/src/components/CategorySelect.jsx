@@ -202,6 +202,18 @@ export default function CategorySelect({
     toggle(nextValue);
   };
 
+  const removeSelected = (event, categoryId) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onChange?.(selectedIds.filter((current) => current !== String(categoryId)));
+  };
+
+  const allSelected = categories.length > 0 && selected.length === categories.length
+    && categories.every((category) => selectedIds.includes(String(category.id)));
+  const visibleSelected = allSelected || selected.length <= 2 ? selected : selected.slice(0, 1);
+  const hiddenSelectedCount = allSelected ? 0 : Math.max(0, selected.length - visibleSelected.length);
+  const canRemoveChips = multiple && clearable;
+
   const renderBulkActions = () => (multiple && showBulkActions ? (
     <div className="category-multi-bulk-actions">
       <button type="button" disabled={!filteredIds.length || allFilteredSelected} onClick={selectAllVisible}>Selecionar todas</button>
@@ -209,19 +221,45 @@ export default function CategorySelect({
     </div>
   ) : null);
 
-  const selectedValues = selected.length ? selected.map((category) => (
-    <span className="category-choice-chip" style={{ "--category-color": category.color }} key={category.id}>
-      {category.name}
-    </span>
-  )) : <span className="category-multi-placeholder">{placeholder}</span>;
+  const selectedValues = (() => {
+    if (!selected.length) return <span className="category-multi-placeholder">{placeholder}</span>;
+    if (allSelected) {
+      return <span className="category-choice-chip is-summary"><span className="category-choice-label">Todas · {selected.length}</span></span>;
+    }
+    return (
+      <>
+        {visibleSelected.map((category) => (
+          <span className={`category-choice-chip ${canRemoveChips ? "is-removable" : ""}`} style={{ "--category-color": category.color }} key={category.id}>
+            <span className="category-choice-label">{category.name}</span>
+            {canRemoveChips && (
+              <button className="category-choice-remove" type="button" onClick={(event) => removeSelected(event, category.id)} aria-label={`Remover ${category.name}`}>
+                <X size={11} />
+              </button>
+            )}
+          </span>
+        ))}
+        {hiddenSelectedCount > 0 && (
+          <span className="category-choice-chip is-summary"><span className="category-choice-label">+{hiddenSelectedCount}</span></span>
+        )}
+      </>
+    );
+  })();
+
+  const toggleOpen = () => { setSearch(""); setOpen((current) => !current); };
+
+  const handleTriggerKeyDown = (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleOpen();
+  };
 
   return (
     <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef} onBlurCapture={handleFocusLeave}>
       <div className="category-multi-desktop-control">
-        <button className="category-multi-trigger" type="button" onClick={() => { setSearch(""); setOpen((current) => !current); }} aria-haspopup="listbox" aria-expanded={open}>
+        <div className="category-multi-trigger" role="combobox" tabIndex={0} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={toggleOpen} onKeyDown={handleTriggerKeyDown}>
           <span className="category-multi-values">{selectedValues}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
-        </button>
+        </div>
         {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
       </div>
 

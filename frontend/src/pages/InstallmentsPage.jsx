@@ -161,7 +161,16 @@ export default function InstallmentsPage({ categories = [], invoices = [], revis
   const maxForecast = Math.max(...(summary.forecast || []).map((item) => Number(item.amount)), 0);
   const totalPurchases = Number(summary.active_count) + Number(summary.paid_off_count);
   const updateFilter = (setter) => (value) => { setter(value); setPage(1); };
-  const activeFilters = [query && { id: "query", label: `Busca: ${query}`, clear: () => { setQuery(""); setDebouncedQuery(""); setPage(1); } }, ...categoryIds.map((id) => ({ id: `category-${id}`, label: `Categoria: ${categories.find((item) => String(item.id) === id)?.name || id}`, clear: () => { setCategoryIds((current) => current.filter((item) => item !== id)); setPage(1); } })), invoice !== "all" && { id: "invoice", label: `Cartão/fatura: ${invoiceSources.find((item) => String(item.template_id ?? item.id) === invoice)?.name}`, clear: () => updateFilter(setInvoice)("all") }, situation !== "all" && { id: "situation", label: `Situação: ${{ regular: "Em dia", soon: "Vence em breve", overdue: "Atrasados" }[situation]}`, clear: () => updateFilter(setSituation)("all") }].filter(Boolean);
+  const activeFilters = [
+    query && { id: "query", label: `Busca: ${query}`, clear: () => { setQuery(""); setDebouncedQuery(""); setPage(1); } },
+    ...categoryIds.map((id) => ({
+      id: `category-${id}`,
+      label: categories.find((item) => String(item.id) === id)?.name || id,
+      clear: () => { setCategoryIds((current) => current.filter((item) => item !== id)); setPage(1); },
+    })),
+    invoice !== "all" && { id: "invoice", label: `Cartão/fatura: ${invoiceSources.find((item) => String(item.template_id ?? item.id) === invoice)?.name}`, clear: () => updateFilter(setInvoice)("all") },
+    situation !== "all" && { id: "situation", label: `Situação: ${{ regular: "Em dia", soon: "Vence em breve", overdue: "Atrasados" }[situation]}`, clear: () => updateFilter(setSituation)("all") },
+  ].filter(Boolean);
   const clearFilters = () => { setQuery(""); setDebouncedQuery(""); setCategoryIds([]); setInvoice("all"); setSituation("all"); setPage(1); };
   const changeView = (mode) => { setViewMode(mode); try { sessionStorage.setItem(VIEW_KEY, mode); } catch { /* unavailable */ } };
   const changeTab = (tab) => { setActiveTab(tab); setPage(1); };
@@ -180,8 +189,8 @@ export default function InstallmentsPage({ categories = [], invoices = [], revis
         <nav className="installment-tabs" role="tablist" aria-label="Situação das compras parceladas" onKeyDown={handleTabsKey}><button id="installment-tab-active" type="button" role="tab" aria-selected={activeTab === "inProgress"} aria-controls="installment-panel" tabIndex={activeTab === "inProgress" ? 0 : -1} className={activeTab === "inProgress" ? "active" : ""} onClick={() => changeTab("inProgress")}>Em andamento <span>{summary.active_count}</span></button><button id="installment-tab-paid" type="button" role="tab" aria-selected={activeTab === "paidOff"} aria-controls="installment-panel" tabIndex={activeTab === "paidOff" ? 0 : -1} className={activeTab === "paidOff" ? "active" : ""} onClick={() => changeTab("paidOff")}>Quitados <span>{summary.paid_off_count}</span></button></nav>
         <div className="installment-tools">
           <label className="installment-search"><Search size={17} /><span className="sr-only">Buscar compra por nome</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome..." />{query && <button type="button" onClick={() => { setQuery(""); setDebouncedQuery(""); }} aria-label="Limpar busca"><X size={15} /></button>}</label>
-          <button className={`btn installment-filter-trigger ${filtersOpen ? "active" : ""}`} type="button" onClick={() => setFiltersOpen((current) => !current)} aria-expanded={filtersOpen}><Filter size={16} /> Filtros {activeFilters.length > 0 && <span>{activeFilters.length}</span>}</button>
-          <div className={`installment-filter-fields ${filtersOpen ? "open" : ""}`}>
+          <button className={`btn installment-filter-trigger ${filtersOpen ? "active" : ""}`} type="button" onClick={() => setFiltersOpen((current) => !current)} aria-expanded={filtersOpen} aria-controls="installment-filter-fields"><Filter size={16} /> Filtros {activeFilters.length > 0 && <span>{activeFilters.length}</span>}<ChevronDown size={16} /></button>
+          <div className={`installment-filter-fields ${filtersOpen ? "open" : ""}`} id="installment-filter-fields">
             <div className="installment-filter-field"><span>Categoria</span><CategorySelect className="installment-filter-select" categories={categories} values={categoryIds} onChange={(values) => { setCategoryIds(values); setPage(1); }} placeholder="Todas as categorias" searchPlaceholder="Buscar categoria..." ariaLabel="Categorias do filtro" showBulkActions /></div>
             <div className="installment-filter-field"><span>Cartão ou fatura</span><FilterSelect value={invoice} options={invoiceOptions} onChange={updateFilter(setInvoice)} ariaLabel="Cartão ou fatura" searchable searchPlaceholder="Buscar cartão ou fatura..." /></div>
             <div className="installment-filter-field"><span>Situação</span><FilterSelect value={situation} options={situationOptions} onChange={updateFilter(setSituation)} ariaLabel="Situação" /></div>

@@ -8519,13 +8519,15 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .category-multi-clear:focus-visible { background: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--primary); outline: none; }
 .category-multi-select.open .category-multi-trigger,
 .category-multi-trigger:focus-visible { border-color: var(--primary); outline: 2px solid color-mix(in srgb, var(--primary) 18%, transparent); }
-.category-multi-values { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+.category-multi-values { display: flex; flex: 1; flex-wrap: nowrap; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
 .category-multi-placeholder { color: var(--muted); font-size: 13px; }
 .category-choice-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
+  flex: 0 1 auto;
+  min-width: 0;
   border: 1px solid color-mix(in srgb, var(--category-color) 36%, transparent);
   border-radius: 999px;
   padding: 3px 7px;
@@ -8534,6 +8536,45 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   font-size: 11px;
   font-weight: 800;
   line-height: 1.15;
+}
+.category-choice-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-choice-chip.is-removable { padding-right: 3px; }
+.category-choice-remove {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  opacity: .72;
+  cursor: pointer;
+}
+.category-choice-remove:hover,
+.category-choice-remove:focus-visible {
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  opacity: 1;
+  outline: none;
+}
+.category-choice-chip.is-summary {
+  --category-color: var(--muted);
+  flex: 0 0 auto;
+  max-width: none;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--border) 28%, transparent);
+  color: var(--text);
+}
+.category-choice-chip.is-summary .category-choice-label {
+  overflow: visible;
+  text-overflow: unset;
 }
 .category-multi-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .18s ease; }
 .category-multi-select.open .category-multi-chevron { transform: rotate(180deg); }
@@ -10165,9 +10206,12 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-search input { min-width: 0; flex: 1; border: 0; padding: 0; background: transparent; color: var(--text); outline: 0; box-shadow: none; font-size: 13px; }
 .installment-search input:focus { box-shadow: none; }
 .installment-search > button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
-.installment-filter-trigger { display: none; height: 40px; }
+.installment-filter-trigger { display: inline-flex; align-items: center; gap: 8px; height: 40px; }
 .installment-filter-trigger > span { min-width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--primary); color: white; font-size: 10px; }
-.installment-filter-fields { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 8px; }
+.installment-filter-trigger > svg:last-child { margin-left: 2px; color: var(--muted); transition: transform .2s ease; }
+.installment-filter-trigger.active > svg:last-child { transform: rotate(180deg); }
+.installment-filter-fields { grid-column: 1 / -1; grid-row: 2; display: none; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 8px; }
+.installment-filter-fields.open { display: grid; }
 .installment-filter-fields label,
 .installment-filter-fields .installment-filter-field { min-width: 0; display: grid; gap: 4px; }
 .installment-filter-fields label > span,
@@ -10176,6 +10220,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-filter-fields .category-multi-trigger { min-height: 38px; padding-block: 4px; }
 .installment-filter-fields .category-multi-native-row { min-height: 38px; }
 .installment-filter-fields .category-choice-chip { max-width: 145px; overflow: hidden; padding-block: 2px; text-overflow: ellipsis; white-space: nowrap; }
+.installment-filter-fields .category-choice-chip.is-summary { max-width: none; overflow: visible; }
 .installment-filter-fields .category-multi-placeholder,
 .filter-select-value { overflow: hidden; color: var(--text); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .installment-filter-fields .category-multi-placeholder { color: var(--muted); }
@@ -10208,7 +10253,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .edit-installment-invoice .filter-select-menu { z-index: 80; }
 .installment-view-toggle { height: 40px; }
 .installment-view-toggle button { min-height: 38px; font-size: 12px; }
-.installment-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: -5px; }
+.installment-filter-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-height: 72px; margin-top: -5px; overflow-y: auto; }
 .installment-filter-chips button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; background: var(--card); color: var(--muted); font-size: 10px; font-weight: 700; }
 .installment-filter-chips button:hover { color: var(--text); border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); }
 .installment-filter-chips .clear { border-color: transparent; background: transparent; color: var(--primary); }
@@ -10435,9 +10480,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 @media (max-width: 1000px) {
   .installment-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .installment-tools { grid-template-columns: minmax(180px, 1fr) auto auto; }
-  .installment-filter-trigger { display: inline-flex; }
-  .installment-filter-fields { display: none; grid-template-columns: repeat(2, minmax(150px, 1fr)); }
-  .installment-filter-fields.open { display: grid; }
+  .installment-filter-fields { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
   .installment-table-wrap { overflow-x: auto; }.installment-table { min-width: 850px; }
 }
 
