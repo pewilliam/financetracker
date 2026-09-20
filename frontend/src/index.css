@@ -9131,16 +9131,28 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-installment-settings { display: grid; gap: 10px; }
 .receivable-series-controls {
   display: grid;
-  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 12px;
-  align-items: end;
+  max-width: 420px;
+  margin-inline: auto;
+  width: 100%;
 }
 .receivable-series-controls .field-label { min-width: 0; }
+.receivable-series-count,
+.receivable-series-allocation {
+  text-align: center;
+}
+.receivable-series-count > span,
+.receivable-series-allocation > span {
+  justify-self: center;
+}
 .receivable-count-stepper {
   display: inline-flex !important;
   flex-direction: row !important;
   align-items: stretch;
   width: 100%;
+  max-width: 220px;
+  margin-inline: auto;
   height: 42px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -9620,7 +9632,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 @media (max-width: 600px) {
   .expense-receivable-action { align-items: stretch; flex-direction: column; }
   .receivable-choice-row { grid-template-columns: 1fr; }
-  .receivable-series-controls { grid-template-columns: 1fr; }
   .receivable-allocation-toggle,
   .receivable-choice-row.receivable-allocation-toggle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .receivable-linked-expense { align-items: flex-start; flex-wrap: wrap; }

@@ -54,8 +54,12 @@ export default function ExpensePicker({
     if (autoOpen && !value) setOpen(true);
   }, [autoOpen, value]);
 
+  const MIN_SEARCH_CHARS = 3;
+  const searchReady = normalizeText(search).replace(/\s+/g, "").length >= MIN_SEARCH_CHARS;
+
   const visibleOptions = useMemo(() => {
-    const query = normalizeText(search);
+    const query = normalizeText(search).trim();
+    if (query.replace(/\s+/g, "").length < MIN_SEARCH_CHARS) return [];
     return options
       .filter((option) => {
         if (mode === "transaction" && option.source_type === "installment_purchase") return false;
@@ -65,7 +69,6 @@ export default function ExpensePicker({
           || (currentReceivableId && option.receivable_ids?.includes(currentReceivableId));
         if (!isSelected && !ownLink && Number(option.available_amount || 0) <= 0) return false;
         if (kind !== "all" && optionKind(option) !== kind) return false;
-        if (!query) return true;
         const haystack = normalizeText([
           option.description,
           option.invoice_name,
@@ -159,7 +162,13 @@ export default function ExpensePicker({
             ].map(([filter, label]) => <button className={kind === filter ? "active" : ""} key={filter} type="button" onClick={() => setKind(filter)}>{label}</button>)}
           </div>
           <div className="expense-picker-results">
-            {groups.length ? groups.map((group) => (
+            {!searchReady ? (
+              <div className="expense-picker-empty">
+                <Search size={22} />
+                <strong>{language === "en-US" ? "Keep typing to search" : "Continue digitando para buscar"}</strong>
+                <small>{language === "en-US" ? "Enter at least 3 characters to see expenses." : "Digite pelo menos 3 caracteres para ver os gastos."}</small>
+              </div>
+            ) : groups.length ? groups.map((group) => (
               <section className="expense-picker-group" key={group.key}>
                 <header><span>{monthLabel(group.key, language)}</span><small>{group.items.length}</small></header>
                 {group.items.map((option) => {
@@ -194,8 +203,14 @@ export default function ExpensePicker({
             )}
           </div>
           <footer>
-            <span>{visibleOptions.length} {language === "en-US" ? "expenses found" : "gastos encontrados"}</span>
-            {visibleOptions.length > 80 && <small>{language === "en-US" ? "Refine the search to see more." : "Refine a busca para ver mais resultados."}</small>}
+            {searchReady ? (
+              <>
+                <span>{visibleOptions.length} {language === "en-US" ? "expenses found" : "gastos encontrados"}</span>
+                {visibleOptions.length > 80 && <small>{language === "en-US" ? "Refine the search to see more." : "Refine a busca para ver mais resultados."}</small>}
+              </>
+            ) : (
+              <span>{language === "en-US" ? "Minimum 3 characters" : "Mínimo de 3 caracteres"}</span>
+            )}
           </footer>
         </div>
       )}

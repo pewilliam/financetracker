@@ -344,11 +344,10 @@ def _apply_expense_link(
     count = requested_count if requested_count is not None else len(items)
     count = max(count, 1)
 
+    amounts = _allocate_series_amounts(_money(receivable.total_amount), count, mode)
     if count == len(items):
-        amounts = _allocate_installments(_money(receivable.total_amount), items, mode)
         bindings = [("installment_item", item.id) for item in items]
     else:
-        amounts = _allocate_series_amounts(_money(receivable.total_amount), count, mode)
         bindings = [("installment_item", items[min(index, len(items) - 1)].id) for index in range(count)]
 
     reusable_by_item_id: dict[int, Receivable] = {}

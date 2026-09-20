@@ -23,27 +23,10 @@ function money(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
-function allocateAmounts(total, count, mode, itemAmounts = []) {
+function allocateAmounts(total, count, mode) {
   const size = Math.max(count, 1);
   if (mode === "per_installment") {
     return Array.from({ length: size }, () => money(total));
-  }
-  if (itemAmounts.length === size) {
-    const sourceTotal = itemAmounts.reduce((sum, amount) => sum + Number(amount || 0), 0);
-    if (sourceTotal > 0) {
-      const allocated = [];
-      let running = 0;
-      itemAmounts.forEach((amount, index) => {
-        if (index === itemAmounts.length - 1) {
-          allocated.push(money(total - running));
-          return;
-        }
-        const share = money((total * Number(amount || 0)) / sourceTotal);
-        allocated.push(share);
-        running = money(running + share);
-      });
-      return allocated;
-    }
   }
   const base = money(total / size);
   const values = Array.from({ length: size }, () => base);
@@ -82,12 +65,11 @@ function buildReceivablePreview({
   seriesCount,
   allocationMode,
   typedAmount,
-  dueDate,
-  weightAmounts = []
+  dueDate
 }) {
   if (!dueDate || !typedAmount || typedAmount <= 0) return [];
   const count = Math.max(Number(seriesCount) || 1, 1);
-  const amounts = allocateAmounts(typedAmount, count, allocationMode, weightAmounts.slice(0, count));
+  const amounts = allocateAmounts(typedAmount, count, allocationMode);
   return amounts.map((amount, index) => ({
     key: `row-${index}`,
     labelNumber: index + 1,
@@ -151,23 +133,16 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
       ? scopedInstallmentItems.reduce((sum, option) => sum + Number(option.available_amount || 0), 0) + availableCredit
       : Number((displayExpense || selectedExpense)?.available_amount || 0) + availableCredit;
 
-  const weightAmounts = seriesCount === scopedInstallmentItems.length
-    ? scopedInstallmentItems.map((item) => item.amount)
-    : [];
-
-  const weightKey = weightAmounts.join("|");
   const previewRows = useMemo(() => buildReceivablePreview({
     seriesCount,
     allocationMode: form.allocation_mode,
     typedAmount,
-    dueDate: form.due_date,
-    weightAmounts: weightKey ? weightKey.split("|").map(Number) : []
+    dueDate: form.due_date
   }), [
     seriesCount,
     form.allocation_mode,
     typedAmount,
-    form.due_date,
-    weightKey
+    form.due_date
   ]);
 
   const previewTotal = previewRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -274,7 +249,6 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
           <section className="receivable-installment-settings">
             <div className="receivable-link-heading">
               <span><Layers3 size={16} /> {tt("receivables.howPaid", "Como será o pagamento?")}</span>
-              <small>{tt("receivables.howPaidHint", "Defina em quantas vezes a pessoa vai te pagar.")}</small>
             </div>
             <div className="receivable-series-controls">
               <div className="field-label receivable-series-count">
