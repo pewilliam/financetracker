@@ -109,6 +109,8 @@ export default function MonthlyTable({
         const plannedReceivables = day.planned_receivables || [];
         const hasEntries = day.transactions.length || plannedReceivables.length;
         const future = day.has_future || isFutureDate(day.date);
+        const projectedBalance = day.projected_balance ?? day.balance;
+        const hasSplitBalance = Number(projectedBalance) !== Number(day.balance);
         return (
           <div key={day.date} className={weekSeparator ? "week-block" : ""}>
             {weekSeparator && <div className="week-separator" />}
@@ -198,9 +200,24 @@ export default function MonthlyTable({
                 )}
               </div>
 
-              <div className="day-balance">
-                <span>{tt("monthlyTable.balanceChip", "Saldo")}</span>
-                <strong>{formatMoney(day.balance)}</strong>
+              <div className={`day-balance${hasSplitBalance ? " has-split" : ""}`}>
+                {hasSplitBalance ? (
+                  <>
+                    <div>
+                      <span>{tt("monthlyTable.realizedBalance", "Saldo real")}</span>
+                      <strong>{formatMoney(day.balance)}</strong>
+                    </div>
+                    <div className="day-balance-projected">
+                      <span>{tt("monthlyTable.projectedBalance", "Saldo previsto")}</span>
+                      <strong>{formatMoney(projectedBalance)}</strong>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span>{tt("monthlyTable.balanceChip", "Saldo")}</span>
+                    <strong>{formatMoney(day.balance)}</strong>
+                  </>
+                )}
               </div>
               <button className="icon-btn add-day" onClick={() => onAdd(day.date)} aria-label="Adicionar">
                 <Plus size={17} />

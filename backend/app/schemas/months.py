@@ -22,6 +22,7 @@ class MonthDayOut(APIModel):
     expenses: Decimal
     income: Decimal
     balance: Decimal
+    projected_balance: Decimal = Decimal("0.00")
     notes: Optional[str] = None
     has_future: bool = False
     transactions: List[TransactionOut] = []
@@ -32,6 +33,8 @@ class MonthResponse(APIModel):
     year: int
     month: int
     opening_balance: Decimal
+    opening_balance_projected: Decimal = Decimal("0.00")
+    prior_planned_receivables_total: Decimal = Decimal("0.00")
     closing_balance: Decimal
     total_expenses: Decimal
     total_income: Decimal
@@ -48,6 +51,7 @@ class MonthSummaryOut(APIModel):
     projected_closing: Decimal
     future_net: Decimal
     planned_receivables_total: Decimal = Decimal("0.00")
+    prior_planned_receivables_total: Decimal = Decimal("0.00")
     transactions_projected_closing: Decimal = Decimal("0.00")
 
 

@@ -299,11 +299,23 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
     setExpandedYears((previous) => ({ ...previous, [groupYear]: !previous[groupYear] }));
   };
 
+  const priorPlannedOpening = Number(monthData?.prior_planned_receivables_total || 0);
+  const hasSplitOpening = priorPlannedOpening > 0;
+  const projectedOpening = monthData?.opening_balance_projected ?? (Number(monthData?.opening_balance || 0) + priorPlannedOpening);
+  const tableOpeningEyebrow = hasSplitOpening ? (
+    <>
+      <span>{tt("monthlyTable.realizedOpeningBalance", "Saldo inicial real")} {formatMoney(monthData.opening_balance, language)}</span>
+      <span className="opening-balance-projected">{tt("monthlyTable.projectedOpeningBalance", "Saldo inicial previsto")} {formatMoney(projectedOpening, language)}</span>
+    </>
+  ) : `${tt("monthlyTable.openingBalance", "Saldo inicial")} ${formatMoney(monthData?.opening_balance, language)}`;
+
   return (
     <section className={viewMode === "table" ? "card" : "months-overview"}>
       <div className={`section-head ${viewMode === "cards" ? "months-overview-head" : ""}`}>
         <div data-months-tour="intro">
-          <p className="eyebrow">{viewMode === "table" ? `${tt("monthlyTable.openingBalance", "Saldo inicial")} ${formatMoney(monthData.opening_balance, language)}` : (language === "en-US" ? "FINANCIAL TIMELINE" : "LINHA DO TEMPO FINANCEIRA")}</p>
+          <p className={`eyebrow${viewMode === "table" && hasSplitOpening ? " opening-balance-eyebrow" : ""}`}>
+            {viewMode === "table" ? tableOpeningEyebrow : (language === "en-US" ? "FINANCIAL TIMELINE" : "LINHA DO TEMPO FINANCEIRA")}
+          </p>
           <h2>{viewMode === "table" ? tt("monthlyTable.monthlyTable", "Tabela mensal") : (language === "en-US" ? "Your months at a glance" : "Seus meses em perspectiva")}</h2>
           {viewMode === "cards" && <p className="months-overview-description">{language === "en-US" ? "Compare cash flow and see how each month changed your balance." : "Compare o fluxo de caixa e veja como cada mês transformou seu saldo."}</p>}
         </div>

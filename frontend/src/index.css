@@ -553,6 +553,14 @@ button:focus-visible {
   font-weight: 700;
   margin: 0 0 6px;
 }
+.opening-balance-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.opening-balance-eyebrow .opening-balance-projected {
+  color: var(--planned-text);
+}
 .field-label {
   color: var(--muted);
   font-size: 13px;
@@ -1486,7 +1494,7 @@ select {
 .month-list { margin-top: 18px; display: grid; gap: 10px; }
 .day-row {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) 150px 42px;
+  grid-template-columns: 150px minmax(0, 1fr) 168px 42px;
   align-items: center;
   gap: 14px;
   border: 1px solid var(--border);
@@ -1580,6 +1588,20 @@ select {
 .day-balance { text-align: right; }
 .day-balance span { display: block; color: var(--muted); font-size: 12px; }
 .day-balance strong { color: var(--primary); font-size: 16px; }
+.day-balance.has-split {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+.day-balance.has-split > div {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+}
+.day-balance-projected span,
+.day-balance-projected strong {
+  color: var(--planned-text);
+}
 .row-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .18s ease; }
 .day-row:hover .row-actions { opacity: 1; }
 .week-separator { border-top: 1px dashed var(--border); margin: 8px 0; }
@@ -7891,6 +7913,17 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     gap: 6px;
     text-align: left;
   }
+  .day-balance.has-split {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+  }
+  .day-balance.has-split > div {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .day-balance.has-split span { display: inline; }
   .add-day { grid-area: add; }
   .inline-form { grid-template-columns: 1fr; }
   .recurrence-grid { grid-template-columns: 1fr; }

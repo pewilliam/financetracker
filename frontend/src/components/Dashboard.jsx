@@ -173,20 +173,22 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       ? monthData.days
       : balanceSeries.map((item) => ({ date: item.date, balance: item.balance, planned_receivables: [] }));
 
-    let runningPlanned = 0;
+    let runningPlanned = toNumber(monthData?.prior_planned_receivables_total);
     const series = days.map((day) => {
       const dayPlanned = (day.planned_receivables || []).reduce((total, item) => total + toNumber(item.remaining_amount), 0);
       runningPlanned += dayPlanned;
+      const balance = toNumber(day.balance);
+      const projected = day.projected_balance == null ? balance + runningPlanned : toNumber(day.projected_balance);
       return {
         date: day.date,
-        balance: toNumber(day.balance),
+        balance,
         plannedReceivable: dayPlanned,
-        cumulativePlanned: runningPlanned,
+        cumulativePlanned: projected - balance,
       };
     });
 
     const firstProjectedIndex = series.findIndex((item) => item.date > todayIso);
-    const hasOpenPlanned = series.some((item) => item.plannedReceivable > 0);
+    const hasOpenPlanned = toNumber(monthData?.prior_planned_receivables_total) > 0 || series.some((item) => item.plannedReceivable > 0);
 
     return series.map((item, index) => {
       const bridgeFromYesterday = firstProjectedIndex >= 0 && index >= Math.max(0, firstProjectedIndex - 1);

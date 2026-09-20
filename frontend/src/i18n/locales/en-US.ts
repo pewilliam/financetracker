@@ -414,6 +414,8 @@ export const enUS = {
   },
   monthlyTable: {
     openingBalance: "Opening balance",
+    realizedOpeningBalance: "Actual opening balance",
+    projectedOpeningBalance: "Projected opening balance",
     viewAllDays: "View all days of the month",
     viewSummary: "View month summary",
     nextDayWithoutEntries: "No entries",
@@ -432,6 +434,8 @@ export const enUS = {
     expenseChip: "EXPENSE",
     incomeChip: "INCOME",
     balanceChip: "BALANCE",
+    realizedBalance: "Actual balance",
+    projectedBalance: "Projected balance",
     noDescription: "No description",
     recurring: "Recurring",
     invoice: "Invoice",
