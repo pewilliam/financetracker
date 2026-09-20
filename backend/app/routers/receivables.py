@@ -272,6 +272,27 @@ def _allocate_series_amounts(total: Decimal, count: int, mode: str) -> list[Deci
     return values
 
 
+def _requested_series_count(series_count: int | None, installment_amounts: list[Decimal] | None) -> int | None:
+    if installment_amounts is not None:
+        return max(len(installment_amounts), 1)
+    if series_count is not None:
+        return max(int(series_count), 1)
+    return None
+
+
+def _series_amounts_for(
+    receivable: Receivable,
+    *,
+    series_count: int | None,
+    allocation_mode: str,
+    installment_amounts: list[Decimal] | None = None,
+) -> list[Decimal]:
+    if installment_amounts is not None:
+        return [_money(amount) for amount in installment_amounts]
+    count = _requested_series_count(series_count, None) or 1
+    return _allocate_series_amounts(_money(receivable.total_amount), count, allocation_mode)
+
+
 def _series_siblings(db: Session, user_id: int, receivable: Receivable) -> list[Receivable]:
     if not receivable.series_id:
         return [receivable]
@@ -291,25 +312,32 @@ def _apply_expense_link(
     *,
     series_count: int | None = None,
     allocation_mode: str | None = None,
+    installment_amounts: list[Decimal] | None = None,
 ) -> list[Receivable]:
     mode = allocation_mode or (link.allocation_mode if link else "total") or "total"
+    amounts = _series_amounts_for(
+        receivable,
+        series_count=series_count if link is not None else (series_count or 1),
+        allocation_mode=mode,
+        installment_amounts=installment_amounts,
+    )
 
     if link is None:
-        count = max(int(series_count or 1), 1)
         return _sync_series_rows(
             db,
             user_id,
             receivable,
-            amounts=_allocate_series_amounts(_money(receivable.total_amount), count, mode),
-            source_bindings=[(None, None)] * count,
+            amounts=amounts,
+            source_bindings=[(None, None)] * len(amounts),
         )
 
     single = _single_source(db, user_id, link)
-    requested_count = max(int(series_count), 1) if series_count is not None else None
+    requested_count = _requested_series_count(series_count, installment_amounts)
 
     if single and (requested_count or 1) <= 1:
         source_type, source, _source_due_date, field = single
-        amount = _money(receivable.total_amount)
+        amount = amounts[0]
+        receivable.total_amount = amount
         _validate_source_amount(db, field, source.id, source.amount, amount, receivable.id)
         stays_in_series = source_type == "installment_item" and receivable.source_installment_item_id == source.id and receivable.series_id
         if not stays_in_series:
@@ -320,9 +348,8 @@ def _apply_expense_link(
         return []
 
     if single:
-        count = requested_count or 1
+        count = len(amounts)
         source_type, source, _source_due_date, field = single
-        amounts = _allocate_series_amounts(_money(receivable.total_amount), count, mode)
         exclude_ids = {item.id for item in _series_siblings(db, user_id, receivable)} | {receivable.id}
         _validate_source_amount(
             db,
@@ -341,10 +368,9 @@ def _apply_expense_link(
         )
 
     items = _installment_sources(db, user_id, link)
-    count = requested_count if requested_count is not None else len(items)
-    count = max(count, 1)
-
-    amounts = _allocate_series_amounts(_money(receivable.total_amount), count, mode)
+    if installment_amounts is None and requested_count is None:
+        amounts = _allocate_series_amounts(_money(receivable.total_amount), max(len(items), 1), mode)
+    count = len(amounts)
     if count == len(items):
         bindings = [("installment_item", item.id) for item in items]
     else:
@@ -863,6 +889,7 @@ def create_receivable(
         payload.expense_link,
         series_count=payload.series_count,
         allocation_mode=payload.allocation_mode,
+        installment_amounts=payload.installment_amounts,
     )
     db.commit()
     return _load_receivable(db, receivable.id, current_user.id)
@@ -896,11 +923,20 @@ def update_receivable(
     if selected_category_ids is not None:
         _set_receivable_categories(db, current_user.id, receivable, selected_category_ids)
 
-    should_sync_series = "expense_link" in data or "series_count" in data or "allocation_mode" in data or "total_amount" in data
+    should_sync_series = (
+        "expense_link" in data
+        or "series_count" in data
+        or "allocation_mode" in data
+        or "total_amount" in data
+        or "installment_amounts" in data
+    )
     if should_sync_series:
         link = payload.expense_link if "expense_link" in data else _expense_link_from_receivable(receivable)
-        series_count = payload.series_count if "series_count" in data else (
-            receivable.series_installment_count or 1
+        installment_amounts = payload.installment_amounts if "installment_amounts" in data else None
+        series_count = (
+            len(installment_amounts) if installment_amounts is not None
+            else payload.series_count if "series_count" in data
+            else (receivable.series_installment_count or 1)
         )
         allocation_mode = payload.allocation_mode if "allocation_mode" in data else (
             (payload.expense_link.allocation_mode if payload.expense_link else None) or "total"
@@ -912,6 +948,7 @@ def update_receivable(
             link,
             series_count=series_count,
             allocation_mode=allocation_mode,
+            installment_amounts=installment_amounts,
         )
 
     if not receivable.description:

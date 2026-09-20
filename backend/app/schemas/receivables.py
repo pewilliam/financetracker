@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
+from pydantic import Field, model_validator
 from app.schemas.base import APIModel, PositiveMoney
 from app.schemas.categories import CategoryOut
 
@@ -80,7 +81,16 @@ class ReceivableCreate(APIModel):
     category_ids: Optional[List[int]] = None
     series_count: Optional[int] = None
     allocation_mode: Literal["total", "per_installment"] = "total"
+    installment_amounts: Optional[List[PositiveMoney]] = Field(default=None, min_length=1, max_length=60)
     expense_link: Optional[ReceivableExpenseLinkIn] = None
+
+    @model_validator(mode="after")
+    def validate_installment_amounts(self):
+        if self.installment_amounts is None or self.series_count is None:
+            return self
+        if len(self.installment_amounts) != self.series_count:
+            raise ValueError("Installment amounts must match series count")
+        return self
 
 
 class ReceivableUpdate(APIModel):
@@ -94,7 +104,16 @@ class ReceivableUpdate(APIModel):
     category_ids: Optional[List[int]] = None
     series_count: Optional[int] = None
     allocation_mode: Optional[Literal["total", "per_installment"]] = None
+    installment_amounts: Optional[List[PositiveMoney]] = Field(default=None, min_length=1, max_length=60)
     expense_link: Optional[ReceivableExpenseLinkIn] = None
+
+    @model_validator(mode="after")
+    def validate_installment_amounts(self):
+        if self.installment_amounts is None or self.series_count is None:
+            return self
+        if len(self.installment_amounts) != self.series_count:
+            raise ValueError("Installment amounts must match series count")
+        return self
 
 
 class ReceivableOut(APIModel):

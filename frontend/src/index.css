@@ -9491,7 +9491,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   border-radius: 10px;
   background: var(--card);
 }
-.receivable-preview-row > span {
+.receivable-preview-row > span,
+.receivable-preview-row > label {
   min-width: 0;
   display: grid;
   gap: 2px;
@@ -9507,9 +9508,29 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+.receivable-preview-row > label,
 .receivable-preview-row > span:last-child {
   justify-items: end;
   text-align: right;
+}
+.receivable-preview-row input {
+  width: 8.75rem;
+  max-width: 100%;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--bg, var(--card));
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.receivable-preview-row input:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: 1px;
 }
 
 .expense-receivable-action {
@@ -9682,12 +9703,17 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
+  .receivable-preview-row > label,
   .receivable-preview-row > span:last-child {
     grid-column: 1 / -1;
     justify-items: start;
     text-align: left;
     padding-top: 4px;
     border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+  .receivable-preview-row input {
+    width: 100%;
+    text-align: left;
   }
 }
 

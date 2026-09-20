@@ -360,6 +360,8 @@ export const ptBR = {
     previewMany: "{{count}} recebíveis serão criados.",
     previewOneUpdate: "1 recebível será atualizado.",
     previewManyUpdate: "{{count}} recebíveis serão atualizados.",
+    previewHint: "Você pode ajustar o valor de cada parcela.",
+    editInstallmentAmount: "Valor da parcela {{current}}/{{total}}",
     howPaid: "Como será o pagamento?",
     howPaidHint: "Defina em quantas vezes a pessoa vai te pagar.",
     seriesCount: "Quantidade de recebíveis",

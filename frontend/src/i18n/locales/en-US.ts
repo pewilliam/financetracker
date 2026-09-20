@@ -401,6 +401,8 @@ export const enUS = {
     previewMany: "{{count}} receivables will be created.",
     previewOneUpdate: "1 receivable will be updated.",
     previewManyUpdate: "{{count}} receivables will be updated.",
+    previewHint: "You can adjust each installment amount.",
+    editInstallmentAmount: "Installment {{current}}/{{total}} amount",
     howPaid: "How will payment work?",
     howPaidHint: "Choose how many installments the person will pay you in.",
     seriesCount: "Number of receivables",

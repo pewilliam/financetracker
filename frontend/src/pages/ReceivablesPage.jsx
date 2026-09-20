@@ -5,7 +5,7 @@ import { formatDateShort, formatMoney, formatMonthLabel } from "../utils/format.
 import { receivableStatusText, todayIsoDate } from "../app/helpers.js";
 import ReceivableDetailsModal from "../modals/ReceivableDetailsModal.jsx";
 
-function originGroupKey(item) {
+export function originGroupKey(item) {
   if (item.record_kind === "linked_transaction") {
     return `linked_transaction:${item.id}`;
   }
@@ -38,7 +38,7 @@ function sortReceivableItems(items) {
   });
 }
 
-function buildReceivableGroups(items) {
+export function buildReceivableGroups(items) {
   const buckets = new Map();
   for (const item of items) {
     const key = originGroupKey(item);
@@ -68,6 +68,15 @@ function buildReceivableGroups(items) {
       count: sorted.length
     };
   }).sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || left.key.localeCompare(right.key));
+}
+
+export function receivableGroupForId(receivables, receivableId) {
+  if (!receivableId) return null;
+  const items = (receivables || []).map((item) => ({ ...item, record_kind: "receivable" }));
+  const match = items.find((item) => Number(item.id) === Number(receivableId));
+  if (!match) return null;
+  const key = originGroupKey(match);
+  return buildReceivableGroups(items).find((group) => group.key === key) || null;
 }
 
 function ReceivableSummaryCard({ group, language, tt, onOpen }) {

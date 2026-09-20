@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -349,6 +350,67 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.assertEqual([row.total_amount for row in rows], [Decimal("50.00"), Decimal("50.00")])
         self.assertEqual({row.source_transaction_id for row in rows}, {expense.id})
         self.assertEqual(created.series_installment_count, 2)
+
+    def test_custom_installment_amounts_are_persisted_on_create(self):
+        created = create_receivable(
+            ReceivableCreate(
+                person_id=self.person.id,
+                description="Reembolso parcelado",
+                total_amount=Decimal("300.00"),
+                due_date=date(2026, 9, 1),
+                series_count=3,
+                allocation_mode="total",
+                installment_amounts=[Decimal("120.00"), Decimal("80.00"), Decimal("100.00")],
+            ),
+            self.db,
+            self.user,
+        )
+
+        rows = self.db.query(Receivable).order_by(Receivable.series_installment_number).all()
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([row.total_amount for row in rows], [Decimal("120.00"), Decimal("80.00"), Decimal("100.00")])
+        self.assertEqual(created.series_installment_count, 3)
+        self.assertEqual(len({row.series_id for row in rows}), 1)
+
+    def test_update_can_change_individual_installment_amounts(self):
+        created = create_receivable(
+            ReceivableCreate(
+                person_id=self.person.id,
+                description="Reembolso parcelado",
+                total_amount=Decimal("300.00"),
+                due_date=date(2026, 9, 1),
+                series_count=3,
+                allocation_mode="total",
+            ),
+            self.db,
+            self.user,
+        )
+
+        update_receivable(
+            created.id,
+            ReceivableUpdate(
+                series_count=3,
+                installment_amounts=[Decimal("50.00"), Decimal("150.00"), Decimal("100.00")],
+            ),
+            self.db,
+            self.user,
+        )
+
+        rows = self.db.query(Receivable).order_by(Receivable.series_installment_number).all()
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([row.total_amount for row in rows], [Decimal("50.00"), Decimal("150.00"), Decimal("100.00")])
+        self.assertEqual(len({row.series_id for row in rows}), 1)
+
+    def test_custom_installment_amounts_must_match_series_count(self):
+        with self.assertRaises(ValidationError):
+            ReceivableCreate(
+                person_id=self.person.id,
+                description="Reembolso parcelado",
+                total_amount=Decimal("300.00"),
+                due_date=date(2026, 9, 1),
+                series_count=2,
+                installment_amounts=[Decimal("120.00"), Decimal("80.00"), Decimal("100.00")],
+            )
 
     def test_income_transaction_can_link_to_expense_and_consumes_available_amount(self):
         expense = Transaction(

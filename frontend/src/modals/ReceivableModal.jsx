@@ -61,15 +61,24 @@ function installmentItemsForPreview(selectedExpense, expenseOptions) {
   return [];
 }
 
+function resolveInstallmentAmounts(installmentAmounts, count, typedAmount, allocationMode, language) {
+  if (Array.isArray(installmentAmounts) && installmentAmounts.length === count) {
+    return installmentAmounts.map((value) => money(parseTypedMoneyInput(value, language)));
+  }
+  return allocateAmounts(typedAmount, count, allocationMode);
+}
+
 function buildReceivablePreview({
   seriesCount,
   allocationMode,
   typedAmount,
-  dueDate
+  dueDate,
+  installmentAmounts,
+  language
 }) {
   if (!dueDate || !typedAmount || typedAmount <= 0) return [];
   const count = Math.max(Number(seriesCount) || 1, 1);
-  const amounts = allocateAmounts(typedAmount, count, allocationMode);
+  const amounts = resolveInstallmentAmounts(installmentAmounts, count, typedAmount, allocationMode, language);
   return amounts.map((amount, index) => ({
     key: `row-${index}`,
     labelNumber: index + 1,
@@ -137,21 +146,31 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
     seriesCount,
     allocationMode: form.allocation_mode,
     typedAmount,
-    dueDate: form.due_date
+    dueDate: form.due_date,
+    installmentAmounts: form.installment_amounts,
+    language
   }), [
     seriesCount,
     form.allocation_mode,
+    form.installment_amounts,
     typedAmount,
-    form.due_date
+    form.due_date,
+    language
   ]);
 
   const previewTotal = previewRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  const currentAmountLabels = () => (
+    form.installment_amounts?.length === seriesCount
+      ? [...form.installment_amounts]
+      : allocateAmounts(typedAmount, seriesCount, form.allocation_mode).map((amount) => formatMoney(amount, language))
+  );
 
   const setAllocationMode = (mode) => {
     const nextAmount = mode === "per_installment"
       ? money((installmentAvailable || Number(displayExpense?.amount || selectedExpense?.amount || typedAmount || 0)) / Math.max(seriesCount, 1))
       : installmentAvailable || Number(displayExpense?.available_amount || selectedExpense?.available_amount || displayExpense?.amount || selectedExpense?.amount || 0);
-    updateForm({ allocation_mode: mode, total_amount: formatMoney(nextAmount, language) });
+    updateForm({ allocation_mode: mode, total_amount: formatMoney(nextAmount, language), installment_amounts: [] });
   };
 
   const selectExpense = (key) => {
@@ -183,13 +202,27 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
       description: form.description.trim() ? form.description : resolved.description,
       category_ids: form.category_ids?.length
         ? form.category_ids
-        : (resolved.category_ids?.length ? resolved.category_ids : resolved.category_id ? [resolved.category_id] : []).map(String)
+        : (resolved.category_ids?.length ? resolved.category_ids : resolved.category_id ? [resolved.category_id] : []).map(String),
+      installment_amounts: []
     });
   };
 
   const setSeriesCount = (next) => {
     const count = Math.min(60, Math.max(1, Number(next) || 1));
-    updateForm({ series_count: count });
+    updateForm({ series_count: count, installment_amounts: [] });
+  };
+
+  const setTotalAmount = (value, { resetInstallments = true } = {}) => {
+    updateForm({
+      total_amount: value,
+      ...(resetInstallments ? { installment_amounts: [] } : {})
+    });
+  };
+
+  const setInstallmentAmount = (index, value) => {
+    const next = currentAmountLabels();
+    next[index] = value;
+    updateForm({ installment_amounts: next });
   };
 
   const normalizeAmount = () => {
@@ -197,11 +230,29 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
     updateForm({ total_amount: formatTypedMoneyAsCurrency(form.total_amount, language) });
   };
 
+  const normalizeInstallmentAmount = (index) => {
+    const next = currentAmountLabels();
+    if (!next[index]) return;
+    next[index] = formatTypedMoneyAsCurrency(next[index], language);
+    const patch = { installment_amounts: next };
+    if (form.allocation_mode !== "per_installment") {
+      const sum = next.reduce((total, value) => total + (parseTypedMoneyInput(value, language) || 0), 0);
+      if (sum > 0) patch.total_amount = formatMoney(sum, language);
+    }
+    updateForm(patch);
+  };
+
   const submit = (event) => {
     event.preventDefault();
     const hasPerson = form.person_id && (form.person_id !== CREATE_RECEIVABLE_PERSON_VALUE || form.person_name.trim());
+    const installmentAmounts = previewRows.map((row) => Number(row.amount) || 0);
     if (!hasPerson || !form.description.trim() || !parseTypedMoneyInput(form.total_amount, language) || !form.due_date) return;
-    onSubmit({ ...form, series_count: seriesCount });
+    if (seriesCount > 1 && installmentAmounts.some((amount) => amount <= 0)) return;
+    onSubmit({
+      ...form,
+      series_count: seriesCount,
+      installment_amounts: seriesCount > 1 ? installmentAmounts : undefined
+    });
   };
 
   return (
@@ -286,7 +337,7 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
                   ? tt("receivables.amountPerInstallment", "Valor por parcela")
                   : tt("receivables.amount", "Valor")}
               </span>
-              <input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => updateForm({ total_amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={normalizeAmount} required />
+              <input inputMode="decimal" placeholder={formatMoney(0, language)} value={form.total_amount} onChange={(event) => setTotalAmount(formatTypedMoneyForEditing(event.target.value, language))} onBlur={normalizeAmount} required />
             </div>
             <div className="field-label">
               <span>
@@ -311,27 +362,43 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
                       : (editing
                         ? tt("receivables.previewManyUpdate", `${previewRows.length} recebíveis serão atualizados.`, { count: previewRows.length })
                         : tt("receivables.previewMany", `${previewRows.length} recebíveis serão criados.`, { count: previewRows.length }))}
+                    {previewRows.length > 1 ? ` ${tt("receivables.previewHint", "Você pode ajustar o valor de cada parcela.")}` : ""}
                   </p>
                 </div>
                 <strong>{formatMoney(previewTotal, language)}</strong>
               </header>
               <div className="receivable-preview-list">
-                {previewRows.map((row) => (
-                  <div className="receivable-preview-row" key={row.key}>
-                    <span>
-                      <small>{tt("receivables.installment", "Parcela")}</small>
-                      <strong>{row.labelNumber}/{row.labelTotal}</strong>
-                    </span>
-                    <span>
-                      <small>{tt("receivables.dueDate", "Vencimento")}</small>
-                      <strong>{formatDateShort(row.dueDate, language)}</strong>
-                    </span>
-                    <span>
-                      <small>{tt("receivables.amount", "Valor")}</small>
-                      <strong>{formatMoney(row.amount, language)}</strong>
-                    </span>
-                  </div>
-                ))}
+                {previewRows.map((row, index) => {
+                  const amountValue = form.installment_amounts?.length === seriesCount
+                    ? form.installment_amounts[index]
+                    : formatMoney(row.amount, language);
+                  return (
+                    <div className="receivable-preview-row" key={row.key}>
+                      <span>
+                        <small>{tt("receivables.installment", "Parcela")}</small>
+                        <strong>{row.labelNumber}/{row.labelTotal}</strong>
+                      </span>
+                      <span>
+                        <small>{tt("receivables.dueDate", "Vencimento")}</small>
+                        <strong>{formatDateShort(row.dueDate, language)}</strong>
+                      </span>
+                      <label>
+                        <small>{tt("receivables.amount", "Valor")}</small>
+                        {seriesCount > 1 ? (
+                          <input
+                            inputMode="decimal"
+                            value={amountValue}
+                            onChange={(event) => setInstallmentAmount(index, formatTypedMoneyForEditing(event.target.value, language))}
+                            onBlur={() => normalizeInstallmentAmount(index)}
+                            aria-label={tt("receivables.editInstallmentAmount", `Valor da parcela ${row.labelNumber}/${row.labelTotal}`, { current: row.labelNumber, total: row.labelTotal })}
+                          />
+                        ) : (
+                          <strong>{formatMoney(row.amount, language)}</strong>
+                        )}
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
