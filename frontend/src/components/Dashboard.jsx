@@ -406,183 +406,39 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       </div>
 
       {activeSection === "overview" && (
-        <section
-          className="dashboard-section"
-          id="dashboard-panel-overview"
-          role="tabpanel"
-          aria-labelledby="dashboard-tab-overview"
-        >
+        <section className="dashboard-section" id="dashboard-panel-overview" role="tabpanel" aria-labelledby="dashboard-tab-overview">
           <section className="card chart-card dashboard-balance-card">
             <div className="dashboard-card-head balance-head">
-              <div>
-                <p className="eyebrow">
-                  {copy("Fluxo do mês", "Monthly cash flow")}
-                </p>
-                <h2>{t("dashboard.balanceEvolution")}</h2>
-              </div>
-
+              <div><p className="eyebrow">{copy("Fluxo do mês", "Monthly cash flow")}</p><h2>{t("dashboard.balanceEvolution")}</h2></div>
               <div className="balance-head-summary">
-                <span>
-                  <small>{copy("Saldo inicial", "Opening balance")}</small>
-                  <strong>{formatMoney(monthData?.opening_balance, language)}</strong>
-                </span>
+                <span><small>{copy("Saldo inicial", "Opening balance")}</small><strong>{formatMoney(monthData?.opening_balance, language)}</strong></span>
                 {isPastMonth ? (
-                  <span>
-                    <small>{copy("Saldo final", "Closing balance")}</small>
-                    <strong>{formatMoney(closingBalance, language)}</strong>
-                  </span>
+                  <span><small>{copy("Saldo final", "Closing balance")}</small><strong>{formatMoney(closingBalance, language)}</strong></span>
                 ) : isFutureMonth ? (
-                  <span>
-                    <small>{copy("Projeção", "Projection")}</small>
-                    <strong>{formatMoney(safeSummary.projected_closing, language)}</strong>
-                  </span>
+                  <span><small>{copy("Projeção", "Projection")}</small><strong>{formatMoney(safeSummary.projected_closing, language)}</strong></span>
                 ) : (
-                  <span>
-                    <small>{copy("Saldo atual", "Current")}</small>
-                    <strong>{formatMoney(safeSummary.current_balance, language)}</strong>
-                  </span>
+                  <span><small>{copy("Saldo atual", "Current")}</small><strong>{formatMoney(safeSummary.current_balance, language)}</strong></span>
                 )}
-                <span className={movementClass(balanceVariation)}>
-                  <small>{copy("Variação", "Change")}</small>
-                  <strong>
-                    <MovementIcon value={balanceVariation} />
-                    {formatMoney(balanceVariation, language)}
-                  </strong>
-                </span>
+                <span className={movementClass(balanceVariation)}><small>{copy("Variação", "Change")}</small><strong><MovementIcon value={balanceVariation} />{formatMoney(balanceVariation, language)}</strong></span>
               </div>
             </div>
-
             {balanceChartData.length && hasBalanceActivity ? (
               <div className="dashboard-balance-chart">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={balanceChartData}
-                    margin={{
-                      top: 14,
-                      left: 4,
-                      right: 10,
-                      bottom: 0,
-                    }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="dashboardBalanceFill"
-                        x1="0"
-                        x2="0"
-                        y1="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="0%"
-                          stopColor="#14A078"
-                          stopOpacity={0.18}
-                        />
-                        <stop
-                          offset="100%"
-                          stopColor="#14A078"
-                          stopOpacity={0.01}
-                        />
-                      </linearGradient>
-                    </defs>
-
-                    <CartesianGrid
-                      stroke="var(--border)"
-                      strokeDasharray="4 4"
-                      vertical={false}
-                    />
-
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(value) => value.slice(-2)}
-                      tickLine={false}
-                      axisLine={false}
-                      minTickGap={30}
-                    />
-
-                    <YAxis
-                      domain={balanceDomain}
-                      tickFormatter={(value) =>
-                        formatCompactMoney(value, language)
-                      }
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={7}
-                      width={76}
-                    />
-
-                    <Tooltip
-                      content={<BalanceTooltip language={language} />}
-                    />
-
-                    {containsToday && (
-                      <ReferenceLine
-                        x={todayIso}
-                        stroke="color-mix(in srgb, var(--primary) 55%, var(--border))"
-                        strokeDasharray="3 3"
-                        label={{
-                          value: copy("Hoje", "Today"),
-                          position: "insideTopRight",
-                          fill: "var(--muted)",
-                          fontSize: 10,
-                        }}
-                      />
-                    )}
-
-                    <Area
-                      type="monotone"
-                      dataKey="realizedBalance"
-                      name={copy(
-                        "Saldo realizado",
-                        "Actual balance"
-                      )}
-                      stroke="#14A078"
-                      strokeWidth={3}
-                      fill="url(#dashboardBalanceFill)"
-                      connectNulls={false}
-                      dot={false}
-                      activeDot={{ r: 5 }}
-                    />
-
-                    {containsProjection && (
-                      <Line
-                        type="monotone"
-                        dataKey="projectedBalance"
-                        name={copy(
-                          "Saldo projetado",
-                          "Projected balance"
-                        )}
-                        stroke="#14A078"
-                        strokeWidth={2.5}
-                        strokeDasharray="6 5"
-                        strokeOpacity={0.58}
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                      />
-                    )}
+                  <ComposedChart data={balanceChartData} margin={{ top: 14, left: 4, right: 10, bottom: 0 }}>
+                    <defs><linearGradient id="dashboardBalanceFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#14A078" stopOpacity={0.18} /><stop offset="100%" stopColor="#14A078" stopOpacity={0.01} /></linearGradient></defs>
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+                    <XAxis dataKey="date" tickFormatter={(value) => value.slice(-2)} tickLine={false} axisLine={false} minTickGap={30} />
+                    <YAxis domain={balanceDomain} tickFormatter={(value) => formatCompactMoney(value, language)} tickLine={false} axisLine={false} tickMargin={7} width={76} />
+                    <Tooltip content={<BalanceTooltip language={language} />} />
+                    {containsToday && <ReferenceLine x={todayIso} stroke="color-mix(in srgb, var(--primary) 55%, var(--border))" strokeDasharray="3 3" label={{ value: copy("Hoje", "Today"), position: "insideTopRight", fill: "var(--muted)", fontSize: 10 }} />}
+                    <Area type="monotone" dataKey="realizedBalance" name={copy("Saldo realizado", "Actual balance")} stroke="#14A078" strokeWidth={3} fill="url(#dashboardBalanceFill)" connectNulls={false} dot={false} activeDot={{ r: 5 }} />
+                    {containsProjection && <Line type="monotone" dataKey="projectedBalance" name={copy("Saldo projetado", "Projected balance")} stroke="#14A078" strokeWidth={2.5} strokeDasharray="6 5" strokeOpacity={0.58} dot={false} activeDot={{ r: 4 }} />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-            ) : (
-              <DashboardEmpty
-                icon={TrendingUp}
-                title={copy(
-                  "Ainda não há evolução para exibir",
-                  "No balance trend to show yet"
-                )}
-                description={copy(
-                  "Adicione seu primeiro lançamento para acompanhar a evolução.",
-                  "Add your first entry to start tracking your balance."
-                )}
-                action={onNewTransaction}
-                actionLabel={copy(
-                  "Adicionar lançamento",
-                  "Add entry"
-                )}
-              />
-            )}
+            ) : <DashboardEmpty icon={TrendingUp} title={copy("Ainda não há evolução para exibir", "No balance trend to show yet")} description={copy("Adicione seu primeiro lançamento para acompanhar a evolução.", "Add your first entry to start tracking your balance.")} action={onNewTransaction} actionLabel={copy("Adicionar lançamento", "Add entry")} />}
           </section>
-        </section>
-      )}
 
           <div className="dashboard-overview-lists">
             <section className="card dashboard-list-card">
