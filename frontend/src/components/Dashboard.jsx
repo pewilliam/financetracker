@@ -390,7 +390,12 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={balanceChartData}
-                    margin={{ top: 14, left: 4, right: 10, bottom: 0 }}
+                    margin={{
+                      top: 14,
+                      left: 4,
+                      right: 10,
+                      bottom: 0,
+                    }}
                   >
                     <defs>
                       <linearGradient
@@ -438,7 +443,9 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
                       width={76}
                     />
 
-                    <Tooltip content={<BalanceTooltip language={language} />} />
+                    <Tooltip
+                      content={<BalanceTooltip language={language} />}
+                    />
 
                     {containsToday && (
                       <ReferenceLine
@@ -457,7 +464,10 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
                     <Area
                       type="monotone"
                       dataKey="realizedBalance"
-                      name={copy("Saldo realizado", "Actual balance")}
+                      name={copy(
+                        "Saldo realizado",
+                        "Actual balance"
+                      )}
                       stroke="#14A078"
                       strokeWidth={3}
                       fill="url(#dashboardBalanceFill)"
@@ -497,7 +507,10 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
                   "Add your first entry to start tracking your balance."
                 )}
                 action={onNewTransaction}
-                actionLabel={copy("Adicionar lançamento", "Add entry")}
+                actionLabel={copy(
+                  "Adicionar lançamento",
+                  "Add entry"
+                )}
               />
             )}
           </section>
