@@ -300,7 +300,8 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   };
 
   const priorPlannedOpening = Number(monthData?.prior_planned_receivables_total || 0);
-  const hasSplitOpening = priorPlannedOpening > 0;
+  const isViewingCurrentMonth = getMonthPeriod({ year, month }) === "current";
+  const hasSplitOpening = priorPlannedOpening > 0 && isViewingCurrentMonth;
   const projectedOpening = monthData?.opening_balance_projected ?? (Number(monthData?.opening_balance || 0) + priorPlannedOpening);
   const tableOpeningEyebrow = hasSplitOpening ? (
     <>

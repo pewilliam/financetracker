@@ -9,6 +9,7 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
   const period = getMonthPeriod(item);
   const isCurrent = period === "current";
   const isFuture = period === "future";
+  const isPast = period === "past";
   const net = Number(item.total_income || 0) - Number(item.total_expenses || 0);
   const totalMovement = Number(item.total_expenses || 0) + Number(item.total_income || 0);
   const incomeShare = totalMovement ? (Number(item.total_income || 0) / totalMovement) * 100 : 50;
@@ -17,16 +18,16 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
   const movementClass = net > 0 ? "money-income" : net < 0 ? "money-expense" : "money-neutral";
   const monthName = new Intl.DateTimeFormat(language, { month: "long" }).format(new Date(Number(item.year), Number(item.month) - 1, 1));
   const normalizedMonthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-  const displayedBalance = isCurrent ? item.current_balance : item.closing_balance;
   const labelText = language === "en-US" ? {
     expenses: isFuture ? "Projected expenses" : "Expenses",
     income: isFuture ? "Projected income" : "Income",
-    closing: isFuture ? "Projection" : isCurrent ? "Current balance" : "Closing",
+    closing: isFuture ? "Projection" : "Closing balance",
+    current: "Current balance",
     currentBadge: "CURRENT MONTH",
     futureBadge: "FUTURE",
     count: `${Number(item.transaction_count || 0)} ${Number(item.transaction_count || 0) === 1 ? "entry" : "entries"}${isFuture ? " expected" : ""}`,
     result: isFuture ? "Projected result" : "Month result",
-    startedWith: "Started with",
+    startedWith: "Opening balance",
     projectedClosing: "Projected closing",
     quickAdd: "Add entry",
     view: "Open month",
@@ -34,17 +35,63 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
   } : {
     expenses: isFuture ? "Gastos previstos" : "Gastos",
     income: isFuture ? "Ganhos previstos" : "Ganhos",
-    closing: isFuture ? "Projeção" : isCurrent ? "Saldo atual" : "Fechamento",
+    closing: isFuture ? "Projeção" : "Saldo final",
+    current: "Saldo atual",
     currentBadge: "MÊS ATUAL",
     futureBadge: "FUTURO",
     count: formatTransactionCount(item.transaction_count, isFuture),
     result: isFuture ? "Resultado previsto" : "Resultado do mês",
-    startedWith: "Começou com",
+    startedWith: "Saldo inicial",
     projectedClosing: "Fechamento previsto",
     quickAdd: "Adicionar",
     view: "Abrir mês",
     flow: "Fluxo do mês"
   };
+
+  const balanceBlock = featured && isCurrent ? (
+    <div className="month-card-balance featured-balance featured-balance-triple">
+      <div className="month-balance-metric">
+        <span>{labelText.startedWith}</span>
+        <AnimatedMoney value={item.opening_balance} />
+      </div>
+      <div className="month-balance-metric primary">
+        <span>{labelText.current}</span>
+        <AnimatedMoney value={item.current_balance} />
+      </div>
+      <div className="month-balance-metric projected">
+        <span>{labelText.projectedClosing}</span>
+        <AnimatedMoney value={item.closing_balance} />
+      </div>
+    </div>
+  ) : isFuture ? (
+    <div className="month-card-balance featured-balance">
+      <div className="month-balance-metric">
+        <span>{labelText.startedWith}</span>
+        <AnimatedMoney value={item.opening_balance} />
+      </div>
+      <div className="month-balance-metric projected">
+        <span>{labelText.projectedClosing}</span>
+        <AnimatedMoney value={item.closing_balance} />
+      </div>
+    </div>
+  ) : isPast ? (
+    <div className="month-card-balance featured-balance">
+      <div className="month-balance-metric">
+        <span>{labelText.startedWith}</span>
+        <AnimatedMoney value={item.opening_balance} />
+      </div>
+      <div className="month-balance-metric primary">
+        <span>{labelText.closing}</span>
+        <AnimatedMoney value={item.closing_balance} />
+      </div>
+    </div>
+  ) : (
+    <div className="month-card-balance">
+      <span>{labelText.current}</span>
+      <AnimatedMoney value={item.current_balance} />
+      <small>{labelText.startedWith} {formatMoney(item.opening_balance, language)}</small>
+    </div>
+  );
 
   return (
     <article className={`month-card ${period}${featured ? " featured" : ""}`} data-months-tour={tourTarget}>
@@ -59,24 +106,7 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
         </button>
       </header>
       <div className="month-card-body">
-        {featured && isCurrent ? (
-          <div className="month-card-balance featured-balance">
-            <div className="month-balance-metric primary">
-              <span>{labelText.closing}</span>
-              <AnimatedMoney value={displayedBalance} />
-            </div>
-            <div className="month-balance-metric projected">
-              <span>{labelText.projectedClosing}</span>
-              <AnimatedMoney value={item.closing_balance} />
-            </div>
-          </div>
-        ) : (
-          <div className="month-card-balance">
-            <span>{labelText.closing}</span>
-            <AnimatedMoney value={displayedBalance} />
-            <small>{labelText.startedWith} {formatMoney(item.opening_balance, language)}</small>
-          </div>
-        )}
+        {balanceBlock}
 
         <div className="month-flow" aria-label={labelText.flow}>
           <div className="month-flow-values">
@@ -110,5 +140,3 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
     </article>
   );
 }
-
-

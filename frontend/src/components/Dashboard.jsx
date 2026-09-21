@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/format.js";
-import { isInvoiceTransaction } from "../app/helpers.js";
+import { getMonthPeriod, isInvoiceTransaction } from "../app/helpers.js";
 import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
 
@@ -205,7 +205,20 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
     });
   }, [balanceSeries, monthData, todayIso]);
   const balanceDomain = chartDomain(balanceChartData.flatMap((item) => [item.balance, item.projectedBalance].filter((value) => value != null)));
-  const balanceVariation = toNumber(safeSummary.current_balance) - toNumber(monthData?.opening_balance);
+  const period = getMonthPeriod({
+    year: monthData?.year ?? safeSummary.year,
+    month: monthData?.month ?? safeSummary.month,
+  });
+  const isPastMonth = period === "past";
+  const isFutureMonth = period === "future";
+  const openingBalance = monthData?.opening_balance;
+  const closingBalance = monthData?.closing_balance ?? safeSummary.current_balance;
+  const balanceEndValue = isPastMonth
+    ? closingBalance
+    : isFutureMonth
+      ? safeSummary.projected_closing
+      : safeSummary.current_balance;
+  const balanceVariation = toNumber(balanceEndValue) - toNumber(openingBalance);
   const containsToday = balanceChartData.some((item) => item.date === todayIso);
   const containsProjection = balanceChartData.some((item) => item.projectedBalance != null);
   const hasBalanceActivity = transactions.length > 0
@@ -290,11 +303,55 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       )
       : t("dashboard.futureNet", { value: formatMoney(safeSummary.future_net, language) });
 
+  const balanceCard = isPastMonth || isFutureMonth
+    ? {
+      id: "balance",
+      label: copy("Saldo inicial", "Opening balance"),
+      value: formatMoney(openingBalance, language),
+      tone: "balance",
+      icon: WalletCards,
+      comparison: isFutureMonth
+        ? <ComparisonMeta value={balanceChange} language={language} />
+        : (
+          <span className="stat-comparison neutral">
+            {copy("Início do período", "Period opening")}
+          </span>
+        )
+    }
+    : {
+      id: "balance",
+      label: t("dashboard.currentBalance"),
+      value: formatMoney(safeSummary.current_balance, language),
+      tone: "balance",
+      icon: WalletCards,
+      opening: formatMoney(openingBalance, language),
+      comparison: <ComparisonMeta value={balanceChange} language={language} />
+    };
+
+  const closingCard = isPastMonth
+    ? {
+      id: "projection",
+      label: copy("Saldo final", "Closing balance"),
+      value: formatMoney(closingBalance, language),
+      tone: "projection",
+      icon: CalendarClock,
+      comparison: <ComparisonMeta value={balanceChange} language={language} />
+    }
+    : {
+      id: "projection",
+      label: t("dashboard.closingProjection"),
+      value: hasProjection ? formatMoney(safeSummary.projected_closing, language) : copy("Indisponível", "Unavailable"),
+      tone: "projection",
+      icon: CalendarClock,
+      badge: copy("Projeção", "Projection"),
+      meta: projectionMeta
+    };
+
   const cards = [
-    { id: "balance", label: t("dashboard.currentBalance"), value: formatMoney(safeSummary.current_balance, language), tone: "balance", icon: WalletCards, comparison: <ComparisonMeta value={balanceChange} language={language} /> },
+    balanceCard,
     { id: "income", label: t("dashboard.monthIncome"), value: formatMoney(safeSummary.total_income, language), tone: "income", icon: TrendingUp, comparison: <ComparisonMeta value={incomeChange} language={language} /> },
     { id: "expense", label: t("dashboard.monthExpenses"), value: formatMoney(safeSummary.total_expenses, language), tone: "expense", icon: TrendingDown, comparison: <ComparisonMeta value={expenseChange} inverse language={language} /> },
-    { id: "projection", label: t("dashboard.closingProjection"), value: hasProjection ? formatMoney(safeSummary.projected_closing, language) : copy("Indisponível", "Unavailable"), tone: "projection", icon: CalendarClock, badge: copy("Projeção", "Projection"), meta: projectionMeta }
+    closingCard
   ];
   const sections = [
     { id: "overview", label: copy("Visão geral", "Overview") },
@@ -324,7 +381,16 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
           const Icon = card.icon;
           return (
             <article className={`card stat-card dashboard-stat-card stat-card-${card.tone}`} key={card.id}>
-              <div className="dashboard-stat-head"><span className="dashboard-stat-icon"><Icon size={17} /></span>{card.badge && <span className="projection-badge"><Clock3 size={12} /> {card.badge}</span>}</div>
+              <div className="dashboard-stat-head">
+                <span className="dashboard-stat-icon"><Icon size={17} /></span>
+                {card.opening && (
+                  <span className="opening-badge">
+                    <small>{copy("Inicial", "Opening")}</small>
+                    <strong>{card.opening}</strong>
+                  </span>
+                )}
+                {card.badge && <span className="projection-badge"><Clock3 size={12} /> {card.badge}</span>}
+              </div>
               <p className="stat-label">{card.label}</p>
               <p className="stat-value">{card.value}</p>
               {card.comparison || <div className="stat-meta">{card.meta}</div>}
@@ -345,8 +411,14 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
             <div className="dashboard-card-head balance-head">
               <div><p className="eyebrow">{copy("Fluxo do mês", "Monthly cash flow")}</p><h2>{t("dashboard.balanceEvolution")}</h2></div>
               <div className="balance-head-summary">
-                <span><small>{copy("Início", "Opening")}</small><strong>{formatMoney(monthData?.opening_balance, language)}</strong></span>
-                <span><small>{copy("Saldo atual", "Current")}</small><strong>{formatMoney(safeSummary.current_balance, language)}</strong></span>
+                <span><small>{copy("Saldo inicial", "Opening balance")}</small><strong>{formatMoney(monthData?.opening_balance, language)}</strong></span>
+                {isPastMonth ? (
+                  <span><small>{copy("Saldo final", "Closing balance")}</small><strong>{formatMoney(closingBalance, language)}</strong></span>
+                ) : isFutureMonth ? (
+                  <span><small>{copy("Projeção", "Projection")}</small><strong>{formatMoney(safeSummary.projected_closing, language)}</strong></span>
+                ) : (
+                  <span><small>{copy("Saldo atual", "Current")}</small><strong>{formatMoney(safeSummary.current_balance, language)}</strong></span>
+                )}
                 <span className={movementClass(balanceVariation)}><small>{copy("Variação", "Change")}</small><strong><MovementIcon value={balanceVariation} />{formatMoney(balanceVariation, language)}</strong></span>
               </div>
             </div>
