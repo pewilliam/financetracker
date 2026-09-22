@@ -1891,11 +1891,17 @@ select {
   font-size: 21px;
 }
 .month-card.featured .month-card-body {
-  grid-template-columns: minmax(360px, 1.35fr) minmax(280px, 1fr) minmax(200px, .65fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, .8fr);
+  grid-template-areas:
+    "balance balance"
+    "flow result";
   align-items: stretch;
-  gap: 16px;
+  gap: 14px;
   padding: 8px 22px 18px;
 }
+.month-card.featured .month-card-balance { grid-area: balance; }
+.month-card.featured .month-flow { grid-area: flow; }
+.month-card.featured .month-result { grid-area: result; }
 .month-card.featured .month-card-balance,
 .month-card.featured .month-flow,
 .month-card.featured .month-result {
@@ -1920,7 +1926,7 @@ select {
   border-color: color-mix(in srgb, var(--primary) 16%, var(--border));
   background: color-mix(in srgb, var(--card) 78%, transparent);
 }
-.month-card-balance.featured-balance-triple {
+.month-card.featured .month-card-balance.featured-balance-triple {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .month-balance-metric {
@@ -1946,18 +1952,29 @@ select {
   font-size: clamp(15px, 1.5vw, 18px);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.04em;
+  letter-spacing: -.03em;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .month-balance-metric.primary > span:nth-child(2) {
   color: color-mix(in srgb, var(--text) 92%, var(--primary));
-  font-size: clamp(18px, 2vw, 26px);
+  font-size: clamp(16px, 1.7vw, 22px);
 }
 .month-balance-metric.projected > span:nth-child(2) {
   color: color-mix(in srgb, var(--text) 70%, var(--muted));
   font-size: clamp(16px, 1.7vw, 22px);
+}
+.month-card:not(.featured) .month-balance-metric {
+  container-type: inline-size;
+}
+.month-card:not(.featured) .month-balance-metric > span:nth-child(2),
+.month-card:not(.featured) .month-balance-metric.primary > span:nth-child(2),
+.month-card:not(.featured) .month-balance-metric.projected > span:nth-child(2) {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(12px, 14cqi, 22px);
+  text-overflow: clip;
 }
 .month-card-balance.featured-balance-triple .month-balance-metric.primary > span:nth-child(2) {
   font-size: clamp(17px, 1.8vw, 24px);
@@ -2185,10 +2202,10 @@ select {
 
 @media (max-width: 1100px) {
   .month-card.featured .month-card-body {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .month-card.featured .month-card-balance {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "balance balance"
+      "flow result";
   }
 }
 
@@ -2199,6 +2216,10 @@ select {
   }
   .month-card.featured .month-card-body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "balance"
+      "flow"
+      "result";
     gap: 10px;
     padding: 6px 15px 14px 18px;
   }
@@ -2208,7 +2229,8 @@ select {
     gap: 13px;
   }
   .month-card-balance.featured-balance,
-  .month-card-balance.featured-balance-triple {
+  .month-card-balance.featured-balance-triple,
+  .month-card.featured .month-card-balance.featured-balance-triple {
     grid-template-columns: minmax(0, 1fr);
     gap: 13px;
   }
