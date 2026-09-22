@@ -1,0 +1,16 @@
+{
+  "name": "Finance Tracker",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "cd backend && . .venv/bin/activate && set -a && . ../.env && set +a && uvicorn app.main:app --host 0.0.0.0 --port 8010 --reload"
+    },
+    {
+      "name": "frontend",
+      "command": "cd frontend && npm run dev"
+    }
+  ],
+  "ports": [5173, 8010]
+}
