@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { CalendarClock, ChevronLeft, ChevronRight, Menu, Plus } from "lucide-react";
 import Dashboard from "../Dashboard.jsx";
@@ -28,6 +28,7 @@ import DeleteInstallmentModal from "../../modals/DeleteInstallmentModal.jsx";
 import BatchTransactionModal from "../../modals/BatchTransactionModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
+import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, nextDueDateFromDay, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
 import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCategories, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
@@ -37,7 +38,6 @@ export default function AppShell() {
   const { t, language } = useI18n();
   const { user } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -116,6 +116,7 @@ export default function AppShell() {
   const [receivableDetailsId, setReceivableDetailsId] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [pageOverlayOpen, setPageOverlayOpen] = useState(false);
+  const [invoiceItemsOverlay, setInvoiceItemsOverlay] = useState(false);
   const [budgetMobileTab, setBudgetMobileTab] = useState("categories");
   const [dashboardSection, setDashboardSection] = useState("overview");
   const viewGeneration = useRef(0);
@@ -151,7 +152,7 @@ export default function AppShell() {
     () => receivableGroupForId(receivables, receivableDetailsId),
     [receivableDetailsId, receivables]
   );
-  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen;
+  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
   // Lock the body (preserving scroll position) for overlays and, on mobile, for
   // the sidebar drawer so the content behind it does not jump back to the top.
   const bodyLocked = overlayOpen || (menuOpen && isMobile);
@@ -546,9 +547,15 @@ export default function AppShell() {
 
   const openInvoiceItems = (invoiceId) => {
     if (!invoiceId) return;
+    const invoice = invoices.find((item) => item.id === invoiceId);
+    if (!invoice) {
+      toast.error(language === "en-US" ? "Invoice not found." : "Fatura não encontrada.");
+      return;
+    }
     setDrawerOpen(false);
     setEditing(null);
-    navigate("/faturas", { state: { openInvoiceItemsId: invoiceId } });
+    void ensureExtras(["categories", "expenseOptions"]);
+    invoiceModals.openItems(invoice);
   };
 
   const openReceivableDetails = async (receivable) => {
@@ -1177,6 +1184,30 @@ export default function AppShell() {
     }
   };
 
+  const invoiceModals = useInvoiceItemModals({
+    invoices,
+    categories,
+    expenseOptions: receivableExpenseOptions,
+    allowOverdueInvoiceEdits,
+    addItem,
+    updateItem: saveItem,
+    updateDueDate: saveInvoiceDueDate,
+    createInstallment: createNewInstallment,
+    deleteItem,
+    deleteInstallmentItem: removeInstallmentItem,
+    deleteInvoice: removeInvoice,
+    onManageReceivable: manageExpenseReceivable,
+    onCreateCategory: saveCategory,
+    onLoadCategoryDetails: loadCategoryExpenseDetails,
+    onLoadInvoiceItems: loadInvoiceDetails,
+    onEnsureExpenseContext: () => ensureExtras(["expenseOptions"]),
+    onViewInstallment: showInstallmentDetails,
+  });
+
+  useEffect(() => {
+    setInvoiceItemsOverlay(invoiceModals.overlayOpen);
+  }, [invoiceModals.overlayOpen]);
+
   return (
     <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
       <Toaster position="top-right" />
@@ -1254,6 +1285,7 @@ export default function AppShell() {
       {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}
       {receivableToDelete && <DeleteReceivableModal receivable={receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={() => removeReceivable(receivableToDelete)} />}
       {transactionToDelete && <DeleteTransactionModal transaction={transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => removeTransaction(transactionToDelete.id)} />}
+      {invoiceModals.element}
     </div>
   );
 }

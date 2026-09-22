@@ -1,19 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Filter, Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import InvoiceCard from "../components/InvoiceCard.jsx";
-import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
-import InvoiceItemModal from "../modals/InvoiceItemModal.jsx";
-import InvoiceItemsModal from "../modals/InvoiceItemsModal.jsx";
-import InvoiceDueDateModal from "../modals/InvoiceDueDateModal.jsx";
-import DeleteInvoiceModal from "../modals/DeleteInvoiceModal.jsx";
-import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
-import InstallmentModal from "../modals/InstallmentModal.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { defaultInstallmentForm, invoiceAcceptsNewCharges, normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
+import { useInvoiceItemModals } from "../hooks/useInvoiceItemModals.jsx";
+import { normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 import { formatMoney } from "../utils/format.js";
-import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 
 export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, openModal, onViewInstallment }) {
   const { t, language } = useI18n();
@@ -24,19 +17,26 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
-  const [editingItem, setEditingItem] = useState(null);
-  const [viewingItem, setViewingItem] = useState(null);
-  const [creatingEntry, setCreatingEntry] = useState(null);
-  const [itemsInvoiceId, setItemsInvoiceId] = useState(null);
-  const [dueDateInvoiceId, setDueDateInvoiceId] = useState(null);
-  const [deletingInvoiceId, setDeletingInvoiceId] = useState(null);
-  const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
   const statusMenuRef = useRef(null);
-  const findInvoice = (invoiceId) => invoiceId === null ? null : invoices.find((invoice) => invoice.id === invoiceId) || null;
-  const itemsInvoice = findInvoice(itemsInvoiceId);
-  const dueDateInvoice = findInvoice(dueDateInvoiceId);
-  const deletingInvoice = findInvoice(deletingInvoiceId);
-  const invoiceOverlayOpen = Boolean(creatingEntry || editingItem || viewingItem || itemsInvoice || dueDateInvoice || deletingInvoice);
+  const invoiceModals = useInvoiceItemModals({
+    invoices,
+    categories,
+    expenseOptions,
+    allowOverdueInvoiceEdits,
+    addItem,
+    updateItem,
+    updateDueDate,
+    createInstallment,
+    deleteItem,
+    deleteInstallmentItem,
+    deleteInvoice,
+    onManageReceivable,
+    onCreateCategory,
+    onLoadCategoryDetails,
+    onLoadInvoiceItems,
+    onEnsureExpenseContext,
+    onViewInstallment,
+  });
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
   const statusOrder = ["open", "paid"];
@@ -63,19 +63,17 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   }, []);
 
   useEffect(() => {
-    onOverlayChange?.(invoiceOverlayOpen);
+    onOverlayChange?.(invoiceModals.overlayOpen);
     return () => onOverlayChange?.(false);
-  }, [invoiceOverlayOpen, onOverlayChange]);
+  }, [invoiceModals.overlayOpen, onOverlayChange]);
 
   useEffect(() => {
     const invoiceId = Number(location.state?.openInvoiceItemsId);
     if (!invoiceId) return;
     const target = invoices.find((invoice) => Number(invoice.id) === invoiceId);
     if (target) {
-      setCreatingEntry(null);
-      setEditingItem(null);
-      setViewingItem(null);
-      setItemsInvoiceId(target.id);
+      invoiceModals.openItems(target);
+      navigate("/faturas", { replace: true, state: {} });
       return;
     }
     if (invoices.length) toast.error(language === "en-US" ? "Invoice not found." : "Fatura não encontrada.");
@@ -131,23 +129,6 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   ].filter((group) => group.id !== "other" || group.items.length > 0);
 
   useEffect(() => {
-    if (itemsInvoice?.items_included === false) onLoadInvoiceItems?.([itemsInvoice.id]);
-  }, [itemsInvoice, onLoadInvoiceItems]);
-
-  useEffect(() => {
-    if (!viewingItem?.invoice) return;
-    const monthKey = yearMonthKey(viewingItem.invoice.due_date);
-    const ids = invoices
-      .filter((invoice) => invoice.items_included === false && yearMonthKey(invoice.due_date) === monthKey)
-      .map((invoice) => invoice.id);
-    if (ids.length) onLoadInvoiceItems?.(ids);
-  }, [invoices, onLoadInvoiceItems, viewingItem]);
-
-  useEffect(() => {
-    if (creatingEntry || editingItem || viewingItem || itemsInvoice) onEnsureExpenseContext?.();
-  }, [creatingEntry, editingItem, itemsInvoice, viewingItem]);
-
-  useEffect(() => {
     setExpandedGroups((current) => {
       const next = {};
       invoiceGroups.forEach((group) => {
@@ -160,101 +141,6 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   const toggleGroup = (groupId) => {
     setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
   };
-
-  const saveEditedItem = async (payload) => {
-    if (!editingItem) return;
-    await updateItem(editingItem.invoice.id, editingItem.item.id, payload);
-    setEditingItem(null);
-  };
-
-  const saveNewEntry = async (payload) => {
-    if (!creatingEntry) return;
-    await addItem(creatingEntry.invoice.id, payload);
-    setCreatingEntry(null);
-  };
-
-  const saveNewInstallment = async (payload) => {
-    const created = await createInstallment(payload);
-    if (created === false) return;
-    setCreatingEntry(null);
-    setInstallmentForm(defaultInstallmentForm());
-  };
-
-  const closeInvoiceItems = () => {
-    setItemsInvoiceId(null);
-    if (location.state?.openInvoiceItemsId) navigate("/faturas", { replace: true, state: {} });
-  };
-
-  const openEntryModal = (invoice, kind) => {
-    setEditingItem(null);
-    setViewingItem(null);
-    setInstallmentForm(defaultInstallmentForm(invoice.id));
-    setCreatingEntry({ invoice, kind, entryMode: "single" });
-  };
-
-  const setEntryMode = (entryMode) => {
-    setCreatingEntry((current) => current ? { ...current, entryMode } : current);
-  };
-
-  const closeEntryModal = () => {
-    setCreatingEntry(null);
-    setInstallmentForm(defaultInstallmentForm());
-  };
-
-  const manageReceivable = (option) => {
-    setEditingItem(null);
-    setViewingItem(null);
-    onManageReceivable?.(option);
-  };
-
-  const invoiceItemInsight = ({ invoice: targetInvoice, item: targetItem, context }) => {
-    const targetCategories = targetItem.categories?.length ? targetItem.categories : targetItem.category ? [targetItem.category] : [];
-    const category = targetCategories[0];
-    if (!category) return null;
-    const targetIsRefund = context === "invoice" && Number(targetItem.amount) < 0;
-    if (!targetIsRefund) {
-      return buildUnifiedExpenseInsight(expenseOptions, {
-        sourceType: context === "installment" ? "installment_item" : "invoice_item",
-        sourceId: targetItem.id,
-        date: targetInvoice.due_date,
-        amount: targetItem.amount,
-      }, category, language);
-    }
-    const monthEntries = invoices
-      .filter((invoice) => yearMonthKey(invoice.due_date) === yearMonthKey(targetInvoice.due_date))
-      .flatMap((invoice) => [
-        ...(invoice.items || []).map((item) => ({ ...item, invoice, context: "invoice" })),
-        ...(invoice.installment_items || []).map((item) => ({ ...item, invoice, context: "installment" })),
-      ])
-      .filter((entry) => {
-        const entryCategories = entry.categories?.length ? entry.categories : entry.category ? [entry.category] : [];
-        const isRefund = entry.context === "invoice" && Number(entry.amount) < 0;
-        return isRefund === targetIsRefund && entryCategories.some((item) => item.id === category.id);
-      })
-      .sort((left, right) => String(left.invoice.due_date).localeCompare(String(right.invoice.due_date))
-        || String(left.created_at || "").localeCompare(String(right.created_at || ""))
-        || Number(left.id) - Number(right.id));
-    const position = monthEntries.findIndex((entry) => entry.id === targetItem.id && entry.context === context && entry.invoice.id === targetInvoice.id) + 1;
-    const categoryTotal = monthEntries.reduce((total, entry) => total + Math.abs(Number(entry.amount || 0)), 0);
-    const share = categoryTotal ? Math.min((Math.abs(Number(targetItem.amount || 0)) / categoryTotal) * 100, 100) : 0;
-    const kind = targetIsRefund
-      ? (language === "en-US" ? "refund" : "reembolso")
-      : (language === "en-US" ? "expense" : "gasto");
-    return {
-      label: language === "en-US"
-        ? `#${position} ${kind} in ${category.name} across this month's invoices`
-        : `${position}º ${kind} em ${category.name} nas faturas deste mês`,
-      share,
-      shareLabel: language === "en-US"
-        ? `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% of the invoiced category total`
-        : `${share.toLocaleString(language, { maximumFractionDigits: 1 })}% do total da categoria nas faturas`,
-    };
-  };
-
-  const viewingInsight = useMemo(
-    () => viewingItem ? invoiceItemInsight(viewingItem) : null,
-    [expenseOptions, invoices, language, viewingItem],
-  );
 
   return (
     <section>
@@ -362,11 +248,11 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
                             key={invoice.id}
                             invoice={invoice}
                             allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
-                            onAddEntry={openEntryModal}
-                            onOpenItems={(targetInvoice) => { setCreatingEntry(null); setEditingItem(null); setViewingItem(null); setItemsInvoiceId(targetInvoice.id); }}
-                            onEditDueDate={(targetInvoice) => setDueDateInvoiceId(targetInvoice.id)}
+                            onAddEntry={invoiceModals.openEntry}
+                            onOpenItems={invoiceModals.openItems}
+                            onEditDueDate={invoiceModals.openEditDueDate}
                             onTogglePaid={togglePaid}
-                            onDelete={deleteInvoice ? (targetInvoice) => setDeletingInvoiceId(targetInvoice.id) : undefined}
+                            onDelete={deleteInvoice ? invoiceModals.openDelete : undefined}
                           />
                         ))}</div>
                       ) : <div className="invoice-group-empty">{group.empty}</div>
@@ -379,96 +265,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
         </>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
       <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
-      {itemsInvoice && (
-        <InvoiceItemsModal
-          invoice={itemsInvoice}
-          expenseOptions={expenseOptions}
-          canAddToInvoice={invoiceAcceptsNewCharges(itemsInvoice, allowOverdueInvoiceEdits)}
-          onAddEntry={openEntryModal}
-          onEditItem={(targetInvoice, item) => setEditingItem({ invoice: targetInvoice, item })}
-          onViewItem={(targetInvoice, item, context) => setViewingItem({ invoice: targetInvoice, item, context })}
-          onDeleteItem={deleteItem}
-          onDeleteInstallmentItem={deleteInstallmentItem}
-          onManageReceivable={manageReceivable}
-          onViewInstallment={onViewInstallment}
-          onClose={closeInvoiceItems}
-        />
-      )}
-      {dueDateInvoice && (
-        <InvoiceDueDateModal
-          invoice={dueDateInvoice}
-          onSave={async (dueDate) => {
-            await updateDueDate(dueDateInvoice.id, dueDate);
-            setDueDateInvoiceId(null);
-          }}
-          onClose={() => setDueDateInvoiceId(null)}
-        />
-      )}
-      {deletingInvoice && (
-        <DeleteInvoiceModal
-          invoice={deletingInvoice}
-          onConfirm={async () => {
-            await deleteInvoice(deletingInvoice.id);
-            setDeletingInvoiceId(null);
-          }}
-          onClose={() => setDeletingInvoiceId(null)}
-        />
-      )}
-      {creatingEntry?.entryMode === "single" && (
-        <InvoiceEntryModal
-          kind={creatingEntry.kind}
-          invoice={creatingEntry.invoice}
-          categories={categories}
-          onCreateCategory={onCreateCategory}
-          onOpenInstallment={creatingEntry.kind === "expense" ? () => setEntryMode("batch") : undefined}
-          onSave={saveNewEntry}
-          onClose={closeEntryModal}
-        />
-      )}
-      {creatingEntry?.entryMode === "batch" && (
-        <InstallmentModal
-          form={installmentForm}
-          setForm={setInstallmentForm}
-          invoices={invoices}
-          categories={categories}
-          onCreateCategory={onCreateCategory}
-          allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
-          onOpenSingle={() => setEntryMode("single")}
-          onSubmit={saveNewInstallment}
-          onClose={closeEntryModal}
-        />
-      )}
-      {editingItem && (
-        <InvoiceItemModal
-          invoice={editingItem.invoice}
-          item={editingItem.item}
-          categories={categories}
-          expenseOption={expenseOptions.find((option) => option.source_type === "invoice_item" && option.source_id === editingItem.item.id)}
-          onManageReceivable={manageReceivable}
-          onCreateCategory={onCreateCategory}
-          onSave={saveEditedItem}
-          onClose={() => setEditingItem(null)}
-        />
-      )}
-      {viewingItem && (
-        <EntryDetailsModal
-          item={viewingItem.item}
-          context={viewingItem.context}
-          invoice={viewingItem.invoice}
-          insight={viewingInsight}
-          onLoadCategoryDetails={onLoadCategoryDetails}
-          onClose={() => setViewingItem(null)}
-          onEdit={viewingItem.context === "invoice" ? () => {
-            const target = viewingItem;
-            setViewingItem(null);
-            setEditingItem({ invoice: target.invoice, item: target.item });
-          } : undefined}
-          onViewInstallment={viewingItem.context === "installment" ? (purchaseId) => {
-            setViewingItem(null);
-            onViewInstallment?.(purchaseId);
-          } : undefined}
-        />
-      )}
+      {invoiceModals.element}
     </section>
   );
 }
