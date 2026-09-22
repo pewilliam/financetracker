@@ -2,9 +2,9 @@ import calendar
 from bisect import bisect_left
 from datetime import date, timedelta
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, or_
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, noload, selectinload
 from app.database import get_db
 from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.schemas.months import (
@@ -18,7 +18,7 @@ from app.schemas.months import (
     OpeningBalancePayload,
 )
 from app.security import get_current_user
-from app.services.wallets import money, wallet_balance
+from app.services.wallets import money, wallet_balances_as_of
 
 router = APIRouter(prefix="/api/months", tags=["months"])
 
@@ -44,6 +44,12 @@ def _to_decimal(value) -> Decimal:
     return Decimal(str(value))
 
 
+def _visible_transactions(query, db: Session, user_id: int):
+    """Keep legacy unassigned transactions and ignore archived wallets."""
+    active_wallet_ids = db.query(Wallet.id).filter(Wallet.user_id == user_id, Wallet.active.is_(True))
+    return query.filter(or_(Transaction.wallet_id.is_(None), Transaction.wallet_id.in_(active_wallet_ids)))
+
+
 def _month_bounds(year: int, month: int):
     if month < 1 or month > 12:
         raise HTTPException(status_code=400, detail="Invalid month")
@@ -57,11 +63,12 @@ def _opening_balance(db: Session, start: date, user_id: int) -> Decimal:
     wallets = db.query(Wallet).filter(Wallet.user_id == user_id, Wallet.active.is_(True)).all()
     if wallets:
         previous_day = start - timedelta(days=1)
+        balances = wallet_balances_as_of(db, wallets, previous_day)
         return sum(
             (
                 money(wallet.initial_balance)
                 if wallet.tracking_started_on == start
-                else wallet_balance(db, wallet, previous_day)
+                else balances.get(wallet.id, Decimal("0.00"))
                 if wallet.tracking_started_on < start
                 else Decimal("0.00")
                 for wallet in wallets
@@ -200,28 +207,40 @@ def _projection_planned_total(
     return in_month_total + prior_total
 
 
-def _build_month_data(db: Session, year: int, month: int, user_id: int) -> MonthResponse:
-    start, end, last_day = _month_bounds(year, month)
-    transactions = (
-        db.query(Transaction)
-        .options(
-            selectinload(Transaction.wallet),
-            selectinload(Transaction.category),
-            selectinload(Transaction.categories),
+def _transaction_link_options(include_links: bool):
+    if include_links:
+        return (
             selectinload(Transaction.linked_expense_transaction).selectinload(Transaction.categories),
             selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.categories),
             selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.template),
             selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.purchase).selectinload(InstallmentPurchase.categories),
             selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.template),
         )
+    return (
+        noload(Transaction.linked_expense_transaction),
+        noload(Transaction.linked_expense_invoice_item),
+        noload(Transaction.linked_expense_installment_item),
+    )
+
+
+def _build_month_data(db: Session, year: int, month: int, user_id: int, *, include_links: bool = True) -> MonthResponse:
+    start, end, last_day = _month_bounds(year, month)
+    transactions = _visible_transactions(
+        db.query(Transaction)
+        .options(
+            selectinload(Transaction.wallet),
+            selectinload(Transaction.category),
+            selectinload(Transaction.categories),
+            *_transaction_link_options(include_links),
+        )
         .filter(
             Transaction.user_id == user_id,
             Transaction.date >= start,
             Transaction.date <= end,
-        )
-        .order_by(Transaction.date, Transaction.id)
-        .all()
-    )
+        ),
+        db,
+        user_id,
+    ).order_by(Transaction.date, Transaction.id).all()
 
     opening_balance = _opening_balance(db, start, user_id)
     prior_planned_receivables_total = _prior_planned_receivables_total(db, start, user_id)
@@ -355,15 +374,16 @@ def _build_month_summary(
     prior_planned_receivables_total = _prior_planned_receivables_total(db, start, user_id)
     balance_effects = _wallet_balance_effects(db, start, end, user_id)
     planned_by_date = _open_receivables_by_due_date(db, start, end, user_id)
-    transaction_rows = (
+    transaction_rows = _visible_transactions(
         db.query(Transaction.date, Transaction.type, Transaction.amount)
         .filter(
             Transaction.user_id == user_id,
             Transaction.date >= start,
             Transaction.date <= end,
-        )
-        .all()
-    )
+        ),
+        db,
+        user_id,
+    ).all()
 
     total_income = sum((row.amount for row in transaction_rows if row.type == "income"), Decimal("0.00"))
     total_expenses = sum((row.amount for row in transaction_rows if row.type == "expense"), Decimal("0.00"))
@@ -412,14 +432,31 @@ def _build_month_summary(
     )
 
 
+@router.get("/summary-series", response_model=list[MonthSummaryOut])
+def get_summary_series(
+    year: int,
+    month: int,
+    count: int = Query(default=6, ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Summaries ending at year/month, oldest first. One call replaces the per-month fan-out."""
+    anchor = year * 12 + (month - 1)
+    return [
+        _build_month_summary(db, (anchor + offset) // 12, (anchor + offset) % 12 + 1, current_user.id)
+        for offset in range(1 - count, 1)
+    ]
+
+
 @router.get("/{year}/{month}", response_model=MonthResponse)
 def get_month(
     year: int,
     month: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    include_links: bool = True,
 ):
-    return _build_month_data(db, year, month, current_user.id)
+    return _build_month_data(db, year, month, current_user.id, include_links=include_links)
 
 
 @router.get("/{year}/{month}/summary", response_model=MonthSummaryOut)
@@ -489,7 +526,7 @@ def get_category_breakdown(
         for category_id in selected_ids:
             target[category_id] = target.get(category_id, Decimal("0.00")) + share
 
-    direct_transactions = (
+    direct_transactions = _visible_transactions(
         db.query(Transaction)
         .options(selectinload(Transaction.categories))
         .filter(
@@ -498,9 +535,10 @@ def get_category_breakdown(
             Transaction.invoice_id.is_(None),
             Transaction.date >= start,
             Transaction.date <= end,
-        )
-        .all()
-    )
+        ),
+        db,
+        current_user.id,
+    ).all()
     for transaction in direct_transactions:
         add_expense_amount(
             transaction,
@@ -514,7 +552,7 @@ def get_category_breakdown(
             } if include_details else None,
         )
 
-    income_transactions = (
+    income_transactions = _visible_transactions(
         db.query(Transaction)
         .options(selectinload(Transaction.categories))
         .filter(
@@ -522,9 +560,10 @@ def get_category_breakdown(
             Transaction.type == "income",
             Transaction.date >= start,
             Transaction.date <= end,
-        )
-        .all()
-    )
+        ),
+        db,
+        current_user.id,
+    ).all()
     for transaction in income_transactions:
         add_categorized_amount(income_totals, transaction, transaction.amount)
         add_income_amount(

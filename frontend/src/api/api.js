@@ -87,16 +87,22 @@ export function updatePassword(payload) {
   });
 }
 
-export function getMonth(year, month) {
-  return request(`/months/${year}/${month}`);
+export function getMonth(year, month, { includeLinks = true, signal } = {}) {
+  const query = includeLinks ? "" : "?include_links=false";
+  return request(`/months/${year}/${month}${query}`, { signal });
 }
 
-export function getMonthSummary(year, month) {
-  return request(`/months/${year}/${month}/summary`);
+export function getMonthSummary(year, month, { signal } = {}) {
+  return request(`/months/${year}/${month}/summary`, { signal });
 }
 
-export function getMonthsSummary() {
-  return request("/months/summary");
+export function getMonthSummarySeries(year, month, count = 6, { signal } = {}) {
+  const params = new URLSearchParams({ year: String(year), month: String(month), count: String(count) });
+  return request(`/months/summary-series?${params}`, { signal });
+}
+
+export function getMonthsSummary({ signal } = {}) {
+  return request("/months/summary", { signal });
 }
 
 export function setOpeningBalance(year, month, opening_balance) {
@@ -113,8 +119,8 @@ export function createTransaction(payload) {
   });
 }
 
-export function listWallets(includeArchived = true) {
-  return request(`/wallets?include_archived=${includeArchived ? "true" : "false"}`);
+export function listWallets(includeArchived = true, { signal } = {}) {
+  return request(`/wallets?include_archived=${includeArchived ? "true" : "false"}`, { signal });
 }
 
 export function getWallet(id) {
@@ -187,13 +193,21 @@ export function deleteTransaction(id) {
   return request(`/transactions/${id}`, { method: "DELETE" });
 }
 
-export function listInvoices() {
-  return request("/invoices");
+export function listInvoices({ includeItems = true, ids = [], signal } = {}) {
+  const params = new URLSearchParams();
+  if (!includeItems) params.set("include_items", "false");
+  ids.forEach((id) => params.append("ids", String(id)));
+  const query = params.toString();
+  return request(`/invoices${query ? `?${query}` : ""}`, { signal });
 }
 
-export function listInvoiceTemplates(active) {
+export function getInvoice(id, { signal } = {}) {
+  return request(`/invoices/${id}`, { signal });
+}
+
+export function listInvoiceTemplates(active, { signal } = {}) {
   const query = active === undefined ? "" : `?active=${active ? "true" : "false"}`;
-  return request(`/invoice-templates${query}`);
+  return request(`/invoice-templates${query}`, { signal });
 }
 
 export function createInvoiceTemplate(payload) {
@@ -225,13 +239,13 @@ export function createInvoice(payload) {
   });
 }
 
-export function getCategoryBreakdown(year, month, { includeDetails = false } = {}) {
+export function getCategoryBreakdown(year, month, { includeDetails = false, signal } = {}) {
   const query = includeDetails ? "?include_details=true" : "";
-  return request(`/months/${year}/${month}/categories${query}`);
+  return request(`/months/${year}/${month}/categories${query}`, { signal });
 }
 
-export function getMonthlyBudgetPlan(year, month) {
-  return request(`/budget-plans/${year}/${month}`);
+export function getMonthlyBudgetPlan(year, month, { signal } = {}) {
+  return request(`/budget-plans/${year}/${month}`, { signal });
 }
 
 export function updateMonthlyBudgetPlan(year, month, payload) {
@@ -248,8 +262,8 @@ export function updateBudgetReserveRule(year, month, payload) {
   });
 }
 
-export function listCategories() {
-  return request("/categories");
+export function listCategories({ signal } = {}) {
+  return request("/categories", { signal });
 }
 
 export function createCategory(payload) {
@@ -326,20 +340,20 @@ export function listInstallmentPage({ tab = "active", search = "", categoryIds =
   return request(`/installments/page?${params}`);
 }
 
-export function listReceivables() {
-  return request("/receivables");
+export function listReceivables({ signal } = {}) {
+  return request("/receivables", { signal });
 }
 
-export function listReceivableExpenseOptions() {
-  return request("/receivables/expense-options");
+export function listReceivableExpenseOptions({ signal } = {}) {
+  return request("/receivables/expense-options", { signal });
 }
 
-export function listLinkedReceivableTransactions() {
-  return request("/receivables/linked-transactions");
+export function listLinkedReceivableTransactions({ signal } = {}) {
+  return request("/receivables/linked-transactions", { signal });
 }
 
-export function listReceivablePeople() {
-  return request("/receivables/people");
+export function listReceivablePeople({ signal } = {}) {
+  return request("/receivables/people", { signal });
 }
 
 export function createReceivablePerson(payload) {

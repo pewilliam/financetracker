@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
-from app.routers.invoices import delete_invoice
+from app.routers.invoices import delete_invoice, list_invoices
 from app.services.invoices import create_invoice_with_transaction
 
 
@@ -96,6 +96,21 @@ class InvoiceDeletionTests(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertIsNotNone(self.db.get(Invoice, invoice.id))
+
+    def test_invoice_summary_counts_items_without_returning_them(self):
+        invoice = self._invoice()
+        self.db.add(InvoiceItem(invoice_id=invoice.id, description="Compra", amount=Decimal("25.00")))
+        self.db.commit()
+
+        rows = list_invoices(include_items=False, db=self.db, current_user=self.current_user)
+        detailed = list_invoices(include_items=True, ids=[invoice.id], db=self.db, current_user=self.current_user)
+
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(rows[0].items_included)
+        self.assertEqual(rows[0].item_count, 1)
+        self.assertEqual(rows[0].items, [])
+        self.assertEqual(len(detailed), 1)
+        self.assertEqual(len(detailed[0].items), 1)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import Simulation, SimulationItem, User
-from app.routers.months import _build_month_data, _summarize_month_data
+from app.routers.months import _build_month_summary
 from app.schemas.simulations import (
     SimulationCreate,
     SimulationItemPayload,
@@ -184,18 +184,24 @@ def preview_simulation(
     current_balance = Decimal("0.00")
     for index in range(start_index, end_index + 1):
         month_value = month_from_index(index)
-        year, month = (int(part) for part in month_value.split("-"))
-        month_summary = _summarize_month_data(
-            _build_month_data(db, year, month, current_user.id)
-        )
-        if index == start_index:
-            current_balance = month_summary.current_balance
+        if payload.include_real or index == start_index:
+            year, month = (int(part) for part in month_value.split("-"))
+            month_summary = _build_month_summary(db, year, month, current_user.id)
+            if index == start_index:
+                current_balance = month_summary.current_balance
+            income = month_summary.total_income if payload.include_real else Decimal("0.00")
+            expenses = month_summary.total_expenses if payload.include_real else Decimal("0.00")
+            closing = month_summary.projected_closing if payload.include_real else current_balance
+        else:
+            income = Decimal("0.00")
+            expenses = Decimal("0.00")
+            closing = current_balance
         real_months.append(
             RealMonth(
                 month=month_value,
-                total_income=month_summary.total_income,
-                total_expenses=month_summary.total_expenses,
-                projected_closing=month_summary.projected_closing,
+                total_income=income,
+                total_expenses=expenses,
+                projected_closing=closing,
             )
         )
 

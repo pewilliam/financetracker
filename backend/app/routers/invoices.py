@@ -1,9 +1,10 @@
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
+from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
 from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
 from app.security import get_current_user
 from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
@@ -12,23 +13,96 @@ from app.services.categories import category_ids_from_payload, get_user_categori
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
 
+def _invoice_detail_options():
+    return (
+        selectinload(Invoice.template),
+        selectinload(Invoice.items).selectinload(InvoiceItem.categories),
+        selectinload(Invoice.items).selectinload(InvoiceItem.category),
+        selectinload(Invoice.installment_items)
+        .selectinload(InstallmentItem.purchase)
+        .selectinload(InstallmentPurchase.categories),
+        selectinload(Invoice.installment_items)
+        .selectinload(InstallmentItem.purchase)
+        .selectinload(InstallmentPurchase.category),
+    )
+
+
+def _invoice_query(db: Session, user_id: int, *, include_items: bool):
+    options = _invoice_detail_options() if include_items else (selectinload(Invoice.template),)
+    return (
+        db.query(Invoice)
+        .options(*options)
+        .filter(Invoice.user_id == user_id)
+        .order_by(Invoice.due_date, Invoice.id)
+    )
+
+
+def _invoice_summaries(db: Session, invoices: list[Invoice]) -> list[InvoiceOut]:
+    invoice_ids = [invoice.id for invoice in invoices]
+    item_counts = {}
+    installment_counts = {}
+    if invoice_ids:
+        item_counts = dict(
+            db.query(InvoiceItem.invoice_id, func.count(InvoiceItem.id))
+            .filter(InvoiceItem.invoice_id.in_(invoice_ids))
+            .group_by(InvoiceItem.invoice_id)
+            .all()
+        )
+        installment_counts = dict(
+            db.query(InstallmentItem.invoice_id, func.count(InstallmentItem.id))
+            .filter(InstallmentItem.invoice_id.in_(invoice_ids))
+            .group_by(InstallmentItem.invoice_id)
+            .all()
+        )
+    return [
+        InvoiceOut(
+            id=invoice.id,
+            template_id=invoice.template_id,
+            name=invoice.name,
+            color=invoice.color,
+            due_date=invoice.due_date,
+            total_amount=invoice.total_amount,
+            paid=invoice.paid,
+            linked_transaction_id=invoice.linked_transaction_id,
+            created_at=invoice.created_at,
+            items_included=False,
+            item_count=int(item_counts.get(invoice.id, 0)),
+            installment_item_count=int(installment_counts.get(invoice.id, 0)),
+        )
+        for invoice in invoices
+    ]
+
+
 @router.get("", response_model=list[InvoiceOut])
 def list_invoices(
+    include_items: bool = True,
+    ids: Annotated[list[int] | None, Query()] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    invoices = (
-        db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.template),
-            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
-        )
-        .filter(Invoice.user_id == current_user.id)
-        .order_by(Invoice.due_date)
-        .all()
+    query = _invoice_query(db, current_user.id, include_items=include_items)
+    if ids:
+        query = query.filter(Invoice.id.in_(ids))
+    invoices = query.all()
+    if include_items:
+        return invoices
+    return _invoice_summaries(db, invoices)
+
+
+@router.get("/{invoice_id}", response_model=InvoiceOut)
+def get_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    invoice = (
+        _invoice_query(db, current_user.id, include_items=True)
+        .filter(Invoice.id == invoice_id)
+        .first()
     )
-    return invoices
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
 
 
 @router.post("", response_model=InvoiceOut)
@@ -62,11 +136,7 @@ def update_invoice(
 ):
     invoice = (
         db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.template),
-            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
-        )
+        .options(*_invoice_detail_options())
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -90,11 +160,7 @@ def set_invoice_paid(
 ):
     invoice = (
         db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.template),
-            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
-        )
+        .options(*_invoice_detail_options())
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -127,10 +193,7 @@ def delete_invoice(
 ):
     invoice = (
         db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.installment_items),
-        )
+        .options(*_invoice_detail_options())
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -167,11 +230,7 @@ def add_invoice_item(
 ):
     invoice = (
         db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.template),
-            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
-        )
+        .options(*_invoice_detail_options())
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -208,11 +267,7 @@ def delete_invoice_item(
 ):
     invoice = (
         db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.template),
-            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
-        )
+        .options(*_invoice_detail_options())
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )
@@ -251,11 +306,7 @@ def update_invoice_item(
 ):
     invoice = (
         db.query(Invoice)
-        .options(
-            selectinload(Invoice.items),
-            selectinload(Invoice.template),
-            selectinload(Invoice.installment_items).selectinload(InstallmentItem.purchase),
-        )
+        .options(*_invoice_detail_options())
         .filter(Invoice.id == invoice_id, Invoice.user_id == current_user.id)
         .first()
     )

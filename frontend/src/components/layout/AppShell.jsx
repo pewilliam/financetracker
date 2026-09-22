@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { CalendarClock, ChevronLeft, ChevronRight, Menu, Plus } from "lucide-react";
@@ -30,7 +30,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, nextDueDateFromDay, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummary, getMonthsSummary, listCategories, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCategories, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -58,6 +58,8 @@ export default function AppShell() {
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [receivableExpenseOptions, setReceivableExpenseOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [dashboardLoadError, setDashboardLoadError] = useState(false);
   const [menuOpen, setMenuOpen] = useState(() => {
     if (isMobileViewport()) return false;
@@ -69,6 +71,10 @@ export default function AppShell() {
       return true;
     }
   });
+
+  useEffect(() => {
+    document.title = "Kashy365";
+  }, []);
 
   useEffect(() => {
     if (isMobileViewport()) return;
@@ -110,7 +116,14 @@ export default function AppShell() {
   const [pageOverlayOpen, setPageOverlayOpen] = useState(false);
   const [budgetMobileTab, setBudgetMobileTab] = useState("categories");
   const [dashboardSection, setDashboardSection] = useState("overview");
-  const monthLoadSequence = useRef(0);
+  const viewGeneration = useRef(0);
+  const invoiceDetailRequests = useRef(new Set());
+  const extrasInFlight = useRef(new Set());
+  const seriesGeneration = useRef(0);
+  const freshRef = useRef({ period: "", flags: {} });
+  const invoicesRef = useRef(invoices);
+  const loadViewRef = useRef(null);
+  invoicesRef.current = invoices;
   const selectedPeriodRef = useRef({ year, month, language });
   selectedPeriodRef.current = { year, month, language };
 
@@ -164,157 +177,269 @@ export default function AppShell() {
     if (location.pathname !== "/meses") setReceivableDetailsId(null);
   }, [location.pathname]);
 
-  async function refresh({ showLoading = true } = {}) {
-    const requestedPeriod = { year, month, language };
-    const selectedAtStart = selectedPeriodRef.current;
-    if (
-      requestedPeriod.year !== selectedAtStart.year
-      || requestedPeriod.month !== selectedAtStart.month
-      || requestedPeriod.language !== selectedAtStart.language
-    ) return;
-    const loadSequence = ++monthLoadSequence.current;
-    const isCurrentPeriod = () => {
-      const selectedPeriod = selectedPeriodRef.current;
-      return loadSequence === monthLoadSequence.current
-        && requestedPeriod.year === selectedPeriod.year
-        && requestedPeriod.month === selectedPeriod.month
-        && requestedPeriod.language === selectedPeriod.language;
-    };
-    if (showLoading) {
-      setLoading(true);
-      if (location.pathname === "/") setDashboardLoadError(false);
+  const periodResources = new Set(["month", "monthSlim", "summary", "summaryPrevious", "summarySeries", "categoryBreakdown", "previousBreakdown", "budgetPlan"]);
+
+  function rememberPeriod() {
+    const period = `${year}-${month}`;
+    if (freshRef.current.period === period) return;
+    const flags = {};
+    for (const [key, value] of Object.entries(freshRef.current.flags)) {
+      if (!periodResources.has(key)) flags[key] = value;
     }
-    let dashboardPriorityLoaded = false;
-    try {
-      const offsets = [-5, -4, -3, -2, -1, 0];
+    freshRef.current = { period, flags };
+  }
+
+  function isFresh(name) {
+    rememberPeriod();
+    const flags = freshRef.current.flags;
+    if (name === "monthSlim" && (flags.month || flags.monthSlim)) return true;
+    if (name === "summary" && (flags.summary || flags.summarySeries)) return true;
+    if (name === "summaryPrevious" && (flags.summaryPrevious || flags.summarySeries)) return true;
+    return Boolean(flags[name]);
+  }
+
+  function markFresh(name) {
+    rememberPeriod();
+    freshRef.current.flags[name] = true;
+    if (name === "month") freshRef.current.flags.monthSlim = true;
+    if (name === "summarySeries") {
+      freshRef.current.flags.summary = true;
+      freshRef.current.flags.summaryPrevious = true;
+    }
+  }
+
+  function invalidateResources(names) {
+    rememberPeriod();
+    names.forEach((name) => {
+      delete freshRef.current.flags[name];
+    });
+  }
+
+  function resourcesForView() {
+    const settingsSection = new URLSearchParams(location.search).get("secao") || "conta";
+    if (location.pathname === "/") {
+      const names = ["monthSlim", "summary", "summaryPrevious", "invoiceHeaders"];
+      if (dashboardSection === "history") names.push("summarySeries");
+      if (dashboardSection === "categories") names.push("categories", "categoryBreakdown");
+      return names;
+    }
+    if (location.pathname === "/meses") return ["month", "summary", "monthCards", "invoiceHeaders", "expenseOptions"];
+    if (location.pathname === "/categorias") return ["categories", "categoryBreakdown", "previousBreakdown", "budgetPlan"];
+    if (location.pathname === "/carteiras") return ["wallets"];
+    if (location.pathname === "/faturas" || location.pathname === "/parcelamentos") return ["invoiceHeaders", "categories"];
+    if (location.pathname === "/simulador") return ["invoiceHeaders", "monthCards"];
+    if (location.pathname === "/recebiveis") return ["receivables", "linked", "categories"];
+    if (location.pathname === "/configuracoes") {
+      if (settingsSection === "modelos") return ["templates"];
+      if (settingsSection === "financeiro") return ["summary", "categories"];
+      if (settingsSection === "dados") return ["monthSlim"];
+      return [];
+    }
+    return ["monthSlim", "summary", "summaryPrevious", "invoiceHeaders"];
+  }
+
+  function blocksFirstPaint(name) {
+    if (name === "summarySeries") return false;
+    if (location.pathname === "/" && (name === "categories" || name === "categoryBreakdown")) return false;
+    return true;
+  }
+
+  function mergeInvoiceHeaders(current, headers) {
+    const details = new Map(current.filter((item) => item.items_included !== false).map((item) => [item.id, item]));
+    return headers
+      .map((row) => {
+        const detailed = details.get(row.id);
+        if (!detailed) return row;
+        return { ...detailed, ...row, items: detailed.items, installment_items: detailed.installment_items, items_included: true };
+      })
+      .sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || left.id - right.id);
+  }
+
+  async function loadMissing(missing, signal) {
+    const tasks = [];
+    const alive = () => !signal.aborted && selectedPeriodRef.current.year === year && selectedPeriodRef.current.month === month;
+
+    if (missing.includes("summarySeries") || missing.includes("summary") || missing.includes("summaryPrevious")) {
+      const count = missing.includes("summarySeries") ? 6 : 2;
+      const generation = ++seriesGeneration.current;
+      tasks.push((async () => {
+        const rows = await getMonthSummarySeries(year, month, count, { signal });
+        if (!alive() || generation !== seriesGeneration.current) return;
+        const currentRow = rows.find((item) => item.year === year && item.month === month) || rows.at(-1);
+        setSummary(currentRow);
+        setComparisons(rows);
+        markFresh(count >= 6 ? "summarySeries" : "summaryPrevious");
+        markFresh("summary");
+      })());
+    }
+    if (missing.includes("month") || missing.includes("monthSlim")) {
+      const includeLinks = missing.includes("month");
+      tasks.push((async () => {
+        const payload = await getMonth(year, month, { includeLinks, signal });
+        if (!alive()) return;
+        setMonthData(payload);
+        markFresh(includeLinks ? "month" : "monthSlim");
+      })());
+    }
+    if (missing.includes("invoiceHeaders")) {
+      tasks.push((async () => {
+        const payload = await listInvoices({ includeItems: false, signal });
+        if (!alive()) return;
+        setInvoices((current) => mergeInvoiceHeaders(current, payload));
+        markFresh("invoiceHeaders");
+      })());
+    }
+    if (missing.includes("categories")) {
+      tasks.push((async () => {
+        const payload = await listCategories({ signal });
+        if (!alive()) return;
+        setCategories(payload);
+        markFresh("categories");
+      })());
+    }
+    if (missing.includes("wallets")) {
+      tasks.push((async () => {
+        const payload = await listWallets(true, { signal });
+        if (!alive()) return;
+        setWalletSummary(payload);
+        markFresh("wallets");
+      })());
+    }
+    if (missing.includes("templates")) {
+      tasks.push((async () => {
+        const payload = await listInvoiceTemplates(undefined, { signal });
+        if (!alive()) return;
+        setInvoiceTemplates(payload);
+        markFresh("templates");
+      })());
+    }
+    if (missing.includes("categoryBreakdown")) {
+      tasks.push((async () => {
+        const payload = await getCategoryBreakdown(year, month, { signal });
+        if (!alive()) return;
+        setCategoryBreakdown(payload);
+        markFresh("categoryBreakdown");
+      })());
+    }
+    if (missing.includes("previousBreakdown")) {
       const previousTarget = shiftMonth(year, month, -1);
-      const priorityPayloads = {};
+      tasks.push((async () => {
+        const payload = await getCategoryBreakdown(previousTarget.year, previousTarget.month, { signal });
+        if (!alive()) return;
+        setPreviousCategoryBreakdown(payload);
+        markFresh("previousBreakdown");
+      })());
+    }
+    if (missing.includes("budgetPlan")) {
+      tasks.push((async () => {
+        const payload = await getMonthlyBudgetPlan(year, month, { signal });
+        if (!alive()) return;
+        setBudgetPlan(payload);
+        markFresh("budgetPlan");
+      })());
+    }
+    if (missing.includes("receivables")) {
+      tasks.push((async () => {
+        const payload = await listReceivables({ signal });
+        if (!alive()) return;
+        setReceivables(payload);
+        markFresh("receivables");
+      })());
+    }
+    if (missing.includes("linked")) {
+      tasks.push((async () => {
+        const payload = await listLinkedReceivableTransactions({ signal });
+        if (!alive()) return;
+        setLinkedReceivableTransactions(payload);
+        markFresh("linked");
+      })());
+    }
+    if (missing.includes("people")) {
+      tasks.push((async () => {
+        const payload = await listReceivablePeople({ signal });
+        if (!alive()) return;
+        setReceivablePeople(payload);
+        markFresh("people");
+      })());
+    }
+    if (missing.includes("expenseOptions")) {
+      tasks.push((async () => {
+        const payload = await listReceivableExpenseOptions({ signal });
+        if (!alive()) return;
+        setReceivableExpenseOptions(payload);
+        markFresh("expenseOptions");
+      })());
+    }
+    if (missing.includes("monthCards")) {
+      tasks.push((async () => {
+        const payload = await getMonthsSummary({ signal });
+        if (!alive()) return;
+        setMonthCards(payload);
+        markFresh("monthCards");
+      })());
+    }
+    await Promise.all(tasks);
+  }
 
-      if (showLoading && location.pathname === "/meses") {
-        [priorityPayloads.month, priorityPayloads.summary, priorityPayloads.monthCards] = await Promise.all([
-          getMonth(year, month),
-          getMonthSummary(year, month),
-          getMonthsSummary()
-        ]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(priorityPayloads.month);
-        setSummary(priorityPayloads.summary);
-        setMonthCards(priorityPayloads.monthCards);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/carteiras") {
-        priorityPayloads.wallets = await listWallets();
-        if (!isCurrentPeriod()) return;
-        setWalletSummary(priorityPayloads.wallets);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/categorias") {
-        [priorityPayloads.categories, priorityPayloads.categoryBreakdown, priorityPayloads.previousCategoryBreakdown, priorityPayloads.budgetPlan] = await Promise.all([
-          listCategories(),
-          getCategoryBreakdown(year, month),
-          getCategoryBreakdown(previousTarget.year, previousTarget.month),
-          getMonthlyBudgetPlan(year, month)
-        ]);
-        if (!isCurrentPeriod()) return;
-        setCategories(priorityPayloads.categories);
-        setCategoryBreakdown(priorityPayloads.categoryBreakdown);
-        setPreviousCategoryBreakdown(priorityPayloads.previousCategoryBreakdown);
-        setBudgetPlan(priorityPayloads.budgetPlan);
-        setLoading(false);
-      } else if (showLoading && location.pathname === "/") {
-        [priorityPayloads.month, priorityPayloads.summary, priorityPayloads.invoices, priorityPayloads.categoryBreakdown, priorityPayloads.comparison] = await Promise.all([
-          getMonth(year, month),
-          getMonthSummary(year, month),
-          listInvoices(),
-          getCategoryBreakdown(year, month),
-          Promise.all(offsets.map(async (offset) => {
-            const target = shiftMonth(year, month, offset);
-            const data = await getMonthSummary(target.year, target.month);
-            return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-          }))
-        ]);
-        if (!isCurrentPeriod()) return;
-        setMonthData(priorityPayloads.month);
-        setSummary(priorityPayloads.summary);
-        setInvoices(priorityPayloads.invoices);
-        setCategoryBreakdown(priorityPayloads.categoryBreakdown);
-        setComparisons(priorityPayloads.comparison);
-        dashboardPriorityLoaded = true;
-        setLoading(false);
-      }
-
-      const cachedRequest = (key, request) => Object.prototype.hasOwnProperty.call(priorityPayloads, key)
-        ? Promise.resolve(priorityPayloads[key])
-        : request();
-      const monthRequest = cachedRequest("month", () => getMonth(year, month));
-      const summaryRequest = cachedRequest("summary", () => getMonthSummary(year, month));
-      const invoicesRequest = cachedRequest("invoices", listInvoices);
-      const templatesRequest = listInvoiceTemplates();
-      const categoriesRequest = cachedRequest("categories", listCategories);
-      const walletsRequest = cachedRequest("wallets", listWallets);
-      const categoryBreakdownRequest = cachedRequest("categoryBreakdown", () => getCategoryBreakdown(year, month));
-      const previousCategoryBreakdownRequest = cachedRequest("previousCategoryBreakdown", () => getCategoryBreakdown(previousTarget.year, previousTarget.month));
-      const budgetPlanRequest = cachedRequest("budgetPlan", () => getMonthlyBudgetPlan(year, month));
-      const receivablesRequest = listReceivables();
-      const linkedReceivablesRequest = listLinkedReceivableTransactions();
-      const peopleRequest = listReceivablePeople();
-      const expenseOptionsRequest = listReceivableExpenseOptions();
-      const monthCardsRequest = cachedRequest("monthCards", getMonthsSummary);
-      const comparisonRequest = cachedRequest("comparison", () => Promise.all(offsets.map(async (offset) => {
-        const target = shiftMonth(year, month, offset);
-        const data = await getMonthSummary(target.year, target.month);
-        return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-      })));
-
-      const allPayloadsRequest = Promise.all([
-        monthRequest,
-        summaryRequest,
-        invoicesRequest,
-        templatesRequest,
-        categoriesRequest,
-        walletsRequest,
-        categoryBreakdownRequest,
-        previousCategoryBreakdownRequest,
-        budgetPlanRequest,
-        receivablesRequest,
-        linkedReceivablesRequest,
-        peopleRequest,
-        expenseOptionsRequest,
-        monthCardsRequest,
-        comparisonRequest
-      ]);
-      void allPayloadsRequest.catch(() => undefined);
-
-      const [monthPayload, summaryPayload, invoicesPayload, templatesPayload, categoriesPayload, walletsPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload] = await allPayloadsRequest;
-      if (!isCurrentPeriod()) return;
-      setMonthData(monthPayload);
-      setSummary(summaryPayload);
-      setInvoices(invoicesPayload);
-      setInvoiceTemplates(templatesPayload);
-      setCategories(categoriesPayload);
-      setWalletSummary(walletsPayload);
-      setCategoryBreakdown(categoryBreakdownPayload);
-      setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
-      setBudgetPlan(budgetPlanPayload);
-      setReceivables(receivablesPayload);
-      setLinkedReceivableTransactions(linkedReceivablesPayload);
-      setReceivablePeople(peoplePayload);
-      setReceivableExpenseOptions(expenseOptionsPayload);
-      setMonthCards(monthCardsPayload);
-      setComparisons(comparisonPayload);
+  async function loadView({ signal, showSkeleton }) {
+    const generation = ++viewGeneration.current;
+    const required = resourcesForView();
+    const missing = required.filter((name) => !isFresh(name));
+    if (!missing.length) {
+      if (generation === viewGeneration.current) setLoading(false);
+      return;
+    }
+    if (showSkeleton && missing.some(blocksFirstPaint)) setLoading(true);
+    if (location.pathname === "/" && missing.some(blocksFirstPaint)) setDashboardLoadError(false);
+    if (missing.includes("summarySeries")) setHistoryLoading(true);
+    if (missing.includes("categoryBreakdown")) setCategoriesLoading(true);
+    try {
+      await loadMissing(missing, signal);
     } catch (error) {
-      if (isCurrentPeriod()) {
-        if (location.pathname === "/" && !dashboardPriorityLoaded) setDashboardLoadError(true);
-        toast.error(t("toasts.loadDataError"));
-      }
+      if (signal.aborted || error?.name === "AbortError") return;
+      if (generation !== viewGeneration.current) return;
+      if (location.pathname === "/") setDashboardLoadError(true);
+      toast.error(t("toasts.loadDataError"));
     } finally {
-      if (showLoading && isCurrentPeriod()) setLoading(false);
+      if (generation === viewGeneration.current && !signal.aborted) {
+        setLoading(false);
+        setHistoryLoading(false);
+        setCategoriesLoading(false);
+      }
+    }
+  }
+
+  loadViewRef.current = loadView;
+
+  async function refresh() {
+    freshRef.current = { period: "", flags: {} };
+    setLoading(true);
+    if (location.pathname === "/") setDashboardLoadError(false);
+    const controller = new AbortController();
+    await loadView({ signal: controller.signal, showSkeleton: true });
+  }
+
+  async function ensureExtras(names) {
+    const missing = names.filter((name) => !isFresh(name) && !extrasInFlight.current.has(name));
+    if (!missing.length) return;
+    missing.forEach((name) => extrasInFlight.current.add(name));
+    const controller = new AbortController();
+    try {
+      await loadMissing(missing, controller.signal);
+    } finally {
+      missing.forEach((name) => extrasInFlight.current.delete(name));
     }
   }
 
   useLayoutEffect(() => {
-    setLoading(true);
-  }, [year, month, language]);
+    if (resourcesForView().some((name) => blocksFirstPaint(name) && !isFresh(name))) setLoading(true);
+  }, [year, month, location.pathname, location.search]);
 
-  useEffect(() => { refresh(); }, [year, month, language]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadViewRef.current?.({ signal: controller.signal, showSkeleton: true });
+    return () => controller.abort();
+  }, [year, month, location.pathname, location.search, dashboardSection]);
 
   const sortInvoicesByDueDate = (items) => [...items].sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || left.id - right.id);
 
@@ -329,8 +454,10 @@ export default function AppShell() {
   };
 
   const syncInvoiceCollections = async () => {
-    const invoicesPayload = await listInvoices();
-    setInvoices(invoicesPayload);
+    invalidateResources(["invoiceHeaders"]);
+    const invoicesPayload = await listInvoices({ includeItems: false });
+    setInvoices((current) => mergeInvoiceHeaders(current, invoicesPayload));
+    markFresh("invoiceHeaders");
   };
 
   const syncReceivableCollections = async () => {
@@ -344,52 +471,19 @@ export default function AppShell() {
     setLinkedReceivableTransactions(linkedReceivablesPayload);
     setReceivablePeople(peoplePayload);
     setReceivableExpenseOptions(expenseOptionsPayload);
+    markFresh("receivables");
+    markFresh("linked");
+    markFresh("people");
+    markFresh("expenseOptions");
   };
 
   const syncMonthCollections = async () => {
-    const requestedPeriod = { year, month, language };
-    const selectedAtStart = selectedPeriodRef.current;
-    if (
-      requestedPeriod.year !== selectedAtStart.year
-      || requestedPeriod.month !== selectedAtStart.month
-      || requestedPeriod.language !== selectedAtStart.language
-    ) return;
-    const loadSequence = ++monthLoadSequence.current;
-    const offsets = [-5, -4, -3, -2, -1, 0];
-    const previousTarget = shiftMonth(year, month, -1);
-    const [monthPayload, summaryPayload, categoryBreakdownPayload, previousCategoryBreakdownPayload, budgetPlanPayload, linkedReceivablesPayload, expenseOptionsPayload, monthCardsPayload, comparisonPayload, walletsPayload] = await Promise.all([
-      getMonth(year, month),
-      getMonthSummary(year, month),
-      getCategoryBreakdown(year, month),
-      getCategoryBreakdown(previousTarget.year, previousTarget.month),
-      getMonthlyBudgetPlan(year, month),
-      listLinkedReceivableTransactions(),
-      listReceivableExpenseOptions(),
-      getMonthsSummary(),
-      Promise.all(offsets.map(async (offset) => {
-        const target = shiftMonth(year, month, offset);
-        const data = await getMonthSummary(target.year, target.month);
-        return { label: formatMonthLabel(target.year, target.month, language).slice(0, 3), ...data };
-      })),
-      listWallets()
+    invalidateResources([
+      "month", "monthSlim", "summary", "summaryPrevious", "summarySeries",
+      "categoryBreakdown", "previousBreakdown", "budgetPlan", "monthCards", "wallets", "linked", "expenseOptions"
     ]);
-    const selectedPeriod = selectedPeriodRef.current;
-    if (
-      loadSequence !== monthLoadSequence.current
-      || requestedPeriod.year !== selectedPeriod.year
-      || requestedPeriod.month !== selectedPeriod.month
-      || requestedPeriod.language !== selectedPeriod.language
-    ) return;
-    setMonthData(monthPayload);
-    setSummary(summaryPayload);
-    setCategoryBreakdown(categoryBreakdownPayload);
-    setPreviousCategoryBreakdown(previousCategoryBreakdownPayload);
-    setBudgetPlan(budgetPlanPayload);
-    setLinkedReceivableTransactions(linkedReceivablesPayload);
-    setReceivableExpenseOptions(expenseOptionsPayload);
-    setMonthCards(monthCardsPayload);
-    setComparisons(comparisonPayload);
-    setWalletSummary(walletsPayload);
+    const controller = new AbortController();
+    await loadView({ signal: controller.signal, showSkeleton: false });
   };
 
   const syncInvoiceAndMonthCollections = async () => {
@@ -400,6 +494,10 @@ export default function AppShell() {
   };
 
   const balanceSeries = useMemo(() => monthData?.days?.map((day) => ({ date: day.date, balance: day.balance, hasFuture: day.has_future })) || [], [monthData]);
+  const comparisonView = useMemo(() => comparisons.map((item) => ({
+    ...item,
+    label: formatMonthLabel(item.year, item.month, language).slice(0, 3)
+  })), [comparisons, language]);
 
   const loadCategoryExpenseDetails = (targetYear = year, targetMonth = month) => getCategoryBreakdown(targetYear, targetMonth, { includeDetails: true });
 
@@ -407,7 +505,26 @@ export default function AppShell() {
     setSelectedDate(dateString);
     setEditing(null);
     setDrawerOpen(true);
+    void ensureExtras(["categories", "wallets", "expenseOptions"]);
   };
+
+  const loadInvoiceDetails = useCallback(async (ids) => {
+    const missing = [...new Set(ids)].filter((id) => {
+      const invoice = invoicesRef.current.find((item) => item.id === id);
+      return invoice && invoice.items_included === false && !invoiceDetailRequests.current.has(id);
+    });
+    if (!missing.length) return;
+    missing.forEach((id) => invoiceDetailRequests.current.add(id));
+    try {
+      const details = await listInvoices({ includeItems: true, ids: missing });
+      setInvoices((current) => {
+        const byId = new Map(details.map((invoice) => [invoice.id, { ...invoice, items_included: true }]));
+        return current.map((invoice) => byId.get(invoice.id) || invoice);
+      });
+    } finally {
+      missing.forEach((id) => invoiceDetailRequests.current.delete(id));
+    }
+  }, []);
 
   const openInvoiceItems = (invoiceId) => {
     if (!invoiceId) return;
@@ -426,13 +543,26 @@ export default function AppShell() {
     setReceivableDetailsId(receivable.id);
   };
 
-  const openTransactionEditor = (transaction) => {
+  const openTransactionEditor = async (transaction) => {
     if (isInvoiceTransaction(transaction)) {
       openInvoiceItems(transaction.invoice_id);
       return;
     }
-    setSelectedDate(transaction.date);
-    setEditing(transaction);
+    void ensureExtras(["categories", "wallets", "expenseOptions"]);
+    let current = transaction;
+    if (!isFresh("month")) {
+      try {
+        const payload = await getMonth(year, month, { includeLinks: true });
+        setMonthData(payload);
+        markFresh("month");
+        const linked = payload.days?.flatMap((day) => day.transactions || []).find((item) => item.id === transaction.id);
+        if (linked) current = linked;
+      } catch {
+        current = transaction;
+      }
+    }
+    setSelectedDate(current.date);
+    setEditing(current);
     setDrawerOpen(true);
   };
 
@@ -530,18 +660,43 @@ export default function AppShell() {
     }
   };
 
-  const openNewInvoiceModal = () => {
-    const activeTemplate = invoiceTemplates.find((template) => template.active);
-    const activeWallet = walletSummary.wallets.find((wallet) => wallet.active && wallet.is_primary) || walletSummary.wallets.find((wallet) => wallet.active);
-    const initialForm = { ...defaultInvoiceForm(), wallet_id: String(activeWallet?.id || "") };
-    setInvoiceForm(activeTemplate ? { ...initialForm, template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : initialForm);
-    setInvoiceModal(true);
+  const openNewInvoiceModal = async () => {
+    try {
+      let templates = invoiceTemplates;
+      let wallets = walletSummary.wallets;
+      const needsTemplates = !isFresh("templates");
+      const needsWallets = !isFresh("wallets");
+      if (needsTemplates || needsWallets) {
+        const [templatePayload, walletPayload] = await Promise.all([
+          needsTemplates ? listInvoiceTemplates() : null,
+          needsWallets ? listWallets() : null
+        ]);
+        if (templatePayload) {
+          templates = templatePayload;
+          setInvoiceTemplates(templatePayload);
+          markFresh("templates");
+        }
+        if (walletPayload) {
+          wallets = walletPayload.wallets || [];
+          setWalletSummary(walletPayload);
+          markFresh("wallets");
+        }
+      }
+      const activeTemplate = templates.find((template) => template.active);
+      const activeWallet = wallets.find((wallet) => wallet.active && wallet.is_primary) || wallets.find((wallet) => wallet.active);
+      const initialForm = { ...defaultInvoiceForm(), wallet_id: String(activeWallet?.id || "") };
+      setInvoiceForm(activeTemplate ? { ...initialForm, template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : initialForm);
+      setInvoiceModal(true);
+    } catch {
+      toast.error("Erro ao preparar a nova fatura");
+    }
   };
 
   const saveInvoiceTemplate = async (payload, id = null) => {
     const saved = id ? await updateInvoiceTemplate(id, payload) : await createInvoiceTemplate(payload);
     const templatesPayload = await listInvoiceTemplates();
     setInvoiceTemplates(templatesPayload);
+    markFresh("templates");
     return saved;
   };
 
@@ -869,6 +1024,7 @@ export default function AppShell() {
       setReceivableForm(initial);
     }
     setReceivableModal(true);
+    void ensureExtras(["people", "categories", "expenseOptions"]);
   };
 
   const manageExpenseReceivable = (expenseOption) => {
@@ -1027,11 +1183,11 @@ export default function AppShell() {
 
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Routes>
-              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisons} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} />} />
+              <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisonView} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} historyLoading={historyLoading} categoriesLoading={categoriesLoading} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} />} />
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage categories={categories} invoices={invoices} revision={installmentsRevision} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} onRequestDelete={requestInstallmentDelete} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
