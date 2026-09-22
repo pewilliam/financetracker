@@ -226,7 +226,7 @@ export default function AppShell() {
       if (dashboardSection === "categories") names.push("categories", "categoryBreakdown");
       return names;
     }
-    if (location.pathname === "/meses") return ["month", "summary", "monthCards", "invoiceHeaders", "expenseOptions"];
+    if (location.pathname === "/meses") return ["month", "summary", "monthCards", "invoiceHeaders", "expenseOptions", "receivables"];
     if (location.pathname === "/categorias") return ["categories", "categoryBreakdown", "previousBreakdown", "budgetPlan"];
     if (location.pathname === "/carteiras") return ["wallets"];
     if (location.pathname === "/faturas" || location.pathname === "/parcelamentos") return ["invoiceHeaders", "categories"];
@@ -244,6 +244,7 @@ export default function AppShell() {
   function blocksFirstPaint(name) {
     if (name === "summarySeries") return false;
     if (location.pathname === "/" && (name === "categories" || name === "categoryBreakdown")) return false;
+    if (location.pathname === "/meses" && name === "receivables") return false;
     return true;
   }
 
@@ -541,9 +542,22 @@ export default function AppShell() {
     navigate("/faturas", { state: { openInvoiceItemsId: invoiceId } });
   };
 
-  const openReceivableDetails = (receivable) => {
+  const openReceivableDetails = async (receivable) => {
     if (!receivable?.id) return;
-    const group = receivableGroupForId(receivables, receivable.id);
+    let group = receivableGroupForId(receivables, receivable.id);
+    if (!group) {
+      // The receivables list may not be loaded yet on screens that reference
+      // receivables from month data (e.g. monthly control). Fetch on demand and
+      // retry before giving up so the details modal can still open.
+      try {
+        const payload = await listReceivables();
+        setReceivables(payload);
+        markFresh("receivables");
+        group = receivableGroupForId(payload, receivable.id);
+      } catch {
+        group = null;
+      }
+    }
     if (!group) {
       toast.error(language === "en-US" ? "Receivable not found." : "Recebível não encontrado.");
       return;
