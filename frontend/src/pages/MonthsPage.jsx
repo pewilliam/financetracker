@@ -332,7 +332,9 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
       </div>
       {viewMode === "table" ? (
         <div ref={tableRef} data-months-tour="table">
-          <MonthlyTable days={monthData.days} summary={summary} invoices={invoices} expenseOptions={expenseOptions} onAdd={openAddForm} onEdit={onEditTransaction} onDelete={removeTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} />
+          {monthData?.days && (
+            <MonthlyTable days={monthData.days} summary={summary} invoices={invoices} expenseOptions={expenseOptions} onAdd={openAddForm} onEdit={onEditTransaction} onDelete={removeTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} />
+          )}
         </div>
       ) : (
         <div className="month-year-list">

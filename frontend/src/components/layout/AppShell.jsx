@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { CalendarClock, ChevronLeft, ChevronRight, Menu, Plus } from "lucide-react";
@@ -123,6 +123,8 @@ export default function AppShell() {
   const freshRef = useRef({ period: "", flags: {} });
   const invoicesRef = useRef(invoices);
   const loadViewRef = useRef(null);
+  const loadFailedRef = useRef(false);
+  const viewRouteRef = useRef("");
   invoicesRef.current = invoices;
   const selectedPeriodRef = useRef({ year, month, language });
   selectedPeriodRef.current = { year, month, language };
@@ -398,6 +400,7 @@ export default function AppShell() {
     } catch (error) {
       if (signal.aborted || error?.name === "AbortError") return;
       if (generation !== viewGeneration.current) return;
+      loadFailedRef.current = true;
       if (location.pathname === "/") setDashboardLoadError(true);
       toast.error(t("toasts.loadDataError"));
     } finally {
@@ -431,9 +434,13 @@ export default function AppShell() {
     }
   }
 
-  useLayoutEffect(() => {
-    if (resourcesForView().some((name) => blocksFirstPaint(name) && !isFresh(name))) setLoading(true);
-  }, [year, month, location.pathname, location.search]);
+  const viewRouteKey = `${location.pathname}?${location.search}|${year}-${month}`;
+  if (viewRouteRef.current !== viewRouteKey) {
+    viewRouteRef.current = viewRouteKey;
+    loadFailedRef.current = false;
+  }
+  const viewBlocked = resourcesForView().some((name) => blocksFirstPaint(name) && !isFresh(name));
+  if (viewBlocked && !loading && !loadFailedRef.current) setLoading(true);
 
   useEffect(() => {
     const controller = new AbortController();
