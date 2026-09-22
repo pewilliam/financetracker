@@ -134,6 +134,7 @@ export default function AppShell() {
   const allowOverdueInvoiceEdits = Boolean(user?.allow_overdue_invoice_edits);
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
   const viewingBudget = location.pathname === "/categorias";
+  const stickyMonthHeader = location.pathname === "/" || location.pathname === "/meses";
   const loadingVariant = location.pathname === "/meses" ? "months" : location.pathname === "/categorias" ? "categories" : "dashboard";
   const loadingLabel = language === "en-US"
     ? `Loading ${formatMonthLabel(year, month, language)}`
@@ -1169,7 +1170,7 @@ export default function AppShell() {
       <main className="content">
         <div className="content-inner">
           {showMonthHeader && (
-            <header className={`page-header ${viewingBudget ? "budget-page-header" : ""}`}>
+            <header className={`page-header ${viewingBudget ? "budget-page-header" : ""} ${stickyMonthHeader ? "page-header-sticky" : ""}`}>
               <div>
                 <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
                 <h1><span className="page-title-default">{t("app.title")}</span>{viewingBudget && <span className="budget-mobile-title">{t("categories.mobileTitle")}</span>}</h1>

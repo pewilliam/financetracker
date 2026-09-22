@@ -541,6 +541,18 @@ button:focus-visible {
   gap: 16px;
 }
 .page-header { margin-bottom: 24px; }
+.page-header.page-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  margin-left: -24px;
+  margin-right: -24px;
+  padding: 16px 24px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid transparent;
+  box-shadow: 0 10px 20px -18px rgba(6, 18, 13, 0.55);
+}
 .section-head {
   flex-wrap: wrap;
   margin-bottom: 24px;
@@ -7839,6 +7851,13 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   }
   .content-inner { padding: 80px 16px 96px; }
   .page-header, .section-head { align-items: flex-start; flex-direction: column; }
+  .page-header.page-header-sticky {
+    top: 56px;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
   .page-header .toolbar {
     width: 100%;
     display: grid;
