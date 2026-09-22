@@ -12,14 +12,17 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const status = daysUntil(invoice.due_date);
   const overdue = !invoice.paid && getDaysUntil(invoice.due_date) <= 0;
+  const itemsKnown = invoice.items_included !== false;
   const regularItems = invoice.items || [];
   const installmentItems = invoice.installment_items || [];
   const canAddToInvoice = invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
   const canEditDueDate = canAddToInvoice;
-  const totalItemCount = regularItems.length + installmentItems.length;
+  const totalItemCount = itemsKnown
+    ? regularItems.length + installmentItems.length
+    : Number(invoice.item_count || 0) + Number(invoice.installment_item_count || 0);
   const refundTotal = regularItems.reduce((total, item) => Number(item.amount) < 0 ? total + Math.abs(Number(item.amount)) : total, 0);
-  const categoryTotals = invoiceCategoryTotals(invoice);
-  const showCategorySummary = categoryTotals.length > 1;
+  const categoryTotals = itemsKnown ? invoiceCategoryTotals(invoice) : [];
+  const showCategorySummary = itemsKnown && categoryTotals.length > 1;
   const breakdownTotal = categoryTotals.reduce((total, entry) => total + entry.amount, 0);
   const topCategories = categoryTotals.slice(0, 3);
   const remainingCategories = categoryTotals.length - topCategories.length;

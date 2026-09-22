@@ -60,6 +60,59 @@ def user_wallet(db: Session, user_id: int, wallet_id: int | None, *, active_only
     return wallet
 
 
+def wallet_balances_as_of(db: Session, wallets: list[Wallet], as_of: date) -> dict[int, Decimal]:
+    """Balance of many wallets on one date, with a fixed number of aggregate queries."""
+    if not wallets:
+        return {}
+    wallet_ids = [wallet.id for wallet in wallets]
+    signed = case((Transaction.type == "income", Transaction.amount), else_=-Transaction.amount)
+    transaction_totals = dict(db.query(
+        Transaction.wallet_id,
+        func.coalesce(func.sum(signed), 0),
+    ).join(Wallet, Wallet.id == Transaction.wallet_id).filter(
+        Transaction.wallet_id.in_(wallet_ids),
+        Transaction.date >= Wallet.tracking_started_on,
+        Transaction.date <= as_of,
+    ).group_by(Transaction.wallet_id).all())
+    adjustment_totals = dict(db.query(
+        WalletAdjustment.wallet_id,
+        func.coalesce(func.sum(WalletAdjustment.amount), 0),
+    ).join(Wallet, Wallet.id == WalletAdjustment.wallet_id).filter(
+        WalletAdjustment.wallet_id.in_(wallet_ids),
+        WalletAdjustment.date >= Wallet.tracking_started_on,
+        WalletAdjustment.date <= as_of,
+    ).group_by(WalletAdjustment.wallet_id).all())
+    incoming_totals = dict(db.query(
+        WalletTransfer.destination_wallet_id,
+        func.coalesce(func.sum(WalletTransfer.amount), 0),
+    ).join(Wallet, Wallet.id == WalletTransfer.destination_wallet_id).filter(
+        WalletTransfer.destination_wallet_id.in_(wallet_ids),
+        WalletTransfer.date >= Wallet.tracking_started_on,
+        WalletTransfer.date <= as_of,
+    ).group_by(WalletTransfer.destination_wallet_id).all())
+    outgoing_totals = dict(db.query(
+        WalletTransfer.source_wallet_id,
+        func.coalesce(func.sum(WalletTransfer.amount), 0),
+    ).join(Wallet, Wallet.id == WalletTransfer.source_wallet_id).filter(
+        WalletTransfer.source_wallet_id.in_(wallet_ids),
+        WalletTransfer.date >= Wallet.tracking_started_on,
+        WalletTransfer.date <= as_of,
+    ).group_by(WalletTransfer.source_wallet_id).all())
+    balances = {}
+    for wallet in wallets:
+        if as_of < wallet.tracking_started_on:
+            balances[wallet.id] = Decimal("0.00")
+            continue
+        balances[wallet.id] = (
+            money(wallet.initial_balance)
+            + money(transaction_totals.get(wallet.id))
+            + money(adjustment_totals.get(wallet.id))
+            + money(incoming_totals.get(wallet.id))
+            - money(outgoing_totals.get(wallet.id))
+        )
+    return balances
+
+
 def wallet_balance(
     db: Session,
     wallet: Wallet,

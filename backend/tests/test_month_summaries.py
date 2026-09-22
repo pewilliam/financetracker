@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import MonthlyBalance, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
-from app.routers.months import _build_month_summary, _summarize_month_data, get_month, list_month_summaries
+from app.routers.months import _build_month_summary, _summarize_month_data, get_month, get_summary_series, list_month_summaries
 
 
 class MonthSummaryPerformanceTests(unittest.TestCase):
@@ -58,6 +58,8 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         march = get_month(2026, 3, self.db, current_user)
         self.assertEqual((february.opening_balance, february.closing_balance), (Decimal("500.00"), Decimal("400.00")))
         self.assertEqual((march.opening_balance, march.closing_balance), (Decimal("400.00"), Decimal("600.00")))
+        series = get_summary_series(2026, 3, 2, self.db, current_user)
+        self.assertEqual([(item.year, item.month) for item in series], [(2026, 2), (2026, 3)])
 
         comparison_date = date(2026, 2, 15)
         for target_month in (1, 2, 3):

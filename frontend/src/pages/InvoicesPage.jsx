@@ -15,7 +15,7 @@ import { defaultInstallmentForm, invoiceAcceptsNewCharges, normalizeInvoiceColor
 import { formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 
-export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, openModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, openModal, onViewInstallment }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const location = useLocation();
@@ -129,6 +129,23 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
     { id: "other", label: "Demais faturas", items: otherInvoices, empty: "Sem demais faturas." },
     { id: "paid", label: "Faturas pagas", items: paidInvoices, empty: "Sem faturas pagas." }
   ].filter((group) => group.id !== "other" || group.items.length > 0);
+
+  useEffect(() => {
+    if (itemsInvoice?.items_included === false) onLoadInvoiceItems?.([itemsInvoice.id]);
+  }, [itemsInvoice, onLoadInvoiceItems]);
+
+  useEffect(() => {
+    if (!viewingItem?.invoice) return;
+    const monthKey = yearMonthKey(viewingItem.invoice.due_date);
+    const ids = invoices
+      .filter((invoice) => invoice.items_included === false && yearMonthKey(invoice.due_date) === monthKey)
+      .map((invoice) => invoice.id);
+    if (ids.length) onLoadInvoiceItems?.(ids);
+  }, [invoices, onLoadInvoiceItems, viewingItem]);
+
+  useEffect(() => {
+    if (creatingEntry || editingItem || viewingItem || itemsInvoice) onEnsureExpenseContext?.();
+  }, [creatingEntry, editingItem, itemsInvoice, viewingItem]);
 
   useEffect(() => {
     setExpandedGroups((current) => {

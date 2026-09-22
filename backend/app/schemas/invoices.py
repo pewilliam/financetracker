@@ -65,5 +65,8 @@ class InvoiceOut(APIModel):
     paid: bool = False
     linked_transaction_id: Optional[int] = None
     created_at: Optional[datetime] = None
+    items_included: bool = True
+    item_count: int = 0
+    installment_item_count: int = 0
     items: List[InvoiceItemOut] = []
     installment_items: List[InvoiceInstallmentItemOut] = []
