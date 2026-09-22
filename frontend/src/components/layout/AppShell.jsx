@@ -85,14 +85,16 @@ export default function AppShell() {
     }
   }, [menuOpen]);
 
+  const [isMobile, setIsMobile] = useState(() => isMobileViewport());
   useEffect(() => {
     const media = window.matchMedia(MOBILE_MEDIA_QUERY);
-    const closeMobileDrawer = () => {
+    const handleViewportChange = () => {
+      setIsMobile(media.matches);
       if (media.matches) setMenuOpen(false);
     };
-    closeMobileDrawer();
-    media.addEventListener("change", closeMobileDrawer);
-    return () => media.removeEventListener("change", closeMobileDrawer);
+    handleViewportChange();
+    media.addEventListener("change", handleViewportChange);
+    return () => media.removeEventListener("change", handleViewportChange);
   }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
@@ -135,6 +137,11 @@ export default function AppShell() {
   const showMonthHeader = location.pathname === "/" || location.pathname === "/meses" || location.pathname === "/categorias";
   const viewingBudget = location.pathname === "/categorias";
   const stickyMonthHeader = location.pathname === "/" || location.pathname === "/meses";
+  const goToMonth = (nextYear, nextMonth) => {
+    setYear(nextYear);
+    setMonth(nextMonth);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
   const loadingVariant = location.pathname === "/meses" ? "months" : location.pathname === "/categorias" ? "categories" : "dashboard";
   const loadingLabel = language === "en-US"
     ? `Loading ${formatMonthLabel(year, month, language)}`
@@ -145,7 +152,9 @@ export default function AppShell() {
     [receivableDetailsId, receivables]
   );
   const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen;
-  const bodyLocked = overlayOpen;
+  // Lock the body (preserving scroll position) for overlays and, on mobile, for
+  // the sidebar drawer so the content behind it does not jump back to the top.
+  const bodyLocked = overlayOpen || (menuOpen && isMobile);
 
   useEffect(() => {
     if (bodyLocked) {
@@ -1191,13 +1200,13 @@ export default function AppShell() {
               </div>
               <div className="toolbar" data-months-tour={location.pathname === "/meses" ? "period" : undefined}>
                 {!viewingCurrentMonth && (
-                  <button className="btn month-current-btn" type="button" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}>
+                  <button className="btn month-current-btn" type="button" onClick={() => goToMonth(today.getFullYear(), today.getMonth() + 1)}>
                     <CalendarClock size={16} /> {t("actions.currentMonth")}
                   </button>
                 )}
-                <button className="btn month-nav-button" type="button" aria-label={t("actions.previous")} onClick={() => { const target = shiftMonth(year, month, -1); setYear(target.year); setMonth(target.month); }}><ChevronLeft className="month-nav-icon" size={22} /><span>{t("actions.previous")}</span></button>
-                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : ""} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) { setYear(y); setMonth(m); } }} />
-                <button className="btn month-nav-button" type="button" aria-label={t("actions.next")} onClick={() => { const target = shiftMonth(year, month, 1); setYear(target.year); setMonth(target.month); }}><ChevronRight className="month-nav-icon" size={22} /><span>{t("actions.next")}</span></button>
+                <button className="btn month-nav-button" type="button" aria-label={t("actions.previous")} onClick={() => { const target = shiftMonth(year, month, -1); goToMonth(target.year, target.month); }}><ChevronLeft className="month-nav-icon" size={22} /><span>{t("actions.previous")}</span></button>
+                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : ""} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) goToMonth(y, m); }} />
+                <button className="btn month-nav-button" type="button" aria-label={t("actions.next")} onClick={() => { const target = shiftMonth(year, month, 1); goToMonth(target.year, target.month); }}><ChevronRight className="month-nav-icon" size={22} /><span>{t("actions.next")}</span></button>
                 <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
