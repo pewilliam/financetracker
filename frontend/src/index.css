@@ -7826,28 +7826,14 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .app-layout.sidebar-open .content,
   .app-layout.sidebar-closed .content { padding-left: 0; }
   .app-layout.sidebar-open {
-    height: 100svh;
-    overflow: hidden;
     background: var(--bg);
     overscroll-behavior: none;
     touch-action: none;
   }
-  @supports (height: 100dvh) {
-    .app-layout.sidebar-open {
-      height: 100dvh;
-    }
-  }
   .app-layout.sidebar-open .content {
-    max-height: 100svh;
     background: var(--bg);
-    overflow: hidden;
     pointer-events: none;
     touch-action: none;
-  }
-  @supports (max-height: 100dvh) {
-    .app-layout.sidebar-open .content {
-      max-height: 100dvh;
-    }
   }
   .content-inner { padding: 80px 16px 96px; }
   .page-header, .section-head { align-items: flex-start; flex-direction: column; }
