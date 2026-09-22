@@ -1,6 +1,6 @@
 import { CalendarDays, CheckCircle2, ChevronRight, CircleMinus, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
-import { invoiceAcceptsNewCharges, invoiceCategoryTotals } from "../app/helpers.js";
+import { invoiceAcceptsNewCharges } from "../app/helpers.js";
 import { daysUntil, formatDateShort, formatDateWithWeekday, formatMoney, getDaysUntil } from "../utils/format.js";
 
 function invoiceColor(color) {
@@ -21,15 +21,9 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
     ? regularItems.length + installmentItems.length
     : Number(invoice.item_count || 0) + Number(invoice.installment_item_count || 0);
   const refundTotal = regularItems.reduce((total, item) => Number(item.amount) < 0 ? total + Math.abs(Number(item.amount)) : total, 0);
-  const categoryTotals = itemsKnown ? invoiceCategoryTotals(invoice) : [];
-  const showCategorySummary = itemsKnown && categoryTotals.length > 1;
-  const breakdownTotal = categoryTotals.reduce((total, entry) => total + entry.amount, 0);
-  const topCategories = categoryTotals.slice(0, 3);
-  const remainingCategories = categoryTotals.length - topCategories.length;
   const viewItemsLabel = language === "en-US"
     ? `View items (${totalItemCount})`
     : `Ver itens (${totalItemCount})`;
-  const noCategoryLabel = language === "en-US" ? "Uncategorized" : "Sem categoria";
   const addItemLabel = language === "en-US" ? "Add item" : "Adicionar item";
   const addRefundLabel = language === "en-US" ? "Add refund" : "Adicionar reembolso";
   const addItemShortLabel = language === "en-US" ? "New item" : "Novo item";
@@ -101,21 +95,6 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
       {totalItemCount === 0 && (
         <div className="invoice-items">
           <p className="muted">{tt("invoices.noItems", "Sem itens ainda.")}</p>
-        </div>
-      )}
-
-      {showCategorySummary && (
-        <div className="invoice-category-summary">
-          {topCategories.map((entry) => (
-            <div className="invoice-category-row" style={{ "--category-color": entry.color || "var(--muted)" }} key={entry.id}>
-              <span title={entry.name || noCategoryLabel}>{entry.name || noCategoryLabel}</span>
-              <strong>{formatMoney(entry.amount)}</strong>
-              <i><b style={{ width: `${breakdownTotal ? Math.max((entry.amount / breakdownTotal) * 100, 2) : 0}%` }} /></i>
-            </div>
-          ))}
-          {remainingCategories > 0 && (
-            <p>{language === "en-US" ? `+${remainingCategories} more categories` : `+${remainingCategories} outras categorias`}</p>
-          )}
         </div>
       )}
 

@@ -3754,51 +3754,6 @@ select {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.invoice-category-summary {
-  display: grid;
-  gap: 10px;
-  padding: 14px 16px 4px;
-}
-.invoice-category-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 3px 10px;
-}
-.invoice-category-row > span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.invoice-category-row > strong {
-  font-size: 12px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.invoice-category-row > i {
-  grid-column: 1 / -1;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 15%, transparent);
-}
-.invoice-category-row > i > b {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--category-color);
-}
-.invoice-category-summary > p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .modal-card.invoice-items-modal {
   width: min(860px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
