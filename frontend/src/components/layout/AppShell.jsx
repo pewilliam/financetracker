@@ -73,6 +73,10 @@ export default function AppShell() {
   });
 
   useEffect(() => {
+    document.title = "Kashy365";
+  }, []);
+
+  useEffect(() => {
     if (isMobileViewport()) return;
     try {
       localStorage.setItem("menuOpen", menuOpen ? "1" : "0");

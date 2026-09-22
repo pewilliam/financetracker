@@ -89,7 +89,7 @@ export default function AuthPage({ mode }) {
     <main className="auth-page">
       <Toaster position="top-right" />
       <section className="auth-card">
-        <div className="auth-logo"><img src={BRAND_MARK_SRC} alt="" aria-hidden="true" /></div>
+        <Link className="auth-logo" to="/" aria-label="Página inicial do Kashy365"><img src={BRAND_MARK_SRC} alt="" aria-hidden="true" /></Link>
         <h1>Kashy365</h1>
         <p>{isRegister ? "Crie sua conta para começar." : "Entre para ver seus dados financeiros."}</p>
         <form className="form-stack" onSubmit={submit}>

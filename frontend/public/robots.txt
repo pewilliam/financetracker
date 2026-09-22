@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Disallow: /meses
+Disallow: /faturas
+Disallow: /carteiras
+Disallow: /categorias
+Disallow: /parcelamentos
+Disallow: /simulador
+Disallow: /recebiveis
+Disallow: /contas-a-receber
+Disallow: /configuracoes
+Disallow: /modelos-de-fatura

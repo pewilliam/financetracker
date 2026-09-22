@@ -123,6 +123,7 @@ button:focus-visible {
   border-radius: 8px;
   color: #fff;
   background: var(--primary);
+  text-decoration: none;
 }
 .auth-logo img {
   height: 34px;
