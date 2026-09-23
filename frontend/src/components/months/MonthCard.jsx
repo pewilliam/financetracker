@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarPlus, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, CalendarPlus, CircleDollarSign, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useI18n } from "../../i18n/index.ts";
 import { formatMoney } from "../../utils/format.js";
 import AnimatedMoney from "../common/AnimatedMoney.jsx";
@@ -10,9 +10,16 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
   const isCurrent = period === "current";
   const isFuture = period === "future";
   const isPast = period === "past";
-  const net = Number(item.total_income || 0) - Number(item.total_expenses || 0);
-  const totalMovement = Number(item.total_expenses || 0) + Number(item.total_income || 0);
-  const incomeShare = totalMovement ? (Number(item.total_income || 0) / totalMovement) * 100 : 50;
+  const priorPlanned = isPast ? 0 : Number(item.prior_planned_receivables_total || 0);
+  const plannedReceivables = isPast ? 0 : Number(item.planned_receivables_total || 0);
+  const inMonthReceivables = Math.max(0, plannedReceivables - priorPlanned);
+  const projectedClosing = Number(item.closing_balance || 0) + plannedReceivables;
+  const openingValue = Number(item.opening_balance || 0) + (isFuture ? priorPlanned : 0);
+  const incomeValue = Number(item.total_income || 0) + (isFuture ? inMonthReceivables : 0);
+  const expenseValue = Number(item.total_expenses || 0);
+  const net = incomeValue - expenseValue;
+  const totalMovement = expenseValue + incomeValue;
+  const incomeShare = totalMovement ? (incomeValue / totalMovement) * 100 : 50;
   const expenseShare = totalMovement ? 100 - incomeShare : 50;
   const movementLabel = net > 0 ? "+" : net < 0 ? "−" : "";
   const movementClass = net > 0 ? "money-income" : net < 0 ? "money-expense" : "money-neutral";
@@ -31,7 +38,8 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
     projectedClosing: "Projected closing",
     quickAdd: "Add entry",
     view: "Open month",
-    flow: "Month cash flow"
+    flow: "Month cash flow",
+    receivables: `Includes ${formatMoney(plannedReceivables, language)} in receivables`
   } : {
     expenses: isFuture ? "Gastos previstos" : "Gastos",
     income: isFuture ? "Ganhos previstos" : "Ganhos",
@@ -45,14 +53,19 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
     projectedClosing: "Fechamento previsto",
     quickAdd: "Adicionar",
     view: "Abrir mês",
-    flow: "Fluxo do mês"
+    flow: "Fluxo do mês",
+    receivables: `Inclui ${formatMoney(plannedReceivables, language)} em recebíveis`
   };
+
+  const receivableNote = plannedReceivables > 0 ? (
+    <p className="month-receivable-note"><CircleDollarSign size={13} /> {labelText.receivables}</p>
+  ) : null;
 
   const balanceBlock = featured && isCurrent ? (
     <div className="month-card-balance featured-balance featured-balance-triple">
       <div className="month-balance-metric">
         <span>{labelText.startedWith}</span>
-        <AnimatedMoney value={item.opening_balance} />
+        <AnimatedMoney value={openingValue} />
       </div>
       <div className="month-balance-metric primary">
         <span>{labelText.current}</span>
@@ -60,29 +73,31 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
       </div>
       <div className="month-balance-metric projected">
         <span>{labelText.projectedClosing}</span>
-        <AnimatedMoney value={item.closing_balance} />
+        <AnimatedMoney value={projectedClosing} />
       </div>
+      {receivableNote}
     </div>
   ) : isFuture ? (
     <div className="month-card-balance featured-balance">
       <div className="month-balance-metric">
         <span>{labelText.startedWith}</span>
-        <AnimatedMoney value={item.opening_balance} />
+        <AnimatedMoney value={openingValue} />
       </div>
       <div className="month-balance-metric projected">
         <span>{labelText.projectedClosing}</span>
-        <AnimatedMoney value={item.closing_balance} />
+        <AnimatedMoney value={projectedClosing} />
       </div>
+      {receivableNote}
     </div>
   ) : isPast ? (
     <div className="month-card-balance featured-balance">
       <div className="month-balance-metric">
         <span>{labelText.startedWith}</span>
-        <AnimatedMoney value={item.opening_balance} />
+        <AnimatedMoney value={openingValue} />
       </div>
       <div className="month-balance-metric primary">
         <span>{labelText.closing}</span>
-        <AnimatedMoney value={item.closing_balance} />
+        <AnimatedMoney value={projectedClosing} />
       </div>
     </div>
   ) : (
@@ -112,11 +127,11 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
           <div className="month-flow-values">
             <div className="month-flow-metric income">
               <span><TrendingUp size={14} /> {labelText.income}</span>
-              <AnimatedMoney value={item.total_income} />
+              <AnimatedMoney value={incomeValue} />
             </div>
             <div className="month-flow-metric expense">
               <span><TrendingDown size={14} /> {labelText.expenses}</span>
-              <AnimatedMoney value={item.total_expenses} />
+              <AnimatedMoney value={expenseValue} />
             </div>
           </div>
           <div className="month-flow-track" aria-hidden="true">

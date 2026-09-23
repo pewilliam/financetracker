@@ -2023,6 +2023,20 @@ select {
   color: color-mix(in srgb, var(--text) 70%, var(--muted));
   font-size: clamp(16px, 1.7vw, 22px);
 }
+.month-receivable-note {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--planned-text) 32%, transparent);
+  color: var(--planned-text);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.month-receivable-note svg { flex: 0 0 auto; }
 .month-card:not(.featured) .month-card-balance.featured-balance {
   column-gap: 16px;
 }

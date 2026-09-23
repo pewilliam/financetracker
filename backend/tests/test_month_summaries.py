@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import MonthlyBalance, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
+from app.models import MonthlyBalance, Receivable, ReceivablePerson, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.routers.months import _build_month_summary, _summarize_month_data, get_month, get_summary_series, list_month_summaries
 
 
@@ -43,7 +43,7 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         finally:
             event.remove(self.engine, "before_cursor_execute", listener)
 
-        self.assertEqual(len(statements), 2)
+        self.assertEqual(len(statements), 3)
         self.assertEqual([(item.year, item.month) for item in result], [(2026, 3), (2026, 2), (2026, 1)])
         self.assertEqual(
             [(item.opening_balance, item.total_income, item.total_expenses, item.closing_balance, item.transaction_count) for item in result],
@@ -187,13 +187,83 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         finally:
             event.remove(self.engine, "before_cursor_execute", listener)
 
-        self.assertEqual(len(statements), 4)
+        self.assertEqual(len(statements), 5)
         self.assertEqual([(item.year, item.month) for item in result], [(2026, 3), (2026, 2), (2026, 1)])
         for item in result:
             self.assertEqual(
                 (item.opening_balance, item.total_income, item.total_expenses, item.closing_balance),
                 expected[item.month],
             )
+
+    def test_month_cards_add_open_receivables_to_current_and_future_projections(self):
+        class FixedDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 9, 15)
+
+        person = ReceivablePerson(user_id=self.user.id, name="Ana")
+        self.db.add(person)
+        self.db.flush()
+        self.db.add_all([
+            Transaction(user_id=self.user.id, date=date(2026, 8, 5), type="income", amount=Decimal("1000.00"), description="Agosto"),
+            Transaction(user_id=self.user.id, date=date(2026, 9, 5), type="income", amount=Decimal("500.00"), description="Setembro"),
+            Transaction(user_id=self.user.id, date=date(2026, 10, 5), type="expense", amount=Decimal("100.00"), description="Outubro"),
+            Receivable(
+                user_id=self.user.id,
+                person_id=person.id,
+                description="Atrasado",
+                total_amount=Decimal("30.00"),
+                received_amount=Decimal("0.00"),
+                due_date=date(2026, 8, 20),
+                status="pending",
+            ),
+            Receivable(
+                user_id=self.user.id,
+                person_id=person.id,
+                description="Parcial",
+                total_amount=Decimal("80.00"),
+                received_amount=Decimal("30.00"),
+                due_date=date(2026, 9, 20),
+                status="partial",
+            ),
+            Receivable(
+                user_id=self.user.id,
+                person_id=person.id,
+                description="Pago",
+                total_amount=Decimal("40.00"),
+                received_amount=Decimal("40.00"),
+                due_date=date(2026, 9, 12),
+                status="paid",
+            ),
+            Receivable(
+                user_id=self.user.id,
+                person_id=person.id,
+                description="Futuro",
+                total_amount=Decimal("25.00"),
+                received_amount=Decimal("0.00"),
+                due_date=date(2026, 10, 8),
+                status="pending",
+            ),
+        ])
+        self.db.commit()
+        current_user = type("CurrentUser", (), {"id": self.user.id})()
+
+        with patch("app.routers.months.date", FixedDate):
+            result = { (item.year, item.month): item for item in list_month_summaries(self.db, current_user) }
+
+        august = result[(2026, 8)]
+        september = result[(2026, 9)]
+        october = result[(2026, 10)]
+        self.assertEqual(august.planned_receivables_total, Decimal("0.00"))
+        self.assertEqual(august.closing_balance, Decimal("1000.00"))
+        self.assertEqual(september.prior_planned_receivables_total, Decimal("30.00"))
+        self.assertEqual(september.planned_receivables_total, Decimal("80.00"))
+        self.assertEqual(september.current_balance, Decimal("1500.00"))
+        self.assertEqual(september.closing_balance, Decimal("1500.00"))
+        self.assertEqual(october.prior_planned_receivables_total, Decimal("80.00"))
+        self.assertEqual(october.planned_receivables_total, Decimal("105.00"))
+        self.assertEqual(october.opening_balance, Decimal("1500.00"))
+        self.assertEqual(october.closing_balance, Decimal("1400.00"))
 
 
 if __name__ == "__main__":

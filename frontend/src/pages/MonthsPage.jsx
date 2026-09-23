@@ -221,7 +221,13 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   const yearSummaries = useMemo(() => {
     return Object.fromEntries(Object.entries(yearGroups).map(([groupYear, items]) => [
       groupYear,
-      items.reduce((total, item) => total + Number(item.total_income || 0) - Number(item.total_expenses || 0), 0)
+      items.reduce((total, item) => {
+        const period = getMonthPeriod(item);
+        const planned = period === "past" ? 0 : Number(item.planned_receivables_total || 0);
+        const prior = period === "past" ? 0 : Number(item.prior_planned_receivables_total || 0);
+        const inMonth = Math.max(0, planned - prior);
+        return total + Number(item.total_income || 0) - Number(item.total_expenses || 0) + inMonth;
+      }, 0)
     ]));
   }, [yearGroups]);
   const [expandedYears, setExpandedYears] = useState({});
@@ -369,7 +375,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
             const isExpanded = expandedYears[groupYear];
             const yearResult = yearSummaries[groupYear];
             const resultClass = yearResult > 0 ? "money-income" : yearResult < 0 ? "money-expense" : "money-neutral";
-            const includesProjections = items.some((item) => getMonthPeriod(item) === "future");
+            const includesProjections = items.some((item) => getMonthPeriod(item) === "future" || (getMonthPeriod(item) !== "past" && Number(item.planned_receivables_total || 0) > 0));
             const currentItems = items.filter((item) => getMonthPeriod(item) === "current");
             const previousItems = items.filter((item) => getMonthPeriod(item) === "past");
             const futureItems = items.filter((item) => getMonthPeriod(item) === "future");

@@ -214,6 +214,40 @@ def _projection_planned_total(
     return in_month_total + prior_total
 
 
+def _open_receivable_remainings(db: Session, user_id: int) -> list[tuple[date, Decimal]]:
+    rows = (
+        db.query(Receivable.due_date, Receivable.total_amount, Receivable.received_amount)
+        .filter(Receivable.user_id == user_id, Receivable.status != "paid")
+        .all()
+    )
+    remainings: list[tuple[date, Decimal]] = []
+    for due_date, total_amount, received_amount in rows:
+        remaining = max(_to_decimal(total_amount) - _to_decimal(received_amount), Decimal("0.00"))
+        if remaining > 0:
+            remainings.append((due_date, remaining))
+    return remainings
+
+
+def _card_planned_amounts(
+    remainings: list[tuple[date, Decimal]],
+    year: int,
+    month: int,
+    current_date: date,
+) -> tuple[Decimal, Decimal]:
+    """Prior unpaid carry and this month's open receivables. Both are zero after the month ends."""
+    start, end, _ = _month_bounds(year, month)
+    if end < current_date:
+        return Decimal("0.00"), Decimal("0.00")
+    prior = Decimal("0.00")
+    in_month = Decimal("0.00")
+    for due_date, remaining in remainings:
+        if due_date < start:
+            prior += remaining
+        elif due_date <= end:
+            in_month += remaining
+    return prior, in_month
+
+
 def _transaction_link_options(include_links: bool):
     if include_links:
         return (
@@ -763,6 +797,7 @@ def list_month_summaries(
 ):
     current_date = date.today()
     current_period = (current_date.year, current_date.month)
+    receivable_remainings = _open_receivable_remainings(db, current_user.id)
     transaction_rows = (
         db.query(Transaction.date, Transaction.type, Transaction.amount, Transaction.wallet_id)
         .filter(Transaction.user_id == current_user.id)
@@ -883,6 +918,7 @@ def list_month_summaries(
                 ), Decimal("0.00"))
                 current_balance = opening + current_transaction_net + current_balance_effect
             difference_pct = ((closing - opening) / abs(opening) * Decimal("100")) if opening else Decimal("0.00")
+            prior_planned, in_month_planned = _card_planned_amounts(receivable_remainings, row_year, row_month, current_date)
             summaries.append(MonthCardSummaryOut(
                 year=row_year,
                 month=row_month,
@@ -894,6 +930,8 @@ def list_month_summaries(
                 closing_balance=closing,
                 difference_pct=difference_pct,
                 transaction_count=totals["count"],
+                prior_planned_receivables_total=prior_planned,
+                planned_receivables_total=prior_planned + in_month_planned,
             ))
         return summaries
     if not transaction_rows:
@@ -960,6 +998,7 @@ def list_month_summaries(
         difference_pct = Decimal("0.00")
         if opening:
             difference_pct = ((closing - opening) / abs(opening)) * Decimal("100")
+        prior_planned, in_month_planned = _card_planned_amounts(receivable_remainings, row_year, row_month, current_date)
 
         summaries.append(
             MonthCardSummaryOut(
@@ -973,6 +1012,8 @@ def list_month_summaries(
                 closing_balance=closing,
                 difference_pct=difference_pct,
                 transaction_count=totals["count"],
+                prior_planned_receivables_total=prior_planned,
+                planned_receivables_total=prior_planned + in_month_planned,
             )
         )
 
