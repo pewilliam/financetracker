@@ -563,8 +563,6 @@ button:focus-visible {
 .app-layout.chrome-hidden .mobile-topbar {
   transform: translateY(calc(-100% - var(--sticky-header-lift)));
   pointer-events: none;
-  /* Leave the top immediately. The slide only plays when the bar comes back. */
-  transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .page-header.page-header-sticky,
