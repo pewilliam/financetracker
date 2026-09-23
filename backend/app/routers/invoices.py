@@ -9,9 +9,9 @@ from app.schemas.invoices import InvoiceItemCreate, InvoiceItemUpdate, InvoiceOu
 from app.security import get_current_user
 from app.services.credit_cards import relocate_invoice_item
 from app.services.invoices import (
-    card_payment_date,
     invoice_accepts_new_charges,
     recalculate_invoice_total,
+    refresh_open_payment_dates,
 )
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.subscriptions import (
@@ -105,6 +105,8 @@ def present_invoices(
 ) -> list:
     changed = bool(materialize and materialize_due_subscriptions(db, user))
     if ensure_commitment_invoices(db, user):
+        changed = True
+    if refresh_open_payment_dates(db, user.id):
         changed = True
     if changed:
         db.commit()
@@ -231,7 +233,7 @@ def set_invoice_paid(
             .first()
         )
         if linked:
-            payment_date = card_payment_date(invoice.due_date, invoice.card)
+            payment_date = invoice.payment_date
             linked.is_future = False if payload.paid else payment_date > date.today()
 
     db.commit()

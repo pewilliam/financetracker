@@ -18,7 +18,7 @@ from app.schemas.months import (
     OpeningBalancePayload,
 )
 from app.security import get_current_user
-from app.services.invoices import invoice_payment_date
+from app.services.invoices import invoice_payment_date, refresh_open_payment_dates
 from app.services.wallets import money, wallet_balances_as_of
 
 router = APIRouter(prefix="/api/months", tags=["months"])
@@ -49,6 +49,12 @@ def _visible_transactions(query, db: Session, user_id: int):
     """Keep legacy unassigned transactions and ignore archived wallets."""
     active_wallet_ids = db.query(Wallet.id).filter(Wallet.user_id == user_id, Wallet.active.is_(True))
     return query.filter(or_(Transaction.wallet_id.is_(None), Transaction.wallet_id.in_(active_wallet_ids)))
+
+
+def _shift_date(value: date, months: int) -> date:
+    index = value.year * 12 + value.month - 1 + months
+    year, month = index // 12, index % 12 + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
 
 
 def _month_bounds(year: int, month: int):
@@ -461,6 +467,8 @@ def get_month(
     current_user: User = Depends(get_current_user),
     include_links: bool = True,
 ):
+    if refresh_open_payment_dates(db, current_user.id):
+        db.commit()
     return _build_month_data(db, year, month, current_user.id, include_links=include_links)
 
 
@@ -589,6 +597,8 @@ def get_category_breakdown(
             Invoice.due_date,
             Invoice.planned_payment_date,
             CreditCard.name.label("invoice_name"),
+            CreditCard.due_day,
+            CreditCard.closing_day,
             CreditCard.payment_forecast_day,
             CreditCard.payment_forecast_kind,
         )
@@ -596,7 +606,7 @@ def get_category_breakdown(
         .filter(
             Invoice.user_id == current_user.id,
             or_(
-                and_(Invoice.due_date >= start, Invoice.due_date <= end),
+                and_(Invoice.due_date >= _shift_date(start, -1), Invoice.due_date <= _shift_date(end, 1)),
                 and_(Invoice.planned_payment_date >= start, Invoice.planned_payment_date <= end),
             ),
         )
@@ -607,7 +617,13 @@ def get_category_breakdown(
     def invoice_control_date(row) -> date:
         if row.planned_payment_date:
             return row.planned_payment_date
-        return invoice_payment_date(row.due_date, row.payment_forecast_day, row.payment_forecast_kind)
+        return invoice_payment_date(
+            row.due_date,
+            row.payment_forecast_day,
+            row.payment_forecast_kind,
+            due_day=row.due_day,
+            closing_day=row.closing_day,
+        )
     invoice_ids = list(invoices_by_id)
     if invoice_ids:
         invoice_items = (

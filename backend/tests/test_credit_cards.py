@@ -203,18 +203,28 @@ class CreditCardFlowTests(unittest.TestCase):
             self.user,
         )
         self.assertEqual(invoice.due_date, date(2026, 11, 5))
-        self.assertEqual(invoice.linked_transaction.date, date(2026, 11, 2))
-        self.assertEqual(invoice_payment_date(date(2026, 2, 5), 31), date(2026, 2, 28))
+        self.assertEqual(invoice.linked_transaction.date, date(2026, 10, 2))
+        self.assertEqual(
+            invoice_payment_date(date(2026, 3, 5), 31, "day", due_day=5, closing_day=25),
+            date(2026, 2, 28),
+        )
 
-        november = _build_month_data(self.db, 2026, 11, self.user.id)
+        october = _build_month_data(self.db, 2026, 10, self.user.id)
         placed = [
+            transaction
+            for day in october.days
+            for transaction in day.transactions
+            if transaction.invoice_id == invoice.id
+        ]
+        self.assertEqual([item.date for item in placed], [date(2026, 10, 2)])
+        november = _build_month_data(self.db, 2026, 11, self.user.id)
+        november_invoice = [
             transaction
             for day in november.days
             for transaction in day.transactions
             if transaction.invoice_id == invoice.id
         ]
-        self.assertEqual([item.date for item in placed], [date(2026, 11, 2)])
-        self.assertEqual(november.days[4].expenses, Decimal("0.00"))
+        self.assertEqual(november_invoice, [])
 
         paid = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 8, 5))
         paid.total_amount = Decimal("80.00")
@@ -233,7 +243,7 @@ class CreditCardFlowTests(unittest.TestCase):
         open_invoice = self.db.get(Invoice, invoice.id)
         settled = self.db.get(Invoice, paid.id)
         self.assertEqual(open_invoice.due_date, date(2026, 11, 5))
-        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 1))
+        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 10, 1))
         self.assertEqual(settled.linked_transaction.date, date(2026, 8, 5))
 
         update_card(
@@ -247,10 +257,22 @@ class CreditCardFlowTests(unittest.TestCase):
         self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 5))
 
     def test_forecast_rules_and_open_invoices_follow_the_card(self):
-        self.assertEqual(invoice_payment_date(date(2026, 2, 5), 31, "day"), date(2026, 2, 28))
-        self.assertEqual(invoice_payment_date(date(2024, 2, 5), 31, "day"), date(2024, 2, 29))
-        self.assertEqual(invoice_payment_date(date(2026, 2, 5), None, "last"), date(2026, 2, 28))
-        self.assertEqual(invoice_payment_date(date(2026, 4, 5), None, "first"), date(2026, 4, 1))
+        self.assertEqual(
+            invoice_payment_date(date(2026, 3, 5), 31, "day", due_day=5, closing_day=25),
+            date(2026, 2, 28),
+        )
+        self.assertEqual(
+            invoice_payment_date(date(2024, 3, 5), 31, "day", due_day=5, closing_day=25),
+            date(2024, 2, 29),
+        )
+        self.assertEqual(
+            invoice_payment_date(date(2026, 3, 5), None, "last", due_day=5, closing_day=25),
+            date(2026, 2, 28),
+        )
+        self.assertEqual(
+            invoice_payment_date(date(2026, 5, 5), None, "first", due_day=5, closing_day=25),
+            date(2026, 4, 1),
+        )
 
         drifted = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 11, 18))
         drifted.total_amount = Decimal("30.00")
@@ -269,7 +291,7 @@ class CreditCardFlowTests(unittest.TestCase):
         open_invoice = self.db.get(Invoice, drifted.id)
         settled = self.db.get(Invoice, paid.id)
         self.assertEqual(open_invoice.due_date, date(2026, 11, 10))
-        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 30))
+        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 10, 31))
         self.assertEqual(settled.due_date, date(2026, 8, 5))
         self.assertEqual(settled.linked_transaction.date, date(2026, 8, 5))
         self.assertEqual(self.db.get(CreditCard, self.card.id).payment_forecast_kind, "last")
@@ -309,14 +331,14 @@ class CreditCardFlowTests(unittest.TestCase):
 
         update_card(
             self.card.id,
-            CardUpdate(closing_day=29, due_day=5),
+            CardUpdate(closing_day=29, due_day=5, payment_forecast_kind="day", payment_forecast_day=30),
             self.db,
             self.user,
         )
         self.db.expire_all()
         current = self.db.get(Invoice, invoice.id)
         self.assertEqual(current.due_date, date(2026, 10, 5))
-        self.assertEqual(current.linked_transaction.date, date(2026, 10, 5))
+        self.assertEqual(current.linked_transaction.date, date(2026, 9, 30))
 
     def test_forecast_change_does_not_merge_open_invoices(self):
         first = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 9, 5))
@@ -332,8 +354,8 @@ class CreditCardFlowTests(unittest.TestCase):
         self.db.expire_all()
         self.assertEqual(self.db.get(Invoice, first.id).due_date, date(2026, 9, 5))
         self.assertEqual(self.db.get(Invoice, second.id).due_date, date(2026, 9, 18))
-        self.assertEqual(self.db.get(Invoice, first.id).linked_transaction.date, date(2026, 9, 30))
-        self.assertEqual(self.db.get(Invoice, second.id).linked_transaction.date, date(2026, 9, 30))
+        self.assertEqual(self.db.get(Invoice, first.id).linked_transaction.date, date(2026, 8, 30))
+        self.assertEqual(self.db.get(Invoice, second.id).linked_transaction.date, date(2026, 8, 30))
 
     def test_available_limit_uses_unpaid_invoice_totals(self):
         from app.routers.cards import list_cards
