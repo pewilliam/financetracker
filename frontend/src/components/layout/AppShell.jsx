@@ -30,7 +30,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
-import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
+import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
 import { addInvoiceItem, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
@@ -450,7 +450,8 @@ export default function AppShell() {
     loadFailedRef.current = false;
   }
   const viewBlocked = resourcesForView().some((name) => blocksFirstPaint(name) && !isFresh(name));
-  if (viewBlocked && !loading && !loadFailedRef.current) setLoading(true);
+  const monthsAlreadyVisible = location.pathname === "/meses" && Number(monthData?.year) === Number(year) && Number(monthData?.month) === Number(month);
+  if (viewBlocked && !loading && !loadFailedRef.current && !monthsAlreadyVisible) setLoading(true);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -653,7 +654,18 @@ export default function AppShell() {
             wallet_id: normalizedData.wallet_id
           });
         } else {
-          await createTransaction(normalizedData);
+          const created = await createTransaction(normalizedData);
+          setDrawerOpen(false);
+          if (location.pathname === "/meses" && mergeCreatedTransaction(monthData, created)) {
+            toast.success("Lançamento adicionado!");
+            setMonthData((current) => mergeCreatedTransaction(current, created) || current);
+            setSummary((current) => patchSummaryForTransaction(current, created));
+            setMonthCards((current) => patchMonthCardsForTransaction(current, created));
+            setComparisons((current) => current.map((item) => patchSummaryForTransaction(item, created)));
+            invalidateResources(["summarySeries", "categoryBreakdown", "previousBreakdown", "budgetPlan", "wallets", "expenseOptions"]);
+            void ensureExtras(["expenseOptions"]);
+            return;
+          }
         }
       }
       toast.success(payload.recurrenceUpdate?.enabled ? "Recorrência atualizada" : editing ? "Lançamento salvo" : "Lançamento adicionado!");

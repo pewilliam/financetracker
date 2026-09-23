@@ -11343,11 +11343,11 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   aspect-ratio: 1.586 / 1;
   overflow: hidden;
   border-radius: 22px 22px 0 0;
-  padding: 20px 22px 18px;
+  padding: 16px 22px 16px;
   color: #f7fffb;
   background:
     radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, white 34%, transparent), transparent 42%),
@@ -11382,8 +11382,11 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   letter-spacing: .06em;
 }
 .plastic-chip {
-  position: relative;
+  position: absolute;
   z-index: 1;
+  top: 50%;
+  right: 72px;
+  transform: translateY(-50%);
   width: 46px;
   height: 34px;
   border-radius: 8px;
@@ -11401,7 +11404,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .plastic-chip::before { top: 11px; }
 .plastic-chip::after { top: 22px; }
-.plastic-card-identity { display: grid; gap: 4px; }
+.plastic-card-identity { display: grid; gap: 2px; }
 .plastic-card-identity strong { font-size: 22px; letter-spacing: .01em; line-height: 1.1; }
 .plastic-card-identity span { font-size: 13px; opacity: .88; }
 .plastic-card-figures {

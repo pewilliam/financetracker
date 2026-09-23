@@ -116,10 +116,12 @@ export default function CardsPage({ onChanged, onViewCurrentInvoice }) {
             return (
               <article className={`plastic-card ${card.active ? "" : "inactive"}`} key={card.id} style={{ "--card-color": normalizeInvoiceColor(card.color) }}>
                 <div className="plastic-card-face">
-                  <div className="plastic-card-top">
-                    <span className="plastic-card-brand">{card.institution || ""}</span>
-                    {!card.active && <span className="plastic-card-badge">{tt("cards.inactive", "INATIVO")}</span>}
-                  </div>
+                  {(card.institution || !card.active) && (
+                    <div className="plastic-card-top">
+                      {card.institution ? <span className="plastic-card-brand">{card.institution}</span> : <span />}
+                      {!card.active && <span className="plastic-card-badge">{tt("cards.inactive", "INATIVO")}</span>}
+                    </div>
+                  )}
                   <span className="plastic-chip" aria-hidden="true" />
                   <div className="plastic-card-identity">
                     <strong>{card.name}</strong>
