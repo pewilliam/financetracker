@@ -10,7 +10,11 @@ from app.security import get_current_user
 from app.services.credit_cards import relocate_invoice_item
 from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
-from app.services.subscriptions import apply_subscription_projections, materialize_due_subscriptions
+from app.services.subscriptions import (
+    apply_subscription_projections,
+    ensure_commitment_invoices,
+    materialize_due_subscriptions,
+)
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -93,7 +97,10 @@ def present_invoices(
     credit_card_id: int | None = None,
     materialize: bool = True,
 ) -> list:
-    if materialize and materialize_due_subscriptions(db, user):
+    changed = bool(materialize and materialize_due_subscriptions(db, user))
+    if ensure_commitment_invoices(db, user):
+        changed = True
+    if changed:
         db.commit()
     query = _invoice_query(db, user.id, include_items=include_items)
     if ids:
@@ -109,13 +116,16 @@ def present_invoices(
         invoices,
         include_virtual=include_virtual,
     )
+    if ids:
+        requested = set(ids)
+        presented = [invoice for invoice in presented if invoice.id in requested]
     if credit_card_id is not None:
         presented = [invoice for invoice in presented if _card_id(invoice) == credit_card_id]
     real = [invoice for invoice in presented if not getattr(invoice, "is_projected", False)]
     virtual = [invoice for invoice in presented if getattr(invoice, "is_projected", False)]
-    if include_items:
-        return real + virtual
-    return _invoice_summaries(db, real) + virtual
+    combined = real + virtual if include_items else _invoice_summaries(db, real) + virtual
+    combined.sort(key=lambda invoice: (invoice.due_date, invoice.id))
+    return combined
 
 
 def load_user_invoice(db: Session, user_id: int, invoice_id: int) -> Invoice:
@@ -159,9 +169,10 @@ def get_invoice(
         ids=[invoice_id],
         materialize=True,
     )
-    if not presented:
+    chosen = next((invoice for invoice in presented if invoice.id == invoice_id), None)
+    if chosen is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return presented[0]
+    return chosen
 
 
 @router.put("/{invoice_id}", response_model=InvoiceOut)

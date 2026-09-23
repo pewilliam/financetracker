@@ -3,7 +3,7 @@ import { AlertTriangle, Loader2, Plus, Repeat2 } from "lucide-react";
 
 import { listCardSubscriptions } from "../api/api.js";
 import { useI18n } from "../i18n/index.ts";
-import { formatMoney } from "../utils/format.js";
+import { formatDateShort, formatMoney } from "../utils/format.js";
 
 export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
   const { language } = useI18n();
@@ -33,6 +33,23 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
     return () => { cancelled = true; };
   }, [revision]);
 
+  const periodLabel = (period) => ({
+    monthly: copy("Mensal", "Monthly"),
+    bimonthly: copy("Bimestral", "Every 2 months"),
+    quarterly: copy("Trimestral", "Quarterly"),
+    semiannual: copy("Semestral", "Semiannual"),
+    annual: copy("Anual", "Annual"),
+    custom: copy("Personalizada", "Custom"),
+  }[period] || copy("Mensal", "Monthly"));
+  const termLabel = (item) => {
+    if (item.term_kind === "months" && item.term_months) {
+      return copy(`${item.term_months} meses`, `${item.term_months} months`);
+    }
+    if (item.term_kind === "end_date" && item.term_end_date) {
+      return copy(`até ${formatDateShort(item.term_end_date, language)}`, `until ${formatDateShort(item.term_end_date, language)}`);
+    }
+    return copy("Prazo indeterminado", "Open-ended");
+  };
   const activeCount = items.filter((item) => item.active).length;
   const endedCount = items.length - activeCount;
   const visible = items.filter((item) => (tab === "active" ? item.active : !item.active));
@@ -44,8 +61,8 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
           <p className="eyebrow">{copy("Cobranças recorrentes", "Recurring charges")}</p>
           <h1>{copy("Assinaturas", "Subscriptions")}</h1>
           <p>{copy(
-            "A cobrança aparece nas próximas faturas como previsão e só entra no limite do cartão no dia em que é lançada.",
-            "The charge shows on upcoming invoices as a forecast and counts toward the card limit only on the day it posts.",
+            "A periodicidade define a frequência da cobrança e a duração define até quando o compromisso existe. A cobrança fica prevista até o dia em que é lançada e só então entra no limite.",
+            "Billing period sets how often the card is charged, and the commitment sets how long it lasts. A charge stays forecast until its date, and only then uses the limit.",
           )}</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={onNew}><Plus size={16} /> {copy("Nova assinatura", "New subscription")}</button>
@@ -82,7 +99,11 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
                       <small>
                         {item.card_name}
                         {" · "}
+                        {periodLabel(item.billing_period)}
+                        {" · "}
                         {copy(`dia ${item.charge_day}`, `day ${item.charge_day}`)}
+                        {" · "}
+                        {termLabel(item)}
                         {categories.length ? ` · ${categories.join(", ")}` : ""}
                       </small>
                     </div>

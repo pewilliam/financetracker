@@ -260,7 +260,11 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int, *, inclu
 
     for day in range(1, last_day + 1):
         current_date = date(year, month, day)
-        day_transactions = by_date.get(current_date, [])
+        day_transactions = [
+            tx
+            for tx in by_date.get(current_date, [])
+            if tx.invoice_id is None or Decimal(str(tx.amount or 0)) != 0
+        ]
         day_planned = [_planned_receivable_out(item) for item in planned_by_date.get(current_date, [])]
         income = sum(
             (tx.amount for tx in day_transactions if tx.type == "income"),
