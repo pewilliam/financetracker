@@ -29,21 +29,41 @@ def card_cycle_due_date(year: int, month: int, due_day: int) -> date:
     return _date_on_day(year, month, due_day)
 
 
+def closing_month_of_due(due_date: date, due_day: int, closing_day: int) -> tuple[int, int]:
+    """Month in which the invoice closes.
+
+    When the due day is on or before the closing day, the bill is due in the
+    month after closing. The payment forecast uses this closing month.
+    """
+    if int(due_day) <= int(closing_day):
+        index = due_date.year * 12 + due_date.month - 2
+        return index // 12, index % 12 + 1
+    return due_date.year, due_date.month
+
+
 def invoice_payment_date(
     due_date: date,
     payment_forecast_day: int | None = None,
     payment_forecast_kind: str | None = None,
+    *,
+    due_day: int | None = None,
+    closing_day: int | None = None,
 ) -> date:
-    """Day the invoice payment is counted on monthly control, in the due month.
+    """Day the invoice payment is counted on monthly control.
 
-    ``first`` and ``last`` follow the real length of the month, so February
-    uses day 1 or day 28/29. A fixed day that does not exist, such as 31,
-    uses the last day of that month. An empty forecast keeps the due date.
+    The day belongs to the closing month, not the due month. ``first`` and
+    ``last`` follow that month, including February. A fixed day that does not
+    exist, such as 31, uses the last day of the closing month. An empty
+    forecast keeps the due date.
     """
     kind = payment_forecast_kind or None
     if kind is None and payment_forecast_day:
         kind = "day"
-    last_day = calendar.monthrange(due_date.year, due_date.month)[1]
+    if due_day is None or closing_day is None:
+        year, month = due_date.year, due_date.month
+    else:
+        year, month = closing_month_of_due(due_date, due_day, closing_day)
+    last_day = calendar.monthrange(year, month)[1]
     if kind == "first":
         day = 1
     elif kind == "last":
@@ -52,7 +72,7 @@ def invoice_payment_date(
         day = min(int(payment_forecast_day), last_day)
     else:
         return due_date
-    return date(due_date.year, due_date.month, day)
+    return date(year, month, day)
 
 
 def apply_payment_forecast(
@@ -78,13 +98,47 @@ def apply_payment_forecast(
 def card_payment_date(due_date: date, card: CreditCard | None) -> date:
     if card is None:
         return due_date
-    return invoice_payment_date(due_date, card.payment_forecast_day, card.payment_forecast_kind)
+    return invoice_payment_date(
+        due_date,
+        card.payment_forecast_day,
+        card.payment_forecast_kind,
+        due_day=card.due_day,
+        closing_day=card.closing_day,
+    )
 
 
 def _invoice_payment_date(invoice: Invoice) -> date:
     if invoice.planned_payment_date:
         return invoice.planned_payment_date
     return card_payment_date(invoice.due_date, invoice.card)
+
+
+def refresh_open_payment_dates(db: Session, user_id: int) -> bool:
+    """Move open invoices that still follow the card onto the closing-month payment date."""
+    from sqlalchemy.orm import selectinload
+
+    invoices = (
+        db.query(Invoice)
+        .options(selectinload(Invoice.card))
+        .filter(
+            Invoice.user_id == user_id,
+            Invoice.paid.is_(False),
+            Invoice.planned_payment_date.is_(None),
+            Invoice.linked_transaction_id.isnot(None),
+        )
+        .all()
+    )
+    changed = False
+    today = date.today()
+    for invoice in invoices:
+        payment_date = _invoice_payment_date(invoice)
+        linked = db.get(Transaction, invoice.linked_transaction_id)
+        if linked is None or linked.date == payment_date:
+            continue
+        linked.date = payment_date
+        linked.is_future = payment_date > today
+        changed = True
+    return changed
 
 
 def same_cycle_due_date(

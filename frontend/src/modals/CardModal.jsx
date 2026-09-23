@@ -68,7 +68,7 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
           <div>
             <small>{tt("cards.editorEyebrow", "CARTÃO DE CRÉDITO")}</small>
             <h2 id="card-modal-title">{initial ? tt("cards.edit", "Editar cartão") : tt("cards.new", "Novo cartão")}</h2>
-            <p>{tt("cards.editorHint", "O dia de fechamento inicia um novo ciclo: uma compra nessa data entra na fatura seguinte. Faturas em aberto passam a usar o vencimento e a previsão deste cartão. Faturas pagas permanecem como foram.")}</p>
+            <p>{tt("cards.editorHint", "O fechamento inicia o ciclo: uma compra nesse dia entra na fatura seguinte. O vencimento cai no mês seguinte quando o dia é até o fechamento; senão, no mesmo mês. A previsão de pagamento usa o mês do fechamento. Faturas pagas permanecem como foram.")}</p>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} disabled={submitting} aria-label={tt("actions.close", "Fechar modal")}><X size={18} /></button>
         </div>
@@ -101,7 +101,7 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
             {form.payment_forecast_kind === "day" && (
               <input type="number" min="1" max="31" value={form.payment_forecast_day ?? ""} onChange={(event) => setForm({ ...form, payment_forecast_day: event.target.value })} onBlur={() => setForm({ ...form, payment_forecast_day: paymentForecastDay ?? "" })} placeholder={tt("cards.forecastDay", "Dia")} disabled={submitting} aria-label={tt("cards.forecastDay", "Dia")} />
             )}
-            <small id="card-payment-forecast-hint">{tt("cards.paymentForecastHint", "É o dia em que o pagamento entra no controle mensal, no mês do vencimento. No vencimento usa o dia do cartão. Primeiro e último dia acompanham o mês, inclusive fevereiro. Um dia fixo que não existe, como 31, cai no último dia daquele mês.")}</small>
+            <small id="card-payment-forecast-hint">{tt("cards.paymentForecastHint", "O dia escolhido entra no controle mensal no mês em que a fatura fecha, não no mês do vencimento. No vencimento usa a data de vencimento. Primeiro e último dia são do mês de fechamento. Um dia que esse mês não tem, como 31 em fevereiro, cai no último dia dele.")}</small>
           </div>
           <div className="invoice-field">
             <span>{tt("cards.wallet", "Carteira padrão")}</span>
