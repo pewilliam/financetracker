@@ -6,10 +6,19 @@ import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { daysUntil, formatDateWithWeekday, getDaysUntil } from "../utils/format.js";
 
-export default function InvoiceDueDateModal({ invoice, onSave, onClose }) {
+function snapToCardDueDay(value, dueDay) {
+  if (!value || !dueDay) return value;
+  const [year, month] = String(value).split("-").map(Number);
+  if (!year || !month) return value;
+  const last = new Date(year, month, 0).getDate();
+  const day = String(Math.min(Number(dueDay), last)).padStart(2, "0");
+  return `${year}-${String(month).padStart(2, "0")}-${day}`;
+}
+
+export default function InvoiceDueDateModal({ invoice, cardDueDay = null, onSave, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
-  const [dueDate, setDueDate] = useState(invoice.due_date);
+  const [dueDate, setDueDate] = useState(() => snapToCardDueDay(invoice.due_date, cardDueDay));
   const [saving, setSaving] = useState(false);
   const changed = Boolean(dueDate) && dueDate !== invoice.due_date;
   const overdue = Boolean(dueDate) && getDaysUntil(dueDate) < 0;
@@ -54,7 +63,8 @@ export default function InvoiceDueDateModal({ invoice, onSave, onClose }) {
         <div className="transaction-modal-body invoice-due-date-body">
           <div className="invoice-due-date-field">
             <span>{copy("Data de vencimento", "Due date")}</span>
-            <DateField value={dueDate} onChange={setDueDate} ariaInvalid={!dueDate} />
+            <DateField value={dueDate} onChange={(value) => setDueDate(snapToCardDueDay(value, cardDueDay))} ariaInvalid={!dueDate} />
+            {cardDueDay ? <small>{copy("O dia do vencimento segue o dia do cartão. A data salva usa esse dia no mês escolhido.", "The due day follows the card. The saved date uses that day in the month you choose.")}</small> : null}
           </div>
 
           <div className={`invoice-due-date-preview ${overdue ? "overdue" : ""}`}>

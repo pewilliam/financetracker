@@ -86,6 +86,7 @@ export default function FilterSelect({
   const optionKeyDown = (event, index) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       rootRef.current?.querySelector("button")?.focus();
     }
@@ -117,6 +118,13 @@ export default function FilterSelect({
             if (disabled) return;
             setSearch("");
             setOpen((current) => !current);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && open) {
+              event.preventDefault();
+              event.stopPropagation();
+              setOpen(false);
+            }
           }}
           aria-label={ariaLabel}
           aria-haspopup="listbox"
@@ -157,6 +165,7 @@ export default function FilterSelect({
                     focusOption(0);
                   }
                   if (event.key === "Escape") {
+                    event.stopPropagation();
                     setOpen(false);
                     rootRef.current?.querySelector("button")?.focus();
                   }

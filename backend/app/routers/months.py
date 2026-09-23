@@ -589,6 +589,7 @@ def get_category_breakdown(
             Invoice.due_date,
             CreditCard.name.label("invoice_name"),
             CreditCard.payment_forecast_day,
+            CreditCard.payment_forecast_kind,
         )
         .join(CreditCard, Invoice.credit_card_id == CreditCard.id)
         .filter(
@@ -601,7 +602,7 @@ def get_category_breakdown(
     invoices_by_id = {row.id: row for row in invoice_rows}
 
     def invoice_control_date(row) -> date:
-        return invoice_payment_date(row.due_date, row.payment_forecast_day)
+        return invoice_payment_date(row.due_date, row.payment_forecast_day, row.payment_forecast_kind)
     invoice_ids = list(invoices_by_id)
     if invoice_ids:
         invoice_items = (
