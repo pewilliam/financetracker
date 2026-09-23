@@ -3,7 +3,7 @@ import { Clock3, Coins, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "luc
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
-import { isInvoiceTransaction } from "../app/helpers.js";
+import { isInvoiceTransaction, todayIsoDate } from "../app/helpers.js";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 
 function isFutureDate(dateString) {
@@ -109,14 +109,21 @@ export default function MonthlyTable({
         const plannedReceivables = day.planned_receivables || [];
         const hasEntries = day.transactions.length || plannedReceivables.length;
         const future = day.has_future || isFutureDate(day.date);
+        const isToday = String(day.date).slice(0, 10) === todayIsoDate();
         const projectedBalance = day.projected_balance ?? day.balance;
         const hasSplitBalance = Number(projectedBalance) !== Number(day.balance);
         return (
           <div key={day.date} className={weekSeparator ? "week-block" : ""}>
             {weekSeparator && <div className="week-separator" />}
-            <div className={`day-row ${future ? "future" : ""}`} data-months-tour={index === 0 ? "entries" : undefined}>
+            <div
+              className={`day-row${isToday ? " is-today" : ""}${future ? " future" : ""}`}
+              data-day={String(day.date).slice(0, 10)}
+              data-months-tour={index === 0 ? "entries" : undefined}
+              aria-current={isToday ? "date" : undefined}
+            >
               <div className="day-date">
-                {future && <Clock3 size={15} />}
+                {isToday && <span className="today-badge">{tt("monthlyTable.today", "Hoje")}</span>}
+                {future && !isToday && <Clock3 size={15} />}
                 <span>{formatDateWithWeekday(day.date)}</span>
               </div>
 

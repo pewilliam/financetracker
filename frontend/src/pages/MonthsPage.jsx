@@ -5,7 +5,7 @@ import MonthCard from "../components/months/MonthCard.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney } from "../utils/format.js";
-import { getMonthPeriod, quickAddDate } from "../app/helpers.js";
+import { getMonthPeriod, quickAddDate, todayIsoDate } from "../app/helpers.js";
 import { MONTHS_VIEW_MODE_KEY } from "../app/constants.js";
 
 const MONTHS_TUTORIAL_VERSION = 1;
@@ -194,6 +194,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   const tutorialContent = useMemo(() => getTutorialContent(language), [language]);
   const tableRef = useRef(null);
   const [pendingTableScroll, setPendingTableScroll] = useState(false);
+  const [pendingTodayScroll, setPendingTodayScroll] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [viewMode, setViewMode] = useState(() => {
@@ -284,6 +285,27 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
     });
     return () => cancelAnimationFrame(frame);
   }, [pendingTableScroll, viewMode, year, month]);
+
+  const goToToday = () => {
+    const today = new Date();
+    setPendingTodayScroll(true);
+    setYear(today.getFullYear());
+    setMonth(today.getMonth() + 1);
+    changeView("table");
+  };
+
+  useEffect(() => {
+    if (!pendingTodayScroll || viewMode !== "table") return undefined;
+    const today = new Date();
+    if (year !== today.getFullYear() || month !== today.getMonth() + 1) return undefined;
+    const row = tableRef.current?.querySelector(`[data-day="${todayIsoDate()}"]`);
+    if (!row) return undefined;
+    const frame = requestAnimationFrame(() => {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      setPendingTodayScroll(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingTodayScroll, viewMode, year, month, monthData]);
 
   useEffect(() => {
     setExpandedYears((previous) => {
@@ -429,6 +451,10 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
           }) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>{language === "en-US" ? "No months with entries yet." : "Nenhum mês com lançamentos."}</h3><p>{language === "en-US" ? "Select + New to get started." : "Clique em + Novo para começar."}</p></div>}
         </div>
       )}
+      <button className="month-today-fab" type="button" onClick={goToToday} aria-label={tt("monthlyTable.goToToday", "Ir para o dia de hoje")}>
+        <CalendarDays size={18} />
+        <span>{tt("monthlyTable.today", "Hoje")}</span>
+      </button>
       <button className="month-new-fab" data-months-tour="new" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")}>
         <Plus size={24} />
       </button>
