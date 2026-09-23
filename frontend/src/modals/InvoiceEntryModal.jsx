@@ -7,7 +7,7 @@ import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { todayIsoDate } from "../app/helpers.js";
-import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 const BILLING_PERIODS = ["monthly", "bimonthly", "quarterly", "semiannual", "annual"];
 
