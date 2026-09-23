@@ -21,7 +21,7 @@ function isoDate(year, month, day) {
 export function invoicePeriod(closingDay, dueDay, purchaseDate) {
   const [year, month, day] = String(purchaseDate).split("-").map(Number);
   const closingThisMonth = Math.min(Number(closingDay), lastDayOfMonth(year, month));
-  const close = day <= closingThisMonth ? { year, month } : shiftMonth(year, month, 1);
+  const close = day < closingThisMonth ? { year, month } : shiftMonth(year, month, 1);
   const due = Number(dueDay) <= Number(closingDay) ? shiftMonth(close.year, close.month, 1) : close;
   return {
     closingDate: isoDate(close.year, close.month, Number(closingDay)),
@@ -42,7 +42,7 @@ export function normalizeInvoiceColor(color) {
 }
 
 export function defaultCardForm() {
-  return { name: "", institution: "", color: DEFAULT_INVOICE_COLOR, credit_limit: "", closing_day: 23, due_day: 30, default_wallet_id: "" };
+  return { name: "", institution: "", color: DEFAULT_INVOICE_COLOR, credit_limit: "", closing_day: 23, due_day: 30, payment_forecast_day: "", default_wallet_id: "" };
 }
 
 export function defaultInstallmentForm(cardId = "") {

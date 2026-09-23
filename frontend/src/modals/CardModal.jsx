@@ -18,12 +18,15 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
     credit_limit: initial.credit_limit === null || initial.credit_limit === undefined || initial.credit_limit === "" ? "" : formatMoney(initial.credit_limit, language),
     closing_day: initial.closing_day,
     due_day: initial.due_day,
+    payment_forecast_day: initial.payment_forecast_day ?? "",
     default_wallet_id: initial.default_wallet_id ? String(initial.default_wallet_id) : ""
   } : defaultCardForm());
   const [submitting, setSubmitting] = useState(false);
   const nameInputRef = useRef(null);
   const closingDay = Math.min(31, Math.max(1, Number(form.closing_day) || 1));
   const dueDay = Math.min(31, Math.max(1, Number(form.due_day) || 1));
+  const forecastValue = String(form.payment_forecast_day ?? "").trim();
+  const paymentForecastDay = forecastValue ? Math.min(31, Math.max(1, Number(forecastValue) || 1)) : null;
   useModalLifecycle({ onClose, busy: submitting, initialFocusRef: nameInputRef, autoFocus: !isMobileViewport() });
 
   const submit = async (event) => {
@@ -37,6 +40,7 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
         color: normalizeInvoiceColor(form.color),
         closing_day: closingDay,
         due_day: dueDay,
+        payment_forecast_day: paymentForecastDay,
         credit_limit: String(form.credit_limit || "").trim() ? parseTypedMoneyInput(form.credit_limit, language) : null,
         default_wallet_id: form.default_wallet_id ? Number(form.default_wallet_id) : null
       });
@@ -54,7 +58,7 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
           <div>
             <small>{tt("cards.editorEyebrow", "CARTÃO DE CRÉDITO")}</small>
             <h2 id="card-modal-title">{initial ? tt("cards.edit", "Editar cartão") : tt("cards.new", "Novo cartão")}</h2>
-            <p>{tt("cards.editorHint", "O fechamento define em qual fatura cada compra entra. Faturas já lançadas não são recalculadas.")}</p>
+            <p>{tt("cards.editorHint", "O dia de fechamento inicia um novo ciclo: uma compra nessa data entra na fatura seguinte. Faturas já lançadas não são recalculadas.")}</p>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} disabled={submitting} aria-label={tt("actions.close", "Fechar modal")}><X size={18} /></button>
         </div>
@@ -69,6 +73,11 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
           <div className="installment-form-row">
             <div className="field-label"><span>{tt("cards.closingDay", "Dia de fechamento")}</span><input type="number" min="1" max="31" value={form.closing_day ?? ""} onChange={(event) => setForm({ ...form, closing_day: event.target.value })} onBlur={() => setForm({ ...form, closing_day: closingDay })} disabled={submitting} required /></div>
             <div className="field-label"><span>{tt("cards.dueDay", "Dia de vencimento")}</span><input type="number" min="1" max="31" value={form.due_day ?? ""} onChange={(event) => setForm({ ...form, due_day: event.target.value })} onBlur={() => setForm({ ...form, due_day: dueDay })} disabled={submitting} required /></div>
+          </div>
+          <div className="field-label">
+            <span>{tt("cards.paymentForecast", "Previsão de pagamento")}</span>
+            <input type="number" min="1" max="31" value={form.payment_forecast_day ?? ""} onChange={(event) => setForm({ ...form, payment_forecast_day: event.target.value })} onBlur={() => setForm({ ...form, payment_forecast_day: paymentForecastDay ?? "" })} placeholder={tt("cards.paymentForecastPlaceholder", "Opcional")} disabled={submitting} aria-describedby="card-payment-forecast-hint" />
+            <small id="card-payment-forecast-hint">{tt("cards.paymentForecastHint", "Dia em que o pagamento entra no controle mensal, no mês do vencimento. Vazio usa o vencimento.")}</small>
           </div>
           <div className="invoice-field">
             <span>{tt("cards.wallet", "Carteira padrão")}</span>

@@ -33,12 +33,13 @@ def legacy_closing_day(due_day: int) -> int:
 def invoice_period(closing_day: int, due_day: int, purchase_date: date) -> tuple[date, date]:
     """Return (closing_date, due_date) for a purchase.
 
-    A purchase on the closing day belongs to the cycle that closes that day.
-    The next day starts the following cycle. When the due day is on or before
-    the closing day, the invoice is due in the month after closing.
+    Closing starts a new cycle. A purchase on the closing day belongs to the
+    following invoice, and the day before still belongs to the cycle that
+    closes that day. When the due day is on or before the closing day, the
+    invoice is due in the month after closing.
     """
     closing_this_month = date_on_day(purchase_date.year, purchase_date.month, closing_day)
-    if purchase_date <= closing_this_month:
+    if purchase_date < closing_this_month:
         close_year, close_month = purchase_date.year, purchase_date.month
     else:
         close_year, close_month = shift_month(purchase_date.year, purchase_date.month, 1)

@@ -9,20 +9,22 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import CreditCard, InstallmentItem, Invoice, InvoiceItem, User, Wallet
-from app.routers.cards import create_card_purchase
+from app.routers.cards import create_card_purchase, update_card
 from app.routers.installments import create_installment
 from app.routers.invoices import update_invoice_item
+from app.routers.months import _build_month_data
+from app.schemas.cards import CardUpdate
 from app.schemas.installments import InstallmentCreate
 from app.schemas.invoices import InvoiceItemUpdate, PurchaseCreate
 from app.services.credit_cards import get_or_create_invoice, invoice_period, legacy_closing_day
-from app.services.invoices import create_invoice_with_transaction
+from app.services.invoices import create_invoice_with_transaction, invoice_payment_date
 
 
 class InvoicePeriodTests(unittest.TestCase):
-    def test_purchase_on_closing_day_stays_in_that_cycle(self):
+    def test_purchase_on_closing_day_starts_the_next_cycle(self):
         closing, due = invoice_period(25, 5, date(2026, 3, 25))
-        self.assertEqual(closing, date(2026, 3, 25))
-        self.assertEqual(due, date(2026, 4, 5))
+        self.assertEqual(closing, date(2026, 4, 25))
+        self.assertEqual(due, date(2026, 5, 5))
 
     def test_purchase_after_closing_moves_to_the_next_cycle(self):
         closing, due = invoice_period(25, 5, date(2026, 3, 26))
@@ -33,19 +35,23 @@ class InvoicePeriodTests(unittest.TestCase):
         self.assertEqual(invoice_period(25, 5, date(2026, 3, 24))[1], date(2026, 4, 5))
 
     def test_due_day_after_closing_stays_in_the_closing_month(self):
-        self.assertEqual(invoice_period(5, 10, date(2026, 3, 5)), (date(2026, 3, 5), date(2026, 3, 10)))
+        self.assertEqual(invoice_period(5, 10, date(2026, 3, 4)), (date(2026, 3, 5), date(2026, 3, 10)))
+        self.assertEqual(invoice_period(5, 10, date(2026, 3, 5)), (date(2026, 4, 5), date(2026, 4, 10)))
         self.assertEqual(invoice_period(5, 10, date(2026, 3, 6))[1], date(2026, 4, 10))
 
     def test_short_months_year_wrap_and_edge_days(self):
-        self.assertEqual(invoice_period(31, 10, date(2026, 2, 28)), (date(2026, 2, 28), date(2026, 3, 10)))
+        self.assertEqual(invoice_period(31, 10, date(2026, 2, 27)), (date(2026, 2, 28), date(2026, 3, 10)))
+        self.assertEqual(invoice_period(31, 10, date(2026, 2, 28)), (date(2026, 3, 31), date(2026, 4, 10)))
         self.assertEqual(invoice_period(31, 10, date(2024, 2, 28)), (date(2024, 2, 29), date(2024, 3, 10)))
-        self.assertEqual(invoice_period(31, 10, date(2024, 2, 29)), (date(2024, 2, 29), date(2024, 3, 10)))
+        self.assertEqual(invoice_period(31, 10, date(2024, 2, 29)), (date(2024, 3, 31), date(2024, 4, 10)))
         self.assertEqual(invoice_period(30, 5, date(2026, 1, 31)), (date(2026, 2, 28), date(2026, 3, 5)))
-        self.assertEqual(invoice_period(1, 10, date(2026, 5, 1)), (date(2026, 5, 1), date(2026, 5, 10)))
+        self.assertEqual(invoice_period(1, 10, date(2026, 4, 30)), (date(2026, 5, 1), date(2026, 5, 10)))
+        self.assertEqual(invoice_period(1, 10, date(2026, 5, 1)), (date(2026, 6, 1), date(2026, 6, 10)))
         self.assertEqual(invoice_period(1, 10, date(2026, 5, 2)), (date(2026, 6, 1), date(2026, 6, 10)))
-        self.assertEqual(invoice_period(31, 31, date(2026, 1, 31)), (date(2026, 1, 31), date(2026, 2, 28)))
+        self.assertEqual(invoice_period(31, 31, date(2026, 1, 30)), (date(2026, 1, 31), date(2026, 2, 28)))
+        self.assertEqual(invoice_period(31, 31, date(2026, 1, 31)), (date(2026, 2, 28), date(2026, 3, 31)))
         self.assertEqual(invoice_period(15, 10, date(2026, 12, 20)), (date(2027, 1, 15), date(2027, 2, 10)))
-        self.assertEqual(invoice_period(15, 10, date(2026, 12, 15)), (date(2026, 12, 15), date(2027, 1, 10)))
+        self.assertEqual(invoice_period(15, 10, date(2026, 12, 15)), (date(2027, 1, 15), date(2027, 2, 10)))
 
     def test_legacy_closing_day_wraps_when_due_day_is_too_early(self):
         self.assertEqual(legacy_closing_day(10), 3)
@@ -171,6 +177,74 @@ class CreditCardFlowTests(unittest.TestCase):
         self.assertEqual(due_dates, [date(2026, 11, 5), date(2026, 12, 5), date(2027, 1, 5)])
         self.assertEqual(self.db.query(InstallmentItem).count(), 3)
         self.assertEqual(self.db.query(Invoice).count(), 3)
+
+    def test_purchase_on_the_closing_day_joins_the_following_invoice(self):
+        invoice = create_card_purchase(
+            self.card.id,
+            PurchaseCreate(description="Fechamento", amount=Decimal("15.00"), purchase_date=date(2026, 10, 25)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(invoice.due_date, date(2026, 12, 5))
+        previous = create_card_purchase(
+            self.card.id,
+            PurchaseCreate(description="Véspera", amount=Decimal("10.00"), purchase_date=date(2026, 10, 24)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(previous.due_date, date(2026, 11, 5))
+
+    def test_payment_forecast_dates_the_monthly_control_entry(self):
+        self.card.payment_forecast_day = 2
+        invoice = create_card_purchase(
+            self.card.id,
+            PurchaseCreate(description="Mercado", amount=Decimal("42.50"), purchase_date=date(2026, 10, 20)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(invoice.due_date, date(2026, 11, 5))
+        self.assertEqual(invoice.linked_transaction.date, date(2026, 11, 2))
+        self.assertEqual(invoice_payment_date(date(2026, 2, 5), 31), date(2026, 2, 28))
+
+        november = _build_month_data(self.db, 2026, 11, self.user.id)
+        placed = [
+            transaction
+            for day in november.days
+            for transaction in day.transactions
+            if transaction.invoice_id == invoice.id
+        ]
+        self.assertEqual([item.date for item in placed], [date(2026, 11, 2)])
+        self.assertEqual(november.days[4].expenses, Decimal("0.00"))
+
+        paid = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 8, 5))
+        paid.total_amount = Decimal("80.00")
+        paid.paid = True
+        paid.linked_transaction.amount = Decimal("80.00")
+        paid.linked_transaction.date = date(2026, 8, 5)
+        self.db.commit()
+
+        update_card(
+            self.card.id,
+            CardUpdate(payment_forecast_day=1),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        open_invoice = self.db.get(Invoice, invoice.id)
+        settled = self.db.get(Invoice, paid.id)
+        self.assertEqual(open_invoice.due_date, date(2026, 11, 5))
+        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 1))
+        self.assertEqual(settled.linked_transaction.date, date(2026, 8, 5))
+
+        update_card(
+            self.card.id,
+            CardUpdate(payment_forecast_day=None),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        open_invoice = self.db.get(Invoice, invoice.id)
+        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 5))
 
     def test_available_limit_uses_unpaid_invoice_totals(self):
         from app.routers.cards import list_cards

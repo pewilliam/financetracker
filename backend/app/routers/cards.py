@@ -22,7 +22,12 @@ from app.schemas.invoices import InvoiceOut, PurchaseCreate
 from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import available_credit, committed_by_card, get_or_create_invoice, invoice_period
-from app.services.invoices import invoice_transaction_description, normalize_invoice_color, recalculate_invoice_total
+from app.services.invoices import (
+    invoice_transaction_description,
+    normalize_invoice_color,
+    recalculate_invoice_total,
+    sync_open_invoice_payment_dates,
+)
 from app.services.subscriptions import (
     ensure_commitment_invoices,
     first_charge_on_or_after,
@@ -128,6 +133,7 @@ def _out(
         color=card.color,
         due_day=card.due_day,
         closing_day=card.closing_day,
+        payment_forecast_day=card.payment_forecast_day,
         credit_limit=card.credit_limit,
         institution=card.institution,
         default_wallet_id=card.default_wallet_id,
@@ -195,6 +201,7 @@ def create_card(
         color=normalize_invoice_color(payload.color),
         due_day=payload.due_day,
         closing_day=payload.closing_day,
+        payment_forecast_day=payload.payment_forecast_day,
         credit_limit=payload.credit_limit,
         institution=_clean_institution(payload.institution),
         default_wallet_id=payload.default_wallet_id,
@@ -240,6 +247,9 @@ def update_card(
         card.due_day = payload.due_day
     if "closing_day" in fields and payload.closing_day is not None:
         card.closing_day = payload.closing_day
+    if "payment_forecast_day" in fields:
+        card.payment_forecast_day = payload.payment_forecast_day
+        sync_open_invoice_payment_dates(db, card)
     if "credit_limit" in fields:
         card.credit_limit = payload.credit_limit
     if "institution" in fields:

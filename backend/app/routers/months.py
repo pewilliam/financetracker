@@ -18,6 +18,7 @@ from app.schemas.months import (
     OpeningBalancePayload,
 )
 from app.security import get_current_user
+from app.services.invoices import invoice_payment_date
 from app.services.wallets import money, wallet_balances_as_of
 
 router = APIRouter(prefix="/api/months", tags=["months"])
@@ -583,7 +584,12 @@ def get_category_breakdown(
         )
 
     invoice_rows = (
-        db.query(Invoice.id, Invoice.due_date, CreditCard.name.label("invoice_name"))
+        db.query(
+            Invoice.id,
+            Invoice.due_date,
+            CreditCard.name.label("invoice_name"),
+            CreditCard.payment_forecast_day,
+        )
         .join(CreditCard, Invoice.credit_card_id == CreditCard.id)
         .filter(
             Invoice.user_id == current_user.id,
@@ -593,6 +599,9 @@ def get_category_breakdown(
         .all()
     )
     invoices_by_id = {row.id: row for row in invoice_rows}
+
+    def invoice_control_date(row) -> date:
+        return invoice_payment_date(row.due_date, row.payment_forecast_day)
     invoice_ids = list(invoices_by_id)
     if invoice_ids:
         invoice_items = (
@@ -610,7 +619,7 @@ def get_category_breakdown(
                     "source_id": item.id,
                     "description": item.description,
                     "amount": item.amount,
-                    "date": invoices_by_id[item.invoice_id].due_date,
+                    "date": invoice_control_date(invoices_by_id[item.invoice_id]),
                     "invoice_name": invoices_by_id[item.invoice_id].invoice_name,
                 } if include_details else None,
             )
@@ -635,7 +644,7 @@ def get_category_breakdown(
                     "source_id": item.id,
                     "description": item.purchase_description or item.description,
                     "amount": item.amount,
-                    "date": invoices_by_id[item.invoice_id].due_date,
+                    "date": invoice_control_date(invoices_by_id[item.invoice_id]),
                     "invoice_name": invoices_by_id[item.invoice_id].invoice_name,
                     "installment_number": item.installment_number,
                     "installment_count": item.installment_count,
