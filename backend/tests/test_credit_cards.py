@@ -290,7 +290,7 @@ class CreditCardFlowTests(unittest.TestCase):
         self.db.expire_all()
         open_invoice = self.db.get(Invoice, drifted.id)
         settled = self.db.get(Invoice, paid.id)
-        self.assertEqual(open_invoice.due_date, date(2026, 11, 10))
+        self.assertEqual(open_invoice.due_date, date(2026, 11, 18))
         self.assertEqual(open_invoice.linked_transaction.date, date(2026, 10, 31))
         self.assertEqual(settled.due_date, date(2026, 8, 5))
         self.assertEqual(settled.linked_transaction.date, date(2026, 8, 5))
@@ -303,7 +303,7 @@ class CreditCardFlowTests(unittest.TestCase):
             self.db,
             self.user,
         )
-        self.assertEqual(moved.due_date, date(2026, 11, 10))
+        self.assertEqual(moved.due_date, date(2026, 11, 18))
         self.assertEqual(moved.planned_payment_date, date(2026, 12, 18))
         self.assertEqual(moved.linked_transaction.date, date(2026, 12, 18))
 
@@ -315,7 +315,7 @@ class CreditCardFlowTests(unittest.TestCase):
         )
         self.db.expire_all()
         kept = self.db.get(Invoice, open_invoice.id)
-        self.assertEqual(kept.due_date, date(2026, 11, 10))
+        self.assertEqual(kept.due_date, date(2026, 11, 18))
         self.assertEqual(kept.linked_transaction.date, date(2026, 12, 18))
 
     def test_due_before_closing_is_the_following_month(self):
@@ -337,8 +337,8 @@ class CreditCardFlowTests(unittest.TestCase):
         )
         self.db.expire_all()
         current = self.db.get(Invoice, invoice.id)
-        self.assertEqual(current.due_date, date(2026, 10, 5))
-        self.assertEqual(current.linked_transaction.date, date(2026, 9, 30))
+        self.assertEqual(current.due_date, date(2026, 9, 30))
+        self.assertEqual(current.linked_transaction.date, date(2026, 8, 30))
 
     def test_forecast_change_does_not_merge_open_invoices(self):
         first = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 9, 5))
