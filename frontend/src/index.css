@@ -1516,6 +1516,36 @@ select {
   background: var(--card);
 }
 .day-row.future { background: rgba(20,160,120,0.04); }
+.day-row.is-today {
+  position: relative;
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--card));
+  box-shadow: inset 4px 0 0 var(--color-primary), 0 8px 22px rgba(20, 160, 120, 0.12);
+  scroll-margin-top: 112px;
+  scroll-margin-bottom: 120px;
+}
+.day-row.is-today .day-date { color: var(--color-primary-dark); }
+.dark .day-row.is-today,
+[data-theme="dark"] .day-row.is-today {
+  background: color-mix(in srgb, var(--color-primary) 22%, var(--card));
+  box-shadow: inset 4px 0 0 var(--color-primary-light), 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+.dark .day-row.is-today .day-date,
+[data-theme="dark"] .day-row.is-today .day-date { color: var(--color-primary-light); }
+.today-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
 .day-date { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 800; text-transform: capitalize; }
 .day-transactions { display: grid; gap: 8px; min-width: 0; }
 .transaction-line { display: grid; grid-template-columns: 76px 120px minmax(0,1fr) auto; align-items: center; gap: 10px; min-height: 32px; }
@@ -4638,6 +4668,34 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   background: var(--color-primary);
   color: #fff;
   box-shadow: 0 12px 28px rgba(20,160,120,.35);
+}
+.month-today-fab {
+  position: fixed;
+  right: 28px;
+  bottom: 98px;
+  z-index: 20;
+  height: 44px;
+  padding: 0 16px 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 46%, var(--border));
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--color-primary-dark);
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(20, 160, 120, 0.22);
+}
+.month-today-fab:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--card));
+}
+.month-today-fab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.dark .month-today-fab,
+[data-theme="dark"] .month-today-fab {
+  color: var(--color-primary-light);
 }
 .modal-card {
   position: relative;
@@ -8285,6 +8343,11 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     background: var(--color-primary);
     color: #fff;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .month-today-fab {
+    right: 20px;
+    bottom: 88px;
+    height: 42px;
   }
   .simulation-page {
     padding-bottom: 76px;

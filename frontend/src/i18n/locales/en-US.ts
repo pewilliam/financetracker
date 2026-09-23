@@ -444,7 +444,9 @@ export const enUS = {
     viewInvoiceItems: "View invoice items",
     entry: "Entry",
     deleteEntry: "Delete entry",
-    deleteEntryMessage: "Do you really want to delete this entry? This action cannot be undone."
+    deleteEntryMessage: "Do you really want to delete this entry? This action cannot be undone.",
+    today: "Today",
+    goToToday: "Go to today"
   },
   transactionModal: {
     newEntry: "New entry",
