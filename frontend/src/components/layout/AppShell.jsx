@@ -919,9 +919,9 @@ export default function AppShell() {
 
   const saveInvoiceDueDate = async (invoiceId, dueDate) => {
     try {
-      const updated = await updateInvoice(invoiceId, { due_date: dueDate });
+      const updated = await updateInvoice(invoiceId, { planned_payment_date: dueDate });
       upsertInvoice(updated);
-      toast.success("Data da fatura atualizada");
+      toast.success("Previsão de pagamento atualizada");
       await syncMonthCollections();
     } catch (error) {
       toast.error("Erro ao atualizar data da fatura");

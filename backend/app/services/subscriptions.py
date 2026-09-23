@@ -11,7 +11,7 @@ from app.models import CardSubscription, CardSubscriptionSkip, CreditCard, Insta
 from app.schemas.invoices import InvoiceOut, ProjectedSubscriptionItemOut
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import add_months, date_on_day, get_or_create_invoice, invoice_period, shift_month
-from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
+from app.services.invoices import card_payment_date, invoice_accepts_new_charges, recalculate_invoice_total
 
 _ZERO = Decimal("0.00")
 _MAX_CHARGE_STEPS = 240
@@ -750,6 +750,7 @@ def apply_subscription_projections(
                     name=card.name,
                     color=card.color,
                     due_date=due_date,
+                    payment_date=card_payment_date(due_date, card),
                     total_amount=_ZERO,
                     paid=False,
                     items_included=True,

@@ -277,25 +277,63 @@ class CreditCardFlowTests(unittest.TestCase):
 
         moved = update_invoice(
             open_invoice.id,
-            InvoiceUpdate(due_date=date(2026, 12, 18)),
+            InvoiceUpdate(planned_payment_date=date(2026, 12, 18)),
             self.db,
             self.user,
         )
-        self.assertEqual(moved.due_date, date(2026, 12, 10))
-        self.assertEqual(moved.linked_transaction.date, date(2026, 12, 31))
+        self.assertEqual(moved.due_date, date(2026, 11, 10))
+        self.assertEqual(moved.planned_payment_date, date(2026, 12, 18))
+        self.assertEqual(moved.linked_transaction.date, date(2026, 12, 18))
 
-        february = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 2, 18))
-        self.db.commit()
         update_card(
             self.card.id,
-            CardUpdate(due_day=31, payment_forecast_kind="day", payment_forecast_day=31),
+            CardUpdate(payment_forecast_kind="day", payment_forecast_day=2),
             self.db,
             self.user,
         )
         self.db.expire_all()
-        short_month = self.db.get(Invoice, february.id)
-        self.assertEqual(short_month.due_date, date(2026, 2, 28))
-        self.assertEqual(short_month.linked_transaction.date, date(2026, 2, 28))
+        kept = self.db.get(Invoice, open_invoice.id)
+        self.assertEqual(kept.due_date, date(2026, 11, 10))
+        self.assertEqual(kept.linked_transaction.date, date(2026, 12, 18))
+
+    def test_due_before_closing_is_the_following_month(self):
+        self.card.closing_day = 28
+        self.card.due_day = 30
+        invoice = create_card_purchase(
+            self.card.id,
+            PurchaseCreate(description="Mercado Pago", amount=Decimal("616.02"), purchase_date=date(2026, 9, 23)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(invoice.due_date, date(2026, 9, 30))
+
+        update_card(
+            self.card.id,
+            CardUpdate(closing_day=29, due_day=5),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        current = self.db.get(Invoice, invoice.id)
+        self.assertEqual(current.due_date, date(2026, 10, 5))
+        self.assertEqual(current.linked_transaction.date, date(2026, 10, 5))
+
+    def test_forecast_change_does_not_merge_open_invoices(self):
+        first = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 9, 5))
+        second = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 9, 18))
+        self.db.commit()
+
+        update_card(
+            self.card.id,
+            CardUpdate(payment_forecast_kind="day", payment_forecast_day=30),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        self.assertEqual(self.db.get(Invoice, first.id).due_date, date(2026, 9, 5))
+        self.assertEqual(self.db.get(Invoice, second.id).due_date, date(2026, 9, 18))
+        self.assertEqual(self.db.get(Invoice, first.id).linked_transaction.date, date(2026, 9, 30))
+        self.assertEqual(self.db.get(Invoice, second.id).linked_transaction.date, date(2026, 9, 30))
 
     def test_available_limit_uses_unpaid_invoice_totals(self):
         from app.routers.cards import list_cards

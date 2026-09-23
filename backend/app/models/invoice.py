@@ -13,6 +13,7 @@ class Invoice(Base):
     credit_card_id = Column(Integer, ForeignKey("credit_cards.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     due_date = Column(Date, nullable=False, index=True)
+    planned_payment_date = Column(Date, nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False, default=0)
     paid = Column(Boolean, nullable=False, default=False)
     linked_transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
@@ -33,6 +34,13 @@ class Invoice(Base):
         uselist=False,
         post_update=True,
     )
+
+    @property
+    def payment_date(self):
+        if self.planned_payment_date:
+            return self.planned_payment_date
+        from app.services.invoices import card_payment_date
+        return card_payment_date(self.due_date, self.card)
 
     @property
     def name(self) -> str:

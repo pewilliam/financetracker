@@ -82,46 +82,161 @@ def card_payment_date(due_date: date, card: CreditCard | None) -> date:
 
 
 def _invoice_payment_date(invoice: Invoice) -> date:
+    if invoice.planned_payment_date:
+        return invoice.planned_payment_date
     return card_payment_date(invoice.due_date, invoice.card)
 
 
-def align_open_invoices_to_card(db: Session, card: CreditCard) -> None:
-    """Make unpaid invoices use the card due day and payment forecast.
+def same_cycle_due_date(
+    old_due: date,
+    old_due_day: int,
+    old_closing_day: int,
+    new_due_day: int,
+    new_closing_day: int,
+) -> date:
+    """Due date of the same billing cycle after the card calendar changes.
 
-    Paid invoices stay on the dates they already have. The due month of each
-    open invoice is kept; only the day is taken from the card.
+    The closing day starts the cycle. When the due day is on or before the
+    closing day, the invoice is due in the following month. A bill that closes
+    on the 29th and is due on the 5th therefore stays in the current month
+    until closing and is due on the 5th of the next month.
     """
+    from app.services.credit_cards import date_on_day, invoice_period, shift_month
+
+    if old_due_day <= old_closing_day:
+        close_year, close_month = shift_month(old_due.year, old_due.month, -1)
+    else:
+        close_year, close_month = old_due.year, old_due.month
+    closing = date_on_day(close_year, close_month, old_closing_day)
+    anchor = closing - timedelta(days=1)
+    return invoice_period(new_closing_day, new_due_day, anchor)[1]
+
+
+def _purchase_dates(invoice: Invoice) -> list[date]:
+    return [item.purchase_date for item in invoice.items if item.purchase_date]
+
+
+def _due_target_for_invoice(
+    invoice: Invoice,
+    card: CreditCard,
+    previous_due_day: int,
+    previous_closing_day: int,
+    calendar_changed: bool,
+) -> date:
+    from app.services.credit_cards import invoice_period
+
+    purchase_dates = _purchase_dates(invoice)
+    if purchase_dates:
+        counted: dict[date, int] = {}
+        for purchase_date in purchase_dates:
+            due = invoice_period(card.closing_day, card.due_day, purchase_date)[1]
+            counted[due] = counted.get(due, 0) + 1
+        due, count = max(counted.items(), key=lambda item: item[1])
+        if count == len(purchase_dates):
+            return due
+    if calendar_changed:
+        return same_cycle_due_date(
+            invoice.due_date,
+            previous_due_day,
+            previous_closing_day,
+            card.due_day,
+            card.closing_day,
+        )
+    return invoice.due_date
+
+
+def sync_open_invoices_to_card(
+    db: Session,
+    card: CreditCard,
+    *,
+    previous_due_day: int,
+    previous_closing_day: int,
+    calendar_changed: bool,
+) -> None:
+    """Keep open invoices on the card calendar and refresh their payment dates.
+
+    Paid invoices stay where they are. A charge decides the due date of its
+    invoice. Invoices without charges keep the same cycle when the closing or
+    due day changes. A planned payment date chosen on one invoice is kept.
+    """
+    from sqlalchemy.orm import selectinload
+
     invoices = (
         db.query(Invoice)
+        .options(selectinload(Invoice.items), selectinload(Invoice.installment_items))
         .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(False))
         .order_by(Invoice.due_date, Invoice.id)
         .all()
     )
-    targets: list[tuple[Invoice, date]] = []
-    seen: dict[date, int] = {}
-    for invoice in invoices:
-        target = card_cycle_due_date(invoice.due_date.year, invoice.due_date.month, card.due_day)
-        if target in seen:
-            raise HTTPException(status_code=400, detail="Open invoices would share the same due date")
-        seen[target] = invoice.id
-        targets.append((invoice, target))
-
-    for invoice, target in targets:
-        if invoice.due_date == target:
-            continue
-        occupied = (
-            db.query(Invoice)
-            .filter(
-                Invoice.credit_card_id == card.id,
-                Invoice.due_date == target,
-                Invoice.id != invoice.id,
-            )
-            .first()
+    occupied = {
+        row.due_date
+        for row in db.query(Invoice.due_date)
+        .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(True))
+        .all()
+    }
+    proposals = [
+        (
+            invoice,
+            _due_target_for_invoice(
+                invoice,
+                card,
+                previous_due_day,
+                previous_closing_day,
+                calendar_changed,
+            ),
         )
-        if occupied is not None and occupied.paid:
-            raise HTTPException(status_code=400, detail="A paid invoice already uses that due date")
+        for invoice in invoices
+    ]
+    grouped: dict[date, list[Invoice]] = {}
+    for invoice, target in proposals:
+        grouped.setdefault(target, []).append(invoice)
+    chosen: dict[int, date] = {}
+    removable: list[Invoice] = []
+    for target, group in grouped.items():
+        if target in occupied:
+            for invoice in group:
+                chosen[invoice.id] = invoice.due_date
+            continue
+        charged = [invoice for invoice in group if _purchase_dates(invoice)]
+        if len(group) > 1 and len(charged) == 1:
+            winner = charged[0]
+            for invoice in group:
+                if invoice is winner:
+                    chosen[invoice.id] = target
+                elif not invoice.items and not invoice.installment_items:
+                    removable.append(invoice)
+                else:
+                    chosen[invoice.id] = invoice.due_date
+            continue
+        if len(group) > 1:
+            winner = next((invoice for invoice in group if invoice.due_date == target), None)
+            for invoice in group:
+                chosen[invoice.id] = target if invoice is winner else invoice.due_date
+            continue
+        chosen[group[0].id] = target
+    if removable:
+        removable_ids = {invoice.id for invoice in removable}
+        for invoice in removable:
+            linked_id = invoice.linked_transaction_id
+            invoice.linked_transaction_id = None
+            db.flush()
+            if linked_id:
+                linked = db.get(Transaction, linked_id)
+                if linked is not None and linked.amount == 0:
+                    db.delete(linked)
+            db.delete(invoice)
+        db.flush()
+        invoices = [invoice for invoice in invoices if invoice.id not in removable_ids]
+    used: dict[date, int] = {}
+    for invoice in invoices:
+        target = chosen[invoice.id]
+        owner = used.get(target)
+        if owner is not None and owner != invoice.id:
+            target = invoice.due_date
+            chosen[invoice.id] = target
+        used[target] = invoice.id
 
-    changing = [(invoice, target) for invoice, target in targets if invoice.due_date != target]
+    changing = [(invoice, chosen[invoice.id]) for invoice in invoices if invoice.due_date != chosen[invoice.id]]
     for invoice, _target in changing:
         invoice.due_date = date(1000, 1, 1) + timedelta(days=invoice.id)
     if changing:
@@ -132,13 +247,13 @@ def align_open_invoices_to_card(db: Session, card: CreditCard) -> None:
         db.flush()
 
     today = date.today()
-    for invoice, _target in targets:
+    for invoice in invoices:
         if not invoice.linked_transaction_id:
             continue
         linked = db.get(Transaction, invoice.linked_transaction_id)
         if linked is None:
             continue
-        payment_date = card_payment_date(invoice.due_date, card)
+        payment_date = _invoice_payment_date(invoice)
         linked.date = payment_date
         linked.is_future = payment_date > today
 

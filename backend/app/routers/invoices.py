@@ -2,7 +2,6 @@ from datetime import date
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import CardSubscriptionSkip, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Transaction, User
@@ -10,7 +9,6 @@ from app.schemas.invoices import InvoiceItemCreate, InvoiceItemUpdate, InvoiceOu
 from app.security import get_current_user
 from app.services.credit_cards import relocate_invoice_item
 from app.services.invoices import (
-    card_cycle_due_date,
     card_payment_date,
     invoice_accepts_new_charges,
     recalculate_invoice_total,
@@ -73,6 +71,8 @@ def _invoice_summaries(db: Session, invoices: list[Invoice]) -> list[InvoiceOut]
             name=invoice.name,
             color=invoice.color,
             due_date=invoice.due_date,
+            planned_payment_date=invoice.planned_payment_date,
+            payment_date=invoice.payment_date,
             total_amount=invoice.total_amount,
             paid=invoice.paid,
             linked_transaction_id=invoice.linked_transaction_id,
@@ -197,17 +197,9 @@ def update_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    chosen = payload.due_date
-    if invoice.card is not None:
-        chosen = card_cycle_due_date(chosen.year, chosen.month, invoice.card.due_day)
-    invoice.due_date = chosen
+    invoice.planned_payment_date = payload.planned_payment_date
     recalculate_invoice_total(db, invoice)
-
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="This card already has an invoice on that due date")
+    db.commit()
     db.refresh(invoice)
     return invoice
 

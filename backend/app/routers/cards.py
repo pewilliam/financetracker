@@ -23,11 +23,11 @@ from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import available_credit, committed_by_card, get_or_create_invoice, invoice_period
 from app.services.invoices import (
-    align_open_invoices_to_card,
     apply_payment_forecast,
     invoice_transaction_description,
     normalize_invoice_color,
     recalculate_invoice_total,
+    sync_open_invoices_to_card,
 )
 from app.services.subscriptions import (
     ensure_commitment_invoices,
@@ -233,6 +233,8 @@ def update_card(
 ):
     card = _load_card(db, current_user.id, card_id)
     fields = payload.model_fields_set
+    previous_due_day = card.due_day
+    previous_closing_day = card.closing_day
     if "name" in fields and payload.name is not None:
         name = payload.name.strip()
         if not name:
@@ -265,8 +267,15 @@ def update_card(
         )
         card.payment_forecast_kind = kind
         card.payment_forecast_day = day
-    if ("due_day" in fields and payload.due_day is not None) or forecast_changed:
-        align_open_invoices_to_card(db, card)
+    calendar_changed = card.due_day != previous_due_day or card.closing_day != previous_closing_day
+    if calendar_changed or forecast_changed:
+        sync_open_invoices_to_card(
+            db,
+            card,
+            previous_due_day=previous_due_day,
+            previous_closing_day=previous_closing_day,
+            calendar_changed=calendar_changed,
+        )
     if "credit_limit" in fields:
         card.credit_limit = payload.credit_limit
     if "institution" in fields:
