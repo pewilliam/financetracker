@@ -63,6 +63,7 @@ export default function AppShell() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [dashboardLoadError, setDashboardLoadError] = useState(false);
+  const [chromeHidden, setChromeHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(() => {
     if (isMobileViewport()) return false;
     try {
@@ -156,6 +157,54 @@ export default function AppShell() {
   // Lock the body (preserving scroll position) for overlays and, on mobile, for
   // the sidebar drawer so the content behind it does not jump back to the top.
   const bodyLocked = overlayOpen || (menuOpen && isMobile);
+
+  useEffect(() => {
+    setChromeHidden(false);
+    let anchor = window.scrollY;
+    let frame = 0;
+
+    const update = () => {
+      frame = 0;
+      const y = Math.max(window.scrollY, 0);
+      const pickerOpen = Boolean(document.querySelector(".month-popover, .simulation-tutorial-layer, .modal-layer"));
+      if (bodyLocked || pickerOpen) {
+        anchor = y;
+        setChromeHidden(false);
+        return;
+      }
+      const header = document.querySelector(".page-header-sticky");
+      const sentinel = document.querySelector(".sticky-header-sentinel");
+      const topbar = document.querySelector(".mobile-topbar");
+      const topbarVisible = topbar && getComputedStyle(topbar).display !== "none";
+      const topbarHeight = topbarVisible ? topbar.offsetHeight : 0;
+      const headerClearance = header
+        ? (sentinel ? sentinel.getBoundingClientRect().top + y : 0) + header.offsetHeight
+        : 0;
+      const threshold = header ? Math.max(topbarHeight, headerClearance) : Math.max(80, topbarHeight + 24);
+      if (y <= threshold) {
+        anchor = y;
+        setChromeHidden(false);
+        return;
+      }
+      const delta = y - anchor;
+      if (delta > 8) {
+        anchor = y;
+        setChromeHidden(true);
+      } else if (delta < -8) {
+        anchor = y;
+        setChromeHidden(false);
+      }
+    };
+
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [bodyLocked, location.pathname]);
 
   useEffect(() => {
     if (bodyLocked) {
@@ -1197,7 +1246,7 @@ export default function AppShell() {
   };
 
   return (
-    <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
+    <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}${chromeHidden ? " chrome-hidden" : ""}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
       <header className="mobile-topbar">
@@ -1212,6 +1261,8 @@ export default function AppShell() {
       <main className="content">
         <div className="content-inner">
           {showMonthHeader && (
+            <>
+            {stickyMonthHeader && <div className="sticky-header-sentinel" aria-hidden="true" />}
             <header className={`page-header ${viewingBudget ? "budget-page-header" : ""} ${stickyMonthHeader ? "page-header-sticky" : ""}`}>
               <div>
                 <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
@@ -1229,6 +1280,7 @@ export default function AppShell() {
                 <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
+            </>
           )}
 
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
