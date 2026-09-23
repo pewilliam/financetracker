@@ -21,3 +21,4 @@ class CreditCard(Base):
     user = relationship("User", back_populates="credit_cards")
     default_wallet = relationship("Wallet", foreign_keys=[default_wallet_id])
     invoices = relationship("Invoice", back_populates="card")
+    subscriptions = relationship("CardSubscription", back_populates="card", cascade="all, delete-orphan")

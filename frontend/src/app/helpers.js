@@ -13,6 +13,22 @@ export function addMonthsToDate(dateString, amount) {
   return `${shifted.year}-${String(shifted.month).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
 }
 
+function isoDate(year, month, day) {
+  const lastDay = lastDayOfMonth(year, month);
+  return `${year}-${String(month).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+}
+
+export function invoicePeriod(closingDay, dueDay, purchaseDate) {
+  const [year, month, day] = String(purchaseDate).split("-").map(Number);
+  const closingThisMonth = Math.min(Number(closingDay), lastDayOfMonth(year, month));
+  const close = day <= closingThisMonth ? { year, month } : shiftMonth(year, month, 1);
+  const due = Number(dueDay) <= Number(closingDay) ? shiftMonth(close.year, close.month, 1) : close;
+  return {
+    closingDate: isoDate(close.year, close.month, Number(closingDay)),
+    dueDate: isoDate(due.year, due.month, Number(dueDay)),
+  };
+}
+
 export function nextMonthDate(dateString) {
   return addMonthsToDate(dateString, 1);
 }

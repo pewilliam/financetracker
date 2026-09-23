@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
+    CardSubscription,
     CreditCard,
     InstallmentItem,
     InstallmentPurchase,
@@ -22,7 +23,8 @@ from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import available_credit, committed_by_card, get_or_create_invoice, invoice_period
 from app.services.invoices import invoice_transaction_description, normalize_invoice_color, recalculate_invoice_total
-from app.routers.invoices import load_user_invoice
+from app.services.subscriptions import first_charge_on_or_after, materialize_due_subscriptions
+from app.routers.invoices import load_user_invoice, present_invoices
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
 
@@ -161,6 +163,8 @@ def list_cards(
     query = db.query(CreditCard).filter(CreditCard.user_id == current_user.id)
     if active is not None:
         query = query.filter(CreditCard.active.is_(active))
+    if materialize_due_subscriptions(db, current_user):
+        db.commit()
     cards = query.order_by(CreditCard.active.desc(), CreditCard.name).all()
     card_ids = [card.id for card in cards]
     counts = _card_counts(db, current_user.id)
@@ -314,12 +318,11 @@ def list_card_invoices(
     current_user: User = Depends(get_current_user),
 ):
     _load_card(db, current_user.id, card_id)
-    from app.routers.invoices import _invoice_query
-
-    return (
-        _invoice_query(db, current_user.id, include_items=True)
-        .filter(Invoice.credit_card_id == card_id)
-        .all()
+    return present_invoices(
+        db,
+        current_user,
+        include_items=True,
+        credit_card_id=card_id,
     )
 
 
@@ -330,6 +333,8 @@ def get_current_card_invoice(
     current_user: User = Depends(get_current_user),
 ):
     card = _load_card(db, current_user.id, card_id)
+    if materialize_due_subscriptions(db, current_user):
+        db.commit()
     _, due_date = invoice_period(card.closing_day, card.due_day, date.today())
     existing = (
         db.query(Invoice)
@@ -340,17 +345,26 @@ def get_current_card_invoice(
         )
         .first()
     )
-    if existing:
-        return load_user_invoice(db, current_user.id, existing.id)
-    invoice = get_or_create_invoice(
+    if existing is None:
+        invoice = get_or_create_invoice(
+            db,
+            current_user.id,
+            card,
+            date.today(),
+            allow_overdue=current_user.allow_overdue_invoice_edits,
+        )
+        db.commit()
+        invoice_id = invoice.id
+    else:
+        invoice_id = existing.id
+    presented = present_invoices(
         db,
-        current_user.id,
-        card,
-        date.today(),
-        allow_overdue=current_user.allow_overdue_invoice_edits,
+        current_user,
+        include_items=True,
+        ids=[invoice_id],
+        materialize=False,
     )
-    db.commit()
-    return load_user_invoice(db, current_user.id, invoice.id)
+    return presented[0]
 
 
 @router.post("/{card_id}/purchases", response_model=InvoiceOut)
@@ -361,6 +375,44 @@ def create_card_purchase(
     current_user: User = Depends(get_current_user),
 ):
     card = _load_card(db, current_user.id, card_id)
+    if payload.recurring:
+        if payload.amount <= 0:
+            raise HTTPException(status_code=400, detail="Recurring purchase amount must be greater than zero")
+        charge_day = payload.charge_day or payload.purchase_date.day
+        if charge_day < 1 or charge_day > 31:
+            raise HTTPException(status_code=400, detail="Charge day must be between 1 and 31")
+        start_date = first_charge_on_or_after(payload.purchase_date, charge_day)
+        selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
+        subscription = CardSubscription(
+            user_id=current_user.id,
+            credit_card_id=card.id,
+            description=payload.description.strip(),
+            amount=payload.amount,
+            charge_day=charge_day,
+            start_date=start_date,
+            active=True,
+            category_id=selected_categories[0].id if selected_categories else None,
+        )
+        set_item_categories(subscription, selected_categories)
+        db.add(subscription)
+        db.flush()
+        materialize_due_subscriptions(db, current_user)
+        db.commit()
+        _, due_date = invoice_period(card.closing_day, card.due_day, start_date)
+        presented = present_invoices(
+            db,
+            current_user,
+            include_items=True,
+            credit_card_id=card.id,
+            materialize=False,
+        )
+        chosen = next((invoice for invoice in presented if invoice.due_date == due_date), None)
+        if chosen is not None:
+            return chosen
+        if presented:
+            return presented[0]
+        raise HTTPException(status_code=400, detail="Recurring purchase could not be placed on an invoice")
+
     invoice = get_or_create_invoice(
         db,
         current_user.id,

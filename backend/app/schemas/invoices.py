@@ -22,6 +22,18 @@ class InvoiceItemOut(InvoiceItemCreate):
     created_at: Optional[datetime] = None
     category: Optional[CategoryOut] = None
     categories: List[CategoryOut] = []
+    subscription_id: Optional[int] = None
+    subscription_charge_date: Optional[date] = None
+
+
+class ProjectedSubscriptionItemOut(APIModel):
+    subscription_id: int
+    description: str
+    amount: Decimal
+    charge_date: date
+    category_id: Optional[int] = None
+    category_ids: List[int] = []
+    categories: List[CategoryOut] = []
 
 
 class InvoiceInstallmentItemOut(APIModel):
@@ -48,6 +60,8 @@ class PurchaseCreate(APIModel):
     purchase_date: date
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    recurring: bool = False
+    charge_day: Optional[int] = None
 
 
 class InvoicePaidUpdate(APIModel):
@@ -73,3 +87,8 @@ class InvoiceOut(APIModel):
     installment_item_count: int = 0
     items: List[InvoiceItemOut] = []
     installment_items: List[InvoiceInstallmentItemOut] = []
+    projected_amount: Decimal = Decimal("0.00")
+    projected_total: Decimal = Decimal("0.00")
+    projected_item_count: int = 0
+    is_projected: bool = False
+    projected_items: List[ProjectedSubscriptionItemOut] = []

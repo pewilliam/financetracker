@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, ChevronDown, CircleDollarSign, CircleMinus, CreditCard, Filter, LayoutList, Pencil, Plus, Receipt, Search, Tag, Trash2, X } from "lucide-react";
+import { CalendarDays, ChevronDown, CircleDollarSign, CircleMinus, CreditCard, Filter, LayoutList, Pencil, Plus, Receipt, Repeat2, Search, Tag, Trash2, X } from "lucide-react";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import DeleteInvoiceEntryModal from "./DeleteInvoiceEntryModal.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -21,7 +21,7 @@ function installmentRowStatus(item, invoicePaid, copy) {
   return { label: copy("Pendente", "Pending"), tone: "pending" };
 }
 
-export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAddToInvoice = false, onAddEntry, onEditItem, onViewItem, onDeleteItem, onDeleteInstallmentItem, onManageReceivable, onViewInstallment, onClose }) {
+export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAddToInvoice = false, onAddEntry, onEditItem, onViewItem, onDeleteItem, onDeleteInstallmentItem, onManageReceivable, onViewInstallment, onCancelSubscription, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const layerRef = useRef(null);
@@ -36,6 +36,8 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const [toolbarOpen, setToolbarOpen] = useState(() => !isMobileViewport());
   const [breakdownOpen, setBreakdownOpen] = useState(() => !isMobileViewport());
   const [entryToDelete, setEntryToDelete] = useState(null);
+  const [subscriptionToEnd, setSubscriptionToEnd] = useState(null);
+  const [endingSubscription, setEndingSubscription] = useState(false);
   const noCategoryLabel = copy("Sem categoria", "Uncategorized");
 
   useEffect(() => {
@@ -70,6 +72,14 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const entries = useMemo(() => [
     ...(invoice.items || []).map((item) => ({ key: `invoice-${item.id}`, context: "invoice", item, description: item.description, amount: Number(item.amount || 0), categories: entryCategories(item) })),
     ...(invoice.installment_items || []).map((item) => ({ key: `installment-${item.id}`, context: "installment", item, description: item.purchase_description || item.description, amount: Number(item.amount || 0), categories: entryCategories(item) })),
+    ...(invoice.projected_items || []).map((item) => ({
+      key: `subscription-${item.subscription_id}-${item.charge_date}`,
+      context: "subscription",
+      item: { ...item, id: `subscription-${item.subscription_id}`, created_at: item.charge_date },
+      description: item.description,
+      amount: Number(item.amount || 0),
+      categories: entryCategories(item),
+    })),
   ], [invoice]);
 
   const visibleEntries = useMemo(() => {
@@ -127,18 +137,19 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
 
   const renderRow = (entry) => {
     const refund = entry.context === "invoice" && entry.amount < 0;
+    const projected = entry.context === "subscription";
     const item = entry.item;
     const installmentStatus = entry.context === "installment"
       ? installmentRowStatus(item, invoice.paid, copy)
       : null;
     return (
       <div
-        className={`invoice-items-row ${refund ? "refund" : ""} ${entry.context === "installment" ? "is-installment" : ""}`}
-        role="button"
-        tabIndex="0"
-        onClick={() => onViewItem?.(invoice, item, entry.context)}
+        className={`invoice-items-row ${refund ? "refund" : ""} ${entry.context === "installment" ? "is-installment" : ""} ${projected ? "is-projected" : ""}`}
+        role={projected ? undefined : "button"}
+        tabIndex={projected ? undefined : "0"}
+        onClick={() => { if (!projected) onViewItem?.(invoice, item, entry.context); }}
         onKeyDown={(event) => {
-          if (event.target !== event.currentTarget) return;
+          if (projected || event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onViewItem?.(invoice, item, entry.context);
@@ -150,6 +161,11 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
         <span className="invoice-items-row-main">
           <span className="invoice-items-row-title">
             {refund && <em className="refund-badge">{copy("Reembolso", "Refund")}</em>}
+            {projected && (
+              <em className="installment-badge" title={copy("Cobrança prevista", "Forecast charge")}>
+                <Repeat2 size={11} />{copy("Prevista", "Forecast")}
+              </em>
+            )}
             {entry.context === "installment" && (
               <span className="invoice-items-row-installment-meta">
                 {onViewInstallment ? (
@@ -184,8 +200,19 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
         </span>
         <strong className="invoice-items-row-amount">{formatMoney(entry.amount)}</strong>
         <span className="invoice-items-row-actions">
-          {entry.context === "invoice" ? (
+          {projected ? (
+            onCancelSubscription && (
+              <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); setSubscriptionToEnd({ id: item.subscription_id, description: entry.description }); }} aria-label={copy("Encerrar recorrência", "End recurring charge")} title={copy("Encerrar recorrência", "End recurring charge")}>
+                <Repeat2 size={15} />
+              </button>
+            )
+          ) : entry.context === "invoice" ? (
             <>
+              {item.subscription_id && onCancelSubscription && (
+                <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); setSubscriptionToEnd({ id: item.subscription_id, description: entry.description }); }} aria-label={copy("Encerrar recorrência", "End recurring charge")} title={copy("Encerrar recorrência", "End recurring charge")}>
+                  <Repeat2 size={15} />
+                </button>
+              )}
               <button className="icon-btn small" type="button" onClick={(event) => { event.stopPropagation(); onEditItem?.(invoice, item); }} aria-label={copy("Editar item", "Edit item")} title={copy("Editar item", "Edit item")}>
                 <Pencil size={15} />
               </button>
@@ -221,6 +248,9 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
               <span><CalendarDays size={12} />{copy("Vence", "Due")} {formatDateShort(invoice.due_date)}</span>
               <span>{entries.length} {entries.length === 1 ? copy("item", "item") : copy("itens", "items")}</span>
               <strong>{formatMoney(invoice.total_amount)}</strong>
+              {Number(invoice.projected_amount) > 0 && (
+                <strong className="invoice-items-projected-total">{copy("Previsto", "Projected")} {formatMoney(invoice.projected_total || Number(invoice.total_amount || 0) + Number(invoice.projected_amount || 0))}</strong>
+              )}
             </div>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label={copy("Fechar", "Close")} title={copy("Fechar", "Close")}><X size={18} /></button>
@@ -364,6 +394,37 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
           <button className="btn btn-primary" type="button" onClick={onClose}>{copy("Fechar", "Close")}</button>
         </footer>
       </section>
+      {subscriptionToEnd && (
+        <div className="modal-layer">
+          <button className="modal-backdrop" type="button" onClick={endingSubscription ? undefined : () => setSubscriptionToEnd(null)} aria-label={copy("Fechar", "Close")} />
+          <form
+            className="modal-card invoice-subscription-end"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!onCancelSubscription || endingSubscription) return;
+              setEndingSubscription(true);
+              try {
+                await onCancelSubscription(subscriptionToEnd.id);
+                setSubscriptionToEnd(null);
+              } catch {
+                // A página mostra o erro.
+              } finally {
+                setEndingSubscription(false);
+              }
+            }}
+          >
+            <h2>{copy("Encerrar recorrência", "End recurring charge")}</h2>
+            <p>{copy(
+              `${subscriptionToEnd.description} deixa de entrar nas próximas faturas. O que já virou item da fatura permanece.`,
+              `${subscriptionToEnd.description} will stop appearing on upcoming invoices. Charges already posted stay on the invoice.`,
+            )}</p>
+            <footer className="modal-actions">
+              <button className="btn btn-ghost" type="button" onClick={() => setSubscriptionToEnd(null)} disabled={endingSubscription}>{copy("Cancelar", "Cancel")}</button>
+              <button className="btn btn-primary" type="submit" disabled={endingSubscription}>{copy("Encerrar", "End")}</button>
+            </footer>
+          </form>
+        </div>
+      )}
       {entryToDelete && (
         <DeleteInvoiceEntryModal
           entry={entryToDelete}

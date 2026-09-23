@@ -9,6 +9,8 @@ from app.models.receivable_person import ReceivablePerson
 from app.models.receivable import Receivable
 from app.models.receivable_payment import ReceivablePayment
 from app.models.recurrence import Recurrence
+from app.models.card_subscription import CardSubscription
+from app.models.card_subscription_skip import CardSubscriptionSkip
 from app.models.monthly_balance import MonthlyBalance
 from app.models.simulation import Simulation
 from app.models.simulation_item import SimulationItem
@@ -28,6 +30,8 @@ __all__ = [
     "Receivable",
     "ReceivablePayment",
     "Recurrence",
+    "CardSubscription",
+    "CardSubscriptionSkip",
     "MonthlyBalance",
     "Simulation",
     "SimulationItem",

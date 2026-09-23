@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Transaction, User
+from app.models import CardSubscriptionSkip, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Transaction, User
 from app.schemas.invoices import InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
 from app.security import get_current_user
 from app.services.credit_cards import relocate_invoice_item
 from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
+from app.services.subscriptions import apply_subscription_projections, materialize_due_subscriptions
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -69,9 +70,52 @@ def _invoice_summaries(db: Session, invoices: list[Invoice]) -> list[InvoiceOut]
             items_included=False,
             item_count=int(item_counts.get(invoice.id, 0)),
             installment_item_count=int(installment_counts.get(invoice.id, 0)),
+            projected_amount=getattr(invoice, "projected_amount", 0) or 0,
+            projected_total=getattr(invoice, "projected_total", invoice.total_amount) or invoice.total_amount,
+            projected_item_count=int(getattr(invoice, "projected_item_count", 0) or 0),
+            is_projected=False,
+            projected_items=list(getattr(invoice, "projected_items", []) or []),
         )
         for invoice in invoices
     ]
+
+
+def _card_id(invoice) -> int:
+    return int(invoice.credit_card_id)
+
+
+def present_invoices(
+    db: Session,
+    user: User,
+    *,
+    include_items: bool,
+    ids: list[int] | None = None,
+    credit_card_id: int | None = None,
+    materialize: bool = True,
+) -> list:
+    if materialize and materialize_due_subscriptions(db, user):
+        db.commit()
+    query = _invoice_query(db, user.id, include_items=include_items)
+    if ids:
+        query = query.filter(Invoice.id.in_(ids))
+    if credit_card_id is not None:
+        query = query.filter(Invoice.credit_card_id == credit_card_id)
+    invoices = query.all()
+    # Detail fetches already know the projected shells. A full list needs them.
+    include_virtual = ids is None
+    presented = apply_subscription_projections(
+        db,
+        user.id,
+        invoices,
+        include_virtual=include_virtual,
+    )
+    if credit_card_id is not None:
+        presented = [invoice for invoice in presented if _card_id(invoice) == credit_card_id]
+    real = [invoice for invoice in presented if not getattr(invoice, "is_projected", False)]
+    virtual = [invoice for invoice in presented if getattr(invoice, "is_projected", False)]
+    if include_items:
+        return real + virtual
+    return _invoice_summaries(db, real) + virtual
 
 
 def load_user_invoice(db: Session, user_id: int, invoice_id: int) -> Invoice:
@@ -93,15 +137,13 @@ def list_invoices(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = _invoice_query(db, current_user.id, include_items=include_items)
-    if ids:
-        query = query.filter(Invoice.id.in_(ids))
-    if credit_card_id is not None:
-        query = query.filter(Invoice.credit_card_id == credit_card_id)
-    invoices = query.all()
-    if include_items:
-        return invoices
-    return _invoice_summaries(db, invoices)
+    return present_invoices(
+        db,
+        current_user,
+        include_items=include_items,
+        ids=ids,
+        credit_card_id=credit_card_id,
+    )
 
 
 @router.get("/{invoice_id}", response_model=InvoiceOut)
@@ -110,14 +152,16 @@ def get_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    invoice = (
-        _invoice_query(db, current_user.id, include_items=True)
-        .filter(Invoice.id == invoice_id)
-        .first()
+    presented = present_invoices(
+        db,
+        current_user,
+        include_items=True,
+        ids=[invoice_id],
+        materialize=True,
     )
-    if not invoice:
+    if not presented:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return invoice
+    return presented[0]
 
 
 @router.put("/{invoice_id}", response_model=InvoiceOut)
@@ -280,6 +324,23 @@ def delete_invoice_item(
     if refund_installment:
         refund_installment.status = "pending"
         refund_installment.refund_invoice_item_id = None
+
+    if item.subscription_id and item.subscription_charge_date:
+        already_skipped = (
+            db.query(CardSubscriptionSkip)
+            .filter(
+                CardSubscriptionSkip.subscription_id == item.subscription_id,
+                CardSubscriptionSkip.charge_date == item.subscription_charge_date,
+            )
+            .first()
+        )
+        if already_skipped is None:
+            db.add(
+                CardSubscriptionSkip(
+                    subscription_id=item.subscription_id,
+                    charge_date=item.subscription_charge_date,
+                )
+            )
 
     db.delete(item)
     db.flush()

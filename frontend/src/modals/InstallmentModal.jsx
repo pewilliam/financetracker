@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, CreditCard, Layers3, ReceiptText, Trash2, X } from "lucide-react";
+import { Check, CreditCard, Layers3, ReceiptText, Repeat2, Trash2, X } from "lucide-react";
 import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { addMonthsToDate, formatMonthShort, normalizeInvoiceColor } from "../app/helpers.js";
+import { addMonthsToDate, formatMonthShort, invoicePeriod, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InstallmentModal({ form, setForm, cards = [], categories = [], onCreateCategory, onOpenSingle, onSubmit, onClose }) {
+export default function InstallmentModal({ form, setForm, cards = [], categories = [], onCreateCategory, onOpenSingle, onOpenSubscription, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
@@ -23,6 +23,23 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
   const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
   const selectedCard = activeCards.find((card) => String(card.id) === String(form.credit_card_id));
   const endDate = form.first_purchase_date ? addMonthsToDate(form.first_purchase_date, count - 1) : "";
+  const cycleHint = (() => {
+    if (!selectedCard?.closing_day || !selectedCard?.due_day || !form.first_purchase_date || !endDate) return "";
+    const first = invoicePeriod(selectedCard.closing_day, selectedCard.due_day, form.first_purchase_date);
+    const last = invoicePeriod(selectedCard.closing_day, selectedCard.due_day, endDate);
+    const closeStart = formatDateShort(first.closingDate, language);
+    const dueStart = formatDateShort(first.dueDate, language);
+    if (first.dueDate === last.dueDate) {
+      return language === "en-US"
+        ? `This purchase joins the invoice that closes on ${closeStart} and is due on ${dueStart}.`
+        : `Essa compra entra na fatura que fecha em ${closeStart} e vence em ${dueStart}.`;
+    }
+    const closeEnd = formatDateShort(last.closingDate, language);
+    const dueEnd = formatDateShort(last.dueDate, language);
+    return language === "en-US"
+      ? `Installments join the invoices that close from ${closeStart} to ${closeEnd} and are due from ${dueStart} to ${dueEnd}.`
+      : `As parcelas entram nas faturas que fecham de ${closeStart} até ${closeEnd} e vencem de ${dueStart} até ${dueEnd}.`;
+  })();
 
   useEffect(() => {
     if (form.credit_card_id && activeCards.length && !selectedCard) updateForm({ credit_card_id: "" });
@@ -85,8 +102,9 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
             <h2 id="installment-modal-title">{onOpenSingle ? (language === "en-US" ? "Add purchase" : "Adicionar compra") : tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
           </div>
           {onOpenSingle && (
-            <div className="transaction-mode-switch invoice-entry-mode-switch" aria-label={language === "en-US" ? "Purchase type" : "Tipo de compra"}>
+            <div className="transaction-mode-switch columns-3 invoice-entry-mode-switch" aria-label={language === "en-US" ? "Purchase type" : "Tipo de compra"}>
               <button type="button" aria-pressed="false" onClick={onOpenSingle}><ReceiptText size={15} /> {language === "en-US" ? "One-time purchase" : "Compra única"}</button>
+              <button type="button" aria-pressed="false" onClick={onOpenSubscription}><Repeat2 size={15} /> {language === "en-US" ? "Subscription" : "Assinatura"}</button>
               <button className="active" type="button" aria-pressed="true"><Layers3 size={15} /> {language === "en-US" ? "Installment purchase" : "Compra parcelada"}</button>
             </div>
           )}
@@ -132,7 +150,7 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
                 <span>{tt("installmentModal.firstPurchaseDate", "Data da primeira compra")}</span>
                 <DateField value={form.first_purchase_date} onChange={(first_purchase_date) => updateForm({ first_purchase_date })} />
               </div>
-              <p className="duplicate-summary">{selectedCard && form.first_purchase_date ? tt("installmentModal.cycleHint", `As parcelas seguem o fechamento do cartão, de ${formatDateShort(form.first_purchase_date)} até ${formatDateShort(endDate)}.`, { start: formatDateShort(form.first_purchase_date), end: formatDateShort(endDate) }) : tt("installmentModal.selectCardDate", "Selecione o cartão e a data da primeira compra.")}</p>
+              <p className="duplicate-summary">{cycleHint || tt("installmentModal.selectCardDate", "Selecione o cartão e a data da primeira compra.")}</p>
             </div>
             <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button><button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button></div>
           </>

@@ -8,7 +8,7 @@ import { useInvoiceItemModals } from "../hooks/useInvoiceItemModals.jsx";
 import { normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 import { formatMoney } from "../utils/format.js";
 
-export default function InvoicesPage({ invoices, cards = [], categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, addPurchase, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, onViewInstallment }) {
+export default function InvoicesPage({ invoices, cards = [], categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, addPurchase, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, onViewInstallment, onCancelSubscription }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const location = useLocation();
@@ -38,6 +38,7 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
     onLoadInvoiceItems,
     onEnsureExpenseContext,
     onViewInstallment,
+    onCancelSubscription,
   });
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
@@ -238,6 +239,7 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
               {invoiceGroups.map((group) => {
                 const expanded = expandedGroups[group.id];
                 const groupTotal = group.items.reduce((total, invoice) => total + Number(invoice.total_amount || 0), 0);
+                const groupProjected = group.items.reduce((total, invoice) => total + Number(invoice.projected_amount || 0), 0);
                 return (
                   <section className={`invoice-group ${expanded ? "expanded" : "collapsed"}`} key={group.id}>
                     <button className="invoice-group-toggle" type="button" onClick={() => toggleGroup(group.id)} aria-expanded={expanded}>
@@ -247,6 +249,7 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
                       </div>
                       <div className="invoice-group-meta">
                         {group.items.length > 0 && <strong>{formatMoney(groupTotal)}</strong>}
+                        {groupProjected > 0 && <strong className="is-projected">{tt("invoices.projected", "Previsto")} {formatMoney(groupTotal + groupProjected)}</strong>}
                         <ChevronDown size={18} />
                       </div>
                     </button>

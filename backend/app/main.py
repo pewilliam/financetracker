@@ -6,7 +6,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.rate_limit import RateLimitMiddleware
-from app.routers import auth, budgets, cards, categories, installments, invoices, months, receivables, recurrences, simulations, transactions, wallets
+from app.routers import auth, budgets, cards, categories, installments, invoices, months, receivables, recurrences, simulations, subscriptions, transactions, wallets
 
 app = FastAPI(title="Finance Tracker API", version="0.1.0")
 
@@ -34,6 +34,7 @@ app.include_router(invoices)
 app.include_router(installments)
 app.include_router(receivables)
 app.include_router(recurrences)
+app.include_router(subscriptions)
 app.include_router(months)
 app.include_router(simulations)
 app.include_router(wallets)

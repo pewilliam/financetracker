@@ -10,6 +10,7 @@ import Skeleton from "../common/Skeleton.jsx";
 import MonthsPage from "../../pages/MonthsPage.jsx";
 import InvoicesPage from "../../pages/InvoicesPage.jsx";
 import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
+import SubscriptionsPage from "../../pages/SubscriptionsPage.jsx";
 import SimulationPage from "../../pages/SimulationPage.jsx";
 import ReceivablesPage, { receivableGroupForId } from "../../pages/ReceivablesPage.jsx";
 import CategoriesPage from "../../pages/CategoriesPage.jsx";
@@ -31,7 +32,7 @@ import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -48,6 +49,7 @@ export default function AppShell() {
   const [invoices, setInvoices] = useState([]);
   const [cards, setCards] = useState([]);
   const [installmentsRevision, setInstallmentsRevision] = useState(0);
+  const [subscriptionsRevision, setSubscriptionsRevision] = useState(0);
   const [categories, setCategories] = useState([]);
   const [walletSummary, setWalletSummary] = useState({ total_balance: 0, active_count: 0, wallets: [] });
   const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [], income_chart_items: [] });
@@ -238,6 +240,7 @@ export default function AppShell() {
     if (location.pathname === "/categorias") return ["categories", "categoryBreakdown", "previousBreakdown", "budgetPlan"];
     if (location.pathname === "/carteiras") return ["wallets"];
     if (location.pathname === "/faturas" || location.pathname === "/parcelamentos") return ["invoiceHeaders", "categories", "cards"];
+    if (location.pathname === "/assinaturas") return ["categories", "cards"];
     if (location.pathname === "/cartoes") return [];
     if (location.pathname === "/simulador") return ["invoiceHeaders", "monthCards", "cards"];
     if (location.pathname === "/recebiveis") return ["receivables", "linked", "categories"];
@@ -698,7 +701,8 @@ export default function AppShell() {
     try {
       const updated = await createCardPurchase(cardId, payload);
       upsertInvoice(updated);
-      toast.success("Compra adicionada");
+      if (payload.recurring) setSubscriptionsRevision((current) => current + 1);
+      toast.success(payload.recurring ? "Assinatura adicionada" : "Compra adicionada");
       await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch (error) {
       toast.error(String(error?.message || "").includes("no longer accepts") ? "A fatura deste ciclo não aceita novas compras" : "Erro ao adicionar compra");
@@ -1133,6 +1137,18 @@ export default function AppShell() {
     }
   };
 
+  const cancelSubscription = async (subscriptionId) => {
+    try {
+      await cancelCardSubscription(subscriptionId);
+      setSubscriptionsRevision((current) => current + 1);
+      toast.success("Recorrência encerrada");
+      await Promise.all([syncInvoiceCollections(), refreshCards()]);
+    } catch (error) {
+      toast.error("Erro ao encerrar recorrência");
+      throw error;
+    }
+  };
+
   const invoiceModals = useInvoiceItemModals({
     invoices,
     categories,
@@ -1153,6 +1169,7 @@ export default function AppShell() {
     onLoadInvoiceItems: loadInvoiceDetails,
     onEnsureExpenseContext: () => ensureExtras(["expenseOptions"]),
     onViewInstallment: showInstallmentDetails,
+    onCancelSubscription: cancelSubscription,
   });
 
   useEffect(() => {
@@ -1208,10 +1225,11 @@ export default function AppShell() {
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} cards={cards} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} addPurchase={addPurchase} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} onViewInstallment={showInstallmentDetails} />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} cards={cards} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} addPurchase={addPurchase} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} onViewInstallment={showInstallmentDetails} onCancelSubscription={cancelSubscription} />} />
               <Route path="/cartoes" element={<CardsPage onChanged={refreshCards} onViewCurrentInvoice={viewCurrentCardInvoice} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/cartoes" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage categories={categories} invoices={invoices} revision={installmentsRevision} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} onRequestDelete={requestInstallmentDelete} />} />
+              <Route path="/assinaturas" element={<SubscriptionsPage revision={subscriptionsRevision} onNew={() => invoiceModals.openSubscription()} onCancel={cancelSubscription} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
               <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />

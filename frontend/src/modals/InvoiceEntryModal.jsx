@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CircleMinus, Layers3, Loader2, ReceiptText, ShoppingBag, X } from "lucide-react";
+import { CircleMinus, Layers3, Loader2, ReceiptText, Repeat2, ShoppingBag, X } from "lucide-react";
 
 import { isMobileViewport } from "../app/helpers.js";
 import CategorySelect from "../components/CategorySelect.jsx";
@@ -9,23 +9,28 @@ import { useI18n } from "../i18n/index.ts";
 import { todayIsoDate } from "../app/helpers.js";
 import { formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", kind = "expense", categories = [], onCreateCategory, onOpenInstallment, onSave, onClose }) {
+export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", kind = "expense", mode = "single", categories = [], onCreateCategory, onOpenSingle, onOpenSubscription, onOpenInstallment, onSave, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const isRefund = kind === "refund";
+  const isSubscription = !isRefund && mode === "subscription";
   const lockedCardId = String(invoice?.credit_card_id || cardId || "");
   const [form, setForm] = useState({
     description: "",
     amount: "",
     category_ids: [],
     credit_card_id: lockedCardId,
-    purchase_date: todayIsoDate()
+    purchase_date: todayIsoDate(),
+    charge_day: Number(todayIsoDate().slice(8, 10)),
+    chargeDayTouched: false,
   });
   const [saving, setSaving] = useState(false);
   const amountInputRef = useRef(null);
   const amount = parseTypedMoneyInput(form.amount, language);
   const selectedCard = cards.find((card) => String(card.id) === String(form.credit_card_id));
-  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving && (isRefund || (form.credit_card_id && form.purchase_date)));
+  const chargeDay = Number(form.charge_day);
+  const recurringReady = !isSubscription || (chargeDay >= 1 && chargeDay <= 31);
+  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving && recurringReady && (isRefund || (form.credit_card_id && form.purchase_date)));
   const hasModeSwitch = !isRefund && Boolean(onOpenInstallment);
 
   useEffect(() => {
@@ -58,6 +63,8 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
         category_ids: form.category_ids.map(Number),
         credit_card_id: Number(form.credit_card_id),
         purchase_date: form.purchase_date,
+        recurring: isSubscription,
+        charge_day: isSubscription ? chargeDay : undefined,
       });
     } catch {
       // A página exibe o erro e mantém os dados para uma nova tentativa.
@@ -66,7 +73,11 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
     }
   };
 
-  const title = isRefund ? copy("Adicionar reembolso", "Add refund") : copy("Adicionar compra", "Add purchase");
+  const title = isRefund
+    ? copy("Adicionar reembolso", "Add refund")
+    : isSubscription
+      ? copy("Adicionar assinatura", "Add subscription")
+      : copy("Adicionar compra", "Add purchase");
   const heading = isRefund
     ? copy(`FATURA · ${invoice?.name || ""}`, `INVOICE · ${invoice?.name || ""}`)
     : copy(`CARTÃO · ${selectedCard?.name || invoice?.name || "COMPRA"}`, `CARD · ${selectedCard?.name || invoice?.name || "PURCHASE"}`);
@@ -76,14 +87,15 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
       <button className="modal-backdrop" type="button" onClick={saving ? undefined : onClose} aria-label={copy("Fechar", "Close")} />
       <form className={`modal-card transaction-modal invoice-entry-modal ${isRefund ? "refund" : "expense"}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="invoice-entry-modal-title">
         <header className={`transaction-entry-titlebar invoice-entry-titlebar ${hasModeSwitch ? "" : "compact"}`}>
-          <span className="transaction-entry-icon">{isRefund ? <CircleMinus size={21} /> : <ShoppingBag size={21} />}</span>
+          <span className="transaction-entry-icon">{isRefund ? <CircleMinus size={21} /> : isSubscription ? <Repeat2 size={21} /> : <ShoppingBag size={21} />}</span>
           <div className="transaction-entry-heading">
             <p>{heading}</p>
             <h2 id="invoice-entry-modal-title">{title}</h2>
           </div>
           {hasModeSwitch && (
-            <div className="transaction-mode-switch" aria-label={copy("Tipo de compra", "Purchase type")}>
-              <button className="active" type="button" aria-pressed="true"><ReceiptText size={15} /> {copy("Compra única", "One-time purchase")}</button>
+            <div className="transaction-mode-switch columns-3" aria-label={copy("Tipo de compra", "Purchase type")}>
+              <button className={isSubscription ? "" : "active"} type="button" aria-pressed={!isSubscription} onClick={() => onOpenSingle?.()}><ReceiptText size={15} /> {copy("Compra única", "One-time purchase")}</button>
+              <button className={isSubscription ? "active" : ""} type="button" aria-pressed={isSubscription} onClick={() => onOpenSubscription?.()}><Repeat2 size={15} /> {copy("Assinatura", "Subscription")}</button>
               <button type="button" aria-pressed="false" onClick={onOpenInstallment}><Layers3 size={15} /> {copy("Compra parcelada", "Installment purchase")}</button>
             </div>
           )}
@@ -115,7 +127,7 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
               maxLength={255}
               value={form.description}
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder={isRefund ? copy("Opcional. Ex: estorno ou devolução", "Optional. Ex: reversal or return") : copy("Ex: supermercado, restaurante...", "Ex: groceries, restaurant...")}
+              placeholder={isRefund ? copy("Opcional. Ex: estorno ou devolução", "Optional. Ex: reversal or return") : isSubscription ? copy("Ex: Netflix, academia, streaming...", "Ex: Netflix, gym, streaming...") : copy("Ex: supermercado, restaurante...", "Ex: groceries, restaurant...")}
             />
           </div>
 
@@ -147,9 +159,27 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
               )}
               <div className="invoice-entry-description">
                 <span>{copy("Data da compra", "Purchase date")}</span>
-                <DateField value={form.purchase_date} onChange={(purchase_date) => setForm((current) => ({ ...current, purchase_date }))} />
-                <small>{copy("A fatura é escolhida pelo fechamento do cartão.", "The invoice is chosen from the card closing calendar.")}</small>
+                <DateField value={form.purchase_date} onChange={(purchase_date) => setForm((current) => ({
+                  ...current,
+                  purchase_date,
+                  charge_day: current.chargeDayTouched ? current.charge_day : Number(String(purchase_date).slice(8, 10)) || current.charge_day,
+                }))} />
               </div>
+              {isSubscription && (
+                <div className="invoice-entry-charge-day">
+                  <span>{copy("Dia da cobrança", "Charge day")}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    inputMode="numeric"
+                    value={form.charge_day}
+                    onChange={(event) => setForm((current) => ({ ...current, charge_day: event.target.value, chargeDayTouched: true }))}
+                    aria-label={copy("Dia da cobrança", "Charge day")}
+                  />
+                  <small>{copy("Entra nas próximas faturas como previsão e só conta no limite quando esse dia chega.", "It shows on upcoming invoices as a forecast and counts toward the limit only when that day arrives.")}</small>
+                </div>
+              )}
             </>
           )}
 

@@ -163,7 +163,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const visibleExpenses = showAllExpenses ? allExpenses : allExpenses.slice(0, 5);
   const maxExpense = Math.max(...allExpenses.map((transaction) => toNumber(transaction.amount)), 1);
 
-  const openInvoices = invoices.filter((invoice) => !invoice.paid).sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || Number(left.id) - Number(right.id));
+  const openInvoices = invoices.filter((invoice) => !invoice.paid && !invoice.is_projected).sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)) || Number(left.id) - Number(right.id));
   const visibleInvoices = showAllDueDates ? openInvoices : openInvoices.slice(0, 5);
   const openInvoiceTotal = openInvoices.reduce((total, invoice) => total + toNumber(invoice.total_amount), 0);
 

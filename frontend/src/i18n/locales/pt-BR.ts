@@ -226,6 +226,7 @@ export const ptBR = {
     invoices: "Faturas",
     cards: "Cartões",
     installments: "Parcelamentos",
+    subscriptions: "Assinaturas",
     simulator: "Simulador",
     receivables: "Recebíveis",
     categories: "Orçamento e gastos",

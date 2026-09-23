@@ -94,7 +94,7 @@ export default function CardsPage({ onChanged, onViewCurrentInvoice }) {
     <section className="cards-page">
       <div className="section-head">
         <div>
-          <p className="eyebrow">{tt("cards.eyebrow", "CARTÕES")}</p>
+          <p className="eyebrow">{tt("cards.eyebrow", "GERENCIAMENTO DE CARTÕES")}</p>
           <h2>{tt("cards.title", "Cartões")}</h2>
           <p>{tt("cards.subtitle", "Compras novas entram na fatura do ciclo de fechamento. O disponível desconta as faturas ainda não pagas.")}</p>
         </div>

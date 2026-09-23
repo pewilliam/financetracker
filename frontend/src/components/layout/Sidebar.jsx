@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, Receipt, Wallet, CreditCard, ChartPie, Layers, Calculator, Coins, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Receipt, Wallet, CreditCard, ChartPie, Layers, Repeat2, Calculator, Coins, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
@@ -19,6 +19,7 @@ function SidebarContent({ open, setOpen, onClose }) {
     [t("sidebar.wallets"), "/carteiras", Wallet],
     [t("sidebar.categories"), "/categorias", ChartPie],
     [t("sidebar.installments"), "/parcelamentos", Layers],
+    [t("sidebar.subscriptions"), "/assinaturas", Repeat2],
     [t("sidebar.simulator"), "/simulador", Calculator],
     [t("sidebar.receivables"), "/recebiveis", Coins]
   ];

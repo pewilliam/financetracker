@@ -243,6 +243,14 @@ export function createCardPurchase(cardId, payload) {
   });
 }
 
+export function listCardSubscriptions() {
+  return request("/card-subscriptions");
+}
+
+export function cancelCardSubscription(subscriptionId) {
+  return request(`/card-subscriptions/${subscriptionId}`, { method: "DELETE" });
+}
+
 export function getCategoryBreakdown(year, month, { includeDetails = false, signal } = {}) {
   const query = includeDetails ? "?include_details=true" : "";
   return request(`/months/${year}/${month}/categories${query}`, { signal });

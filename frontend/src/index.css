@@ -3631,10 +3631,75 @@ select {
   background: rgba(255,255,255,.92);
   color: color-mix(in srgb, var(--invoice-color, #14A078) 62%, #0D1F18);
 }
+.invoice-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 22px;
+}
+.invoice-amounts.has-projection .invoice-amount strong {
+  font-size: 24px;
+}
 .invoice-amount {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+.invoice-amount.is-projected strong {
+  font-size: 22px;
+}
+.invoice-group-meta strong.is-projected {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.invoice-items-projected-total {
+  color: var(--muted);
+  font-size: 13px;
+}
+.invoice-items-row.is-projected {
+  background: color-mix(in srgb, var(--invoice-color, var(--primary)) 7%, transparent);
+}
+.invoice-entry-recurring {
+  display: grid;
+  gap: 10px;
+}
+.invoice-entry-recurring > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  font-weight: 700;
+}
+.invoice-entry-charge-day {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+.invoice-entry-charge-day input {
+  width: 88px;
+}
+.invoice-entry-charge-day small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.transaction-mode-switch.columns-3 {
+  grid-template-columns: repeat(3, max-content);
+}
+.invoice-subscription-end {
+  display: grid;
+  gap: 12px;
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px;
+}
+.invoice-subscription-end h2,
+.invoice-subscription-end p {
+  margin: 0;
+}
+.invoice-subscription-end p {
+  color: var(--muted);
+  line-height: 1.45;
 }
 .invoice-amount small {
   color: rgba(255,255,255,.74);
@@ -8942,9 +9007,21 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 
 @media (min-width: 768px) {
-  .invoice-entry-modal { width: min(660px, calc(100vw - 32px)); }
-  .invoice-entry-modal .transaction-mode-switch { min-width: max-content; }
-  .invoice-entry-modal .transaction-mode-switch button { white-space: nowrap; }
+  .transaction-entry-titlebar:has(.transaction-mode-switch.columns-3) {
+    grid-template-columns: 42px minmax(0, 1fr) 38px;
+  }
+  .transaction-entry-titlebar:has(.transaction-mode-switch.columns-3) .transaction-mode-switch {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .transaction-entry-titlebar:has(.transaction-mode-switch.columns-3) > .icon-btn {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .invoice-entry-modal .transaction-mode-switch button,
+  .installment-modal .transaction-mode-switch button { white-space: nowrap; }
 }
 
 @media (max-width: 767px) {
@@ -8965,6 +9042,11 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   }
   .invoice-entry-modal .transaction-mode-switch { min-width: 0; max-width: 100%; }
   .invoice-entry-modal .transaction-mode-switch button { min-width: 0; white-space: normal; }
+  .transaction-entry-titlebar .transaction-mode-switch.columns-3,
+  .transaction-modal .transaction-mode-switch.columns-3,
+  .invoice-entry-modal .transaction-mode-switch.columns-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .invoice-entry-modal-body {
     width: 100%;
     min-width: 0;
@@ -10822,6 +10904,27 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installments-page-head h1 { margin: 0; font-size: clamp(22px, 2vw, 28px); font-weight: 800; letter-spacing: -.025em; }
 .installments-page-head > div > p:last-child { max-width: 630px; margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .installments-page-head .btn { flex: 0 0 auto; }
+.subscription-list { display: grid; gap: 8px; }
+.subscription-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+.subscription-dot { width: 10px; height: 10px; border-radius: 50%; }
+.subscription-main { min-width: 0; display: grid; gap: 3px; }
+.subscription-main strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-main small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-row > b { font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+@media (max-width: 640px) {
+  .subscription-row { grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .subscription-row > b { grid-column: 2; }
+  .subscription-row > .btn { grid-column: 3; grid-row: 1 / span 2; }
+}
 .installment-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .installment-summary-grid > div {
   min-width: 0;
