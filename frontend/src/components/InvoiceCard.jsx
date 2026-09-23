@@ -35,11 +35,19 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const refundLabel = language === "en-US" ? "Refund" : "Reembolso";
   const deleteLabel = language === "en-US" ? "Delete invoice" : "Excluir fatura";
   const canDelete = totalItemCount === 0 && Boolean(onDelete);
-  const dueLabel = language === "en-US" ? "Due" : "Vence";
-  const dueYear = Number(String(invoice.due_date).slice(0, 4));
-  const dueDateLabel = dueYear === new Date().getFullYear()
-    ? formatDateWithWeekday(invoice.due_date)
-    : `${formatDateWithWeekday(invoice.due_date)} ${dueYear}`;
+  const paymentDate = String(invoice.payment_date || invoice.due_date).slice(0, 10);
+  const dueDate = String(invoice.due_date).slice(0, 10);
+  const paymentDiffers = paymentDate !== dueDate;
+  const dueLabel = paymentDiffers
+    ? (language === "en-US" ? "Pays" : "Paga")
+    : (language === "en-US" ? "Due" : "Vence");
+  const paymentYear = Number(paymentDate.slice(0, 4));
+  const dueDateLabel = paymentYear === new Date().getFullYear()
+    ? formatDateWithWeekday(paymentDate)
+    : `${formatDateWithWeekday(paymentDate)} ${paymentYear}`;
+  const dueHint = paymentDiffers
+    ? `${language === "en-US" ? "Due" : "Vence"} ${formatDateShort(dueDate)}`
+    : "";
 
   const renderQuickAddActions = () => (
     <div className="invoice-quick-add-actions">
@@ -85,22 +93,24 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
             type="button"
             onClick={() => onEditDueDate?.(invoice)}
             aria-haspopup="dialog"
-            aria-label={`${language === "en-US" ? "Edit due date" : "Editar vencimento"}: ${formatDateShort(invoice.due_date)}`}
-            title={formatDateShort(invoice.due_date)}
+            aria-label={`${language === "en-US" ? "Edit payment date" : "Editar pagamento"}: ${formatDateShort(paymentDate)}`}
+            title={formatDateShort(paymentDate)}
           >
             <CalendarDays size={14} />
             <span className="invoice-due-copy">
               <small>{dueLabel}</small>
               <strong>{dueDateLabel}</strong>
+              {dueHint ? <em>{dueHint}</em> : null}
             </span>
             <Pencil size={12} className="invoice-due-pencil" />
           </button>
         ) : (
-          <p className="invoice-due-summary" title={formatDateShort(invoice.due_date)}>
+          <p className="invoice-due-summary" title={formatDateShort(paymentDate)}>
             <CalendarDays size={14} />
             <span className="invoice-due-copy">
               <small>{dueLabel}</small>
               <strong>{dueDateLabel}</strong>
+              {dueHint ? <em>{dueHint}</em> : null}
             </span>
           </p>
         )}

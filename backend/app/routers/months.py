@@ -3,7 +3,7 @@ from bisect import bisect_left
 from datetime import date, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, noload, selectinload
 from app.database import get_db
 from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, CreditCard, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
@@ -587,6 +587,7 @@ def get_category_breakdown(
         db.query(
             Invoice.id,
             Invoice.due_date,
+            Invoice.planned_payment_date,
             CreditCard.name.label("invoice_name"),
             CreditCard.payment_forecast_day,
             CreditCard.payment_forecast_kind,
@@ -594,14 +595,18 @@ def get_category_breakdown(
         .join(CreditCard, Invoice.credit_card_id == CreditCard.id)
         .filter(
             Invoice.user_id == current_user.id,
-            Invoice.due_date >= start,
-            Invoice.due_date <= end,
+            or_(
+                and_(Invoice.due_date >= start, Invoice.due_date <= end),
+                and_(Invoice.planned_payment_date >= start, Invoice.planned_payment_date <= end),
+            ),
         )
         .all()
     )
     invoices_by_id = {row.id: row for row in invoice_rows}
 
     def invoice_control_date(row) -> date:
+        if row.planned_payment_date:
+            return row.planned_payment_date
         return invoice_payment_date(row.due_date, row.payment_forecast_day, row.payment_forecast_kind)
     invoice_ids = list(invoices_by_id)
     if invoice_ids:
@@ -612,6 +617,10 @@ def get_category_breakdown(
             .all()
         )
         for item in invoice_items:
+            row = invoices_by_id[item.invoice_id]
+            control_date = invoice_control_date(row)
+            if control_date < start or control_date > end:
+                continue
             add_expense_amount(
                 item,
                 item.amount,
@@ -620,8 +629,8 @@ def get_category_breakdown(
                     "source_id": item.id,
                     "description": item.description,
                     "amount": item.amount,
-                    "date": invoice_control_date(invoices_by_id[item.invoice_id]),
-                    "invoice_name": invoices_by_id[item.invoice_id].invoice_name,
+                    "date": control_date,
+                    "invoice_name": row.invoice_name,
                 } if include_details else None,
             )
 
@@ -637,6 +646,10 @@ def get_category_breakdown(
             .all()
         )
         for item in installment_items:
+            row = invoices_by_id[item.invoice_id]
+            control_date = invoice_control_date(row)
+            if control_date < start or control_date > end:
+                continue
             add_expense_amount(
                 item.purchase if item.purchase else item,
                 item.amount,
@@ -645,8 +658,8 @@ def get_category_breakdown(
                     "source_id": item.id,
                     "description": item.purchase_description or item.description,
                     "amount": item.amount,
-                    "date": invoice_control_date(invoices_by_id[item.invoice_id]),
-                    "invoice_name": invoices_by_id[item.invoice_id].invoice_name,
+                    "date": control_date,
+                    "invoice_name": row.invoice_name,
                     "installment_number": item.installment_number,
                     "installment_count": item.installment_count,
                 } if include_details else None,

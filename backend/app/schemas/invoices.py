@@ -73,7 +73,7 @@ class InvoicePaidUpdate(APIModel):
 
 
 class InvoiceUpdate(APIModel):
-    due_date: date
+    planned_payment_date: date
 
 
 class InvoiceOut(APIModel):
@@ -82,6 +82,8 @@ class InvoiceOut(APIModel):
     name: str
     color: str = "#3B82F6"
     due_date: date
+    planned_payment_date: Optional[date] = None
+    payment_date: Optional[date] = None
     total_amount: Decimal
     paid: bool = False
     linked_transaction_id: Optional[int] = None

@@ -4,23 +4,15 @@ import { CalendarDays, Loader2, X } from "lucide-react";
 
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { daysUntil, formatDateWithWeekday, getDaysUntil } from "../utils/format.js";
+import { daysUntil, formatDateShort, formatDateWithWeekday, getDaysUntil } from "../utils/format.js";
 
-function snapToCardDueDay(value, dueDay) {
-  if (!value || !dueDay) return value;
-  const [year, month] = String(value).split("-").map(Number);
-  if (!year || !month) return value;
-  const last = new Date(year, month, 0).getDate();
-  const day = String(Math.min(Number(dueDay), last)).padStart(2, "0");
-  return `${year}-${String(month).padStart(2, "0")}-${day}`;
-}
-
-export default function InvoiceDueDateModal({ invoice, cardDueDay = null, onSave, onClose }) {
+export default function InvoiceDueDateModal({ invoice, onSave, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
-  const [dueDate, setDueDate] = useState(() => snapToCardDueDay(invoice.due_date, cardDueDay));
+  const currentPayment = String(invoice.payment_date || invoice.due_date).slice(0, 10);
+  const [dueDate, setDueDate] = useState(currentPayment);
   const [saving, setSaving] = useState(false);
-  const changed = Boolean(dueDate) && dueDate !== invoice.due_date;
+  const changed = Boolean(dueDate) && dueDate !== currentPayment;
   const overdue = Boolean(dueDate) && getDaysUntil(dueDate) < 0;
 
   useEffect(() => {
@@ -53,7 +45,7 @@ export default function InvoiceDueDateModal({ invoice, cardDueDay = null, onSave
           <span className="transaction-entry-icon"><CalendarDays size={21} /></span>
           <div className="transaction-entry-heading">
             <p>{copy(`FATURA · ${invoice.name}`, `INVOICE · ${invoice.name}`)}</p>
-            <h2 id="invoice-due-date-modal-title">{copy("Editar vencimento", "Edit due date")}</h2>
+            <h2 id="invoice-due-date-modal-title">{copy("Editar pagamento", "Edit payment date")}</h2>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} disabled={saving} aria-label={copy("Fechar", "Close")}>
             <X size={18} />
@@ -62,15 +54,15 @@ export default function InvoiceDueDateModal({ invoice, cardDueDay = null, onSave
 
         <div className="transaction-modal-body invoice-due-date-body">
           <div className="invoice-due-date-field">
-            <span>{copy("Data de vencimento", "Due date")}</span>
-            <DateField value={dueDate} onChange={(value) => setDueDate(snapToCardDueDay(value, cardDueDay))} ariaInvalid={!dueDate} />
-            {cardDueDay ? <small>{copy("O dia do vencimento segue o dia do cartão. A data salva usa esse dia no mês escolhido.", "The due day follows the card. The saved date uses that day in the month you choose.")}</small> : null}
+            <span>{copy("Data de pagamento", "Payment date")}</span>
+            <DateField value={dueDate} onChange={setDueDate} ariaInvalid={!dueDate} />
+            <small>{copy(`O vencimento continua em ${formatDateShort(invoice.due_date)}. Esta data vale só para o pagamento desta fatura no controle mensal.`, `The due date stays on ${formatDateShort(invoice.due_date)}. This date is only this invoice's payment on monthly control.`)}</small>
           </div>
 
           <div className={`invoice-due-date-preview ${overdue ? "overdue" : ""}`}>
             <CalendarDays size={16} />
             <span>
-              <small>{changed ? copy("Novo vencimento", "New due date") : copy("Vencimento atual", "Current due date")}</small>
+              <small>{changed ? copy("Novo pagamento", "New payment date") : copy("Pagamento atual", "Current payment date")}</small>
               <strong>{dueDate ? formatDateWithWeekday(dueDate) : "--"}</strong>
             </span>
             {dueDate && <em>{daysUntil(dueDate)}</em>}
@@ -82,7 +74,7 @@ export default function InvoiceDueDateModal({ invoice, cardDueDay = null, onSave
           <button className="btn btn-primary transaction-save" type="submit" disabled={!changed || saving}>
             {saving
               ? <><Loader2 className="spin" size={16} /> {copy("Salvando...", "Saving...")}</>
-              : copy("Salvar vencimento", "Save due date")}
+              : copy("Salvar pagamento", "Save payment date")}
           </button>
         </footer>
       </form>
