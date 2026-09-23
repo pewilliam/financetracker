@@ -1,3 +1,4 @@
+import calendar
 from datetime import date
 from decimal import Decimal
 import re
@@ -17,6 +18,43 @@ def invoice_transaction_description(invoice_name: str) -> str:
 
 def normalize_invoice_color(color: str | None) -> str:
     return color if color and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) else DEFAULT_INVOICE_COLOR
+
+
+def invoice_payment_date(due_date: date, payment_forecast_day: int | None) -> date:
+    """Day the invoice payment is counted on monthly control.
+
+    The forecast day stays in the due month. An empty forecast keeps the due date.
+    """
+    if not payment_forecast_day:
+        return due_date
+    last_day = calendar.monthrange(due_date.year, due_date.month)[1]
+    return date(due_date.year, due_date.month, min(int(payment_forecast_day), last_day))
+
+
+def _invoice_payment_date(invoice: Invoice) -> date:
+    card = invoice.card
+    forecast_day = card.payment_forecast_day if card is not None else None
+    return invoice_payment_date(invoice.due_date, forecast_day)
+
+
+def sync_open_invoice_payment_dates(db: Session, card: CreditCard) -> None:
+    invoices = (
+        db.query(Invoice)
+        .filter(
+            Invoice.credit_card_id == card.id,
+            Invoice.paid.is_(False),
+            Invoice.linked_transaction_id.isnot(None),
+        )
+        .all()
+    )
+    today = date.today()
+    for invoice in invoices:
+        linked = db.get(Transaction, invoice.linked_transaction_id)
+        if linked is None:
+            continue
+        payment_date = invoice_payment_date(invoice.due_date, card.payment_forecast_day)
+        linked.date = payment_date
+        linked.is_future = payment_date > today
 
 
 def invoice_accepts_new_charges(invoice: Invoice, allow_overdue: bool = False) -> bool:
@@ -42,10 +80,11 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     if invoice.linked_transaction_id:
         linked = db.get(Transaction, invoice.linked_transaction_id)
         if linked:
+            payment_date = _invoice_payment_date(invoice)
             linked.amount = invoice.total_amount
-            linked.date = invoice.due_date
+            linked.date = payment_date
             linked.description = invoice_transaction_description(invoice.name)
-            linked.is_future = False if invoice.paid else invoice.due_date > date.today()
+            linked.is_future = False if invoice.paid else payment_date > date.today()
 
     return invoice
 
@@ -63,13 +102,14 @@ def create_invoice_with_transaction(db: Session, user_id: int, card: CreditCard,
     db.add(invoice)
     db.flush()
 
+    payment_date = invoice_payment_date(invoice.due_date, card.payment_forecast_day)
     transaction = Transaction(
         user_id=user_id,
-        date=invoice.due_date,
+        date=payment_date,
         type="expense",
         amount=invoice.total_amount,
         description=invoice_transaction_description(card.name),
-        is_future=invoice.due_date > date.today(),
+        is_future=payment_date > date.today(),
         invoice_id=invoice.id,
         wallet_id=wallet.id,
     )

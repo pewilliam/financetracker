@@ -511,8 +511,12 @@ function findInvoiceForMonth(invoices, monthValue, allowOverdueInvoiceEdits = fa
 function purchaseDateForCycle(card, dueDate) {
   const [year, month] = String(dueDate).split("-").map(Number);
   const close = Number(card?.due_day) <= Number(card?.closing_day) ? shiftMonth(year, month, -1) : { year, month };
-  const day = Math.min(Number(card.closing_day) || 1, lastDayOfMonth(close.year, close.month));
-  return `${close.year}-${String(close.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const closingDay = Math.min(Number(card.closing_day) || 1, lastDayOfMonth(close.year, close.month));
+  const closingDate = new Date(Date.UTC(close.year, close.month - 1, closingDay));
+  closingDate.setUTCDate(closingDate.getUTCDate() - 1);
+  const day = String(closingDate.getUTCDate()).padStart(2, "0");
+  const resultMonth = String(closingDate.getUTCMonth() + 1).padStart(2, "0");
+  return `${closingDate.getUTCFullYear()}-${resultMonth}-${day}`;
 }
 
 const SIMULATION_TUTORIAL_STEPS = [

@@ -189,7 +189,8 @@ def charge_date_for_cycle(closing_day: int, due_day: int, due_date: date, charge
     while index <= end:
         year, month_index = divmod(index - 1, 12)
         candidate = date_on_day(year, month_index + 1, charge_day)
-        if previous_closing < candidate <= closing:
+        # Closing day opens the next cycle, so this invoice owns [previous_closing, closing).
+        if found is None and previous_closing <= candidate < closing:
             found = candidate
         index += 1
     return found

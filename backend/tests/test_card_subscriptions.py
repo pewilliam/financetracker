@@ -154,6 +154,15 @@ class CardSubscriptionTests(unittest.TestCase):
         self.assertEqual(october.projected_total, Decimal("55.00"))
         self.assertEqual(october.projected_items[0].charge_date, date(2026, 9, 20))
 
+    def test_closing_day_charge_is_projected_on_the_following_invoice(self):
+        self._add_subscription(charge_day=25, start=date(2026, 8, 25))
+        presented = self._project()
+        projected = [invoice for invoice in presented if invoice.is_projected and invoice.projected_amount]
+        by_due = {invoice.due_date: invoice for invoice in projected}
+        self.assertNotIn(date(2026, 10, 5), by_due)
+        november = by_due[date(2026, 11, 5)]
+        self.assertEqual(november.projected_items[0].charge_date, date(2026, 9, 25))
+
     def test_indefinite_projection_stays_on_the_current_and_next_invoice(self):
         create_installment(
             InstallmentCreate(

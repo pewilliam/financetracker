@@ -8,7 +8,7 @@ from app.models import CardSubscriptionSkip, InstallmentItem, InstallmentPurchas
 from app.schemas.invoices import InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
 from app.security import get_current_user
 from app.services.credit_cards import relocate_invoice_item
-from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
+from app.services.invoices import invoice_accepts_new_charges, invoice_payment_date, recalculate_invoice_total
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.subscriptions import (
     apply_subscription_projections,
@@ -226,7 +226,9 @@ def set_invoice_paid(
             .first()
         )
         if linked:
-            linked.is_future = False if payload.paid else invoice.due_date > date.today()
+            forecast_day = invoice.card.payment_forecast_day if invoice.card is not None else None
+            payment_date = invoice_payment_date(invoice.due_date, forecast_day)
+            linked.is_future = False if payload.paid else payment_date > date.today()
 
     db.commit()
     db.refresh(invoice)

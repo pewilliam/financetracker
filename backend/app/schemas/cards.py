@@ -19,6 +19,7 @@ class CardCreate(APIModel):
     color: str = "#3B82F6"
     due_day: int = Field(ge=1, le=31)
     closing_day: int = Field(ge=1, le=31)
+    payment_forecast_day: Optional[int] = Field(default=None, ge=1, le=31)
     credit_limit: Optional[NonNegativeMoney] = None
     institution: Optional[str] = None
     default_wallet_id: Optional[int] = None
@@ -29,6 +30,7 @@ class CardUpdate(APIModel):
     color: Optional[str] = None
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     closing_day: Optional[int] = Field(default=None, ge=1, le=31)
+    payment_forecast_day: Optional[int] = Field(default=None, ge=1, le=31)
     credit_limit: Optional[NonNegativeMoney] = None
     institution: Optional[str] = None
     default_wallet_id: Optional[int] = None
@@ -40,6 +42,7 @@ class CardOut(APIModel):
     color: str
     due_day: int
     closing_day: int
+    payment_forecast_day: Optional[int] = None
     credit_limit: Optional[Decimal] = None
     institution: Optional[str] = None
     default_wallet_id: Optional[int] = None
