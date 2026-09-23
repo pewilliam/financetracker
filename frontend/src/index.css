@@ -3827,13 +3827,19 @@ select {
 .invoice-due-copy {
   display: inline-flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 5px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .invoice-due-copy small { color: rgba(255,255,255,.72); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .invoice-due-copy strong { font-size: 13px; white-space: nowrap; }
+.invoice-due-copy em {
+  font-style: normal;
+  color: rgba(255,255,255,.78);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 @media (max-width: 767px) {
   .invoice-header .invoice-due-summary { width: 100%; }
   .invoice-header .invoice-due-copy { flex: 1; }

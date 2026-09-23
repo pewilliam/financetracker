@@ -17,6 +17,7 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const openedInitialGroup = useRef(false);
   const statusMenuRef = useRef(null);
   const invoiceModals = useInvoiceItemModals({
     invoices,
@@ -132,21 +133,22 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
   });
   const hasActiveFilters = filters.search || filters.statuses.length !== statusOrder.length || filters.color !== "all";
   const invoiceGroups = [
-    { id: "current", label: tt("invoices.currentMonth", "Mês atual"), items: currentMonthInvoices, empty: "Sem faturas para o mês atual." },
-    { id: "next", label: tt("invoices.nextMonth", "Próximo mês"), items: nextMonthInvoices, empty: "Sem faturas para o próximo mês." },
+    { id: "current", label: tt("invoices.currentMonth", "Vencem este mês"), items: currentMonthInvoices, empty: tt("invoices.currentMonthEmpty", "Sem faturas que vencem este mês.") },
+    { id: "next", label: tt("invoices.nextMonth", "Vencem no próximo mês"), items: nextMonthInvoices, empty: tt("invoices.nextMonthEmpty", "Sem faturas que vencem no próximo mês.") },
     { id: "other", label: "Demais faturas", items: otherInvoices, empty: "Sem demais faturas." },
     { id: "paid", label: "Faturas pagas", items: paidInvoices, empty: "Sem faturas pagas." }
   ].filter((group) => group.id !== "other" || group.items.length > 0);
 
   useEffect(() => {
-    setExpandedGroups((current) => {
-      const next = {};
-      invoiceGroups.forEach((group) => {
-        next[group.id] = current[group.id] ?? (group.id === "current" && group.items.length > 0);
-      });
-      return next;
+    if (openedInitialGroup.current || invoices.length === 0) return;
+    const firstWithItems = invoiceGroups.find((group) => group.items.length > 0);
+    const next = {};
+    invoiceGroups.forEach((group) => {
+      next[group.id] = group.id === firstWithItems?.id;
     });
-  }, [currentMonthInvoices.length, nextMonthInvoices.length, otherInvoices.length, paidInvoices.length]);
+    openedInitialGroup.current = true;
+    setExpandedGroups(next);
+  }, [invoices.length, currentMonthInvoices.length, nextMonthInvoices.length, otherInvoices.length, paidInvoices.length]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
