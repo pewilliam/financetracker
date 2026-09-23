@@ -166,39 +166,6 @@ def same_cycle_due_date(
     return invoice_period(new_closing_day, new_due_day, anchor)[1]
 
 
-def _purchase_dates(invoice: Invoice) -> list[date]:
-    return [item.purchase_date for item in invoice.items if item.purchase_date]
-
-
-def _due_target_for_invoice(
-    invoice: Invoice,
-    card: CreditCard,
-    previous_due_day: int,
-    previous_closing_day: int,
-    calendar_changed: bool,
-) -> date:
-    from app.services.credit_cards import invoice_period
-
-    purchase_dates = _purchase_dates(invoice)
-    if purchase_dates:
-        counted: dict[date, int] = {}
-        for purchase_date in purchase_dates:
-            due = invoice_period(card.closing_day, card.due_day, purchase_date)[1]
-            counted[due] = counted.get(due, 0) + 1
-        due, count = max(counted.items(), key=lambda item: item[1])
-        if count == len(purchase_dates):
-            return due
-    if calendar_changed:
-        return same_cycle_due_date(
-            invoice.due_date,
-            previous_due_day,
-            previous_closing_day,
-            card.due_day,
-            card.closing_day,
-        )
-    return invoice.due_date
-
-
 def sync_open_invoices_to_card(
     db: Session,
     card: CreditCard,
@@ -207,102 +174,50 @@ def sync_open_invoices_to_card(
     previous_closing_day: int,
     calendar_changed: bool,
 ) -> None:
-    """Keep open invoices on the card calendar and refresh their payment dates.
+    """Move open invoices to the new card day and refresh their payment dates.
 
-    Paid invoices stay where they are. A charge decides the due date of its
-    invoice. Invoices without charges keep the same cycle when the closing or
-    due day changes. A planned payment date chosen on one invoice is kept.
+    Each invoice keeps the same billing cycle. The purchase date is not used
+    to choose another month. Paid invoices stay where they are. A planned
+    payment date chosen on one invoice is kept. Changing only the forecast
+    does not move the due date.
     """
-    from sqlalchemy.orm import selectinload
-
     invoices = (
         db.query(Invoice)
-        .options(selectinload(Invoice.items), selectinload(Invoice.installment_items))
         .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(False))
         .order_by(Invoice.due_date, Invoice.id)
         .all()
     )
-    occupied = {
-        row.due_date
-        for row in db.query(Invoice.due_date)
-        .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(True))
-        .all()
-    }
-    proposals = [
-        (
-            invoice,
-            _due_target_for_invoice(
+    if calendar_changed and invoices:
+        occupied = {
+            row.due_date
+            for row in db.query(Invoice.due_date)
+            .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(True))
+            .all()
+        }
+        targets = [
+            (
                 invoice,
-                card,
-                previous_due_day,
-                previous_closing_day,
-                calendar_changed,
-            ),
-        )
-        for invoice in invoices
-    ]
-    grouped: dict[date, list[Invoice]] = {}
-    for invoice, target in proposals:
-        grouped.setdefault(target, []).append(invoice)
-    chosen: dict[int, date] = {}
-    removable: list[Invoice] = []
-    for target, group in grouped.items():
-        charged = [invoice for invoice in group if _purchase_dates(invoice)]
-        empty = [invoice for invoice in group if not invoice.items and not invoice.installment_items]
-        if (
-            target not in occupied
-            and len(group) > 1
-            and len(charged) == 1
-            and len(empty) == len(group) - 1
-        ):
-            chosen[charged[0].id] = target
-            removable.extend(empty)
-            continue
-        if len(group) == 1 and target not in occupied:
-            chosen[group[0].id] = target
-            continue
-        for invoice in group:
-            chosen[invoice.id] = invoice.due_date
-    if removable:
-        removable_ids = {invoice.id for invoice in removable}
-        for invoice in removable:
-            linked_id = invoice.linked_transaction_id
-            invoice.linked_transaction_id = None
-            db.flush()
-            if linked_id:
-                linked = db.get(Transaction, linked_id)
-                if linked is not None:
-                    linked.invoice_id = None
-                    if linked.amount == 0:
-                        db.delete(linked)
-            db.delete(invoice)
-        db.flush()
-        invoices = [invoice for invoice in invoices if invoice.id not in removable_ids]
-    final = {invoice.id: invoice.due_date for invoice in invoices}
-    moved = True
-    while moved:
-        moved = False
-        for invoice in sorted(invoices, key=lambda item: item.due_date, reverse=True):
-            target = chosen[invoice.id]
-            if final[invoice.id] == target or target in occupied:
-                continue
-            if any(final[other.id] == target for other in invoices if other.id != invoice.id):
-                continue
-            final[invoice.id] = target
-            moved = True
-    assigned = [final[invoice.id] for invoice in invoices]
-    if len(assigned) != len(set(assigned)) or occupied.intersection(assigned):
-        final = {invoice.id: invoice.due_date for invoice in invoices}
-
-    changing = [(invoice, final[invoice.id]) for invoice in invoices if invoice.due_date != final[invoice.id]]
-    for invoice, _target in changing:
-        invoice.due_date = date(1000, 1, 1) + timedelta(days=invoice.id)
-    if changing:
-        db.flush()
-    for invoice, target in changing:
-        invoice.due_date = target
-    if changing:
-        db.flush()
+                same_cycle_due_date(
+                    invoice.due_date,
+                    previous_due_day,
+                    previous_closing_day,
+                    card.due_day,
+                    card.closing_day,
+                ),
+            )
+            for invoice in invoices
+        ]
+        proposed = [target for _invoice, target in targets]
+        if len(proposed) == len(set(proposed)) and not occupied.intersection(proposed):
+            changing = [(invoice, target) for invoice, target in targets if invoice.due_date != target]
+            for invoice, _target in changing:
+                invoice.due_date = date(1000, 1, 1) + timedelta(days=invoice.id)
+            if changing:
+                db.flush()
+            for invoice, target in changing:
+                invoice.due_date = target
+            if changing:
+                db.flush()
 
     today = date.today()
     for invoice in invoices:

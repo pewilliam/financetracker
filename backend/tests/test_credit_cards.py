@@ -340,6 +340,22 @@ class CreditCardFlowTests(unittest.TestCase):
         self.assertEqual(current.due_date, date(2026, 10, 5))
         self.assertEqual(current.linked_transaction.date, date(2026, 9, 30))
 
+    def test_card_due_day_keeps_each_invoice_in_its_own_month(self):
+        september = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 11, 5))
+        october = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 12, 5))
+        self.db.add(InvoiceItem(
+            invoice_id=september.id,
+            description="Compra de setembro",
+            amount=Decimal("40.00"),
+            purchase_date=date(2026, 10, 26),
+        ))
+        self.db.commit()
+
+        update_card(self.card.id, CardUpdate(due_day=10), self.db, self.user)
+        self.db.expire_all()
+        self.assertEqual(self.db.get(Invoice, september.id).due_date, date(2026, 11, 10))
+        self.assertEqual(self.db.get(Invoice, october.id).due_date, date(2026, 12, 10))
+
     def test_forecast_change_does_not_merge_open_invoices(self):
         first = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 9, 5))
         second = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 9, 18))
