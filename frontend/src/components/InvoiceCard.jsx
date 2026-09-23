@@ -39,7 +39,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const dueDate = String(invoice.due_date).slice(0, 10);
   const paymentDiffers = paymentDate !== dueDate;
   const dueLabel = paymentDiffers
-    ? (language === "en-US" ? "Pays" : "Paga")
+    ? (language === "en-US" ? "Forecast payment" : "Pagamento previsto")
     : (language === "en-US" ? "Due" : "Vence");
   const paymentYear = Number(paymentDate.slice(0, 4));
   const dueDateLabel = paymentYear === new Date().getFullYear()
@@ -93,7 +93,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
             type="button"
             onClick={() => onEditDueDate?.(invoice)}
             aria-haspopup="dialog"
-            aria-label={`${language === "en-US" ? "Edit payment date" : "Editar pagamento"}: ${formatDateShort(paymentDate)}`}
+            aria-label={`${language === "en-US" ? "Edit forecast payment" : "Editar pagamento previsto"}: ${formatDateShort(paymentDate)}`}
             title={formatDateShort(paymentDate)}
           >
             <CalendarDays size={14} />
