@@ -125,7 +125,7 @@ export default function CardsPage({ onChanged, onViewCurrentInvoice }) {
                   <span className="plastic-chip" aria-hidden="true" />
                   <div className="plastic-card-identity">
                     <strong>{card.name}</strong>
-                    <span>{tt("cards.closesOn", "Fecha dia")} {card.closing_day} · {tt("cards.dueOn", "Vence dia")} {card.due_day}{card.payment_forecast_day ? ` · ${tt("cards.paysOn", "Paga dia")} ${card.payment_forecast_day}` : ""}</span>
+                    <span>{tt("cards.closesOn", "Fecha dia")} {card.closing_day} · {tt("cards.dueOn", "Vence dia")} {card.due_day}</span>
                   </div>
                   <div className="plastic-card-figures">
                     <div><small>{tt("cards.limitShort", "Limite")}</small><strong>{moneyOrDash(card.credit_limit)}</strong></div>
