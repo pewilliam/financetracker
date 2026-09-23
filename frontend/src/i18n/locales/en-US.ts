@@ -690,8 +690,6 @@ export const enUS = {
     forecastChooseDay: "Choose the day",
     forecastDay: "Day",
     paysOn: "Pays on day",
-    paysFirst: "Pays on the 1st",
-    paysLast: "Pays on the last day",
     wallet: "Default wallet",
     walletPlaceholder: "Use the primary wallet",
     inactive: "INACTIVE",
