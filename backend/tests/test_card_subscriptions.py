@@ -12,7 +12,7 @@ from app.routers.cards import create_card_purchase
 from app.routers.invoices import delete_invoice_item, present_invoices
 from app.routers.subscriptions import cancel_card_subscription, list_card_subscriptions, update_card_subscription
 from app.schemas.invoices import PurchaseCreate
-from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionUpdate
+from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionPreview, CardSubscriptionUpdate
 from app.schemas.installments import InstallmentCreate, InstallmentDraftIn
 from app.routers.installments import create_installment
 from app.services.credit_cards import committed_by_card, invoice_period, shift_month
@@ -22,6 +22,7 @@ from app.services.subscriptions import (
     first_charge_on_or_after,
     materialize_due_subscriptions,
     next_cycle_due,
+    preview_subscription_charges,
     update_card_subscription as save_card_subscription,
 )
 
@@ -607,3 +608,56 @@ class CardSubscriptionTests(unittest.TestCase):
         self.assertEqual(payload.amount, Decimal("34.90"))
         self.assertEqual(payload.card_name, "Nubank")
         self.assertTrue(payload.active)
+        self.assertFalse(payload.has_posted_charge)
+
+    def test_preview_counts_charges_with_the_planner_calendar(self):
+        start = date(2026, 9, 20)
+        cases = [
+            ("monthly", 12, None, 12),
+            ("bimonthly", 12, None, 6),
+            ("quarterly", 12, None, 4),
+            ("semiannual", 12, None, 2),
+            ("annual", 24, None, 2),
+            ("quarterly", 10, None, 4),
+        ]
+        for period, months, end, expected in cases:
+            with self.subTest(period=period, months=months):
+                preview = preview_subscription_charges(CardSubscriptionPreview(
+                    purchase_date=start,
+                    charge_day=20,
+                    billing_period=period,
+                    term_kind="months",
+                    term_months=months,
+                    term_end_date=end,
+                ))
+                self.assertTrue(preview["valid"])
+                self.assertEqual(preview["charge_count"], expected)
+                self.assertEqual(preview["start_date"], start)
+
+        open_ended = preview_subscription_charges(CardSubscriptionPreview(
+            purchase_date=start,
+            charge_day=20,
+            billing_period="quarterly",
+            term_kind="indefinite",
+        ))
+        self.assertTrue(open_ended["valid"])
+        self.assertIsNone(open_ended["charge_count"])
+
+        until = preview_subscription_charges(CardSubscriptionPreview(
+            purchase_date=start,
+            charge_day=20,
+            billing_period="monthly",
+            term_kind="end_date",
+            term_end_date=date(2026, 11, 20),
+        ))
+        self.assertEqual(until["charge_count"], 3)
+
+        too_early = preview_subscription_charges(CardSubscriptionPreview(
+            purchase_date=start,
+            charge_day=20,
+            billing_period="monthly",
+            term_kind="end_date",
+            term_end_date=date(2026, 9, 1),
+        ))
+        self.assertFalse(too_early["valid"])
+        self.assertEqual(too_early["reason"], "end_before_start")

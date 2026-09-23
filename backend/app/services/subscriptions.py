@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -93,6 +94,68 @@ def is_scheduled_charge(subscription: CardSubscription, charge: date | None) -> 
         return False
     last = commitment_last_date(subscription)
     return last is None or charge <= last
+
+
+def preview_subscription_charges(payload, today: date | None = None) -> dict:
+    """Count the charges a plan will generate, using the same calendar as the planner."""
+    today = today or date.today()
+    charge_day = int(payload.charge_day)
+    if getattr(payload, "start_date", None) is not None:
+        anchor = SimpleNamespace(
+            start_date=payload.start_date,
+            charge_day=int(payload.current_charge_day or charge_day),
+        )
+        start = _start_date_for_update(anchor, charge_day, today, bool(getattr(payload, "posted", False)))
+    elif getattr(payload, "purchase_date", None) is not None:
+        start = first_charge_on_or_after(payload.purchase_date, charge_day)
+    else:
+        return {"valid": False, "reason": "missing_date", "start_date": None, "billing_interval_months": 1, "term_kind": payload.term_kind or "indefinite", "charge_count": None}
+
+    kind = payload.term_kind or "indefinite"
+    if kind == "months" and (payload.term_months is None or payload.term_months < 1 or payload.term_months > MAX_TERM_MONTHS):
+        return {"valid": False, "reason": "invalid_months", "start_date": start, "billing_interval_months": 1, "term_kind": kind, "charge_count": None}
+    if kind == "end_date" and payload.term_end_date is None:
+        return {"valid": False, "reason": "missing_end_date", "start_date": start, "billing_interval_months": 1, "term_kind": kind, "charge_count": None}
+
+    try:
+        interval, kind, months, end = subscription_plan(
+            payload.billing_period,
+            kind,
+            payload.term_months,
+            payload.term_end_date,
+            start,
+        )
+    except HTTPException:
+        return {"valid": False, "reason": "end_before_start", "start_date": start, "billing_interval_months": 1, "term_kind": kind, "charge_count": None}
+
+    plan = SimpleNamespace(
+        start_date=start,
+        term_kind=kind,
+        term_months=months,
+        term_end_date=end,
+    )
+    last = commitment_last_date(plan)
+    charge_count = None if last is None else sum(1 for _ in iter_charge_dates(start, charge_day, last, interval))
+    return {
+        "valid": True,
+        "reason": None,
+        "start_date": start,
+        "billing_interval_months": interval,
+        "term_kind": kind,
+        "charge_count": charge_count,
+    }
+
+
+def posted_subscription_ids(db: Session, user_id: int, subscription_ids: list[int]) -> set[int]:
+    if not subscription_ids:
+        return set()
+    return {
+        subscription_id
+        for (subscription_id,) in db.query(InvoiceItem.subscription_id)
+        .join(Invoice)
+        .filter(Invoice.user_id == user_id, InvoiceItem.subscription_id.in_(subscription_ids))
+        .distinct()
+    }
 
 
 def iter_charge_dates(start: date, charge_day: int, until: date, interval_months: int = 1):

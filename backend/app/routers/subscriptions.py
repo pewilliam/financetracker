@@ -3,9 +3,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import CardSubscription, User
-from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionUpdate
+from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionPreview, CardSubscriptionPreviewOut, CardSubscriptionUpdate
 from app.security import get_current_user
-from app.services.subscriptions import release_unused_commitment_invoices, update_card_subscription as save_card_subscription
+from app.services.subscriptions import (
+    posted_subscription_ids,
+    preview_subscription_charges,
+    release_unused_commitment_invoices,
+    update_card_subscription as save_card_subscription,
+)
 
 router = APIRouter(prefix="/api/card-subscriptions", tags=["card-subscriptions"])
 
@@ -15,7 +20,7 @@ def list_card_subscriptions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return (
+    subscriptions = (
         db.query(CardSubscription)
         .options(
             selectinload(CardSubscription.categories),
@@ -26,6 +31,18 @@ def list_card_subscriptions(
         .order_by(CardSubscription.active.desc(), CardSubscription.charge_day, CardSubscription.description)
         .all()
     )
+    posted = posted_subscription_ids(db, current_user.id, [subscription.id for subscription in subscriptions])
+    for subscription in subscriptions:
+        subscription.has_posted_charge = subscription.id in posted
+    return subscriptions
+
+
+@router.post("/preview", response_model=CardSubscriptionPreviewOut)
+def preview_card_subscription(
+    payload: CardSubscriptionPreview,
+    current_user: User = Depends(get_current_user),
+):
+    return preview_subscription_charges(payload)
 
 
 @router.put("/{subscription_id}", response_model=CardSubscriptionOut)
@@ -37,7 +54,7 @@ def update_card_subscription(
 ):
     subscription = save_card_subscription(db, current_user, subscription_id, payload)
     db.commit()
-    return (
+    refreshed = (
         db.query(CardSubscription)
         .options(
             selectinload(CardSubscription.categories),
@@ -47,6 +64,8 @@ def update_card_subscription(
         .filter(CardSubscription.id == subscription.id, CardSubscription.user_id == current_user.id)
         .one()
     )
+    refreshed.has_posted_charge = bool(posted_subscription_ids(db, current_user.id, [refreshed.id]))
+    return refreshed
 
 
 @router.delete("/{subscription_id}", status_code=204)

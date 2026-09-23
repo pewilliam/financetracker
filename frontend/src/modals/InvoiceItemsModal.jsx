@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { CalendarDays, ChevronDown, CircleDollarSign, CircleMinus, CreditCard, Filter, LayoutList, Pencil, Plus, Receipt, Repeat2, Search, Tag, Trash2, X } from "lucide-react";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import DeleteInvoiceEntryModal from "./DeleteInvoiceEntryModal.jsx";
+import SubscriptionDetailsModal from "./SubscriptionDetailsModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { MOBILE_MEDIA_QUERY } from "../app/constants.js";
 import { categoryCombination, entryCategories, invoiceCategoryTotals, isMobileViewport, normalizeInvoiceColor } from "../app/helpers.js";
@@ -37,6 +38,7 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
   const [breakdownOpen, setBreakdownOpen] = useState(() => !isMobileViewport());
   const [entryToDelete, setEntryToDelete] = useState(null);
   const [subscriptionToEnd, setSubscriptionToEnd] = useState(null);
+  const [subscriptionDetails, setSubscriptionDetails] = useState(null);
   const [endingSubscription, setEndingSubscription] = useState(false);
   const noCategoryLabel = copy("Sem categoria", "Uncategorized");
 
@@ -139,23 +141,31 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
     const refund = entry.context === "invoice" && entry.amount < 0;
     const projected = entry.context === "subscription";
     const item = entry.item;
+    const subscriptionId = item.subscription_id;
+    const openSubscription = () => setSubscriptionDetails({
+      id: subscriptionId,
+      chargeDate: item.subscription_charge_date || item.charge_date || null,
+    });
     const installmentStatus = entry.context === "installment"
       ? installmentRowStatus(item, invoice.paid, copy)
       : null;
     return (
       <div
         className={`invoice-items-row ${refund ? "refund" : ""} ${entry.context === "installment" ? "is-installment" : ""} ${projected ? "is-projected" : ""}`}
-        role={projected ? undefined : "button"}
-        tabIndex={projected ? undefined : "0"}
-        onClick={() => { if (!projected) onViewItem?.(invoice, item, entry.context); }}
+        role="button"
+        tabIndex="0"
+        onClick={() => { if (subscriptionId) openSubscription(); else onViewItem?.(invoice, item, entry.context); }}
         onKeyDown={(event) => {
-          if (projected || event.target !== event.currentTarget) return;
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onViewItem?.(invoice, item, entry.context);
+            if (subscriptionId) openSubscription();
+            else onViewItem?.(invoice, item, entry.context);
           }
         }}
-        aria-label={`${copy("Ver detalhes de", "View details for")} ${entry.description}`}
+        aria-label={subscriptionId
+          ? `${copy("Ver detalhes da assinatura", "View subscription details")} ${entry.description}`
+          : `${copy("Ver detalhes de", "View details for")} ${entry.description}`}
         key={entry.key}
       >
         <span className="invoice-items-row-main">
@@ -394,6 +404,13 @@ export default function InvoiceItemsModal({ invoice, expenseOptions = [], canAdd
           <button className="btn btn-primary" type="button" onClick={onClose}>{copy("Fechar", "Close")}</button>
         </footer>
       </section>
+      {subscriptionDetails && (
+        <SubscriptionDetailsModal
+          subscriptionId={subscriptionDetails.id}
+          chargeDate={subscriptionDetails.chargeDate}
+          onClose={() => setSubscriptionDetails(null)}
+        />
+      )}
       {subscriptionToEnd && (
         <div className="modal-layer">
           <button className="modal-backdrop" type="button" onClick={endingSubscription ? undefined : () => setSubscriptionToEnd(null)} aria-label={copy("Fechar", "Close")} />

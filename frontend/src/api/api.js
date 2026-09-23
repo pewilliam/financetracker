@@ -247,6 +247,10 @@ export function listCardSubscriptions() {
   return request("/card-subscriptions");
 }
 
+export function previewCardSubscription(payload) {
+  return request("/card-subscriptions/preview", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function updateCardSubscription(subscriptionId, payload) {
   return request(`/card-subscriptions/${subscriptionId}`, { method: "PUT", body: JSON.stringify(payload) });
 }
