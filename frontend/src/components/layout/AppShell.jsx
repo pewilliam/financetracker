@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { CalendarClock, ChevronLeft, ChevronRight, Menu, Plus } from "lucide-react";
@@ -157,6 +157,12 @@ export default function AppShell() {
   // Lock the body (preserving scroll position) for overlays and, on mobile, for
   // the sidebar drawer so the content behind it does not jump back to the top.
   const bodyLocked = overlayOpen || (menuOpen && isMobile);
+
+  useLayoutEffect(() => {
+    if (document.body.style.position === "fixed") document.body.style.top = "0px";
+    window.scrollTo(0, 0);
+    setChromeHidden(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     setChromeHidden(false);
