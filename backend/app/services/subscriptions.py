@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import CardSubscription, CardSubscriptionSkip, CreditCard, InstallmentItem, Invoice, InvoiceItem, Transaction, User
 from app.schemas.invoices import InvoiceOut, ProjectedSubscriptionItemOut
-from app.services.categories import set_item_categories
+from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import add_months, date_on_day, get_or_create_invoice, invoice_period, shift_month
 from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
 
@@ -371,6 +371,152 @@ def ensure_commitment_invoices(db: Session, user, today: date | None = None) -> 
             existing[(card.id, due)] = invoice
             created.append(invoice.id)
     return created
+
+
+def _future_due_dates(subscription: CardSubscription, card: CreditCard | None, today: date) -> set[date]:
+    if card is None or not is_finite_subscription(subscription):
+        return set()
+    return {
+        invoice_period(card.closing_day, card.due_day, charge)[1]
+        for charge in iter_future_charges(subscription, today)
+    }
+
+
+def _subscription_has_posted_charge(db: Session, user_id: int, subscription_id: int) -> bool:
+    return (
+        db.query(InvoiceItem.id)
+        .join(Invoice)
+        .filter(Invoice.user_id == user_id, InvoiceItem.subscription_id == subscription_id)
+        .first()
+        is not None
+    )
+
+
+def _start_date_for_update(subscription: CardSubscription, charge_day: int, today: date, posted: bool) -> date:
+    """Keep the original anchor once a charge exists so later dates stay on cadence.
+
+    With nothing posted, a new charge day moves the first charge to that day in the
+    start month, or to the next occurrence that is still ahead of today.
+    """
+    if posted or int(subscription.charge_day) == int(charge_day):
+        return subscription.start_date
+    candidate = date_on_day(subscription.start_date.year, subscription.start_date.month, charge_day)
+    if candidate >= today:
+        return candidate
+    return first_charge_on_or_after(today, charge_day)
+
+
+def _drop_unneeded_shells(
+    db: Session,
+    user,
+    card: CreditCard,
+    dues: set[date],
+    subscription_id: int,
+    today: date,
+) -> None:
+    """Remove empty projection invoices whose due dates left this subscription's plan."""
+    if not dues:
+        return
+    others = (
+        db.query(CardSubscription)
+        .filter(
+            CardSubscription.user_id == user.id,
+            CardSubscription.credit_card_id == card.id,
+            CardSubscription.active.is_(True),
+            CardSubscription.id != subscription_id,
+        )
+        .all()
+    )
+    blocked = _blocked_charges(db, user.id, [item.id for item in others])
+    still_needed: set[date] = set()
+    for other in others:
+        if not is_finite_subscription(other):
+            continue
+        for charge in iter_future_charges(other, today):
+            if (other.id, charge) in blocked:
+                continue
+            still_needed.add(invoice_period(card.closing_day, card.due_day, charge)[1])
+    for due in dues:
+        if due in still_needed:
+            continue
+        invoice = (
+            db.query(Invoice)
+            .filter(
+                Invoice.user_id == user.id,
+                Invoice.credit_card_id == card.id,
+                Invoice.due_date == due,
+            )
+            .first()
+        )
+        if invoice is None or _invoice_has_entries(db, invoice):
+            continue
+        delete_empty_invoice(db, user.id, invoice)
+
+
+def update_card_subscription(db: Session, user, subscription_id: int, payload, today: date | None = None) -> CardSubscription:
+    """Change the plan. Posted invoice items stay as they were; forecasts follow the new plan."""
+    today = today or date.today()
+    subscription = (
+        db.query(CardSubscription)
+        .options(selectinload(CardSubscription.card), selectinload(CardSubscription.categories))
+        .filter(CardSubscription.id == subscription_id, CardSubscription.user_id == user.id)
+        .first()
+    )
+    if subscription is None:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    if not subscription.active:
+        raise HTTPException(status_code=400, detail="Ended subscriptions cannot be edited")
+
+    description = payload.description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="Description is required")
+    card = (
+        db.query(CreditCard)
+        .filter(CreditCard.id == payload.credit_card_id, CreditCard.user_id == user.id)
+        .first()
+    )
+    if card is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+    if not card.active:
+        raise HTTPException(status_code=400, detail="Card is inactive")
+
+    posted = _subscription_has_posted_charge(db, user.id, subscription.id)
+    start_date = _start_date_for_update(subscription, payload.charge_day, today, posted)
+    interval, term_kind, term_months, term_end_date = subscription_plan(
+        payload.billing_period,
+        payload.term_kind,
+        payload.term_months,
+        payload.term_end_date,
+        start_date,
+    )
+    selected_ids = category_ids_from_payload(payload)
+    categories = list(subscription.categories) if selected_ids is None else get_user_categories(db, user.id, selected_ids)
+    old_card = subscription.card
+    old_card_id = old_card.id if old_card is not None else None
+    old_dues = _future_due_dates(subscription, old_card, today)
+
+    subscription.description = description
+    subscription.amount = payload.amount
+    subscription.charge_day = int(payload.charge_day)
+    subscription.start_date = start_date
+    subscription.billing_interval_months = interval
+    subscription.term_kind = term_kind
+    subscription.term_months = term_months
+    subscription.term_end_date = term_end_date
+    subscription.card = card
+    set_item_categories(subscription, categories)
+    db.flush()
+
+    if old_card_id is not None:
+        shell_card = old_card if old_card is not None and old_card.id == old_card_id else db.get(CreditCard, old_card_id)
+        if old_card_id == card.id:
+            obsolete = old_dues - _future_due_dates(subscription, card, today)
+        else:
+            obsolete = old_dues
+        _drop_unneeded_shells(db, user, shell_card, obsolete, subscription.id, today)
+    ensure_commitment_invoices(db, user, today)
+    db.flush()
+    return subscription
 
 
 def release_unused_commitment_invoices(db: Session, user, subscription: CardSubscription, today: date | None = None) -> None:

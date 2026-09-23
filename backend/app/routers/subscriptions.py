@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import CardSubscription, User
-from app.schemas.subscriptions import CardSubscriptionOut
+from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionUpdate
 from app.security import get_current_user
-from app.services.subscriptions import release_unused_commitment_invoices
+from app.services.subscriptions import release_unused_commitment_invoices, update_card_subscription as save_card_subscription
 
 router = APIRouter(prefix="/api/card-subscriptions", tags=["card-subscriptions"])
 
@@ -25,6 +25,27 @@ def list_card_subscriptions(
         .filter(CardSubscription.user_id == current_user.id)
         .order_by(CardSubscription.active.desc(), CardSubscription.charge_day, CardSubscription.description)
         .all()
+    )
+
+
+@router.put("/{subscription_id}", response_model=CardSubscriptionOut)
+def update_card_subscription(
+    subscription_id: int,
+    payload: CardSubscriptionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    subscription = save_card_subscription(db, current_user, subscription_id, payload)
+    db.commit()
+    return (
+        db.query(CardSubscription)
+        .options(
+            selectinload(CardSubscription.categories),
+            selectinload(CardSubscription.category),
+            selectinload(CardSubscription.card),
+        )
+        .filter(CardSubscription.id == subscription.id, CardSubscription.user_id == current_user.id)
+        .one()
     )
 
 
