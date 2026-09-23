@@ -3679,10 +3679,15 @@ select {
 .invoice-entry-charge-day input {
   width: 88px;
 }
-.invoice-entry-charge-day small {
+.invoice-entry-charge-day small,
+.invoice-entry-span small {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+  font-weight: 500;
+}
+.invoice-entry-span {
+  grid-column: 1 / -1;
 }
 .transaction-mode-switch.columns-3 {
   grid-template-columns: repeat(3, max-content);

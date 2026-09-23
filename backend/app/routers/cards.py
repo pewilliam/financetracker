@@ -23,7 +23,12 @@ from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import available_credit, committed_by_card, get_or_create_invoice, invoice_period
 from app.services.invoices import invoice_transaction_description, normalize_invoice_color, recalculate_invoice_total
-from app.services.subscriptions import first_charge_on_or_after, materialize_due_subscriptions
+from app.services.subscriptions import (
+    ensure_commitment_invoices,
+    first_charge_on_or_after,
+    materialize_due_subscriptions,
+    subscription_plan,
+)
 from app.routers.invoices import load_user_invoice, present_invoices
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
@@ -163,7 +168,10 @@ def list_cards(
     query = db.query(CreditCard).filter(CreditCard.user_id == current_user.id)
     if active is not None:
         query = query.filter(CreditCard.active.is_(active))
-    if materialize_due_subscriptions(db, current_user):
+    changed = materialize_due_subscriptions(db, current_user)
+    if ensure_commitment_invoices(db, current_user):
+        changed = True
+    if changed:
         db.commit()
     cards = query.order_by(CreditCard.active.desc(), CreditCard.name).all()
     card_ids = [card.id for card in cards]
@@ -333,7 +341,10 @@ def get_current_card_invoice(
     current_user: User = Depends(get_current_user),
 ):
     card = _load_card(db, current_user.id, card_id)
-    if materialize_due_subscriptions(db, current_user):
+    changed = materialize_due_subscriptions(db, current_user)
+    if ensure_commitment_invoices(db, current_user):
+        changed = True
+    if changed:
         db.commit()
     _, due_date = invoice_period(card.closing_day, card.due_day, date.today())
     existing = (
@@ -382,6 +393,13 @@ def create_card_purchase(
         if charge_day < 1 or charge_day > 31:
             raise HTTPException(status_code=400, detail="Charge day must be between 1 and 31")
         start_date = first_charge_on_or_after(payload.purchase_date, charge_day)
+        interval, term_kind, term_months, term_end_date = subscription_plan(
+            payload.billing_period,
+            payload.term_kind,
+            payload.term_months,
+            payload.term_end_date,
+            start_date,
+        )
         selected_categories = get_user_categories(db, current_user.id, category_ids_from_payload(payload))
         subscription = CardSubscription(
             user_id=current_user.id,
@@ -390,6 +408,10 @@ def create_card_purchase(
             amount=payload.amount,
             charge_day=charge_day,
             start_date=start_date,
+            billing_interval_months=interval,
+            term_kind=term_kind,
+            term_months=term_months,
+            term_end_date=term_end_date,
             active=True,
             category_id=selected_categories[0].id if selected_categories else None,
         )

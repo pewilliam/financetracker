@@ -13,6 +13,11 @@ class CardSubscriptionOut(APIModel):
     amount: Decimal
     charge_day: int
     start_date: date
+    billing_interval_months: int = 1
+    billing_period: str = "monthly"
+    term_kind: str = "indefinite"
+    term_months: Optional[int] = None
+    term_end_date: Optional[date] = None
     active: bool = True
     created_at: Optional[datetime] = None
     category_id: Optional[int] = None

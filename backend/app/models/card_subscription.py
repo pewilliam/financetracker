@@ -4,6 +4,14 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 from app.models.category_links import card_subscription_categories
 
+_BILLING_PERIODS = {
+    1: "monthly",
+    2: "bimonthly",
+    3: "quarterly",
+    6: "semiannual",
+    12: "annual",
+}
+
 
 class CardSubscription(Base):
     __tablename__ = "card_subscriptions"
@@ -15,6 +23,10 @@ class CardSubscription(Base):
     amount = Column(Numeric(10, 2), nullable=False)
     charge_day = Column(Integer, nullable=False)
     start_date = Column(Date, nullable=False)
+    billing_interval_months = Column(Integer, nullable=False, default=1, server_default="1")
+    term_kind = Column(String(20), nullable=False, default="indefinite", server_default="indefinite")
+    term_months = Column(Integer, nullable=True)
+    term_end_date = Column(Date, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -36,3 +48,7 @@ class CardSubscription(Base):
     @property
     def card_color(self):
         return self.card.color if self.card else "#3B82F6"
+
+    @property
+    def billing_period(self):
+        return _BILLING_PERIODS.get(int(self.billing_interval_months or 1), "custom")

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 from app.schemas.base import APIModel, MoneyValue
 from app.schemas.categories import CategoryOut
 
@@ -62,6 +62,10 @@ class PurchaseCreate(APIModel):
     category_ids: Optional[List[int]] = None
     recurring: bool = False
     charge_day: Optional[int] = None
+    billing_period: Literal["monthly", "bimonthly", "quarterly", "semiannual", "annual"] = "monthly"
+    term_kind: Literal["indefinite", "months", "end_date"] = "indefinite"
+    term_months: Optional[int] = None
+    term_end_date: Optional[date] = None
 
 
 class InvoicePaidUpdate(APIModel):

@@ -1,18 +1,28 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import CardSubscription, CardSubscriptionSkip, CreditCard, Invoice, InvoiceItem
+from app.models import CardSubscription, CardSubscriptionSkip, CreditCard, InstallmentItem, Invoice, InvoiceItem, Transaction, User
 from app.schemas.invoices import InvoiceOut, ProjectedSubscriptionItemOut
 from app.services.categories import set_item_categories
-from app.services.credit_cards import date_on_day, get_or_create_invoice, invoice_period, shift_month
+from app.services.credit_cards import add_months, date_on_day, get_or_create_invoice, invoice_period, shift_month
 from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
 
 _ZERO = Decimal("0.00")
 _MAX_CHARGE_STEPS = 240
+MAX_TERM_MONTHS = 120
+BILLING_PERIOD_MONTHS = {
+    "monthly": 1,
+    "bimonthly": 2,
+    "quarterly": 3,
+    "semiannual": 6,
+    "annual": 12,
+}
+BILLING_MONTHS_PERIOD = {months: period for period, months in BILLING_PERIOD_MONTHS.items()}
 
 
 def first_charge_on_or_after(purchase_date: date, charge_day: int) -> date:
@@ -23,13 +33,76 @@ def first_charge_on_or_after(purchase_date: date, charge_day: int) -> date:
     return candidate
 
 
-def iter_charge_dates(start: date, charge_day: int, until: date):
+def billing_period_name(interval_months: int | None) -> str:
+    return BILLING_MONTHS_PERIOD.get(int(interval_months or 1), "custom")
+
+
+def subscription_plan(
+    billing_period: str | None,
+    term_kind: str | None,
+    term_months: int | None,
+    term_end_date: date | None,
+    start_date: date,
+) -> tuple[int, str, int | None, date | None]:
+    """Validate billing frequency and commitment length as independent fields."""
+    interval = BILLING_PERIOD_MONTHS.get(billing_period or "monthly")
+    if interval is None:
+        raise HTTPException(status_code=400, detail="Billing period is invalid")
+    kind = term_kind or "indefinite"
+    if kind not in {"indefinite", "months", "end_date"}:
+        raise HTTPException(status_code=400, detail="Commitment term is invalid")
+    if kind == "months":
+        if term_months is None or term_months < 1 or term_months > MAX_TERM_MONTHS:
+            raise HTTPException(status_code=400, detail="Commitment months must be between 1 and 120")
+        return interval, kind, int(term_months), None
+    if kind == "end_date":
+        if term_end_date is None:
+            raise HTTPException(status_code=400, detail="Commitment end date is required")
+        if term_end_date < start_date:
+            raise HTTPException(status_code=400, detail="Commitment end date is before the first charge")
+        return interval, kind, None, term_end_date
+    return interval, "indefinite", None, None
+
+
+def commitment_last_date(subscription: CardSubscription) -> date | None:
+    """Last calendar day that can still hold a charge. None means open-ended."""
+    kind = subscription.term_kind or "indefinite"
+    if kind == "months":
+        months = int(subscription.term_months or 0)
+        if months < 1:
+            return subscription.start_date - timedelta(days=1)
+        # A 12-month monthly plan is 12 charges, so the anniversary itself is excluded.
+        return add_months(subscription.start_date, months) - timedelta(days=1)
+    if kind == "end_date":
+        return subscription.term_end_date
+    return None
+
+
+def is_finite_subscription(subscription: CardSubscription) -> bool:
+    return (subscription.term_kind or "indefinite") in {"months", "end_date"}
+
+
+def is_scheduled_charge(subscription: CardSubscription, charge: date | None) -> bool:
+    if charge is None or charge < subscription.start_date:
+        return False
+    if date_on_day(charge.year, charge.month, subscription.charge_day) != charge:
+        return False
+    interval = max(1, int(subscription.billing_interval_months or 1))
+    offset = (charge.year * 12 + charge.month) - (subscription.start_date.year * 12 + subscription.start_date.month)
+    if offset < 0 or offset % interval != 0:
+        return False
+    last = commitment_last_date(subscription)
+    return last is None or charge <= last
+
+
+def iter_charge_dates(start: date, charge_day: int, until: date, interval_months: int = 1):
+    step = max(1, int(interval_months or 1))
     cursor = start
     for _ in range(_MAX_CHARGE_STEPS):
         if cursor > until:
             return
         yield cursor
-        year, month = shift_month(cursor.year, cursor.month, 1)
+        year, month = shift_month(cursor.year, cursor.month, step)
         cursor = date_on_day(year, month, charge_day)
 
 
@@ -117,7 +190,10 @@ def materialize_due_subscriptions(db: Session, user, today: date | None = None) 
         card = subscription.card
         if card is None or not card.active or card.user_id != user.id:
             continue
-        for charge_date in iter_charge_dates(subscription.start_date, subscription.charge_day, today):
+        last = commitment_last_date(subscription)
+        until = today if last is None else min(today, last)
+        interval = max(1, int(subscription.billing_interval_months or 1))
+        for charge_date in iter_charge_dates(subscription.start_date, subscription.charge_day, until, interval):
             key = (subscription.id, charge_date)
             if key in materialized or key in skipped:
                 continue
@@ -183,26 +259,6 @@ def _projected_item(subscription: CardSubscription, charge: date) -> ProjectedSu
     )
 
 
-def _horizon(card: CreditCard, invoices: list[Invoice], today: date) -> list[tuple[Invoice | None, date]]:
-    _, current_due = invoice_period(card.closing_day, card.due_day, today)
-    existing_dues = {invoice.due_date for invoice in invoices}
-    real = [invoice for invoice in invoices if invoice.due_date >= current_due]
-    if real:
-        last = max(real, key=lambda invoice: (invoice.due_date, invoice.id))
-        cycles = [(invoice, invoice.due_date) for invoice in sorted(real, key=lambda invoice: (invoice.due_date, invoice.id))]
-        following = next_cycle_due(card.due_day, last.due_date)
-        if following not in existing_dues:
-            cycles.append((None, following))
-        return cycles
-    following = next_cycle_due(card.due_day, current_due)
-    cycles = []
-    if current_due not in existing_dues:
-        cycles.append((None, current_due))
-    if following not in existing_dues:
-        cycles.append((None, following))
-    return cycles
-
-
 def _clear_projection(invoice: Invoice) -> None:
     invoice.projected_amount = _ZERO
     invoice.projected_total = _money(invoice.total_amount)
@@ -211,32 +267,20 @@ def _clear_projection(invoice: Invoice) -> None:
     invoice.projected_items = []
 
 
-def apply_subscription_projections(
-    db: Session,
-    user_id: int,
-    invoices: list[Invoice],
-    *,
-    include_virtual: bool,
-    today: date | None = None,
-) -> list:
-    """Attach projected charges and, when requested, one extra invoice after the last real one."""
-    today = today or date.today()
-    for invoice in invoices:
-        _clear_projection(invoice)
+def iter_future_charges(subscription: CardSubscription, today: date):
+    """Charges still inside the commitment whose date has not been reached."""
+    last = commitment_last_date(subscription)
+    if last is None or last < subscription.start_date:
+        return
+    interval = max(1, int(subscription.billing_interval_months or 1))
+    for charge in iter_charge_dates(subscription.start_date, subscription.charge_day, last, interval):
+        if charge > today:
+            yield charge
 
-    subscriptions = (
-        db.query(CardSubscription)
-        .options(
-            selectinload(CardSubscription.categories),
-            selectinload(CardSubscription.card),
-        )
-        .filter(CardSubscription.user_id == user_id, CardSubscription.active.is_(True))
-        .all()
-    )
-    if not subscriptions:
-        return list(invoices)
 
-    subscription_ids = [subscription.id for subscription in subscriptions]
+def _blocked_charges(db: Session, user_id: int, subscription_ids: list[int]) -> set[tuple[int, date]]:
+    if not subscription_ids:
+        return set()
     blocked = {
         (subscription_id, charge_date)
         for subscription_id, charge_date in db.query(
@@ -253,6 +297,180 @@ def apply_subscription_projections(
         .filter(CardSubscriptionSkip.subscription_id.in_(subscription_ids))
         .all()
     )
+    return blocked
+
+
+def _invoice_has_entries(db: Session, invoice: Invoice) -> bool:
+    if invoice.paid or _money(invoice.total_amount) != _ZERO:
+        return True
+    if db.query(InvoiceItem.id).filter(InvoiceItem.invoice_id == invoice.id).first():
+        return True
+    return db.query(InstallmentItem.id).filter(InstallmentItem.invoice_id == invoice.id).first() is not None
+
+
+def delete_empty_invoice(db: Session, user_id: int, invoice: Invoice) -> None:
+    linked_transaction_id = invoice.linked_transaction_id
+    invoice.linked_transaction_id = None
+    db.flush()
+    transactions = db.query(Transaction).filter(Transaction.user_id == user_id)
+    if linked_transaction_id:
+        transactions = transactions.filter(
+            or_(Transaction.invoice_id == invoice.id, Transaction.id == linked_transaction_id)
+        )
+    else:
+        transactions = transactions.filter(Transaction.invoice_id == invoice.id)
+    transactions.delete(synchronize_session=False)
+    db.delete(invoice)
+
+
+def ensure_commitment_invoices(db: Session, user, today: date | None = None) -> list[int]:
+    """Create the missing invoices that will hold a finite subscription's future charges.
+
+    The invoice is only a shell: no item is posted and the total stays zero, so
+    the card limit is unchanged until the charge date is reached.
+    """
+    today = today or date.today()
+    subscriptions = (
+        db.query(CardSubscription)
+        .options(selectinload(CardSubscription.card))
+        .filter(CardSubscription.user_id == user.id, CardSubscription.active.is_(True))
+        .all()
+    )
+    finite = [
+        subscription
+        for subscription in subscriptions
+        if is_finite_subscription(subscription)
+        and subscription.card is not None
+        and subscription.card.active
+        and subscription.card.user_id == user.id
+    ]
+    if not finite:
+        return []
+    blocked = _blocked_charges(db, user.id, [subscription.id for subscription in finite])
+    card_ids = {subscription.credit_card_id for subscription in finite}
+    existing = {
+        (invoice.credit_card_id, invoice.due_date): invoice
+        for invoice in db.query(Invoice)
+        .filter(Invoice.user_id == user.id, Invoice.credit_card_id.in_(card_ids))
+        .all()
+    }
+    created: list[int] = []
+    allow_overdue = bool(user.allow_overdue_invoice_edits)
+    for subscription in finite:
+        card = subscription.card
+        for charge in iter_future_charges(subscription, today):
+            if (subscription.id, charge) in blocked:
+                continue
+            _, due = invoice_period(card.closing_day, card.due_day, charge)
+            if (card.id, due) in existing:
+                continue
+            try:
+                invoice = get_or_create_invoice(db, user.id, card, charge, allow_overdue=allow_overdue)
+            except HTTPException:
+                continue
+            existing[(card.id, due)] = invoice
+            created.append(invoice.id)
+    return created
+
+
+def release_unused_commitment_invoices(db: Session, user, subscription: CardSubscription, today: date | None = None) -> None:
+    """Drop empty future invoices that only existed to display this commitment."""
+    if not is_finite_subscription(subscription):
+        return
+    today = today or date.today()
+    card = subscription.card
+    if card is None or card.user_id != user.id:
+        return
+    others = (
+        db.query(CardSubscription)
+        .filter(
+            CardSubscription.user_id == user.id,
+            CardSubscription.credit_card_id == card.id,
+            CardSubscription.active.is_(True),
+            CardSubscription.id != subscription.id,
+        )
+        .all()
+    )
+    blocked = _blocked_charges(db, user.id, [item.id for item in others] + [subscription.id])
+    still_needed: set[date] = set()
+    for other in others:
+        if not is_finite_subscription(other):
+            continue
+        for charge in iter_future_charges(other, today):
+            if (other.id, charge) in blocked:
+                continue
+            still_needed.add(invoice_period(card.closing_day, card.due_day, charge)[1])
+    for charge in iter_future_charges(subscription, today):
+        _, due = invoice_period(card.closing_day, card.due_day, charge)
+        if due in still_needed:
+            continue
+        invoice = (
+            db.query(Invoice)
+            .filter(
+                Invoice.user_id == user.id,
+                Invoice.credit_card_id == card.id,
+                Invoice.due_date == due,
+            )
+            .first()
+        )
+        if invoice is None or _invoice_has_entries(db, invoice):
+            continue
+        delete_empty_invoice(db, user.id, invoice)
+
+
+def _append_charge(slots: dict[date, dict], due: date, invoice: Invoice | None, charge: ProjectedSubscriptionItemOut) -> None:
+    slot = slots.get(due)
+    if slot is None:
+        slots[due] = {"invoice": invoice, "charges": [charge]}
+        return
+    slot["charges"].append(charge)
+
+
+def apply_subscription_projections(
+    db: Session,
+    user_id: int,
+    invoices: list[Invoice],
+    *,
+    include_virtual: bool,
+    today: date | None = None,
+) -> list:
+    """Attach projected charges without posting them or using the card limit.
+
+    Open-ended subscriptions are planned only on the card's current cycle and
+    the next one. Finite subscriptions are planned on every remaining charge
+    through the commitment. Missing invoices for that commitment are created
+    as empty shells and stay projected until the charge date.
+    """
+    today = today or date.today()
+    invoices = list(invoices)
+    user = db.get(User, user_id)
+    created_ids = ensure_commitment_invoices(db, user, today) if user is not None else []
+    if created_ids:
+        known_ids = {invoice.id for invoice in invoices}
+        created_query = (
+            db.query(Invoice)
+            .options(selectinload(Invoice.card))
+            .filter(Invoice.id.in_(created_ids))
+        )
+        if known_ids:
+            created_query = created_query.filter(Invoice.id.notin_(known_ids))
+        invoices.extend(created_query.all())
+    for invoice in invoices:
+        _clear_projection(invoice)
+
+    subscriptions = (
+        db.query(CardSubscription)
+        .options(
+            selectinload(CardSubscription.categories),
+            selectinload(CardSubscription.card),
+        )
+        .filter(CardSubscription.user_id == user_id, CardSubscription.active.is_(True))
+        .all()
+    )
+    if not subscriptions:
+        return list(invoices)
+
+    blocked = _blocked_charges(db, user_id, [subscription.id for subscription in subscriptions])
 
     card_ids = {subscription.credit_card_id for subscription in subscriptions}
     all_invoices = (
@@ -276,21 +494,41 @@ def apply_subscription_projections(
 
     for card_id, card in cards.items():
         card_subscriptions = [subscription for subscription in subscriptions if subscription.credit_card_id == card_id]
-        for invoice, due_date in _horizon(card, by_card.get(card_id, []), today):
-            if invoice is not None and invoice.paid:
+        real_by_due = {invoice.due_date: invoice for invoice in by_card.get(card_id, [])}
+        _, current_due = invoice_period(card.closing_day, card.due_day, today)
+        next_due = next_cycle_due(card.due_day, current_due)
+        slots: dict[date, dict] = {}
+        for subscription in card_subscriptions:
+            if is_finite_subscription(subscription):
+                last = commitment_last_date(subscription)
+                if last is None or last < subscription.start_date:
+                    continue
+                interval = max(1, int(subscription.billing_interval_months or 1))
+                for charge in iter_charge_dates(subscription.start_date, subscription.charge_day, last, interval):
+                    if charge <= today or (subscription.id, charge) in blocked:
+                        continue
+                    _, due = invoice_period(card.closing_day, card.due_day, charge)
+                    invoice = real_by_due.get(due)
+                    if invoice is not None and invoice.paid:
+                        continue
+                    _append_charge(slots, due, invoice, _projected_item(subscription, charge))
                 continue
-            charges: list[ProjectedSubscriptionItemOut] = []
-            for subscription in card_subscriptions:
-                charge = charge_date_for_cycle(card.closing_day, card.due_day, due_date, subscription.charge_day)
-                if charge is None or charge < subscription.start_date or charge <= today:
+            for due in (current_due, next_due):
+                charge = charge_date_for_cycle(card.closing_day, card.due_day, due, subscription.charge_day)
+                if not is_scheduled_charge(subscription, charge) or charge <= today:
                     continue
                 if (subscription.id, charge) in blocked:
                     continue
-                charges.append(_projected_item(subscription, charge))
-            if not charges:
-                continue
+                invoice = real_by_due.get(due)
+                if invoice is not None and invoice.paid:
+                    continue
+                _append_charge(slots, due, invoice, _projected_item(subscription, charge))
+
+        for due_date, slot in slots.items():
+            charges = slot["charges"]
+            invoice = slot["invoice"]
             if invoice is not None:
-                projections[invoice.id] = charges
+                projections.setdefault(invoice.id, []).extend(charges)
                 continue
             if not include_virtual:
                 continue
@@ -324,5 +562,7 @@ def apply_subscription_projections(
         invoice.projected_total = _money(invoice.total_amount) + amount
         invoice.projected_item_count = len(charges)
         invoice.projected_items = charges
+        if amount > 0 and not _invoice_has_entries(db, invoice):
+            invoice.is_projected = True
 
     return list(invoices) + virtuals

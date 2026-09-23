@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import CardSubscription, User
 from app.schemas.subscriptions import CardSubscriptionOut
 from app.security import get_current_user
+from app.services.subscriptions import release_unused_commitment_invoices
 
 router = APIRouter(prefix="/api/card-subscriptions", tags=["card-subscriptions"])
 
@@ -41,5 +42,6 @@ def cancel_card_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
     subscription.active = False
+    release_unused_commitment_invoices(db, current_user, subscription)
     db.commit()
     return None
