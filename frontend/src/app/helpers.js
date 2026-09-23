@@ -25,20 +25,17 @@ export function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
 }
 
-export function defaultInvoiceForm() {
-  return { template_id: "", due_date: "", wallet_id: "", duplicate_next_month: false, duplicate_months: 1 };
+export function defaultCardForm() {
+  return { name: "", institution: "", color: DEFAULT_INVOICE_COLOR, credit_limit: "", closing_day: 23, due_day: 30, default_wallet_id: "" };
 }
 
-export function defaultTemplateForm() {
-  return { name: "", color: DEFAULT_INVOICE_COLOR, default_due_day: 30 };
-}
-
-export function defaultInstallmentForm(firstInvoiceId = "") {
+export function defaultInstallmentForm(cardId = "") {
   return {
     description: "",
     total_amount: "",
     installment_count: 1,
-    first_invoice_id: firstInvoiceId,
+    credit_card_id: cardId ? String(cardId) : "",
+    first_purchase_date: todayIsoDate(),
     category_ids: [],
     different_values: false
   };

@@ -10,6 +10,7 @@ class InvoiceItemCreate(APIModel):
     amount: MoneyValue
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    purchase_date: Optional[date] = None
 
 
 class InvoiceItemUpdate(InvoiceItemCreate):
@@ -41,10 +42,12 @@ class InvoiceInstallmentItemOut(APIModel):
     categories: List[CategoryOut] = []
 
 
-class InvoiceCreate(APIModel):
-    template_id: int
-    due_date: date
-    wallet_id: Optional[int] = None
+class PurchaseCreate(APIModel):
+    description: str
+    amount: MoneyValue
+    purchase_date: date
+    category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
 
 
 class InvoicePaidUpdate(APIModel):
@@ -57,7 +60,7 @@ class InvoiceUpdate(APIModel):
 
 class InvoiceOut(APIModel):
     id: int
-    template_id: int
+    credit_card_id: int
     name: str
     color: str = "#3B82F6"
     due_date: date

@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import InvoiceTemplate, User, Wallet
+from app.models import CreditCard, User, Wallet
 from app.services.invoices import create_invoice_with_transaction
 from app.schemas.transactions import TransactionOut
 
@@ -21,7 +21,7 @@ class InvoiceWalletTests(unittest.TestCase):
         self.db.flush()
         self.primary = Wallet(user_id=self.user.id, name="Principal", type="checking", initial_balance=Decimal("0.00"), tracking_started_on=date.today())
         self.selected = Wallet(user_id=self.user.id, name="Mercado Pago", type="digital", initial_balance=Decimal("0.00"), tracking_started_on=date.today())
-        self.template = InvoiceTemplate(user_id=self.user.id, name="Cartão", color="#14A078", default_due_day=10, active=True)
+        self.template = CreditCard(user_id=self.user.id, name="Cartão", color="#14A078", due_day=10, closing_day=3, active=True)
         self.db.add_all([self.primary, self.selected, self.template])
         self.db.flush()
 

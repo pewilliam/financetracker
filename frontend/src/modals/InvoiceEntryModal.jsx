@@ -4,18 +4,28 @@ import { CircleMinus, Layers3, Loader2, ReceiptText, ShoppingBag, X } from "luci
 
 import { isMobileViewport } from "../app/helpers.js";
 import CategorySelect from "../components/CategorySelect.jsx";
+import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
+import { todayIsoDate } from "../app/helpers.js";
 import { formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InvoiceEntryModal({ invoice, kind = "expense", categories = [], onCreateCategory, onOpenInstallment, onSave, onClose }) {
+export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", kind = "expense", categories = [], onCreateCategory, onOpenInstallment, onSave, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const isRefund = kind === "refund";
-  const [form, setForm] = useState({ description: "", amount: "", category_ids: [] });
+  const lockedCardId = String(invoice?.credit_card_id || cardId || "");
+  const [form, setForm] = useState({
+    description: "",
+    amount: "",
+    category_ids: [],
+    credit_card_id: lockedCardId,
+    purchase_date: todayIsoDate()
+  });
   const [saving, setSaving] = useState(false);
   const amountInputRef = useRef(null);
   const amount = parseTypedMoneyInput(form.amount, language);
-  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving);
+  const selectedCard = cards.find((card) => String(card.id) === String(form.credit_card_id));
+  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving && (isRefund || (form.credit_card_id && form.purchase_date)));
   const hasModeSwitch = !isRefund && Boolean(onOpenInstallment);
 
   useEffect(() => {
@@ -38,10 +48,16 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave({
+      await onSave(isRefund ? {
         description: form.description.trim() || copy("Reembolso", "Refund"),
-        amount: isRefund ? -Math.abs(amount) : Math.abs(amount),
+        amount: -Math.abs(amount),
         category_ids: form.category_ids.map(Number),
+      } : {
+        description: form.description.trim(),
+        amount: Math.abs(amount),
+        category_ids: form.category_ids.map(Number),
+        credit_card_id: Number(form.credit_card_id),
+        purchase_date: form.purchase_date,
       });
     } catch {
       // A página exibe o erro e mantém os dados para uma nova tentativa.
@@ -50,7 +66,10 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
     }
   };
 
-  const title = isRefund ? copy("Adicionar reembolso", "Add refund") : copy("Adicionar item", "Add item");
+  const title = isRefund ? copy("Adicionar reembolso", "Add refund") : copy("Adicionar compra", "Add purchase");
+  const heading = isRefund
+    ? copy(`FATURA · ${invoice?.name || ""}`, `INVOICE · ${invoice?.name || ""}`)
+    : copy(`CARTÃO · ${selectedCard?.name || invoice?.name || "COMPRA"}`, `CARD · ${selectedCard?.name || invoice?.name || "PURCHASE"}`);
 
   return createPortal(
     <div className="modal-layer transaction-modal-layer invoice-entry-modal-layer">
@@ -59,7 +78,7 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
         <header className={`transaction-entry-titlebar invoice-entry-titlebar ${hasModeSwitch ? "" : "compact"}`}>
           <span className="transaction-entry-icon">{isRefund ? <CircleMinus size={21} /> : <ShoppingBag size={21} />}</span>
           <div className="transaction-entry-heading">
-            <p>{copy(`FATURA · ${invoice.name}`, `INVOICE · ${invoice.name}`)}</p>
+            <p>{heading}</p>
             <h2 id="invoice-entry-modal-title">{title}</h2>
           </div>
           {hasModeSwitch && (
@@ -109,6 +128,30 @@ export default function InvoiceEntryModal({ invoice, kind = "expense", categorie
               onCreate={onCreateCategory}
             />
           </div>
+          {!isRefund && (
+            <>
+              {!lockedCardId && (
+                <div className="invoice-entry-category">
+                  <span>{copy("Cartão", "Card")}</span>
+                  <CategorySelect
+                    categories={cards.filter((card) => card.active).map((card) => ({ id: card.id, name: card.name, color: card.color }))}
+                    value={form.credit_card_id}
+                    onChange={(credit_card_id) => setForm((current) => ({ ...current, credit_card_id }))}
+                    multiple={false}
+                    clearable={false}
+                    placeholder={copy("Selecione o cartão", "Select the card")}
+                    searchPlaceholder={copy("Buscar cartão...", "Search card...")}
+                    ariaLabel={copy("Cartão", "Card")}
+                  />
+                </div>
+              )}
+              <div className="invoice-entry-description">
+                <span>{copy("Data da compra", "Purchase date")}</span>
+                <DateField value={form.purchase_date} onChange={(purchase_date) => setForm((current) => ({ ...current, purchase_date }))} />
+                <small>{copy("A fatura é escolhida pelo fechamento do cartão.", "The invoice is chosen from the card closing calendar.")}</small>
+              </div>
+            </>
+          )}
 
         </div>
         <footer className="transaction-modal-actions">

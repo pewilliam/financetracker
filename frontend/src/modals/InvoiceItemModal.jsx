@@ -4,6 +4,7 @@ import { CircleMinus, Link2, Loader2, Pencil, ShoppingBag, X } from "lucide-reac
 
 import { isMobileViewport } from "../app/helpers.js";
 import CategorySelect from "../components/CategorySelect.jsx";
+import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
@@ -18,12 +19,14 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
     kind: Number(item.amount) < 0 ? "refund" : "expense",
     amount: Math.abs(Number(item.amount || 0)),
     category_ids: (item.category_ids?.length ? item.category_ids : item.category_id ? [item.category_id] : []).map(String),
+    purchase_date: String(item.purchase_date || invoice.due_date || "").slice(0, 10),
   };
   const [form, setForm] = useState(() => ({
     description: original.description,
     amount: formatMoney(original.amount, language),
     category_ids: original.category_ids,
     kind: original.kind,
+    purchase_date: original.purchase_date,
   }));
   const [saving, setSaving] = useState(false);
   const amountInputRef = useRef(null);
@@ -32,7 +35,8 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
   const changed = form.description.trim() !== original.description.trim()
     || form.kind !== original.kind
     || cents(amount) !== cents(original.amount)
-    || categoryKey(form.category_ids) !== categoryKey(original.category_ids);
+    || categoryKey(form.category_ids) !== categoryKey(original.category_ids)
+    || form.purchase_date !== original.purchase_date;
   const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && changed && !saving);
 
   useEffect(() => {
@@ -59,6 +63,7 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
         description: form.description.trim() || copy("Reembolso", "Refund"),
         amount: isRefund ? -Math.abs(amount) : Math.abs(amount),
         category_ids: form.category_ids.map(Number),
+        purchase_date: form.purchase_date || null,
       });
     } catch {
       // A página exibe o erro e mantém o modal aberto para uma nova tentativa.
@@ -131,6 +136,12 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
               placeholder={isRefund ? copy("Opcional. Ex: estorno ou devolução", "Optional. Ex: reversal or return") : copy("Ex: supermercado, restaurante...", "Ex: groceries, restaurant...")}
             />
+          </div>
+
+          <div className="invoice-entry-description">
+            <span>{copy("Data da compra", "Purchase date")}</span>
+            <DateField value={form.purchase_date} onChange={(purchase_date) => setForm((current) => ({ ...current, purchase_date }))} />
+            <small>{copy("Se a data mudar de ciclo, a compra vai para a fatura correspondente.", "If the date changes cycle, the purchase moves to that invoice.")}</small>
           </div>
 
           <div className="invoice-entry-category">

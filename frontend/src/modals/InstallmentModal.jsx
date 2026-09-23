@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, CreditCard, Layers3, ReceiptText, Trash2, X } from "lucide-react";
-import InvoiceSelector from "../components/InvoiceSelector.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
+import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { addMonthsToDate, formatMonthShort, formatMonthSlash, invoiceAcceptsNewCharges, normalizeInvoiceColor } from "../app/helpers.js";
+import { addMonthsToDate, formatMonthShort, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InstallmentModal({ form, setForm, invoices, categories = [], onCreateCategory, allowOverdueInvoiceEdits = false, onOpenSingle, onSubmit, onClose }) {
+export default function InstallmentModal({ form, setForm, cards = [], categories = [], onCreateCategory, onOpenSingle, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [step, setStep] = useState(1);
   const [drafts, setDrafts] = useState([]);
-  const selectableInvoices = useMemo(
-    () => invoices.filter((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits)),
-    [invoices, allowOverdueInvoiceEdits]
-  );
-  const invoicesById = useMemo(() => new Map(selectableInvoices.map((invoice) => [String(invoice.id), invoice])), [selectableInvoices]);
+  const activeCards = useMemo(() => cards.filter((card) => card.active), [cards]);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const count = Math.min(48, Math.max(1, Number(form.installment_count) || 1));
   const total = parseTypedMoneyInput(form.total_amount, language);
@@ -25,37 +21,30 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
   const hasRoundingAdjustment = count > 1 && totalCents % count !== 0;
   const installmentAmount = baseInstallmentCents / 100;
   const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
-  const firstInvoice = selectableInvoices.find((invoice) => String(invoice.id) === String(form.first_invoice_id));
-  const endDate = firstInvoice ? addMonthsToDate(firstInvoice.due_date, count - 1) : "";
+  const selectedCard = activeCards.find((card) => String(card.id) === String(form.credit_card_id));
+  const endDate = form.first_purchase_date ? addMonthsToDate(form.first_purchase_date, count - 1) : "";
 
   useEffect(() => {
-    if (form.first_invoice_id && !firstInvoice) updateForm({ first_invoice_id: "" });
-  }, [firstInvoice, form.first_invoice_id]);
-
-  const matchingInvoice = (dateString) => selectableInvoices.find((invoice) => (
-    invoice.template_id === firstInvoice?.template_id &&
-    invoice.due_date.slice(0, 7) === dateString.slice(0, 7)
-  ));
+    if (form.credit_card_id && activeCards.length && !selectedCard) updateForm({ credit_card_id: "" });
+  }, [selectedCard, form.credit_card_id, activeCards.length]);
 
   const handleMoneyChange = (value) => updateForm({ total_amount: formatTypedMoneyForEditing(value, language) });
   const normalizeMoneyField = (field) => updateForm({ [field]: formatTypedMoneyAsCurrency(form[field], language) });
 
   const buildDrafts = () => Array.from({ length: count }, (_, index) => {
-    const dueDate = addMonthsToDate(firstInvoice.due_date, index);
-    const matched = matchingInvoice(dueDate);
+    const purchaseDate = addMonthsToDate(form.first_purchase_date, index);
     const amount = index === count - 1 ? adjustedLastInstallmentAmount : installmentAmount;
     return {
       id: `${Date.now()}-${index}`,
       number: index + 1,
-      month: dueDate,
-      invoice_id: matched?.id || "",
+      purchase_date: purchaseDate,
       amount: formatMoney(amount)
     };
   });
 
   const goToReview = (event) => {
     event.preventDefault();
-    if (!form.description || !total || !firstInvoice) return;
+    if (!form.description || !total || !selectedCard || !form.first_purchase_date) return;
     setDrafts(buildDrafts());
     setStep(2);
   };
@@ -64,20 +53,9 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
   };
 
-  const destinationForDraft = (draft) => {
-    const invoice = draft.invoice_id ? invoicesById.get(String(draft.invoice_id)) : null;
-    return {
-      automatic: !invoice,
-      color: normalizeInvoiceColor(invoice?.color || firstInvoice?.color),
-      dueDate: invoice?.due_date || draft.month,
-      name: invoice?.name || firstInvoice?.name || "Fatura automática"
-    };
-  };
-
   const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
   const confirmedTotal = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.amount, language), 0);
-  const invoiceCount = new Set(drafts.map((draft) => draft.invoice_id || `auto-${draft.month}`)).size;
-  const canCreate = drafts.length && drafts.every((draft) => parseTypedMoneyInput(draft.amount, language) > 0);
+  const canCreate = drafts.length && drafts.every((draft) => parseTypedMoneyInput(draft.amount, language) > 0) && selectedCard;
 
   const submitDrafts = (event) => {
     event.preventDefault();
@@ -86,12 +64,12 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
       description: form.description,
       total_amount: confirmedTotal,
       installment_count: drafts.length,
-      first_invoice_id: Number(form.first_invoice_id),
+      credit_card_id: Number(form.credit_card_id),
+      first_purchase_date: form.first_purchase_date,
       category_ids: (form.category_ids || []).map(Number),
       items: drafts.map((draft) => ({
-        invoice_id: draft.invoice_id ? Number(draft.invoice_id) : null,
         amount: parseTypedMoneyInput(draft.amount, language),
-        target_due_date: draft.month
+        purchase_date: draft.purchase_date
       }))
     });
   };
@@ -103,8 +81,8 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
         <header className={`transaction-entry-titlebar installment-entry-titlebar ${onOpenSingle ? "" : "compact"}`}>
           <span className="transaction-entry-icon"><Layers3 size={21} /></span>
           <div className="transaction-entry-heading">
-            <p>{firstInvoice ? `${language === "en-US" ? "INVOICE" : "FATURA"} · ${firstInvoice.name}` : (language === "en-US" ? "INSTALLMENT PURCHASE" : "COMPRA PARCELADA")}</p>
-            <h2 id="installment-modal-title">{onOpenSingle ? (language === "en-US" ? "Add to invoice" : "Adicionar à fatura") : tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
+            <p>{selectedCard ? `${language === "en-US" ? "CARD" : "CARTÃO"} · ${selectedCard.name}` : (language === "en-US" ? "INSTALLMENT PURCHASE" : "COMPRA PARCELADA")}</p>
+            <h2 id="installment-modal-title">{onOpenSingle ? (language === "en-US" ? "Add purchase" : "Adicionar compra") : tt("installmentModal.addInstallmentPurchase", "Adicionar compra parcelada")}</h2>
           </div>
           {onOpenSingle && (
             <div className="transaction-mode-switch invoice-entry-mode-switch" aria-label={language === "en-US" ? "Purchase type" : "Tipo de compra"}>
@@ -137,12 +115,24 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
                 <span className="duplicate-icon"><CreditCard size={20} /></span>
                 <span><strong>{tt("installmentModal.differentValues", "Parcelas com valores diferentes")}</strong><small>{tt("installmentModal.editEachValue", "Edite cada valor na revisão.")}</small></span>
               </label>
-              <InvoiceSelector
-                invoices={selectableInvoices}
-                value={firstInvoice ? { templateId: String(firstInvoice.template_id ?? firstInvoice.id), invoiceId: String(firstInvoice.id) } : null}
-                onChange={(selection) => updateForm({ first_invoice_id: selection?.invoiceId || "" })}
-              />
-              <p className="duplicate-summary">{firstInvoice ? tt("installmentModal.installmentsFromTo", `Parcelas distribuídas de ${formatMonthSlash(firstInvoice.due_date)} até ${formatMonthSlash(endDate)}`, { start: formatMonthSlash(firstInvoice.due_date), end: formatMonthSlash(endDate) }) : tt("installmentModal.selectFirstInvoiceDistribution", "Selecione a fatura inicial para ver a distribuição.")}</p>
+              <div className="invoice-field">
+                <span>{tt("installmentModal.card", "Cartão")}</span>
+                <CategorySelect
+                  categories={activeCards.map((card) => ({ id: card.id, name: card.name, color: card.color }))}
+                  value={form.credit_card_id}
+                  onChange={(credit_card_id) => updateForm({ credit_card_id })}
+                  multiple={false}
+                  clearable={false}
+                  placeholder={tt("installmentModal.selectCard", "Selecione o cartão")}
+                  searchPlaceholder={tt("installmentModal.searchCard", "Buscar cartão...")}
+                  ariaLabel={tt("installmentModal.card", "Cartão")}
+                />
+              </div>
+              <div className="field-label">
+                <span>{tt("installmentModal.firstPurchaseDate", "Data da primeira compra")}</span>
+                <DateField value={form.first_purchase_date} onChange={(first_purchase_date) => updateForm({ first_purchase_date })} />
+              </div>
+              <p className="duplicate-summary">{selectedCard && form.first_purchase_date ? tt("installmentModal.cycleHint", `As parcelas seguem o fechamento do cartão, de ${formatDateShort(form.first_purchase_date)} até ${formatDateShort(endDate)}.`, { start: formatDateShort(form.first_purchase_date), end: formatDateShort(endDate) }) : tt("installmentModal.selectCardDate", "Selecione o cartão e a data da primeira compra.")}</p>
             </div>
             <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button><button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button></div>
           </>
@@ -150,33 +140,29 @@ export default function InstallmentModal({ form, setForm, invoices, categories =
           <>
             <div className="invoice-review">
               <div className="review-table">
-                <div className="review-row installment-review-head"><span>#</span><span>{tt("installmentModal.installment", "Parcela")}</span><span>{tt("installmentModal.destinationInvoice", "Fatura destino")}</span><span>{tt("installmentModal.value", "Valor")}</span><span /></div>
+                <div className="review-row installment-review-head"><span>#</span><span>{tt("installmentModal.installment", "Parcela")}</span><span>{tt("installmentModal.purchaseDate", "Data da compra")}</span><span>{tt("installmentModal.value", "Valor")}</span><span /></div>
                 <div className="review-list">
-                  {drafts.map((draft, index) => {
-                    const destination = destinationForDraft(draft);
-                    return (
+                  {drafts.map((draft) => (
                       <div className="review-row installment-review-row" key={draft.id}>
-                        <span>{draft.number}/{count}</span>
-                        <strong>{formatMonthShort(draft.month)}</strong>
+                        <span>{draft.number}/{drafts.length}</span>
+                        <strong>{formatMonthShort(draft.purchase_date)}</strong>
                         <div className="installment-destination">
-                          <i aria-hidden="true" style={{ "--invoice-color": destination.color }} />
+                          <i aria-hidden="true" style={{ "--invoice-color": normalizeInvoiceColor(selectedCard?.color) }} />
                           <span>
-                            <strong>{destination.name}</strong>
-                            <small>{destination.automatic ? tt("installmentModal.createdAutomatically", "Será criada automaticamente") : tt("installmentModal.existingInvoice", "Fatura existente")} • {tt("installments.due", "vence")} {formatDateShort(destination.dueDate)}</small>
+                            <strong>{selectedCard?.name}</strong>
+                            <small>{tt("installmentModal.createdAutomatically", "A fatura será definida pelo fechamento")} • {formatDateShort(draft.purchase_date)}</small>
                           </span>
                         </div>
                         <input inputMode="decimal" value={draft.amount} readOnly={!form.different_values} onChange={(event) => updateDraft(draft.id, { amount: formatTypedMoneyForEditing(event.target.value, language) })} onBlur={() => updateDraft(draft.id, { amount: formatTypedMoneyAsCurrency(draft.amount, language) })} />
                         <button className="icon-btn small danger" type="button" onClick={() => removeDraft(draft.id)} aria-label="Remover parcela"><Trash2 size={15} /></button>
                       </div>
-                    );
-                  })}
+                  ))}
                 </div>
               </div>
             </div>
             <div className="review-footer">
               <p>
                 {tt("installmentModal.totalConfirmed", "Valor total confirmado:")} <strong>{formatMoney(confirmedTotal)}</strong>
-                {invoiceCount > 1 ? ` • ${tt("installmentModal.installmentsDifferentInvoices", `Parcelas em ${invoiceCount} faturas diferentes`, { count: invoiceCount })}` : ""}
               </p>
               <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={() => setStep(1)}>← Voltar</button><button className="btn btn-primary" disabled={!canCreate}>Confirmar {drafts.length} parcelas</button></div>
             </div>

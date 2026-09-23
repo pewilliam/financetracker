@@ -224,7 +224,7 @@ export const ptBR = {
     months: "Controle mensal",
     wallets: "Carteiras",
     invoices: "Faturas",
-    invoiceModels: "Modelos de fatura",
+    cards: "Cartões",
     installments: "Parcelamentos",
     simulator: "Simulador",
     receivables: "Recebíveis",

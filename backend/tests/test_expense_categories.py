@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from fastapi import HTTPException
 
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Recurrence, Transaction, User
+from app.models import Category, CreditCard, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Receivable, ReceivablePerson, Recurrence, Transaction, User
 from app.routers.categories import delete_category, update_category
 from app.routers.installments import update_installment_category
 from app.routers.months import get_category_breakdown
@@ -35,11 +35,12 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
 
     def test_breakdown_uses_invoice_items_without_counting_invoice_transaction_twice(self):
         category = Category(user_id=self.user.id, name="Alimentação", color="#14A078")
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#3B82F6",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add_all([category, template])
@@ -47,7 +48,7 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
 
         invoice = Invoice(
             user_id=self.user.id,
-            template_id=template.id,
+            credit_card_id=template.id,
             due_date=date(2026, 8, 10),
             total_amount=Decimal("100.00"),
         )
@@ -224,18 +225,19 @@ class ExpenseCategoryBreakdownTests(unittest.TestCase):
 
     def test_installment_category_update_also_updates_existing_refund(self):
         category = Category(user_id=self.user.id, name="Assinaturas", color="#8B5CF6")
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#3B82F6",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add_all([category, template])
         self.db.flush()
         invoice = Invoice(
             user_id=self.user.id,
-            template_id=template.id,
+            credit_card_id=template.id,
             due_date=date(2026, 8, 10),
             total_amount=Decimal("0.00"),
         )

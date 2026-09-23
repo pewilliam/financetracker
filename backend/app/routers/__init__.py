@@ -1,7 +1,7 @@
 from app.routers.auth import router as auth
 from app.routers.transactions import router as transactions
 from app.routers.invoices import router as invoices
-from app.routers.invoice_templates import router as invoice_templates
+from app.routers.cards import router as cards
 from app.routers.installments import router as installments
 from app.routers.receivables import router as receivables
 from app.routers.recurrences import router as recurrences
@@ -11,4 +11,4 @@ from app.routers.categories import router as categories
 from app.routers.budgets import router as budgets
 from app.routers.wallets import router as wallets
 
-__all__ = ["auth", "transactions", "categories", "budgets", "invoice_templates", "invoices", "installments", "receivables", "recurrences", "months", "simulations", "wallets"]
+__all__ = ["auth", "transactions", "categories", "budgets", "cards", "invoices", "installments", "receivables", "recurrences", "months", "simulations", "wallets"]

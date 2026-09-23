@@ -7,8 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import InvoiceItem, InvoiceTemplate, Transaction, User
-from app.routers.invoice_templates import delete_invoice_template, list_invoice_templates
+from app.models import CreditCard, InvoiceItem, Transaction, User
+from app.routers.cards import delete_card, list_cards
 from app.services.invoices import create_invoice_with_transaction
 
 
@@ -27,11 +27,12 @@ class InvoiceTemplateDeletionTests(unittest.TestCase):
         self.engine.dispose()
 
     def _template(self, *, active=False):
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Banco do Brasil",
             color="#FACC15",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=active,
         )
         self.db.add(template)
@@ -43,13 +44,13 @@ class InvoiceTemplateDeletionTests(unittest.TestCase):
         invoice = create_invoice_with_transaction(self.db, self.user.id, template, date(2026, 9, 10))
         self.db.commit()
 
-        listed = list_invoice_templates(active=None, db=self.db, current_user=self.current_user)
+        listed = list_cards(active=None, db=self.db, current_user=self.current_user)
         self.assertTrue(listed[0].can_delete)
         self.assertEqual(listed[0].total_invoices, 1)
 
-        delete_invoice_template(template.id, db=self.db, current_user=self.current_user)
+        delete_card(template.id, db=self.db, current_user=self.current_user)
 
-        self.assertEqual(self.db.query(InvoiceTemplate).count(), 0)
+        self.assertEqual(self.db.query(CreditCard).count(), 0)
         self.assertEqual(self.db.query(Transaction).count(), 0)
         self.assertIsNone(self.db.get(type(invoice), invoice.id))
 
@@ -60,21 +61,21 @@ class InvoiceTemplateDeletionTests(unittest.TestCase):
         invoice.total_amount = Decimal("25.00")
         self.db.commit()
 
-        listed = list_invoice_templates(active=None, db=self.db, current_user=self.current_user)
+        listed = list_cards(active=None, db=self.db, current_user=self.current_user)
         self.assertFalse(listed[0].can_delete)
 
         with self.assertRaises(HTTPException) as context:
-            delete_invoice_template(template.id, db=self.db, current_user=self.current_user)
+            delete_card(template.id, db=self.db, current_user=self.current_user)
 
         self.assertEqual(context.exception.status_code, 409)
-        self.assertIsNotNone(self.db.get(InvoiceTemplate, template.id))
+        self.assertIsNotNone(self.db.get(CreditCard, template.id))
 
     def test_active_template_must_be_disabled_before_deletion(self):
         template = self._template(active=True)
         self.db.commit()
 
         with self.assertRaises(HTTPException) as context:
-            delete_invoice_template(template.id, db=self.db, current_user=self.current_user)
+            delete_card(template.id, db=self.db, current_user=self.current_user)
 
         self.assertEqual(context.exception.status_code, 409)
 

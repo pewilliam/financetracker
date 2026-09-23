@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, noload, selectinload
 from app.database import get_db
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
+from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, CreditCard, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.schemas.months import (
     CategoryBreakdownOut,
     CategoryExpenseOut,
@@ -212,9 +212,9 @@ def _transaction_link_options(include_links: bool):
         return (
             selectinload(Transaction.linked_expense_transaction).selectinload(Transaction.categories),
             selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.categories),
-            selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.template),
+            selectinload(Transaction.linked_expense_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.card),
             selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.purchase).selectinload(InstallmentPurchase.categories),
-            selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.template),
+            selectinload(Transaction.linked_expense_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.card),
         )
     return (
         noload(Transaction.linked_expense_transaction),
@@ -579,8 +579,8 @@ def get_category_breakdown(
         )
 
     invoice_rows = (
-        db.query(Invoice.id, Invoice.due_date, InvoiceTemplate.name.label("invoice_name"))
-        .join(InvoiceTemplate, Invoice.template_id == InvoiceTemplate.id)
+        db.query(Invoice.id, Invoice.due_date, CreditCard.name.label("invoice_name"))
+        .join(CreditCard, Invoice.credit_card_id == CreditCard.id)
         .filter(
             Invoice.user_id == current_user.id,
             Invoice.due_date >= start,

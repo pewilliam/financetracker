@@ -17,9 +17,11 @@ import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 export function useInvoiceItemModals({
   invoices = [],
   categories = [],
+  cards = [],
   expenseOptions = [],
   allowOverdueInvoiceEdits = false,
   addItem,
+  addPurchase,
   updateItem,
   updateDueDate,
   createInstallment,
@@ -73,7 +75,8 @@ export function useInvoiceItemModals({
 
   const saveNewEntry = async (payload) => {
     if (!creatingEntry) return;
-    await addItem(creatingEntry.invoice.id, payload);
+    if (creatingEntry.kind === "refund") await addItem(creatingEntry.invoice.id, payload);
+    else await addPurchase(payload.credit_card_id, payload);
     setCreatingEntry(null);
   };
 
@@ -97,12 +100,19 @@ export function useInvoiceItemModals({
   const openEntry = (invoice, kind) => {
     setEditingItem(null);
     setViewingItem(null);
-    setInstallmentForm(defaultInstallmentForm(invoice.id));
-    setCreatingEntry({ invoice, kind, entryMode: "single" });
+    setInstallmentForm(defaultInstallmentForm(invoice?.credit_card_id || ""));
+    setCreatingEntry({ invoice, kind, entryMode: "single", cardId: String(invoice?.credit_card_id || "") });
   };
 
   const setEntryMode = (entryMode) => {
     setCreatingEntry((current) => current ? { ...current, entryMode } : current);
+  };
+
+  const openPurchase = (cardId = "") => {
+    setEditingItem(null);
+    setViewingItem(null);
+    setInstallmentForm(defaultInstallmentForm(cardId));
+    setCreatingEntry({ invoice: null, kind: "expense", entryMode: "single", cardId: cardId ? String(cardId) : "" });
   };
 
   const closeEntryModal = () => {
@@ -209,6 +219,8 @@ export function useInvoiceItemModals({
         <InvoiceEntryModal
           kind={creatingEntry.kind}
           invoice={creatingEntry.invoice}
+          cards={cards}
+          cardId={creatingEntry.cardId}
           categories={categories}
           onCreateCategory={onCreateCategory}
           onOpenInstallment={creatingEntry.kind === "expense" ? () => setEntryMode("batch") : undefined}
@@ -220,10 +232,9 @@ export function useInvoiceItemModals({
         <InstallmentModal
           form={installmentForm}
           setForm={setInstallmentForm}
-          invoices={invoices}
+          cards={cards}
           categories={categories}
           onCreateCategory={onCreateCategory}
-          allowOverdueInvoiceEdits={allowOverdueInvoiceEdits}
           onOpenSingle={() => setEntryMode("single")}
           onSubmit={saveNewInstallment}
           onClose={closeEntryModal}
@@ -263,5 +274,5 @@ export function useInvoiceItemModals({
     </>
   );
 
-  return { openItems, closeItems, openEntry, openEditDueDate, openDelete, itemsInvoiceId, overlayOpen, element };
+  return { openItems, closeItems, openEntry, openPurchase, openEditDueDate, openDelete, itemsInvoiceId, overlayOpen, element };
 }

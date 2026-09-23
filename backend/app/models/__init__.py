@@ -1,6 +1,6 @@
 from app.models.user import User
 from app.models.transaction import Transaction
-from app.models.invoice_template import InvoiceTemplate
+from app.models.credit_card import CreditCard
 from app.models.invoice import Invoice
 from app.models.invoice_item import InvoiceItem
 from app.models.installment_purchase import InstallmentPurchase
@@ -19,7 +19,7 @@ from app.models.wallet import Wallet, WalletAdjustment, WalletTransfer
 __all__ = [
     "User",
     "Transaction",
-    "InvoiceTemplate",
+    "CreditCard",
     "Invoice",
     "InvoiceItem",
     "InstallmentPurchase",

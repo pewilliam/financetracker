@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
-from app.schemas.invoices import InvoiceCreate, InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
+from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Transaction, User
+from app.schemas.invoices import InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
 from app.security import get_current_user
-from app.services.invoices import create_invoice_with_transaction, invoice_accepts_new_charges, recalculate_invoice_total
+from app.services.credit_cards import relocate_invoice_item
+from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
 def _invoice_detail_options():
     return (
-        selectinload(Invoice.template),
+        selectinload(Invoice.card),
         selectinload(Invoice.items).selectinload(InvoiceItem.categories),
         selectinload(Invoice.items).selectinload(InvoiceItem.category),
         selectinload(Invoice.installment_items)
@@ -28,7 +29,7 @@ def _invoice_detail_options():
 
 
 def _invoice_query(db: Session, user_id: int, *, include_items: bool):
-    options = _invoice_detail_options() if include_items else (selectinload(Invoice.template),)
+    options = _invoice_detail_options() if include_items else (selectinload(Invoice.card),)
     return (
         db.query(Invoice)
         .options(*options)
@@ -57,7 +58,7 @@ def _invoice_summaries(db: Session, invoices: list[Invoice]) -> list[InvoiceOut]
     return [
         InvoiceOut(
             id=invoice.id,
-            template_id=invoice.template_id,
+            credit_card_id=invoice.credit_card_id,
             name=invoice.name,
             color=invoice.color,
             due_date=invoice.due_date,
@@ -73,16 +74,30 @@ def _invoice_summaries(db: Session, invoices: list[Invoice]) -> list[InvoiceOut]
     ]
 
 
+def load_user_invoice(db: Session, user_id: int, invoice_id: int) -> Invoice:
+    invoice = (
+        _invoice_query(db, user_id, include_items=True)
+        .filter(Invoice.id == invoice_id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+
 @router.get("", response_model=list[InvoiceOut])
 def list_invoices(
     include_items: bool = True,
     ids: Annotated[list[int] | None, Query()] = None,
+    credit_card_id: Annotated[int | None, Query(ge=1)] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     query = _invoice_query(db, current_user.id, include_items=include_items)
     if ids:
         query = query.filter(Invoice.id.in_(ids))
+    if credit_card_id is not None:
+        query = query.filter(Invoice.credit_card_id == credit_card_id)
     invoices = query.all()
     if include_items:
         return invoices
@@ -102,28 +117,6 @@ def get_invoice(
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return invoice
-
-
-@router.post("", response_model=InvoiceOut)
-def create_invoice(
-    payload: InvoiceCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    template = (
-        db.query(InvoiceTemplate)
-        .filter(InvoiceTemplate.id == payload.template_id, InvoiceTemplate.user_id == current_user.id, InvoiceTemplate.active.is_(True))
-        .first()
-    )
-    if not template:
-        raise HTTPException(status_code=404, detail="Invoice template not found")
-
-    invoice = create_invoice_with_transaction(db, current_user.id, template, payload.due_date, payload.wallet_id)
-
-    db.commit()
-    db.refresh(invoice)
-    invoice.template = template
     return invoice
 
 
@@ -246,6 +239,7 @@ def add_invoice_item(
         description=payload.description,
         amount=payload.amount,
         category_id=payload.category_id,
+        purchase_date=payload.purchase_date or invoice.due_date,
     )
     set_item_categories(item, selected_categories)
     db.add(item)
@@ -322,10 +316,17 @@ def update_invoice_item(
     item.description = payload.description
     item.amount = payload.amount
     set_item_categories(item, selected_categories)
-
+    moved = payload.purchase_date is not None and payload.purchase_date != item.purchase_date
+    if moved:
+        invoice = relocate_invoice_item(
+            db,
+            current_user.id,
+            item,
+            payload.purchase_date,
+            allow_overdue=current_user.allow_overdue_invoice_edits,
+        )
     db.flush()
     recalculate_invoice_total(db, invoice)
 
     db.commit()
-    db.refresh(invoice)
-    return invoice
+    return load_user_invoice(db, current_user.id, invoice.id)

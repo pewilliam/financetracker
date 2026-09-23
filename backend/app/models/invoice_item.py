@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 from app.models.category_links import invoice_item_categories
@@ -12,6 +12,7 @@ class InvoiceItem(Base):
     description = Column(String(255), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    purchase_date = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     invoice = relationship("Invoice", back_populates="items")

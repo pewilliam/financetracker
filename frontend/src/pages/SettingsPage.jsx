@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { ChevronDown, ChevronUp, CircleDollarSign, CreditCard, Download, Edit3, EyeOff, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDollarSign, Download, Edit3, EyeOff, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
 import CategoryModal from "../modals/CategoryModal.jsx";
 import DeleteCategoryModal from "../modals/DeleteCategoryModal.jsx";
-import InvoiceTemplatesPage from "./InvoiceTemplatesPage.jsx";
 import { formatMoney } from "../utils/format.js";
 
 export default function SettingsPage({
@@ -17,13 +16,9 @@ export default function SettingsPage({
   year,
   month,
   categories = [],
-  invoiceTemplates = [],
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
-  onSaveInvoiceTemplate,
-  onToggleInvoiceTemplate,
-  onDeleteInvoiceTemplate,
   refresh
 }) {
   const { user, updateProfile, logout } = useAuth();
@@ -40,14 +35,13 @@ export default function SettingsPage({
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [savingCategoryPreference, setSavingCategoryPreference] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const validSections = new Set(["conta", "preferencias", "financeiro", "modelos", "dados"]);
+  const validSections = new Set(["conta", "preferencias", "financeiro", "dados"]);
   const requestedSection = searchParams.get("secao") || "conta";
   const activeSection = validSections.has(requestedSection) ? requestedSection : "conta";
   const sections = [
     { id: "conta", label: tt("settings.accountTab", "Conta"), icon: UserRound },
     { id: "preferencias", label: tt("settings.preferencesTab", "Preferências"), icon: Languages },
     { id: "financeiro", label: tt("settings.financeTab", "Financeiro"), icon: WalletCards },
-    { id: "modelos", label: tt("settings.invoiceModelsTab", "Modelos de fatura"), icon: CreditCard },
     { id: "dados", label: tt("settings.dataTab", "Dados"), icon: Download }
   ];
 
@@ -55,6 +49,10 @@ export default function SettingsPage({
     setProfile({ name: user?.name || "", email: user?.email || "", current_password: "" });
     setAllowOverdueInvoiceEdits(Boolean(user?.allow_overdue_invoice_edits));
   }, [user]);
+
+  useEffect(() => {
+    if (requestedSection === "modelos") navigate("/cartoes", { replace: true });
+  }, [requestedSection, navigate]);
 
   const emailChanged = profile.email.trim().toLowerCase() !== (user?.email || "").toLowerCase();
   const profileChanged = profile.name.trim() !== (user?.name || "") || emailChanged;
@@ -166,7 +164,7 @@ export default function SettingsPage({
         </div>
         <div className="settings-hero-balance">
           <span>{monthLabel}</span>
-          <strong>{formatMoney(summary.current_balance, language)}</strong>
+          <strong>{formatMoney(summary?.current_balance || 0, language)}</strong>
           <small>{tt("settings.currentBalanceLabel", "Saldo atual")}</small>
         </div>
       </header>
@@ -319,21 +317,6 @@ export default function SettingsPage({
           </div>
         ) : <p className="settings-category-empty">{tt("settings.noCategories", "Nenhuma categoria cadastrada.")}</p>)}
         </div>
-      </section>}
-
-      {activeSection === "modelos" && <section className="settings-section" role="tabpanel">
-        <div className="settings-section-heading">
-          <span>{tt("settings.invoiceModelsEyebrow", "FATURAS")}</span>
-          <h2>{tt("settings.invoiceModelsHeading", "Modelos de fatura")}</h2>
-          <p>{tt("settings.invoiceModelsDescription", "Gerencie os cartões e contas usados para organizar suas faturas mensais.")}</p>
-        </div>
-        <InvoiceTemplatesPage
-          embedded
-          templates={invoiceTemplates}
-          onSave={onSaveInvoiceTemplate}
-          onToggle={onToggleInvoiceTemplate}
-          onDelete={onDeleteInvoiceTemplate}
-        />
       </section>}
 
       {activeSection === "dados" && <section className="settings-section" role="tabpanel">

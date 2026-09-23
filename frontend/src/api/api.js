@@ -205,35 +205,39 @@ export function getInvoice(id, { signal } = {}) {
   return request(`/invoices/${id}`, { signal });
 }
 
-export function listInvoiceTemplates(active, { signal } = {}) {
+export function listCards(active, { signal } = {}) {
   const query = active === undefined ? "" : `?active=${active ? "true" : "false"}`;
-  return request(`/invoice-templates${query}`, { signal });
+  return request(`/cards${query}`, { signal });
 }
 
-export function createInvoiceTemplate(payload) {
-  return request("/invoice-templates", {
+export function createCard(payload) {
+  return request("/cards", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
-export function updateInvoiceTemplate(id, payload) {
-  return request(`/invoice-templates/${id}`, {
+export function updateCard(id, payload) {
+  return request(`/cards/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload)
   });
 }
 
-export function toggleInvoiceTemplate(id) {
-  return request(`/invoice-templates/${id}/toggle`, { method: "PATCH" });
+export function toggleCard(id) {
+  return request(`/cards/${id}/toggle`, { method: "PATCH" });
 }
 
-export function deleteInvoiceTemplate(id) {
-  return request(`/invoice-templates/${id}`, { method: "DELETE" });
+export function deleteCard(id) {
+  return request(`/cards/${id}`, { method: "DELETE" });
 }
 
-export function createInvoice(payload) {
-  return request("/invoices", {
+export function getCurrentCardInvoice(id) {
+  return request(`/cards/${id}/invoices/current`);
+}
+
+export function createCardPurchase(cardId, payload) {
+  return request(`/cards/${cardId}/purchases`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
@@ -326,7 +330,7 @@ export function listInstallments() {
   return request("/installments");
 }
 
-export function listInstallmentPage({ tab = "active", search = "", categoryIds = [], invoiceTemplateId = "", situation = "all", sortBy = "nextDue", page = 1, pageSize = 12 } = {}) {
+export function listInstallmentPage({ tab = "active", search = "", categoryIds = [], creditCardId = "", situation = "all", sortBy = "nextDue", page = 1, pageSize = 12 } = {}) {
   const params = new URLSearchParams({
     tab,
     search,
@@ -336,7 +340,7 @@ export function listInstallmentPage({ tab = "active", search = "", categoryIds =
     page_size: String(pageSize)
   });
   categoryIds.forEach((categoryId) => params.append("category_ids", String(categoryId)));
-  if (invoiceTemplateId) params.set("invoice_template_id", String(invoiceTemplateId));
+  if (creditCardId) params.set("credit_card_id", String(creditCardId));
   return request(`/installments/page?${params}`);
 }
 

@@ -3,7 +3,7 @@ from decimal import Decimal
 import re
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.models import InstallmentItem, Invoice, InvoiceItem, InvoiceTemplate, Transaction
+from app.models import CreditCard, InstallmentItem, Invoice, InvoiceItem, Transaction
 from app.services.wallets import user_wallet
 
 DEFAULT_INVOICE_COLOR = "#3B82F6"
@@ -50,15 +50,16 @@ def recalculate_invoice_total(db: Session, invoice: Invoice) -> Invoice:
     return invoice
 
 
-def create_invoice_with_transaction(db: Session, user_id: int, template: InvoiceTemplate, due_date: date, wallet_id: int | None = None) -> Invoice:
+def create_invoice_with_transaction(db: Session, user_id: int, card: CreditCard, due_date: date, wallet_id: int | None = None) -> Invoice:
     wallet = user_wallet(db, user_id, wallet_id, active_only=True)
     invoice = Invoice(
         user_id=user_id,
-        template_id=template.id,
+        credit_card_id=card.id,
         due_date=due_date,
         total_amount=Decimal("0.00"),
         paid=False,
     )
+    invoice.card = card
     db.add(invoice)
     db.flush()
 
@@ -67,7 +68,7 @@ def create_invoice_with_transaction(db: Session, user_id: int, template: Invoice
         date=invoice.due_date,
         type="expense",
         amount=invoice.total_amount,
-        description=invoice_transaction_description(template.name),
+        description=invoice_transaction_description(card.name),
         is_future=invoice.due_date > date.today(),
         invoice_id=invoice.id,
         wallet_id=wallet.id,

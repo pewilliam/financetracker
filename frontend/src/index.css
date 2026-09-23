@@ -8352,7 +8352,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .settings-section-nav {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -11322,4 +11322,142 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .edit-installment-item-titlebar { grid-template-columns: 36px minmax(0, 1fr) 34px; }
   .edit-installment-item-meta { flex-direction: column; align-items: flex-start; }
   .edit-installment-item-purchase { white-space: normal; }
+}
+
+.credit-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 22px;
+}
+.plastic-card {
+  --card-color: #14a078;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 22px;
+  box-shadow: 0 8px 16px color-mix(in srgb, var(--card-color) 18%, transparent);
+}
+.plastic-card.inactive { opacity: .72; }
+.plastic-card-face {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  aspect-ratio: 1.586 / 1;
+  overflow: hidden;
+  border-radius: 22px 22px 0 0;
+  padding: 20px 22px 18px;
+  color: #f7fffb;
+  background:
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, white 34%, transparent), transparent 42%),
+    linear-gradient(145deg, color-mix(in srgb, var(--card-color) 78%, white) 0%, var(--card-color) 42%, color-mix(in srgb, var(--card-color) 42%, #04110d) 100%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 35%, transparent);
+}
+.plastic-card-face::before {
+  content: "";
+  position: absolute;
+  inset: -20% auto auto -10%;
+  width: 70%;
+  height: 140%;
+  background: linear-gradient(115deg, transparent 36%, color-mix(in srgb, white 16%, transparent) 48%, transparent 60%);
+  transform: rotate(8deg);
+  pointer-events: none;
+}
+.plastic-card-top, .plastic-card-identity, .plastic-card-figures, .plastic-card-dock { position: relative; z-index: 1; }
+.plastic-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.plastic-card-brand {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .92;
+}
+.plastic-card-badge {
+  border: 1px solid color-mix(in srgb, white 45%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+.plastic-chip {
+  position: relative;
+  z-index: 1;
+  width: 46px;
+  height: 34px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, #f8efc8 0%, #d7b15a 42%, #f4e3a4 58%, #b8893a 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #6b4e16 35%, transparent);
+}
+.plastic-chip::before, .plastic-chip::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 1px;
+  background: color-mix(in srgb, #6b4e16 45%, transparent);
+}
+.plastic-chip::before { top: 11px; }
+.plastic-chip::after { top: 22px; }
+.plastic-card-identity { display: grid; gap: 4px; }
+.plastic-card-identity strong { font-size: 22px; letter-spacing: .01em; line-height: 1.1; }
+.plastic-card-identity span { font-size: 13px; opacity: .88; }
+.plastic-card-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.plastic-card-figures div { display: grid; gap: 2px; min-width: 0; }
+.plastic-card-figures small {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .75;
+}
+.plastic-card-figures strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.plastic-card-dock {
+  display: grid;
+  gap: 10px;
+  margin-top: -1px;
+  padding: 14px 16px 16px;
+  border-radius: 0 0 22px 22px;
+  background: color-mix(in srgb, var(--card-color) 22%, #04110d);
+  color: #f7fffb;
+}
+.plastic-card-due { margin: 0; color: inherit; font-size: 12px; font-weight: 650; opacity: .86; }
+.plastic-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.plastic-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, white 24%, transparent);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: color-mix(in srgb, white 12%, transparent);
+  color: #f7fffb;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.plastic-card-action:hover { background: color-mix(in srgb, white 22%, transparent); }
+.plastic-card-action:disabled { opacity: .6; cursor: wait; }
+.plastic-card-action.primary {
+  border-color: transparent;
+  background: #f7fffb;
+  color: color-mix(in srgb, var(--card-color) 62%, #04110d);
+}
+.plastic-card-action.primary:hover { background: white; }
+.plastic-card-action.danger {
+  border-color: color-mix(in srgb, #ffd0d0 45%, transparent);
+  background: color-mix(in srgb, #ff5a5a 28%, transparent);
+}
+.cards-page { display: grid; gap: 16px; }
+.cards-status { color: var(--muted); }
+.cards-page .section-head p:last-child { max-width: 62ch; color: var(--muted); }
+@media (max-width: 720px) {
+  .plastic-card-figures strong { font-size: 13px; }
 }
