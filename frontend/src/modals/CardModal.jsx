@@ -4,9 +4,17 @@ import { CreditCard, Loader2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { defaultCardForm, isMobileViewport, normalizeInvoiceColor } from "../app/helpers.js";
 import ColorPickerField from "../components/ColorPickerField.jsx";
+import FilterSelect from "../components/common/FilterSelect.jsx";
 import WalletSelect from "../components/WalletSelect.jsx";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+
+function forecastKindFromCard(card) {
+  if (card?.payment_forecast_kind === "first" || card?.payment_forecast_kind === "last" || card?.payment_forecast_kind === "day") {
+    return card.payment_forecast_kind;
+  }
+  return card?.payment_forecast_day ? "day" : "due";
+}
 
 export default function CardModal({ initial, wallets = [], onSubmit, onClose }) {
   const { t, language } = useI18n();
@@ -18,6 +26,7 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
     credit_limit: initial.credit_limit === null || initial.credit_limit === undefined || initial.credit_limit === "" ? "" : formatMoney(initial.credit_limit, language),
     closing_day: initial.closing_day,
     due_day: initial.due_day,
+    payment_forecast_kind: forecastKindFromCard(initial),
     payment_forecast_day: initial.payment_forecast_day ?? "",
     default_wallet_id: initial.default_wallet_id ? String(initial.default_wallet_id) : ""
   } : defaultCardForm());
@@ -40,7 +49,8 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
         color: normalizeInvoiceColor(form.color),
         closing_day: closingDay,
         due_day: dueDay,
-        payment_forecast_day: paymentForecastDay,
+        payment_forecast_kind: form.payment_forecast_kind === "due" ? null : form.payment_forecast_kind,
+        payment_forecast_day: form.payment_forecast_kind === "day" ? paymentForecastDay : null,
         credit_limit: String(form.credit_limit || "").trim() ? parseTypedMoneyInput(form.credit_limit, language) : null,
         default_wallet_id: form.default_wallet_id ? Number(form.default_wallet_id) : null
       });
@@ -58,7 +68,7 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
           <div>
             <small>{tt("cards.editorEyebrow", "CARTÃO DE CRÉDITO")}</small>
             <h2 id="card-modal-title">{initial ? tt("cards.edit", "Editar cartão") : tt("cards.new", "Novo cartão")}</h2>
-            <p>{tt("cards.editorHint", "O dia de fechamento inicia um novo ciclo: uma compra nessa data entra na fatura seguinte. Faturas já lançadas não são recalculadas.")}</p>
+            <p>{tt("cards.editorHint", "O dia de fechamento inicia um novo ciclo: uma compra nessa data entra na fatura seguinte. Faturas em aberto passam a usar o vencimento e a previsão deste cartão. Faturas pagas permanecem como foram.")}</p>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} disabled={submitting} aria-label={tt("actions.close", "Fechar modal")}><X size={18} /></button>
         </div>
@@ -76,8 +86,22 @@ export default function CardModal({ initial, wallets = [], onSubmit, onClose }) 
           </div>
           <div className="field-label">
             <span>{tt("cards.paymentForecast", "Previsão de pagamento")}</span>
-            <input type="number" min="1" max="31" value={form.payment_forecast_day ?? ""} onChange={(event) => setForm({ ...form, payment_forecast_day: event.target.value })} onBlur={() => setForm({ ...form, payment_forecast_day: paymentForecastDay ?? "" })} placeholder={tt("cards.paymentForecastPlaceholder", "Opcional")} disabled={submitting} aria-describedby="card-payment-forecast-hint" />
-            <small id="card-payment-forecast-hint">{tt("cards.paymentForecastHint", "Dia em que o pagamento entra no controle mensal, no mês do vencimento. Vazio usa o vencimento.")}</small>
+            <FilterSelect
+              value={form.payment_forecast_kind || "due"}
+              ariaLabel={tt("cards.paymentForecast", "Previsão de pagamento")}
+              disabled={submitting}
+              onChange={(value) => setForm({ ...form, payment_forecast_kind: value, payment_forecast_day: value === "day" ? (form.payment_forecast_day || 1) : form.payment_forecast_day })}
+              options={[
+                { value: "due", label: tt("cards.forecastOnDue", "No vencimento") },
+                { value: "first", label: tt("cards.forecastFirst", "Primeiro dia do mês") },
+                { value: "last", label: tt("cards.forecastLast", "Último dia do mês") },
+                { value: "day", label: tt("cards.forecastChooseDay", "Escolher o dia") },
+              ]}
+            />
+            {form.payment_forecast_kind === "day" && (
+              <input type="number" min="1" max="31" value={form.payment_forecast_day ?? ""} onChange={(event) => setForm({ ...form, payment_forecast_day: event.target.value })} onBlur={() => setForm({ ...form, payment_forecast_day: paymentForecastDay ?? "" })} placeholder={tt("cards.forecastDay", "Dia")} disabled={submitting} aria-label={tt("cards.forecastDay", "Dia")} />
+            )}
+            <small id="card-payment-forecast-hint">{tt("cards.paymentForecastHint", "É o dia em que o pagamento entra no controle mensal, no mês do vencimento. No vencimento usa o dia do cartão. Primeiro e último dia acompanham o mês, inclusive fevereiro. Um dia fixo que não existe, como 31, cai no último dia daquele mês.")}</small>
           </div>
           <div className="invoice-field">
             <span>{tt("cards.wallet", "Carteira padrão")}</span>

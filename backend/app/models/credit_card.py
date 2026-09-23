@@ -12,6 +12,7 @@ class CreditCard(Base):
     color = Column(String(20), nullable=False, default="#3B82F6")
     due_day = Column(Integer, nullable=False)
     closing_day = Column(Integer, nullable=False)
+    payment_forecast_kind = Column(String(20), nullable=True)
     payment_forecast_day = Column(Integer, nullable=True)
     credit_limit = Column(Numeric(10, 2), nullable=True)
     institution = Column(String(255), nullable=True)

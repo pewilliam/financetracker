@@ -31,7 +31,7 @@ export default function useModalLifecycle({ onClose, busy = false, initialFocusR
 
   useEffect(() => {
     const closeOnEscape = (event) => {
-      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Escape" && !busy && !document.querySelector(".filter-select-menu")) onClose();
     };
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);

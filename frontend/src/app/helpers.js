@@ -42,7 +42,7 @@ export function normalizeInvoiceColor(color) {
 }
 
 export function defaultCardForm() {
-  return { name: "", institution: "", color: DEFAULT_INVOICE_COLOR, credit_limit: "", closing_day: 23, due_day: 30, payment_forecast_day: "", default_wallet_id: "" };
+  return { name: "", institution: "", color: DEFAULT_INVOICE_COLOR, credit_limit: "", closing_day: 23, due_day: 30, payment_forecast_kind: "due", payment_forecast_day: "", default_wallet_id: "" };
 }
 
 export function defaultInstallmentForm(cardId = "") {

@@ -1,7 +1,8 @@
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import re
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models import CreditCard, InstallmentItem, Invoice, InvoiceItem, Transaction
@@ -20,39 +21,124 @@ def normalize_invoice_color(color: str | None) -> str:
     return color if color and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) else DEFAULT_INVOICE_COLOR
 
 
-def invoice_payment_date(due_date: date, payment_forecast_day: int | None) -> date:
-    """Day the invoice payment is counted on monthly control.
+def _date_on_day(year: int, month: int, day: int) -> date:
+    return date(year, month, min(int(day), calendar.monthrange(year, month)[1]))
 
-    The forecast day stays in the due month. An empty forecast keeps the due date.
+
+def card_cycle_due_date(year: int, month: int, due_day: int) -> date:
+    return _date_on_day(year, month, due_day)
+
+
+def invoice_payment_date(
+    due_date: date,
+    payment_forecast_day: int | None = None,
+    payment_forecast_kind: str | None = None,
+) -> date:
+    """Day the invoice payment is counted on monthly control, in the due month.
+
+    ``first`` and ``last`` follow the real length of the month, so February
+    uses day 1 or day 28/29. A fixed day that does not exist, such as 31,
+    uses the last day of that month. An empty forecast keeps the due date.
     """
-    if not payment_forecast_day:
-        return due_date
+    kind = payment_forecast_kind or None
+    if kind is None and payment_forecast_day:
+        kind = "day"
     last_day = calendar.monthrange(due_date.year, due_date.month)[1]
-    return date(due_date.year, due_date.month, min(int(payment_forecast_day), last_day))
+    if kind == "first":
+        day = 1
+    elif kind == "last":
+        day = last_day
+    elif kind == "day" and payment_forecast_day:
+        day = min(int(payment_forecast_day), last_day)
+    else:
+        return due_date
+    return date(due_date.year, due_date.month, day)
+
+
+def apply_payment_forecast(
+    kind: str | None,
+    day: int | None,
+    *,
+    kind_was_sent: bool,
+) -> tuple[str | None, int | None]:
+    """Store first/last as a rule, or a fixed day. An omitted kind keeps the day-only API."""
+    if not kind_was_sent:
+        return ("day", int(day)) if day else (None, None)
+    if kind in ("first", "last"):
+        return kind, None
+    if kind == "day":
+        if not day:
+            raise HTTPException(status_code=400, detail="Payment forecast day is required")
+        return "day", int(day)
+    if day:
+        return "day", int(day)
+    return None, None
+
+
+def card_payment_date(due_date: date, card: CreditCard | None) -> date:
+    if card is None:
+        return due_date
+    return invoice_payment_date(due_date, card.payment_forecast_day, card.payment_forecast_kind)
 
 
 def _invoice_payment_date(invoice: Invoice) -> date:
-    card = invoice.card
-    forecast_day = card.payment_forecast_day if card is not None else None
-    return invoice_payment_date(invoice.due_date, forecast_day)
+    return card_payment_date(invoice.due_date, invoice.card)
 
 
-def sync_open_invoice_payment_dates(db: Session, card: CreditCard) -> None:
+def align_open_invoices_to_card(db: Session, card: CreditCard) -> None:
+    """Make unpaid invoices use the card due day and payment forecast.
+
+    Paid invoices stay on the dates they already have. The due month of each
+    open invoice is kept; only the day is taken from the card.
+    """
     invoices = (
         db.query(Invoice)
-        .filter(
-            Invoice.credit_card_id == card.id,
-            Invoice.paid.is_(False),
-            Invoice.linked_transaction_id.isnot(None),
-        )
+        .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(False))
+        .order_by(Invoice.due_date, Invoice.id)
         .all()
     )
-    today = date.today()
+    targets: list[tuple[Invoice, date]] = []
+    seen: dict[date, int] = {}
     for invoice in invoices:
+        target = card_cycle_due_date(invoice.due_date.year, invoice.due_date.month, card.due_day)
+        if target in seen:
+            raise HTTPException(status_code=400, detail="Open invoices would share the same due date")
+        seen[target] = invoice.id
+        targets.append((invoice, target))
+
+    for invoice, target in targets:
+        if invoice.due_date == target:
+            continue
+        occupied = (
+            db.query(Invoice)
+            .filter(
+                Invoice.credit_card_id == card.id,
+                Invoice.due_date == target,
+                Invoice.id != invoice.id,
+            )
+            .first()
+        )
+        if occupied is not None and occupied.paid:
+            raise HTTPException(status_code=400, detail="A paid invoice already uses that due date")
+
+    changing = [(invoice, target) for invoice, target in targets if invoice.due_date != target]
+    for invoice, _target in changing:
+        invoice.due_date = date(1000, 1, 1) + timedelta(days=invoice.id)
+    if changing:
+        db.flush()
+    for invoice, target in changing:
+        invoice.due_date = target
+    if changing:
+        db.flush()
+
+    today = date.today()
+    for invoice, _target in targets:
+        if not invoice.linked_transaction_id:
+            continue
         linked = db.get(Transaction, invoice.linked_transaction_id)
         if linked is None:
             continue
-        payment_date = invoice_payment_date(invoice.due_date, card.payment_forecast_day)
+        payment_date = card_payment_date(invoice.due_date, card)
         linked.date = payment_date
         linked.is_future = payment_date > today
 
@@ -102,7 +188,7 @@ def create_invoice_with_transaction(db: Session, user_id: int, card: CreditCard,
     db.add(invoice)
     db.flush()
 
-    payment_date = invoice_payment_date(invoice.due_date, card.payment_forecast_day)
+    payment_date = card_payment_date(invoice.due_date, card)
     transaction = Transaction(
         user_id=user_id,
         date=payment_date,

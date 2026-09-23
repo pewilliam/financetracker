@@ -2,13 +2,19 @@ from datetime import date
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import CardSubscriptionSkip, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Transaction, User
 from app.schemas.invoices import InvoiceItemCreate, InvoiceItemUpdate, InvoiceOut, InvoicePaidUpdate, InvoiceUpdate
 from app.security import get_current_user
 from app.services.credit_cards import relocate_invoice_item
-from app.services.invoices import invoice_accepts_new_charges, invoice_payment_date, recalculate_invoice_total
+from app.services.invoices import (
+    card_cycle_due_date,
+    card_payment_date,
+    invoice_accepts_new_charges,
+    recalculate_invoice_total,
+)
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.subscriptions import (
     apply_subscription_projections,
@@ -191,10 +197,17 @@ def update_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    invoice.due_date = payload.due_date
+    chosen = payload.due_date
+    if invoice.card is not None:
+        chosen = card_cycle_due_date(chosen.year, chosen.month, invoice.card.due_day)
+    invoice.due_date = chosen
     recalculate_invoice_total(db, invoice)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="This card already has an invoice on that due date")
     db.refresh(invoice)
     return invoice
 
@@ -226,8 +239,7 @@ def set_invoice_paid(
             .first()
         )
         if linked:
-            forecast_day = invoice.card.payment_forecast_day if invoice.card is not None else None
-            payment_date = invoice_payment_date(invoice.due_date, forecast_day)
+            payment_date = card_payment_date(invoice.due_date, invoice.card)
             linked.is_future = False if payload.paid else payment_date > date.today()
 
     db.commit()

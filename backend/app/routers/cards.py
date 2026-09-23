@@ -23,10 +23,11 @@ from app.security import get_current_user
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 from app.services.credit_cards import available_credit, committed_by_card, get_or_create_invoice, invoice_period
 from app.services.invoices import (
+    align_open_invoices_to_card,
+    apply_payment_forecast,
     invoice_transaction_description,
     normalize_invoice_color,
     recalculate_invoice_total,
-    sync_open_invoice_payment_dates,
 )
 from app.services.subscriptions import (
     ensure_commitment_invoices,
@@ -133,6 +134,7 @@ def _out(
         color=card.color,
         due_day=card.due_day,
         closing_day=card.closing_day,
+        payment_forecast_kind=card.payment_forecast_kind,
         payment_forecast_day=card.payment_forecast_day,
         credit_limit=card.credit_limit,
         institution=card.institution,
@@ -195,13 +197,20 @@ def create_card(
     current_user: User = Depends(get_current_user),
 ):
     _owned_wallet(db, current_user.id, payload.default_wallet_id)
+    created_fields = payload.model_fields_set
+    forecast_kind, forecast_day = apply_payment_forecast(
+        payload.payment_forecast_kind if "payment_forecast_kind" in created_fields else None,
+        payload.payment_forecast_day if "payment_forecast_day" in created_fields else None,
+        kind_was_sent="payment_forecast_kind" in created_fields,
+    )
     card = CreditCard(
         user_id=current_user.id,
         name=payload.name.strip(),
         color=normalize_invoice_color(payload.color),
         due_day=payload.due_day,
         closing_day=payload.closing_day,
-        payment_forecast_day=payload.payment_forecast_day,
+        payment_forecast_kind=forecast_kind,
+        payment_forecast_day=forecast_day,
         credit_limit=payload.credit_limit,
         institution=_clean_institution(payload.institution),
         default_wallet_id=payload.default_wallet_id,
@@ -247,9 +256,17 @@ def update_card(
         card.due_day = payload.due_day
     if "closing_day" in fields and payload.closing_day is not None:
         card.closing_day = payload.closing_day
-    if "payment_forecast_day" in fields:
-        card.payment_forecast_day = payload.payment_forecast_day
-        sync_open_invoice_payment_dates(db, card)
+    forecast_changed = "payment_forecast_kind" in fields or "payment_forecast_day" in fields
+    if forecast_changed:
+        kind, day = apply_payment_forecast(
+            payload.payment_forecast_kind if "payment_forecast_kind" in fields else card.payment_forecast_kind,
+            payload.payment_forecast_day if "payment_forecast_day" in fields else card.payment_forecast_day,
+            kind_was_sent="payment_forecast_kind" in fields,
+        )
+        card.payment_forecast_kind = kind
+        card.payment_forecast_day = day
+    if ("due_day" in fields and payload.due_day is not None) or forecast_changed:
+        align_open_invoices_to_card(db, card)
     if "credit_limit" in fields:
         card.credit_limit = payload.credit_limit
     if "institution" in fields:

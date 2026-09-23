@@ -11,11 +11,11 @@ from app.database import Base
 from app.models import CreditCard, InstallmentItem, Invoice, InvoiceItem, User, Wallet
 from app.routers.cards import create_card_purchase, update_card
 from app.routers.installments import create_installment
-from app.routers.invoices import update_invoice_item
+from app.routers.invoices import update_invoice, update_invoice_item
 from app.routers.months import _build_month_data
 from app.schemas.cards import CardUpdate
 from app.schemas.installments import InstallmentCreate
-from app.schemas.invoices import InvoiceItemUpdate, PurchaseCreate
+from app.schemas.invoices import InvoiceItemUpdate, InvoiceUpdate, PurchaseCreate
 from app.services.credit_cards import get_or_create_invoice, invoice_period, legacy_closing_day
 from app.services.invoices import create_invoice_with_transaction, invoice_payment_date
 
@@ -245,6 +245,57 @@ class CreditCardFlowTests(unittest.TestCase):
         self.db.expire_all()
         open_invoice = self.db.get(Invoice, invoice.id)
         self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 5))
+
+    def test_forecast_rules_and_open_invoices_follow_the_card(self):
+        self.assertEqual(invoice_payment_date(date(2026, 2, 5), 31, "day"), date(2026, 2, 28))
+        self.assertEqual(invoice_payment_date(date(2024, 2, 5), 31, "day"), date(2024, 2, 29))
+        self.assertEqual(invoice_payment_date(date(2026, 2, 5), None, "last"), date(2026, 2, 28))
+        self.assertEqual(invoice_payment_date(date(2026, 4, 5), None, "first"), date(2026, 4, 1))
+
+        drifted = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 11, 18))
+        drifted.total_amount = Decimal("30.00")
+        paid = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 8, 5))
+        paid.paid = True
+        paid.linked_transaction.date = date(2026, 8, 5)
+        self.db.commit()
+
+        update_card(
+            self.card.id,
+            CardUpdate(due_day=10, payment_forecast_kind="last"),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        open_invoice = self.db.get(Invoice, drifted.id)
+        settled = self.db.get(Invoice, paid.id)
+        self.assertEqual(open_invoice.due_date, date(2026, 11, 10))
+        self.assertEqual(open_invoice.linked_transaction.date, date(2026, 11, 30))
+        self.assertEqual(settled.due_date, date(2026, 8, 5))
+        self.assertEqual(settled.linked_transaction.date, date(2026, 8, 5))
+        self.assertEqual(self.db.get(CreditCard, self.card.id).payment_forecast_kind, "last")
+        self.assertIsNone(self.db.get(CreditCard, self.card.id).payment_forecast_day)
+
+        moved = update_invoice(
+            open_invoice.id,
+            InvoiceUpdate(due_date=date(2026, 12, 18)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(moved.due_date, date(2026, 12, 10))
+        self.assertEqual(moved.linked_transaction.date, date(2026, 12, 31))
+
+        february = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 2, 18))
+        self.db.commit()
+        update_card(
+            self.card.id,
+            CardUpdate(due_day=31, payment_forecast_kind="day", payment_forecast_day=31),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        short_month = self.db.get(Invoice, february.id)
+        self.assertEqual(short_month.due_date, date(2026, 2, 28))
+        self.assertEqual(short_month.linked_transaction.date, date(2026, 2, 28))
 
     def test_available_limit_uses_unpaid_invoice_totals(self):
         from app.routers.cards import list_cards

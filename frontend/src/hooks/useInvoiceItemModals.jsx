@@ -202,6 +202,7 @@ export function useInvoiceItemModals({
       {dueDateInvoice && (
         <InvoiceDueDateModal
           invoice={dueDateInvoice}
+          cardDueDay={cards.find((card) => card.id === dueDateInvoice.credit_card_id)?.due_day}
           onSave={async (dueDate) => {
             await updateDueDate(dueDateInvoice.id, dueDate);
             setDueDateInvoiceId(null);
