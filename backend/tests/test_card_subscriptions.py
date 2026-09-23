@@ -2,6 +2,7 @@ import unittest
 from datetime import date
 from decimal import Decimal
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -9,9 +10,9 @@ from app.database import Base
 from app.models import CardSubscription, CardSubscriptionSkip, CreditCard, Invoice, InvoiceItem, User, Wallet
 from app.routers.cards import create_card_purchase
 from app.routers.invoices import delete_invoice_item, present_invoices
-from app.routers.subscriptions import cancel_card_subscription, list_card_subscriptions
+from app.routers.subscriptions import cancel_card_subscription, list_card_subscriptions, update_card_subscription
 from app.schemas.invoices import PurchaseCreate
-from app.schemas.subscriptions import CardSubscriptionOut
+from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionUpdate
 from app.schemas.installments import InstallmentCreate, InstallmentDraftIn
 from app.routers.installments import create_installment
 from app.services.credit_cards import committed_by_card, invoice_period, shift_month
@@ -21,6 +22,7 @@ from app.services.subscriptions import (
     first_charge_on_or_after,
     materialize_due_subscriptions,
     next_cycle_due,
+    update_card_subscription as save_card_subscription,
 )
 
 
@@ -116,6 +118,23 @@ class CardSubscriptionTests(unittest.TestCase):
         )
         self.db.add(subscription)
         self.db.commit()
+        return subscription
+
+    def _update(self, subscription, today=TODAY, **fields):
+        payload = CardSubscriptionUpdate(
+            description=fields.get("description", subscription.description),
+            amount=Decimal(str(fields.get("amount", subscription.amount))),
+            category_ids=fields.get("category_ids", list(subscription.category_ids)),
+            credit_card_id=fields.get("credit_card_id", subscription.credit_card_id),
+            charge_day=fields.get("charge_day", subscription.charge_day),
+            billing_period=fields.get("billing_period", "monthly"),
+            term_kind=fields.get("term_kind", subscription.term_kind or "indefinite"),
+            term_months=fields.get("term_months", subscription.term_months),
+            term_end_date=fields.get("term_end_date", subscription.term_end_date),
+        )
+        save_card_subscription(self.db, self.user, subscription.id, payload, today=today)
+        self.db.commit()
+        self.db.refresh(subscription)
         return subscription
 
     def test_future_charge_is_projected_and_does_not_use_the_limit(self):
@@ -464,3 +483,127 @@ class CardSubscriptionTests(unittest.TestCase):
         self.assertEqual(payload.term_kind, "months")
         self.assertEqual(payload.term_months, 12)
         self.assertIsNone(payload.term_end_date)
+
+    def test_editing_keeps_the_posted_charge_and_updates_the_forecast(self):
+        subscription = self._add_subscription(start=date(2026, 9, 20), amount="55.00", term_kind="months", term_months=12)
+        materialize_due_subscriptions(self.db, self.user, today=date(2026, 9, 20))
+        self.db.commit()
+        apply_subscription_projections(
+            self.db,
+            self.user.id,
+            self.db.query(Invoice).all(),
+            include_virtual=True,
+            today=date(2026, 9, 20),
+        )
+        self.db.commit()
+        self._update(
+            subscription,
+            today=date(2026, 9, 20),
+            description="Academia",
+            amount="80.00",
+            charge_day=24,
+        )
+        posted = self.db.query(InvoiceItem).one()
+        self.assertEqual(posted.description, "Netflix")
+        self.assertEqual(posted.amount, Decimal("55.00"))
+        self.assertEqual(posted.subscription_charge_date, date(2026, 9, 20))
+        self.assertEqual(subscription.start_date, date(2026, 9, 20))
+        self.assertEqual(subscription.description, "Academia")
+        self.assertEqual(self.db.query(Invoice).count(), 12)
+        presented = apply_subscription_projections(
+            self.db,
+            self.user.id,
+            self.db.query(Invoice).all(),
+            include_virtual=True,
+            today=date(2026, 9, 20),
+        )
+        forecasts = sorted(
+            (item for invoice in presented for item in invoice.projected_items),
+            key=lambda item: item.charge_date,
+        )
+        self.assertTrue(forecasts)
+        self.assertTrue(all(item.amount == Decimal("80.00") and item.description == "Academia" for item in forecasts))
+        self.assertEqual(forecasts[0].charge_date, date(2026, 10, 24))
+        self.assertEqual(committed_by_card(self.db, self.user.id, [self.card.id])[self.card.id], Decimal("55.00"))
+
+    def test_shrinking_the_term_removes_unused_projection_shells(self):
+        subscription = self._add_subscription(term_kind="months", term_months=12)
+        self._project()
+        self.assertEqual(self.db.query(Invoice).count(), 12)
+        self._update(subscription, term_months=2)
+        self.assertEqual(self.db.query(Invoice).count(), 2)
+        presented = self._project()
+        charges = sorted(item.charge_date for invoice in presented for item in invoice.projected_items)
+        self.assertEqual(charges, [date(2026, 9, 20), date(2026, 10, 20)])
+        self.assertEqual(committed_by_card(self.db, self.user.id, [self.card.id]).get(self.card.id, Decimal("0.00")), Decimal("0.00"))
+
+    def test_changing_to_quarterly_keeps_only_the_new_cadence(self):
+        subscription = self._add_subscription(term_kind="months", term_months=12)
+        self._project()
+        self._update(subscription, billing_period="quarterly")
+        self.assertEqual(self.db.query(Invoice).count(), 4)
+        self.assertEqual(subscription.billing_interval_months, 3)
+        presented = self._project()
+        charges = sorted(item.charge_date for invoice in presented for item in invoice.projected_items)
+        self.assertEqual(charges, [date(2026, 9, 20), date(2026, 12, 20), date(2027, 3, 20), date(2027, 6, 20)])
+
+    def test_moving_the_card_releases_the_old_shells(self):
+        other = CreditCard(
+            user_id=self.user.id,
+            name="Inter",
+            color="#FF7A00",
+            due_day=5,
+            closing_day=25,
+            credit_limit=Decimal("2000.00"),
+            active=True,
+        )
+        self.db.add(other)
+        self.db.commit()
+        subscription = self._add_subscription(term_kind="months", term_months=3)
+        self._project()
+        self.assertEqual(self.db.query(Invoice).filter(Invoice.credit_card_id == self.card.id).count(), 3)
+        self._update(subscription, credit_card_id=other.id)
+        self.assertEqual(self.db.query(Invoice).filter(Invoice.credit_card_id == self.card.id).count(), 0)
+        self.assertEqual(self.db.query(Invoice).filter(Invoice.credit_card_id == other.id).count(), 3)
+        self.assertEqual(subscription.credit_card_id, other.id)
+
+    def test_charge_day_realigns_when_nothing_was_posted(self):
+        subscription = self._add_subscription(term_kind="months", term_months=2)
+        self._update(subscription, charge_day=28)
+        self.assertEqual(subscription.start_date, date(2026, 9, 28))
+        presented = self._project()
+        charges = sorted(item.charge_date for invoice in presented for item in invoice.projected_items)
+        self.assertEqual(charges, [date(2026, 9, 28), date(2026, 10, 28)])
+        dues = sorted(invoice.due_date for invoice in presented)
+        self.assertEqual(dues, [date(2026, 11, 5), date(2026, 12, 5)])
+
+    def test_editing_an_ended_subscription_is_rejected(self):
+        subscription = self._add_subscription()
+        subscription.active = False
+        self.db.commit()
+        with self.assertRaises(HTTPException) as caught:
+            self._update(subscription, description="Nope")
+        self.assertEqual(caught.exception.status_code, 400)
+        self.db.refresh(subscription)
+        self.assertEqual(subscription.description, "Netflix")
+
+    def test_route_updates_an_active_subscription(self):
+        subscription = self._add_subscription(start=date(2027, 1, 15), charge_day=15)
+        updated = update_card_subscription(
+            subscription.id,
+            CardSubscriptionUpdate(
+                description="Disney",
+                amount=Decimal("34.90"),
+                credit_card_id=self.card.id,
+                charge_day=15,
+                billing_period="monthly",
+                term_kind="indefinite",
+            ),
+            self.db,
+            self.user,
+        )
+        payload = CardSubscriptionOut.model_validate(updated)
+        self.assertEqual(payload.description, "Disney")
+        self.assertEqual(payload.amount, Decimal("34.90"))
+        self.assertEqual(payload.card_name, "Nubank")
+        self.assertTrue(payload.active)

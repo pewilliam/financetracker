@@ -10909,26 +10909,13 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installments-page-head h1 { margin: 0; font-size: clamp(22px, 2vw, 28px); font-weight: 800; letter-spacing: -.025em; }
 .installments-page-head > div > p:last-child { max-width: 630px; margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .installments-page-head .btn { flex: 0 0 auto; }
-.subscription-list { display: grid; gap: 8px; }
-.subscription-row {
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-}
-.subscription-dot { width: 10px; height: 10px; border-radius: 50%; }
-.subscription-main { min-width: 0; display: grid; gap: 3px; }
-.subscription-main strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.subscription-main small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.subscription-row > b { font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-@media (max-width: 640px) {
-  .subscription-row { grid-template-columns: 10px minmax(0, 1fr) auto; }
-  .subscription-row > b { grid-column: 2; }
-  .subscription-row > .btn { grid-column: 3; grid-row: 1 / span 2; }
+.installment-main-value > span .subscription-card-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
 }
 .installment-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .installment-summary-grid > div {
@@ -11028,6 +11015,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .installment-card { position: relative; gap: 13px; padding: 16px; border-color: var(--border); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.07); cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .installment-card:hover { border-color: color-mix(in srgb, var(--muted) 45%, var(--border)); box-shadow: 0 7px 20px rgba(0,0,0,.11); transform: translateY(-1px); }
+.installment-card.is-static { cursor: default; }
+.installment-card.is-static:hover { border-color: color-mix(in srgb, var(--border) 72%, transparent); box-shadow: none; transform: none; }
 .installment-card:focus-visible { outline: 0; border-color: var(--focus-border); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent); }
 .installment-card.is-paid { border-color: color-mix(in srgb, var(--border) 72%, transparent); background: color-mix(in srgb, var(--card) 94%, var(--surface)); box-shadow: none; }
 .installment-card header { display: grid; grid-template-columns: 34px minmax(0, 1fr) 30px; align-items: start; gap: 9px; }

@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2, Plus, Repeat2 } from "lucide-react";
+import { AlertTriangle, EllipsisVertical, Loader2, Pencil, Plus, Repeat2, X } from "lucide-react";
 
 import { listCardSubscriptions } from "../api/api.js";
+import InvoiceEntryModal from "../modals/InvoiceEntryModal.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
 
-export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
+function subscriptionCategories(item) {
+  return item.categories?.length ? item.categories : item.category ? [item.category] : [];
+}
+
+export default function SubscriptionsPage({ revision = 0, cards = [], categories = [], onCreateCategory, onNew, onSave, onCancel }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const [items, setItems] = useState([]);
@@ -13,6 +18,7 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
   const [loadError, setLoadError] = useState(false);
   const [tab, setTab] = useState("active");
   const [ending, setEnding] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -41,6 +47,12 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
     annual: copy("Anual", "Annual"),
     custom: copy("Personalizada", "Custom"),
   }[period] || copy("Mensal", "Monthly"));
+  const frequencyLabel = (item) => {
+    const interval = Number(item.billing_interval_months || 1);
+    if (interval === 1) return copy("por mês", "per month");
+    if (interval === 12) return copy("por ano", "per year");
+    return copy(`a cada ${interval} meses`, `every ${interval} months`);
+  };
   const termLabel = (item) => {
     if (item.term_kind === "months" && item.term_months) {
       return copy(`${item.term_months} meses`, `${item.term_months} months`);
@@ -53,6 +65,9 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
   const activeCount = items.filter((item) => item.active).length;
   const endedCount = items.length - activeCount;
   const visible = items.filter((item) => (tab === "active" ? item.active : !item.active));
+  const openEditor = (item) => {
+    if (item.active) setEditing(item);
+  };
 
   return (
     <section className="installments-page subscriptions-page">
@@ -88,31 +103,63 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
           {loading && !items.length ? (
             <div className="installment-page-loading"><Loader2 className="spin" size={22} /><span>{copy("Carregando assinaturas...", "Loading subscriptions...")}</span></div>
           ) : visible.length ? (
-            <div className="subscription-list">
+            <div className="installment-grid">
               {visible.map((item) => {
-                const categories = (item.categories || []).map((category) => category.name).filter(Boolean);
+                const itemCategories = subscriptionCategories(item);
+                const interactive = Boolean(item.active);
                 return (
-                  <article className="subscription-row" key={item.id}>
-                    <span className="subscription-dot" style={{ background: item.card_color || "#3B82F6" }} aria-hidden="true" />
-                    <div className="subscription-main">
-                      <strong>{item.description}</strong>
-                      <small>
-                        {item.card_name}
-                        {" · "}
-                        {periodLabel(item.billing_period)}
-                        {" · "}
-                        {copy(`dia ${item.charge_day}`, `day ${item.charge_day}`)}
-                        {" · "}
-                        {termLabel(item)}
-                        {categories.length ? ` · ${categories.join(", ")}` : ""}
-                      </small>
+                  <article
+                    className={`installment-card ${interactive ? "" : "is-paid is-static"}`}
+                    key={item.id}
+                    tabIndex={interactive ? 0 : undefined}
+                    role={interactive ? "button" : undefined}
+                    onClick={() => openEditor(item)}
+                    onKeyDown={(event) => {
+                      if (!interactive) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openEditor(item);
+                      }
+                    }}
+                  >
+                    <header>
+                      <span className="installment-card-icon"><Repeat2 size={18} /></span>
+                      <div className="installment-card-title">
+                        <h3>{item.description}</h3>
+                        <span className="installment-categories">
+                          {itemCategories.length ? itemCategories.map((category) => (
+                            <span className="category-badge" style={{ "--category-color": category.color || "#7ab898" }} key={category.id}>{category.name}</span>
+                          )) : <span className="category-badge uncategorized">{copy("Sem categoria", "No category")}</span>}
+                        </span>
+                      </div>
+                      {interactive && (
+                        <details className="installment-menu" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                          <summary className="icon-btn small" aria-label={copy(`Ações de ${item.description}`, `Actions for ${item.description}`)} title={copy("Mais ações", "More actions")}>
+                            <EllipsisVertical size={17} />
+                          </summary>
+                          <div className="installment-menu-popover">
+                            <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); openEditor(item); }}>
+                              <Pencil size={14} /> {copy("Editar", "Edit")}
+                            </button>
+                            <button className="danger-text" type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); setEnding(item); }}>
+                              <X size={14} /> {copy("Encerrar", "End")}
+                            </button>
+                          </div>
+                        </details>
+                      )}
+                    </header>
+                    <div className="installment-main-value">
+                      <strong>{formatMoney(item.amount, language)} <small>{frequencyLabel(item)}</small></strong>
+                      <span><i className="subscription-card-dot" style={{ background: item.card_color || "#3B82F6" }} />{item.card_name} · {termLabel(item)}</span>
                     </div>
-                    <b>{formatMoney(item.amount, language)}</b>
-                    {item.active && (
-                      <button className="btn btn-ghost" type="button" onClick={() => setEnding(item)}>
-                        {copy("Encerrar", "End")}
-                      </button>
-                    )}
+                    <div className="installment-next">
+                      <div>
+                        <small>{copy("Dia da cobrança", "Charge day")}</small>
+                        <strong>{copy(`Dia ${item.charge_day}`, `Day ${item.charge_day}`)}</strong>
+                        <span>{periodLabel(item.billing_period)}</span>
+                      </div>
+                      <span className={`installment-status ${item.active ? "success" : ""}`}>{item.active ? copy("Ativa", "Active") : copy("Encerrada", "Ended")}</span>
+                    </div>
                   </article>
                 );
               })}
@@ -132,6 +179,22 @@ export default function SubscriptionsPage({ revision = 0, onNew, onCancel }) {
             </div>
           )}
         </>
+      )}
+
+      {editing && (
+        <InvoiceEntryModal
+          key={editing.id}
+          mode="subscription"
+          subscription={editing}
+          cards={cards}
+          categories={categories}
+          onCreateCategory={onCreateCategory}
+          onSave={async (payload) => {
+            await onSave?.(editing.id, payload);
+            setEditing(null);
+          }}
+          onClose={() => setEditing(null)}
+        />
       )}
 
       {ending && (

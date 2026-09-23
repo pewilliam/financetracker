@@ -7,26 +7,50 @@ import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { todayIsoDate } from "../app/helpers.js";
-import { formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
+import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
-export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", kind = "expense", mode = "single", categories = [], onCreateCategory, onOpenSingle, onOpenSubscription, onOpenInstallment, onSave, onClose }) {
+const BILLING_PERIODS = ["monthly", "bimonthly", "quarterly", "semiannual", "annual"];
+
+export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", kind = "expense", mode = "single", subscription = null, categories = [], onCreateCategory, onOpenSingle, onOpenSubscription, onOpenInstallment, onSave, onClose }) {
   const { language } = useI18n();
   const copy = (pt, en) => language === "en-US" ? en : pt;
   const isRefund = kind === "refund";
-  const isSubscription = !isRefund && mode === "subscription";
-  const lockedCardId = String(invoice?.credit_card_id || cardId || "");
-  const [form, setForm] = useState({
-    description: "",
-    amount: "",
-    category_ids: [],
-    credit_card_id: lockedCardId,
-    purchase_date: todayIsoDate(),
-    charge_day: Number(todayIsoDate().slice(8, 10)),
-    chargeDayTouched: false,
-    billing_period: "monthly",
-    term_kind: "indefinite",
-    term_months: "12",
-    term_end_date: "",
+  const editingSubscription = subscription || null;
+  const isSubscription = !isRefund && (mode === "subscription" || Boolean(editingSubscription));
+  const lockedCardId = editingSubscription ? "" : String(invoice?.credit_card_id || cardId || "");
+  const [form, setForm] = useState(() => {
+    if (!editingSubscription) {
+      return {
+        description: "",
+        amount: "",
+        category_ids: [],
+        credit_card_id: lockedCardId,
+        purchase_date: todayIsoDate(),
+        charge_day: Number(todayIsoDate().slice(8, 10)),
+        chargeDayTouched: false,
+        billing_period: "monthly",
+        term_kind: "indefinite",
+        term_months: "12",
+        term_end_date: "",
+      };
+    }
+    const period = BILLING_PERIODS.includes(editingSubscription.billing_period) ? editingSubscription.billing_period : "monthly";
+    const categoryIds = editingSubscription.category_ids?.length
+      ? editingSubscription.category_ids
+      : (editingSubscription.categories || []).map((category) => category.id);
+    return {
+      description: editingSubscription.description || "",
+      amount: formatMoney(editingSubscription.amount, language),
+      category_ids: categoryIds.map(String),
+      credit_card_id: String(editingSubscription.credit_card_id || ""),
+      purchase_date: editingSubscription.start_date || todayIsoDate(),
+      charge_day: editingSubscription.charge_day || 1,
+      chargeDayTouched: true,
+      billing_period: period,
+      term_kind: editingSubscription.term_kind || "indefinite",
+      term_months: String(editingSubscription.term_months || 12),
+      term_end_date: editingSubscription.term_end_date || "",
+    };
   });
   const [saving, setSaving] = useState(false);
   const amountInputRef = useRef(null);
@@ -40,8 +64,8 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
     || (form.term_kind === "end_date" && Boolean(form.term_end_date))
   );
   const recurringReady = !isSubscription || (chargeDay >= 1 && chargeDay <= 31 && termReady);
-  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving && recurringReady && (isRefund || (form.credit_card_id && form.purchase_date)));
-  const hasModeSwitch = !isRefund && Boolean(onOpenInstallment);
+  const canSave = Boolean((form.description.trim() || isRefund) && amount > 0 && !saving && recurringReady && (isRefund || form.credit_card_id) && (isRefund || editingSubscription || form.purchase_date));
+  const hasModeSwitch = !isRefund && !editingSubscription && Boolean(onOpenInstallment);
 
   useEffect(() => {
     if (isMobileViewport()) return undefined;
@@ -63,15 +87,23 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave(isRefund ? {
-        description: form.description.trim() || copy("Reembolso", "Refund"),
-        amount: -Math.abs(amount),
-        category_ids: form.category_ids.map(Number),
-      } : {
+      const subscriptionFields = {
         description: form.description.trim(),
         amount: Math.abs(amount),
         category_ids: form.category_ids.map(Number),
         credit_card_id: Number(form.credit_card_id),
+        charge_day: chargeDay,
+        billing_period: form.billing_period,
+        term_kind: form.term_kind,
+        term_months: form.term_kind === "months" ? termMonths : null,
+        term_end_date: form.term_kind === "end_date" ? form.term_end_date : null,
+      };
+      await onSave(isRefund ? {
+        description: form.description.trim() || copy("Reembolso", "Refund"),
+        amount: -Math.abs(amount),
+        category_ids: form.category_ids.map(Number),
+      } : editingSubscription ? subscriptionFields : {
+        ...subscriptionFields,
         purchase_date: form.purchase_date,
         recurring: isSubscription,
         charge_day: isSubscription ? chargeDay : undefined,
@@ -89,9 +121,11 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
 
   const title = isRefund
     ? copy("Adicionar reembolso", "Add refund")
-    : isSubscription
-      ? copy("Adicionar assinatura", "Add subscription")
-      : copy("Adicionar compra", "Add purchase");
+    : editingSubscription
+      ? copy("Editar assinatura", "Edit subscription")
+      : isSubscription
+        ? copy("Adicionar assinatura", "Add subscription")
+        : copy("Adicionar compra", "Add purchase");
   const heading = isRefund
     ? copy(`FATURA · ${invoice?.name || ""}`, `INVOICE · ${invoice?.name || ""}`)
     : copy(`CARTÃO · ${selectedCard?.name || invoice?.name || "COMPRA"}`, `CARD · ${selectedCard?.name || invoice?.name || "PURCHASE"}`);
@@ -160,7 +194,7 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
                 <div className="invoice-entry-category">
                   <span>{copy("Cartão", "Card")}</span>
                   <CategorySelect
-                    categories={cards.filter((card) => card.active).map((card) => ({ id: card.id, name: card.name, color: card.color }))}
+                    categories={cards.filter((card) => card.active || String(card.id) === String(form.credit_card_id)).map((card) => ({ id: card.id, name: card.name, color: card.color }))}
                     value={form.credit_card_id}
                     onChange={(credit_card_id) => setForm((current) => ({ ...current, credit_card_id }))}
                     multiple={false}
@@ -171,16 +205,31 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
                   />
                 </div>
               )}
-              <div className="invoice-entry-description">
-                <span>{copy("Data da compra", "Purchase date")}</span>
-                <DateField value={form.purchase_date} onChange={(purchase_date) => setForm((current) => ({
-                  ...current,
-                  purchase_date,
-                  charge_day: current.chargeDayTouched ? current.charge_day : Number(String(purchase_date).slice(8, 10)) || current.charge_day,
-                }))} />
-              </div>
+              {editingSubscription ? (
+                <div className="invoice-entry-description">
+                  <span>{copy("Início", "Start")}</span>
+                  <input value={formatDateShort(editingSubscription.start_date, language)} readOnly aria-label={copy("Data de início", "Start date")} />
+                </div>
+              ) : (
+                <div className="invoice-entry-description">
+                  <span>{copy("Data da compra", "Purchase date")}</span>
+                  <DateField value={form.purchase_date} onChange={(purchase_date) => setForm((current) => ({
+                    ...current,
+                    purchase_date,
+                    charge_day: current.chargeDayTouched ? current.charge_day : Number(String(purchase_date).slice(8, 10)) || current.charge_day,
+                  }))} />
+                </div>
+              )}
               {isSubscription && (
                 <>
+                  {editingSubscription && (
+                    <div className="invoice-entry-span">
+                      <small>{copy(
+                        "Cobranças já lançadas permanecem na fatura. A alteração vale para as próximas previsões.",
+                        "Charges already posted stay on the invoice. Changes apply to upcoming forecasts.",
+                      )}</small>
+                    </div>
+                  )}
                   <div className="invoice-entry-description">
                     <span>{copy("Periodicidade", "Billing period")}</span>
                     <select
@@ -252,7 +301,7 @@ export default function InvoiceEntryModal({ invoice, cards = [], cardId = "", ki
         <footer className="transaction-modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>{copy("Cancelar", "Cancel")}</button>
           <button className={`btn transaction-save ${isRefund ? "success" : "danger"}`} type="submit" disabled={!canSave}>
-            {saving ? <><Loader2 className="spin" size={16} /> {copy("Adicionando...", "Adding...")}</> : title}
+            {saving ? <><Loader2 className="spin" size={16} /> {editingSubscription ? copy("Salvando...", "Saving...") : copy("Adicionando...", "Adding...")}</> : title}
           </button>
         </footer>
       </form>
