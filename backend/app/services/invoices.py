@@ -166,39 +166,6 @@ def same_cycle_due_date(
     return invoice_period(new_closing_day, new_due_day, anchor)[1]
 
 
-def _purchase_dates(invoice: Invoice) -> list[date]:
-    return [item.purchase_date for item in invoice.items if item.purchase_date]
-
-
-def _due_target_for_invoice(
-    invoice: Invoice,
-    card: CreditCard,
-    previous_due_day: int,
-    previous_closing_day: int,
-    calendar_changed: bool,
-) -> date:
-    from app.services.credit_cards import invoice_period
-
-    purchase_dates = _purchase_dates(invoice)
-    if purchase_dates:
-        counted: dict[date, int] = {}
-        for purchase_date in purchase_dates:
-            due = invoice_period(card.closing_day, card.due_day, purchase_date)[1]
-            counted[due] = counted.get(due, 0) + 1
-        due, count = max(counted.items(), key=lambda item: item[1])
-        if count == len(purchase_dates):
-            return due
-    if calendar_changed:
-        return same_cycle_due_date(
-            invoice.due_date,
-            previous_due_day,
-            previous_closing_day,
-            card.due_day,
-            card.closing_day,
-        )
-    return invoice.due_date
-
-
 def sync_open_invoices_to_card(
     db: Session,
     card: CreditCard,
@@ -207,18 +174,51 @@ def sync_open_invoices_to_card(
     previous_closing_day: int,
     calendar_changed: bool,
 ) -> None:
-    """Refresh payment dates of open invoices. Existing due dates stay put.
+    """Move open invoices to the new card day and refresh their payment dates.
 
-    Paid invoices are left untouched. A planned payment date chosen on one
-    invoice is kept. Changing the card calendar does not move invoices that
-    already exist.
+    Each invoice keeps the same billing cycle. The purchase date is not used
+    to choose another month. Paid invoices stay where they are. A planned
+    payment date chosen on one invoice is kept. Changing only the forecast
+    does not move the due date.
     """
-    del previous_due_day, previous_closing_day, calendar_changed
     invoices = (
         db.query(Invoice)
         .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(False))
+        .order_by(Invoice.due_date, Invoice.id)
         .all()
     )
+    if calendar_changed and invoices:
+        occupied = {
+            row.due_date
+            for row in db.query(Invoice.due_date)
+            .filter(Invoice.credit_card_id == card.id, Invoice.paid.is_(True))
+            .all()
+        }
+        targets = [
+            (
+                invoice,
+                same_cycle_due_date(
+                    invoice.due_date,
+                    previous_due_day,
+                    previous_closing_day,
+                    card.due_day,
+                    card.closing_day,
+                ),
+            )
+            for invoice in invoices
+        ]
+        proposed = [target for _invoice, target in targets]
+        if len(proposed) == len(set(proposed)) and not occupied.intersection(proposed):
+            changing = [(invoice, target) for invoice, target in targets if invoice.due_date != target]
+            for invoice, _target in changing:
+                invoice.due_date = date(1000, 1, 1) + timedelta(days=invoice.id)
+            if changing:
+                db.flush()
+            for invoice, target in changing:
+                invoice.due_date = target
+            if changing:
+                db.flush()
+
     today = date.today()
     for invoice in invoices:
         if not invoice.linked_transaction_id:
