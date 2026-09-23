@@ -247,27 +247,22 @@ def sync_open_invoices_to_card(
     chosen: dict[int, date] = {}
     removable: list[Invoice] = []
     for target, group in grouped.items():
-        if target in occupied:
-            for invoice in group:
-                chosen[invoice.id] = invoice.due_date
-            continue
         charged = [invoice for invoice in group if _purchase_dates(invoice)]
-        if len(group) > 1 and len(charged) == 1:
-            winner = charged[0]
-            for invoice in group:
-                if invoice is winner:
-                    chosen[invoice.id] = target
-                elif not invoice.items and not invoice.installment_items:
-                    removable.append(invoice)
-                else:
-                    chosen[invoice.id] = invoice.due_date
+        empty = [invoice for invoice in group if not invoice.items and not invoice.installment_items]
+        if (
+            target not in occupied
+            and len(group) > 1
+            and len(charged) == 1
+            and len(empty) == len(group) - 1
+        ):
+            chosen[charged[0].id] = target
+            removable.extend(empty)
             continue
-        if len(group) > 1:
-            winner = next((invoice for invoice in group if invoice.due_date == target), None)
-            for invoice in group:
-                chosen[invoice.id] = target if invoice is winner else invoice.due_date
+        if len(group) == 1 and target not in occupied:
+            chosen[group[0].id] = target
             continue
-        chosen[group[0].id] = target
+        for invoice in group:
+            chosen[invoice.id] = invoice.due_date
     if removable:
         removable_ids = {invoice.id for invoice in removable}
         for invoice in removable:
@@ -276,21 +271,30 @@ def sync_open_invoices_to_card(
             db.flush()
             if linked_id:
                 linked = db.get(Transaction, linked_id)
-                if linked is not None and linked.amount == 0:
-                    db.delete(linked)
+                if linked is not None:
+                    linked.invoice_id = None
+                    if linked.amount == 0:
+                        db.delete(linked)
             db.delete(invoice)
         db.flush()
         invoices = [invoice for invoice in invoices if invoice.id not in removable_ids]
-    used: dict[date, int] = {}
-    for invoice in invoices:
-        target = chosen[invoice.id]
-        owner = used.get(target)
-        if owner is not None and owner != invoice.id:
-            target = invoice.due_date
-            chosen[invoice.id] = target
-        used[target] = invoice.id
+    final = {invoice.id: invoice.due_date for invoice in invoices}
+    moved = True
+    while moved:
+        moved = False
+        for invoice in sorted(invoices, key=lambda item: item.due_date, reverse=True):
+            target = chosen[invoice.id]
+            if final[invoice.id] == target or target in occupied:
+                continue
+            if any(final[other.id] == target for other in invoices if other.id != invoice.id):
+                continue
+            final[invoice.id] = target
+            moved = True
+    assigned = [final[invoice.id] for invoice in invoices]
+    if len(assigned) != len(set(assigned)) or occupied.intersection(assigned):
+        final = {invoice.id: invoice.due_date for invoice in invoices}
 
-    changing = [(invoice, chosen[invoice.id]) for invoice in invoices if invoice.due_date != chosen[invoice.id]]
+    changing = [(invoice, final[invoice.id]) for invoice in invoices if invoice.due_date != final[invoice.id]]
     for invoice, _target in changing:
         invoice.due_date = date(1000, 1, 1) + timedelta(days=invoice.id)
     if changing:

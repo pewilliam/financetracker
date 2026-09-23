@@ -357,6 +357,34 @@ class CreditCardFlowTests(unittest.TestCase):
         self.assertEqual(self.db.get(Invoice, first.id).linked_transaction.date, date(2026, 8, 30))
         self.assertEqual(self.db.get(Invoice, second.id).linked_transaction.date, date(2026, 8, 30))
 
+    def test_card_save_keeps_distinct_due_dates_when_cycles_overlap(self):
+        staying = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 11, 5))
+        moving = create_invoice_with_transaction(self.db, self.user.id, self.card, date(2026, 10, 20))
+        self.db.add(InvoiceItem(
+            invoice_id=staying.id,
+            description="Assinatura",
+            amount=Decimal("30.00"),
+            purchase_date=None,
+        ))
+        self.db.add(InvoiceItem(
+            invoice_id=moving.id,
+            description="Compra",
+            amount=Decimal("40.00"),
+            purchase_date=date(2026, 10, 10),
+        ))
+        self.db.commit()
+
+        update_card(
+            self.card.id,
+            CardUpdate(payment_forecast_kind="last"),
+            self.db,
+            self.user,
+        )
+        self.db.expire_all()
+        self.assertEqual(self.db.get(Invoice, staying.id).due_date, date(2026, 11, 5))
+        self.assertEqual(self.db.get(Invoice, moving.id).due_date, date(2026, 10, 20))
+        self.assertEqual(self.db.get(Invoice, staying.id).linked_transaction.date, date(2026, 10, 31))
+
     def test_available_limit_uses_unpaid_invoice_totals(self):
         from app.routers.cards import list_cards
 
