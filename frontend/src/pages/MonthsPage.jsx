@@ -9,6 +9,7 @@ import { getMonthPeriod, quickAddDate, todayIsoDate } from "../app/helpers.js";
 import { MONTHS_VIEW_MODE_KEY } from "../app/constants.js";
 
 const MONTHS_TUTORIAL_VERSION = 1;
+const TODAY_JUMP_KEY = "months-jump-to-today";
 
 function getTutorialContent(language) {
   if (language === "en-US") {
@@ -194,7 +195,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   const tutorialContent = useMemo(() => getTutorialContent(language), [language]);
   const tableRef = useRef(null);
   const [pendingTableScroll, setPendingTableScroll] = useState(false);
-  const [pendingTodayScroll, setPendingTodayScroll] = useState(false);
+  const [todayJump, setTodayJump] = useState(0);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [viewMode, setViewMode] = useState(() => {
@@ -288,24 +289,27 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
 
   const goToToday = () => {
     const today = new Date();
-    setPendingTodayScroll(true);
+    sessionStorage.setItem(TODAY_JUMP_KEY, "1");
     setYear(today.getFullYear());
     setMonth(today.getMonth() + 1);
     changeView("table");
+    setTodayJump((value) => value + 1);
   };
 
   useEffect(() => {
-    if (!pendingTodayScroll || viewMode !== "table") return undefined;
+    if (viewMode !== "table" || sessionStorage.getItem(TODAY_JUMP_KEY) !== "1") return undefined;
     const today = new Date();
-    if (year !== today.getFullYear() || month !== today.getMonth() + 1) return undefined;
+    const viewingToday = Number(year) === today.getFullYear() && Number(month) === today.getMonth() + 1;
+    const dataReady = Number(monthData?.year) === today.getFullYear() && Number(monthData?.month) === today.getMonth() + 1;
+    if (!viewingToday || !dataReady) return undefined;
     const row = tableRef.current?.querySelector(`[data-day="${todayIsoDate()}"]`);
     if (!row) return undefined;
     const frame = requestAnimationFrame(() => {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
-      setPendingTodayScroll(false);
+      sessionStorage.removeItem(TODAY_JUMP_KEY);
     });
     return () => cancelAnimationFrame(frame);
-  }, [pendingTodayScroll, viewMode, year, month, monthData]);
+  }, [todayJump, viewMode, year, month, monthData]);
 
   useEffect(() => {
     setExpandedYears((previous) => {
