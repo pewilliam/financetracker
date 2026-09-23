@@ -1519,7 +1519,7 @@ select {
 .bar-track { height: 8px; border-radius: 999px; background: #FFE8ED; overflow: hidden; margin-top: 8px; }
 .bar-track span { display: block; height: 100%; background: var(--color-primary); }
 
-.month-list { margin-top: 18px; display: grid; gap: 10px; }
+.month-list { margin-top: 18px; display: grid; gap: 10px; container-type: inline-size; container-name: month-days; }
 .day-row {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) 168px 42px;
@@ -1562,7 +1562,7 @@ select {
   text-transform: uppercase;
 }
 .day-date { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 800; text-transform: capitalize; }
-.day-transactions { display: grid; gap: 8px; min-width: 0; }
+.day-transactions { display: grid; gap: 8px; min-width: 0; container-type: inline-size; container-name: day-entries; }
 .transaction-line { display: grid; grid-template-columns: 76px 120px minmax(0,1fr) auto; align-items: center; gap: 10px; min-height: 32px; }
 .transaction-line.is-clickable {
   cursor: pointer;
@@ -1617,6 +1617,125 @@ select {
 .month-total-planned { color: var(--planned-text); }
 .tx-description { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx-badges:empty { display: none; }
+@container day-entries (max-width: 680px) {
+  .transaction-line {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "type amount actions"
+      "description description description";
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .transaction-line > .type-chip { grid-area: type; }
+  .transaction-line > .money-income,
+  .transaction-line > .money-expense,
+  .transaction-line > .money-planned { grid-area: amount; }
+  .transaction-line > .row-actions { grid-area: actions; justify-self: end; }
+  .tx-description {
+    grid-area: description;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
+  }
+  .tx-badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    overflow: visible;
+  }
+  .tx-badges > span { margin-right: 0; }
+  .tx-description-text {
+    flex: 1 1 12rem;
+    min-width: min(100%, 12rem);
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-overflow: unset;
+  }
+  .tx-description .transaction-category-pill,
+  .tx-description .recurrence-pill,
+  .tx-description .invoice-pill,
+  .tx-description .planned-pill,
+  .tx-description .transaction-expense-pill {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+@container month-days (max-width: 1180px) {
+  .day-row {
+    grid-template-columns: minmax(0, 1fr) auto 42px;
+    grid-template-areas:
+      "date balance add"
+      "transactions transactions transactions";
+    align-items: center;
+    gap: 10px 12px;
+  }
+  .day-date { grid-area: date; }
+  .day-transactions { grid-area: transactions; padding-top: 2px; }
+  .day-balance { grid-area: balance; }
+  .add-day { grid-area: add; }
+  .transaction-line {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "type amount actions"
+      "description description description";
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .transaction-line + .transaction-line {
+    border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+    padding-top: 8px;
+  }
+  .transaction-line > .type-chip { grid-area: type; }
+  .transaction-line > .money-income,
+  .transaction-line > .money-expense,
+  .transaction-line > .money-planned { grid-area: amount; }
+  .transaction-line > .row-actions { grid-area: actions; justify-self: end; }
+  .tx-description {
+    grid-area: description;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
+  }
+  .tx-badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    overflow: visible;
+  }
+  .tx-badges > span { margin-right: 0; }
+  .tx-description-text {
+    flex: 1 1 12rem;
+    min-width: min(100%, 12rem);
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-overflow: unset;
+  }
+  .tx-description .transaction-category-pill,
+  .tx-description .recurrence-pill,
+  .tx-description .invoice-pill,
+  .tx-description .planned-pill,
+  .tx-description .transaction-expense-pill {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
 .recurrence-pill {
   display: inline-flex;
   align-items: center;
@@ -8154,23 +8273,39 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .tx-description {
     grid-area: description;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     min-width: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
   }
   .tx-badges {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
+    gap: 4px;
+    max-width: 100%;
+    overflow: visible;
   }
+  .tx-badges > span { margin-right: 0; }
   .tx-description-text {
-    order: -1;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex: 1 1 12rem;
+    min-width: min(100%, 12rem);
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-overflow: unset;
+  }
+  .tx-description .transaction-category-pill,
+  .tx-description .recurrence-pill,
+  .tx-description .invoice-pill,
+  .tx-description .planned-pill,
+  .tx-description .transaction-expense-pill {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
   .row-actions {
     grid-area: actions;
