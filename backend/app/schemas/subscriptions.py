@@ -8,6 +8,27 @@ from app.schemas.base import APIModel, PositiveMoney
 from app.schemas.categories import CategoryOut
 
 
+class CardSubscriptionPreview(APIModel):
+    purchase_date: Optional[date] = None
+    start_date: Optional[date] = None
+    charge_day: int = Field(ge=1, le=31)
+    current_charge_day: Optional[int] = Field(default=None, ge=1, le=31)
+    posted: bool = False
+    billing_period: Literal["monthly", "bimonthly", "quarterly", "semiannual", "annual"] = "monthly"
+    term_kind: Literal["indefinite", "months", "end_date"] = "indefinite"
+    term_months: Optional[int] = None
+    term_end_date: Optional[date] = None
+
+
+class CardSubscriptionPreviewOut(APIModel):
+    valid: bool = True
+    reason: Optional[str] = None
+    start_date: Optional[date] = None
+    billing_interval_months: int = 1
+    term_kind: str = "indefinite"
+    charge_count: Optional[int] = None
+
+
 class CardSubscriptionOut(APIModel):
     id: int
     credit_card_id: int
@@ -27,6 +48,7 @@ class CardSubscriptionOut(APIModel):
     categories: List[CategoryOut] = []
     card_name: str = ""
     card_color: str = "#3B82F6"
+    has_posted_charge: bool = False
 
 
 class CardSubscriptionUpdate(APIModel):
