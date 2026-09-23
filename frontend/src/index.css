@@ -552,6 +552,18 @@ button:focus-visible {
   margin-bottom: 12px;
   border-bottom: 1px solid transparent;
   box-shadow: 0 10px 20px -18px rgba(6, 18, 13, 0.55);
+  transition: transform 220ms ease;
+}
+.sticky-header-sentinel { height: 0; }
+.app-layout { --sticky-header-lift: 0px; }
+.app-layout.chrome-hidden .page-header.page-header-sticky,
+.app-layout.chrome-hidden .mobile-topbar {
+  transform: translateY(calc(-100% - var(--sticky-header-lift)));
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-header.page-header-sticky,
+  .mobile-topbar { transition: none; }
 }
 .section-head {
   flex-wrap: wrap;
@@ -7941,6 +7953,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .mob-sidebar-panel .sidebar-action.active::before { display: block; }
 
   /* ── Topbar mobile ── */
+  .app-layout { --sticky-header-lift: 56px; }
   .mobile-topbar {
     position: fixed;
     inset: 0 0 auto 0;
@@ -7952,6 +7965,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     background: #0D1F18;
     color: #E8F5EE;
     box-shadow: 0 10px 28px rgba(6,18,13,0.22);
+    transition: transform 220ms ease;
   }
   .mobile-menu-btn {
     position: absolute;
