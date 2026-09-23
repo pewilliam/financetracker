@@ -10,6 +10,7 @@ class InvoiceItemCreate(APIModel):
     amount: MoneyValue
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    purchase_date: Optional[date] = None
 
 
 class InvoiceItemUpdate(InvoiceItemCreate):
@@ -20,6 +21,18 @@ class InvoiceItemOut(InvoiceItemCreate):
     id: int
     created_at: Optional[datetime] = None
     category: Optional[CategoryOut] = None
+    categories: List[CategoryOut] = []
+    subscription_id: Optional[int] = None
+    subscription_charge_date: Optional[date] = None
+
+
+class ProjectedSubscriptionItemOut(APIModel):
+    subscription_id: int
+    description: str
+    amount: Decimal
+    charge_date: date
+    category_id: Optional[int] = None
+    category_ids: List[int] = []
     categories: List[CategoryOut] = []
 
 
@@ -41,10 +54,14 @@ class InvoiceInstallmentItemOut(APIModel):
     categories: List[CategoryOut] = []
 
 
-class InvoiceCreate(APIModel):
-    template_id: int
-    due_date: date
-    wallet_id: Optional[int] = None
+class PurchaseCreate(APIModel):
+    description: str
+    amount: MoneyValue
+    purchase_date: date
+    category_id: Optional[int] = None
+    category_ids: Optional[List[int]] = None
+    recurring: bool = False
+    charge_day: Optional[int] = None
 
 
 class InvoicePaidUpdate(APIModel):
@@ -57,7 +74,7 @@ class InvoiceUpdate(APIModel):
 
 class InvoiceOut(APIModel):
     id: int
-    template_id: int
+    credit_card_id: int
     name: str
     color: str = "#3B82F6"
     due_date: date
@@ -70,3 +87,8 @@ class InvoiceOut(APIModel):
     installment_item_count: int = 0
     items: List[InvoiceItemOut] = []
     installment_items: List[InvoiceInstallmentItemOut] = []
+    projected_amount: Decimal = Decimal("0.00")
+    projected_total: Decimal = Decimal("0.00")
+    projected_item_count: int = 0
+    is_projected: bool = False
+    projected_items: List[ProjectedSubscriptionItemOut] = []

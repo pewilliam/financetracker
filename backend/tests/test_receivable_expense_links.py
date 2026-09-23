@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Receivable, ReceivablePerson, Transaction, User
+from app.models import CreditCard, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Receivable, ReceivablePerson, Transaction, User
 from app.routers.receivables import create_receivable, list_linked_receivable_transactions, list_receivable_expense_options, update_receivable
 from app.routers.transactions import create_transaction, update_transaction
 from app.schemas.receivables import ReceivableCreate, ReceivableExpenseLinkIn, ReceivableUpdate
@@ -39,18 +39,19 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         )
 
     def test_expense_options_expose_the_source_registration_time(self):
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#3B82F6",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add(template)
         self.db.flush()
         invoice = Invoice(
             user_id=self.user.id,
-            template_id=template.id,
+            credit_card_id=template.id,
             due_date=date(2026, 9, 30),
             total_amount=Decimal("0.00"),
         )
@@ -133,16 +134,17 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 400)
 
     def test_single_installment_receivable_keeps_selected_due_date(self):
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#3B82F6",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add(template)
         self.db.flush()
-        invoice = Invoice(user_id=self.user.id, template_id=template.id, due_date=date(2026, 9, 30), total_amount=Decimal("0.00"))
+        invoice = Invoice(user_id=self.user.id, credit_card_id=template.id, due_date=date(2026, 9, 30), total_amount=Decimal("0.00"))
         self.db.add(invoice)
         self.db.flush()
         purchase = InstallmentPurchase(
@@ -184,17 +186,18 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.assertEqual(result.source_installment_item_id, item.id)
 
     def test_partial_total_is_distributed_across_purchase_installments(self):
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#3B82F6",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add(template)
         self.db.flush()
         invoices = [
-            Invoice(user_id=self.user.id, template_id=template.id, due_date=date(2026, month, 10), total_amount=Decimal("0.00"))
+            Invoice(user_id=self.user.id, credit_card_id=template.id, due_date=date(2026, month, 10), total_amount=Decimal("0.00"))
             for month in (9, 10, 11)
         ]
         self.db.add_all(invoices)
@@ -243,17 +246,18 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.assertEqual(len({row.series_id for row in rows}), 1)
 
     def test_update_remaining_scope_rewrites_existing_series_instead_of_duplicating(self):
-        template = InvoiceTemplate(
+        template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#3B82F6",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add(template)
         self.db.flush()
         invoices = [
-            Invoice(user_id=self.user.id, template_id=template.id, due_date=date(2026, month, 10), total_amount=Decimal("0.00"))
+            Invoice(user_id=self.user.id, credit_card_id=template.id, due_date=date(2026, month, 10), total_amount=Decimal("0.00"))
             for month in (9, 10, 11)
         ]
         self.db.add_all(invoices)

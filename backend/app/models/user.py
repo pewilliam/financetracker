@@ -18,11 +18,12 @@ class User(Base):
 
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="user", cascade="all, delete-orphan")
-    invoice_templates = relationship("InvoiceTemplate", back_populates="user", cascade="all, delete-orphan")
+    credit_cards = relationship("CreditCard", back_populates="user", cascade="all, delete-orphan")
     installment_purchases = relationship("InstallmentPurchase", back_populates="user", cascade="all, delete-orphan")
     receivable_people = relationship("ReceivablePerson", back_populates="user", cascade="all, delete-orphan")
     receivables = relationship("Receivable", back_populates="user", cascade="all, delete-orphan")
     recurrences = relationship("Recurrence", back_populates="user", cascade="all, delete-orphan")
+    card_subscriptions = relationship("CardSubscription", back_populates="user", cascade="all, delete-orphan")
     simulations = relationship("Simulation", back_populates="user", cascade="all, delete-orphan")
     categories = relationship("Category", back_populates="user", cascade="all, delete-orphan")
     monthly_budget_plans = relationship("MonthlyBudgetPlan", back_populates="user", cascade="all, delete-orphan")

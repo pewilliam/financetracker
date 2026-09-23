@@ -4,7 +4,7 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContai
 import { toast } from "react-hot-toast";
 import { createInstallment, createSimulation, createTransaction, deleteSimulation, getSimulation, listSimulations, previewSimulation, updateSimulation } from "../api/api.js";
 import { MonthField } from "../components/DateField.jsx";
-import { addMonthsToDate, invoiceAcceptsNewCharges, todayIsoDate } from "../app/helpers.js";
+import { addMonthsToDate, invoiceAcceptsNewCharges, lastDayOfMonth, shiftMonth, todayIsoDate } from "../app/helpers.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney, formatMonthLabel, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
@@ -508,6 +508,13 @@ function findInvoiceForMonth(invoices, monthValue, allowOverdueInvoiceEdits = fa
     .find((invoice) => String(invoice.due_date || "").slice(0, 7) === monthValue);
 }
 
+function purchaseDateForCycle(card, dueDate) {
+  const [year, month] = String(dueDate).split("-").map(Number);
+  const close = Number(card?.due_day) <= Number(card?.closing_day) ? shiftMonth(year, month, -1) : { year, month };
+  const day = Math.min(Number(card.closing_day) || 1, lastDayOfMonth(close.year, close.month));
+  return `${close.year}-${String(close.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 const SIMULATION_TUTORIAL_STEPS = [
   {
     target: "library",
@@ -698,7 +705,7 @@ function SimulationTutorial({ open, stepIndex, startStep, onBack, onClose, onNex
   );
 }
 
-export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits = false, monthCards = [], onInserted }) {
+export default function SimulationPage({ invoices = [], cards = [], allowOverdueInvoiceEdits = false, monthCards = [], onInserted }) {
   const { user, completeTutorial } = useAuth();
   const { language } = useI18n();
   const storageKey = `kashy365_simulation_${user?.id || "local"}`;
@@ -1272,18 +1279,21 @@ export default function SimulationPage({ invoices = [], allowOverdueInvoiceEdits
       return 1;
     }
 
-    const firstInvoice = findInvoiceForMonth(invoices, item.month, allowOverdueInvoiceEdits);
-    if (!firstInvoice) throw new Error(`Crie uma fatura elegível em ${formatMonthLabel(...item.month.split("-").map(Number), language)} antes de inserir "${description}".`);
+    const monthInvoice = findInvoiceForMonth(invoices, item.month, allowOverdueInvoiceEdits);
+    const card = cards.find((candidate) => candidate.active && monthInvoice && Number(candidate.id) === Number(monthInvoice.credit_card_id))
+      || cards.find((candidate) => candidate.active);
+    if (!card) throw new Error(`Cadastre um cartão ativo antes de inserir "${description}".`);
+    const firstPurchaseDate = monthInvoice ? purchaseDateForCycle(card, monthInvoice.due_date) : `${item.month}-01`;
 
     await createInstallment({
       description,
       total_amount: amount,
       installment_count: scheduledValues.length,
-      first_invoice_id: Number(firstInvoice.id),
-      items: scheduledValues.map((entry, index) => ({
-        invoice_id: index === 0 ? Number(firstInvoice.id) : null,
+      credit_card_id: Number(card.id),
+      first_purchase_date: firstPurchaseDate,
+      items: scheduledValues.map((entry) => ({
         amount: entry.value,
-        target_due_date: addMonthsToDate(firstInvoice.due_date, entry.index)
+        purchase_date: addMonthsToDate(firstPurchaseDate, entry.index)
       }))
     });
     return 1;

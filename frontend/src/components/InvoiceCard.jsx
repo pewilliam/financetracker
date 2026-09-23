@@ -11,15 +11,19 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const status = daysUntil(invoice.due_date);
-  const overdue = !invoice.paid && getDaysUntil(invoice.due_date) <= 0;
+  const overdue = !invoice.paid && !invoice.is_projected && getDaysUntil(invoice.due_date) <= 0;
   const itemsKnown = invoice.items_included !== false;
   const regularItems = invoice.items || [];
   const installmentItems = invoice.installment_items || [];
-  const canAddToInvoice = invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
+  const projectedItems = invoice.projected_items || [];
+  const projectedAmount = Number(invoice.projected_amount || 0);
+  const hasProjection = projectedAmount > 0;
+  const projectedTotal = Number(invoice.projected_total ?? Number(invoice.total_amount || 0) + projectedAmount);
+  const canAddToInvoice = !invoice.is_projected && invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
   const canEditDueDate = canAddToInvoice;
   const totalItemCount = itemsKnown
-    ? regularItems.length + installmentItems.length
-    : Number(invoice.item_count || 0) + Number(invoice.installment_item_count || 0);
+    ? regularItems.length + installmentItems.length + projectedItems.length
+    : Number(invoice.item_count || 0) + Number(invoice.installment_item_count || 0) + Number(invoice.projected_item_count || projectedItems.length || 0);
   const refundTotal = regularItems.reduce((total, item) => Number(item.amount) < 0 ? total + Math.abs(Number(item.amount)) : total, 0);
   const viewItemsLabel = language === "en-US"
     ? `View items (${totalItemCount})`
@@ -53,18 +57,28 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
   );
 
   return (
-    <article className={`invoice-card card ${invoice.paid ? "paid" : ""} ${overdue ? "overdue" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
+    <article className={`invoice-card card ${invoice.paid ? "paid" : ""} ${overdue ? "overdue" : ""} ${invoice.is_projected ? "is-projected" : ""}`} style={{ "--invoice-color": invoiceColor(invoice.color) }}>
       <header className="invoice-header">
         <div className="invoice-header-top">
           <h3><span className="invoice-color-dot" />{invoice.name}</h3>
           <span className={`due-badge ${invoice.paid ? "paid" : overdue ? "danger" : ""}`}>
-            {invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
+            {invoice.is_projected
+              ? tt("invoices.projectedInvoice", "Prevista")
+              : invoice.paid ? (language === "en-US" ? "PAID" : "PAGA") : status}
           </span>
         </div>
-        <p className="invoice-amount">
-          <small>{tt("invoices.total", "Total")}</small>
-          <strong>{formatMoney(invoice.total_amount)}</strong>
-        </p>
+        <div className={`invoice-amounts ${hasProjection ? "has-projection" : ""}`}>
+          <p className="invoice-amount">
+            <small>{tt("invoices.total", "Total")}</small>
+            <strong>{formatMoney(invoice.total_amount)}</strong>
+          </p>
+          {hasProjection && (
+            <p className="invoice-amount is-projected">
+              <small>{tt("invoices.projected", "Previsto")}</small>
+              <strong>{formatMoney(projectedTotal)}</strong>
+            </p>
+          )}
+        </div>
         {canEditDueDate ? (
           <button
             className="invoice-due-summary is-editable"
@@ -115,9 +129,9 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
         </button>
       )}
 
-      <div className="invoice-card-footer">
+      {(canAddToInvoice || (!invoice.is_projected && (totalItemCount > 0 || canDelete))) && <div className="invoice-card-footer">
         {canAddToInvoice && renderQuickAddActions()}
-        {(totalItemCount > 0 || canDelete) && (
+        {!invoice.is_projected && (totalItemCount > 0 || canDelete) && (
           <div className="invoice-actions">
             {totalItemCount > 0 ? (
               <button className={`btn ${invoice.paid ? "btn-ghost" : "btn-primary"}`} onClick={() => onTogglePaid(invoice.id, !invoice.paid)}>
@@ -131,7 +145,7 @@ export default function InvoiceCard({ invoice, allowOverdueInvoiceEdits = false,
             )}
           </div>
         )}
-      </div>
+      </div>}
     </article>
   );
 }

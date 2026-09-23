@@ -150,13 +150,13 @@ export default function InstallmentsPage({ categories = [], invoices = [], revis
   useEffect(() => {
     const sequence = ++requestSequence.current;
     setLoading(true); setLoadError(false);
-    listInstallmentPage({ tab: activeTab === "inProgress" ? "active" : "paid", search: debouncedQuery, categoryIds, invoiceTemplateId: invoice === "all" ? "" : invoice, situation, sortBy, page, pageSize })
+    listInstallmentPage({ tab: activeTab === "inProgress" ? "active" : "paid", search: debouncedQuery, categoryIds, creditCardId: invoice === "all" ? "" : invoice, situation, sortBy, page, pageSize })
       .then((payload) => { if (sequence !== requestSequence.current) return; if (payload.total_pages > 0 && page > payload.total_pages) { setPage(payload.total_pages); return; } setData(payload); })
       .catch(() => { if (sequence === requestSequence.current) setLoadError(true); })
       .finally(() => { if (sequence === requestSequence.current) setLoading(false); });
   }, [activeTab, debouncedQuery, categoryIds, invoice, situation, sortBy, page, pageSize, revision, retryToken]);
 
-  const invoiceSources = useMemo(() => { const map = new Map(); invoices.forEach((item) => map.set(String(item.template_id ?? item.id), item)); return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")); }, [invoices]);
+  const invoiceSources = useMemo(() => { const map = new Map(); invoices.forEach((item) => map.set(String(item.credit_card_id ?? item.id), item)); return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")); }, [invoices]);
   const summary = data.summary || EMPTY_SUMMARY;
   const maxForecast = Math.max(...(summary.forecast || []).map((item) => Number(item.amount)), 0);
   const totalPurchases = Number(summary.active_count) + Number(summary.paid_off_count);
@@ -168,14 +168,14 @@ export default function InstallmentsPage({ categories = [], invoices = [], revis
       label: categories.find((item) => String(item.id) === id)?.name || id,
       clear: () => { setCategoryIds((current) => current.filter((item) => item !== id)); setPage(1); },
     })),
-    invoice !== "all" && { id: "invoice", label: `Cartão/fatura: ${invoiceSources.find((item) => String(item.template_id ?? item.id) === invoice)?.name}`, clear: () => updateFilter(setInvoice)("all") },
+    invoice !== "all" && { id: "invoice", label: `Cartão: ${invoiceSources.find((item) => String(item.credit_card_id ?? item.id) === invoice)?.name}`, clear: () => updateFilter(setInvoice)("all") },
     situation !== "all" && { id: "situation", label: `Situação: ${{ regular: "Em dia", soon: "Vence em breve", overdue: "Atrasados" }[situation]}`, clear: () => updateFilter(setSituation)("all") },
   ].filter(Boolean);
   const clearFilters = () => { setQuery(""); setDebouncedQuery(""); setCategoryIds([]); setInvoice("all"); setSituation("all"); setPage(1); };
   const changeView = (mode) => { setViewMode(mode); try { sessionStorage.setItem(VIEW_KEY, mode); } catch { /* unavailable */ } };
   const changeTab = (tab) => { setActiveTab(tab); setPage(1); };
   const handleTabsKey = (event) => { if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return; event.preventDefault(); const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')]; const target = tabs[tabs.indexOf(document.activeElement) === 0 ? 1 : 0]; target?.focus(); target?.click(); };
-  const invoiceOptions = [{ value: "all", label: "Todos" }, ...invoiceSources.map((item) => ({ value: String(item.template_id ?? item.id), label: item.name, color: item.color }))];
+  const invoiceOptions = [{ value: "all", label: "Todos" }, ...invoiceSources.map((item) => ({ value: String(item.credit_card_id ?? item.id), label: item.name, color: item.color }))];
   const situationOptions = [{ value: "all", label: "Todos" }, { value: "regular", label: "Em dia", color: "#14A078" }, { value: "soon", label: "Vence em breve", color: "#D99A18" }, { value: "overdue", label: "Atrasados", color: "#FF4D6A" }];
   const sortOptions = [{ value: "nextDue", label: "Próximo vencimento" }, { value: "remaining", label: "Maior valor restante" }, { value: "installment", label: "Maior valor da parcela" }, { value: "progress", label: "Maior progresso" }, { value: "newest", label: "Mais recentes" }, { value: "oldest", label: "Mais antigos" }, { value: "alphabetical", label: "Ordem alfabética" }];
 

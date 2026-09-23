@@ -23,3 +23,4 @@ class Category(Base):
     installment_purchases = relationship("InstallmentPurchase", back_populates="category")
     recurrences = relationship("Recurrence", back_populates="category")
     receivables = relationship("Receivable", back_populates="category")
+    card_subscriptions = relationship("CardSubscription", back_populates="category")

@@ -13,6 +13,22 @@ export function addMonthsToDate(dateString, amount) {
   return `${shifted.year}-${String(shifted.month).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
 }
 
+function isoDate(year, month, day) {
+  const lastDay = lastDayOfMonth(year, month);
+  return `${year}-${String(month).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+}
+
+export function invoicePeriod(closingDay, dueDay, purchaseDate) {
+  const [year, month, day] = String(purchaseDate).split("-").map(Number);
+  const closingThisMonth = Math.min(Number(closingDay), lastDayOfMonth(year, month));
+  const close = day <= closingThisMonth ? { year, month } : shiftMonth(year, month, 1);
+  const due = Number(dueDay) <= Number(closingDay) ? shiftMonth(close.year, close.month, 1) : close;
+  return {
+    closingDate: isoDate(close.year, close.month, Number(closingDay)),
+    dueDate: isoDate(due.year, due.month, Number(dueDay)),
+  };
+}
+
 export function nextMonthDate(dateString) {
   return addMonthsToDate(dateString, 1);
 }
@@ -25,20 +41,17 @@ export function normalizeInvoiceColor(color) {
   return /^#[0-9A-F]{6}$/i.test(color || "") ? color : DEFAULT_INVOICE_COLOR;
 }
 
-export function defaultInvoiceForm() {
-  return { template_id: "", due_date: "", wallet_id: "", duplicate_next_month: false, duplicate_months: 1 };
+export function defaultCardForm() {
+  return { name: "", institution: "", color: DEFAULT_INVOICE_COLOR, credit_limit: "", closing_day: 23, due_day: 30, default_wallet_id: "" };
 }
 
-export function defaultTemplateForm() {
-  return { name: "", color: DEFAULT_INVOICE_COLOR, default_due_day: 30 };
-}
-
-export function defaultInstallmentForm(firstInvoiceId = "") {
+export function defaultInstallmentForm(cardId = "") {
   return {
     description: "",
     total_amount: "",
     installment_count: 1,
-    first_invoice_id: firstInvoiceId,
+    credit_card_id: cardId ? String(cardId) : "",
+    first_purchase_date: todayIsoDate(),
     category_ids: [],
     different_values: false
   };
@@ -170,6 +183,143 @@ export function formatMonthShort(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
   const label = date.toLocaleDateString(getFormatLocale(), { month: "short", year: "numeric" }).replace(".", "");
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function transactionDate(transaction) {
+  return String(transaction?.date || "").slice(0, 10);
+}
+
+function transactionDelta(transaction) {
+  const amount = Number(transaction?.amount) || 0;
+  return transaction?.type === "income" ? amount : -amount;
+}
+
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function monthKey(year, month) {
+  return `${Number(year)}-${String(Number(month)).padStart(2, "0")}`;
+}
+
+export function mergeCreatedTransaction(monthData, transaction) {
+  const date = transactionDate(transaction);
+  const [year, month] = date.split("-").map(Number);
+  if (!monthData?.days || !year || !month) return null;
+  if (Number(monthData.year) !== year || Number(monthData.month) !== month) return null;
+
+  const delta = transactionDelta(transaction);
+  const amount = Math.abs(delta);
+  let inserted = false;
+  const days = monthData.days.map((day) => {
+    const dayDate = String(day.date).slice(0, 10);
+    if (dayDate < date) return day;
+    if (dayDate === date) {
+      if ((day.transactions || []).some((item) => item.id === transaction.id)) return day;
+      inserted = true;
+      const notes = [day.notes, transaction.description].filter(Boolean).join("; ");
+      return {
+        ...day,
+        transactions: [...(day.transactions || []), transaction].sort((left, right) => Number(left.id) - Number(right.id)),
+        income: roundMoney(Number(day.income || 0) + (transaction.type === "income" ? amount : 0)),
+        expenses: roundMoney(Number(day.expenses || 0) + (transaction.type === "expense" ? amount : 0)),
+        balance: roundMoney(Number(day.balance || 0) + delta),
+        projected_balance: roundMoney(Number(day.projected_balance ?? day.balance ?? 0) + delta),
+        notes: notes || null,
+        has_future: Boolean(day.has_future || transaction.is_future),
+      };
+    }
+    return {
+      ...day,
+      balance: roundMoney(Number(day.balance || 0) + delta),
+      projected_balance: roundMoney(Number(day.projected_balance ?? day.balance ?? 0) + delta),
+    };
+  });
+  if (!inserted) return null;
+  return {
+    ...monthData,
+    days,
+    total_income: roundMoney(Number(monthData.total_income || 0) + (transaction.type === "income" ? amount : 0)),
+    total_expenses: roundMoney(Number(monthData.total_expenses || 0) + (transaction.type === "expense" ? amount : 0)),
+    closing_balance: roundMoney(Number(monthData.closing_balance || 0) + delta),
+  };
+}
+
+export function patchSummaryForTransaction(summary, transaction) {
+  if (!summary) return summary;
+  const date = transactionDate(transaction);
+  const [year, month] = date.split("-").map(Number);
+  if (Number(summary.year) !== year || Number(summary.month) !== month) return summary;
+  const delta = transactionDelta(transaction);
+  const amount = Math.abs(delta);
+  const today = todayIso();
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDayOfMonth(year, month)).padStart(2, "0")}`;
+  const totalIncome = roundMoney(Number(summary.total_income || 0) + (transaction.type === "income" ? amount : 0));
+  const totalExpenses = roundMoney(Number(summary.total_expenses || 0) + (transaction.type === "expense" ? amount : 0));
+  let currentBalance = Number(summary.current_balance || 0);
+  let futureNet = Number(summary.future_net || 0);
+  if (end < today) currentBalance += delta;
+  else if (start > today) futureNet += delta;
+  else if (date <= today) currentBalance += delta;
+  else futureNet += delta;
+  const transactionsClosing = roundMoney(currentBalance + futureNet);
+  const planned = Number(summary.planned_receivables_total || 0);
+  return {
+    ...summary,
+    total_income: totalIncome,
+    total_expenses: totalExpenses,
+    difference: roundMoney(totalExpenses - totalIncome),
+    current_balance: roundMoney(currentBalance),
+    future_net: roundMoney(futureNet),
+    transactions_projected_closing: transactionsClosing,
+    projected_closing: roundMoney(transactionsClosing + planned),
+  };
+}
+
+export function patchMonthCardsForTransaction(cards, transaction) {
+  if (!Array.isArray(cards) || !cards.length) return cards;
+  const date = transactionDate(transaction);
+  const [year, month] = date.split("-").map(Number);
+  if (!year || !month) return cards;
+  const delta = transactionDelta(transaction);
+  const amount = Math.abs(delta);
+  const today = todayIso();
+  const txKey = monthKey(year, month);
+  const todayKey = today.slice(0, 7);
+  return cards.map((card) => {
+    const key = monthKey(card.year, card.month);
+    if (key < txKey) return card;
+    if (key === txKey) {
+      const opening = Number(card.opening_balance || 0);
+      const closing = roundMoney(Number(card.closing_balance || 0) + delta);
+      let current = Number(card.current_balance || 0);
+      if (key < todayKey || (key === todayKey && date <= today)) current += delta;
+      return {
+        ...card,
+        total_income: roundMoney(Number(card.total_income || 0) + (transaction.type === "income" ? amount : 0)),
+        total_expenses: roundMoney(Number(card.total_expenses || 0) + (transaction.type === "expense" ? amount : 0)),
+        closing_balance: closing,
+        current_balance: roundMoney(current),
+        transaction_count: Number(card.transaction_count || 0) + 1,
+        difference_pct: opening ? roundMoney(((closing - opening) / Math.abs(opening)) * 100) : 0,
+      };
+    }
+    const opening = roundMoney(Number(card.opening_balance || 0) + delta);
+    const closing = roundMoney(Number(card.closing_balance || 0) + delta);
+    return {
+      ...card,
+      opening_balance: opening,
+      closing_balance: closing,
+      current_balance: roundMoney(Number(card.current_balance || 0) + delta),
+      difference_pct: opening ? roundMoney(((closing - opening) / Math.abs(opening)) * 100) : card.difference_pct,
+    };
+  });
 }
 
 export function formatMonthSlash(dateString) {

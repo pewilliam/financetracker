@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, InvoiceTemplate, Transaction, User
+from app.models import CreditCard, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Transaction, User
 from app.routers.invoices import delete_invoice, list_invoices
 from app.services.invoices import create_invoice_with_transaction
 
@@ -22,11 +22,12 @@ class InvoiceDeletionTests(unittest.TestCase):
         self.db.add_all([self.user, self.other_user])
         self.db.flush()
         self.current_user = type("CurrentUser", (), {"id": self.user.id})()
-        self.template = InvoiceTemplate(
+        self.template = CreditCard(
             user_id=self.user.id,
             name="Nubank",
             color="#8A05BE",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.db.add(self.template)

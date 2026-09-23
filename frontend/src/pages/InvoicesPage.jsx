@@ -8,7 +8,7 @@ import { useInvoiceItemModals } from "../hooks/useInvoiceItemModals.jsx";
 import { normalizeInvoiceColor, yearMonthKey } from "../app/helpers.js";
 import { formatMoney } from "../utils/format.js";
 
-export default function InvoicesPage({ invoices, categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, openModal, onViewInstallment }) {
+export default function InvoicesPage({ invoices, cards = [], categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, addPurchase, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, onViewInstallment, onCancelSubscription }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const location = useLocation();
@@ -21,9 +21,11 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
   const invoiceModals = useInvoiceItemModals({
     invoices,
     categories,
+    cards,
     expenseOptions,
     allowOverdueInvoiceEdits,
     addItem,
+    addPurchase,
     updateItem,
     updateDueDate,
     createInstallment,
@@ -36,6 +38,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
     onLoadInvoiceItems,
     onEnsureExpenseContext,
     onViewInstallment,
+    onCancelSubscription,
   });
   const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
   const statusLabelByValue = { open: tt("invoices.pending", "Pendentes"), paid: tt("invoices.paid", "Pagas") };
@@ -78,6 +81,13 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
     }
     if (invoices.length) toast.error(language === "en-US" ? "Invoice not found." : "Fatura não encontrada.");
   }, [invoices, language, location.state?.openInvoiceItemsId]);
+
+  useEffect(() => {
+    const cardId = Number(location.state?.addPurchaseCardId);
+    if (!cardId) return;
+    invoiceModals.openPurchase(cardId);
+    navigate("/faturas", { replace: true, state: {} });
+  }, [location.state?.addPurchaseCardId]);
 
   const toggleStatus = (status) => {
     setFilters((current) => {
@@ -152,7 +162,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
               <Filter size={16} /> {tt("invoices.filterInvoices", "Filtrar faturas")}
             </button>
           )}
-          <button className="btn btn-primary" onClick={openModal}><Plus size={16} /> {tt("invoices.newInvoice", "Nova fatura")}</button>
+          <button className="btn btn-primary" onClick={() => invoiceModals.openPurchase()}><Plus size={16} /> {tt("invoices.addPurchase", "Adicionar compra")}</button>
         </div>
       </div>
       {invoices.length ? (
@@ -229,6 +239,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
               {invoiceGroups.map((group) => {
                 const expanded = expandedGroups[group.id];
                 const groupTotal = group.items.reduce((total, invoice) => total + Number(invoice.total_amount || 0), 0);
+                const groupProjected = group.items.reduce((total, invoice) => total + Number(invoice.projected_amount || 0), 0);
                 return (
                   <section className={`invoice-group ${expanded ? "expanded" : "collapsed"}`} key={group.id}>
                     <button className="invoice-group-toggle" type="button" onClick={() => toggleGroup(group.id)} aria-expanded={expanded}>
@@ -238,6 +249,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
                       </div>
                       <div className="invoice-group-meta">
                         {group.items.length > 0 && <strong>{formatMoney(groupTotal)}</strong>}
+                        {groupProjected > 0 && <strong className="is-projected">{tt("invoices.projected", "Previsto")} {formatMoney(groupTotal + groupProjected)}</strong>}
                         <ChevronDown size={18} />
                       </div>
                     </button>
@@ -264,7 +276,7 @@ export default function InvoicesPage({ invoices, categories = [], expenseOptions
           ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura encontrada.</h3><p>Ajuste os filtros para ver outras faturas.</p></div>}
         </>
       ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>Nenhuma fatura cadastrada.</h3><p>Clique em Nova fatura para criar.</p></div>}
-      <button className="fab" onClick={openModal} aria-label="Criar fatura"><Plus /></button>
+      <button className="fab" onClick={() => invoiceModals.openPurchase()} aria-label={tt("invoices.addPurchase", "Adicionar compra")}><Plus /></button>
       {invoiceModals.element}
     </section>
   );

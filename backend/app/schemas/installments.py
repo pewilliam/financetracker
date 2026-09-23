@@ -8,16 +8,16 @@ from app.schemas.categories import CategoryOut
 
 
 class InstallmentDraftIn(APIModel):
-    invoice_id: Optional[int] = None
     amount: NonNegativeMoney
-    target_due_date: Optional[date] = None
+    purchase_date: Optional[date] = None
 
 
 class InstallmentCreate(APIModel):
     description: str
     total_amount: PositiveMoney
     installment_count: int = Field(ge=1, le=48)
-    first_invoice_id: int
+    credit_card_id: int
+    first_purchase_date: date
     custom_values: Optional[List[NonNegativeMoney]] = None
     items: Optional[List[InstallmentDraftIn]] = None
     category_id: Optional[int] = None

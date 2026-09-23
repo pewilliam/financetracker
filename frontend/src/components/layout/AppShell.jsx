@@ -10,12 +10,13 @@ import Skeleton from "../common/Skeleton.jsx";
 import MonthsPage from "../../pages/MonthsPage.jsx";
 import InvoicesPage from "../../pages/InvoicesPage.jsx";
 import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
+import SubscriptionsPage from "../../pages/SubscriptionsPage.jsx";
 import SimulationPage from "../../pages/SimulationPage.jsx";
 import ReceivablesPage, { receivableGroupForId } from "../../pages/ReceivablesPage.jsx";
 import CategoriesPage from "../../pages/CategoriesPage.jsx";
 import WalletsPage from "../../pages/WalletsPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
-import InvoiceModal from "../../modals/InvoiceModal.jsx";
+import CardsPage from "../../pages/CardsPage.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
 import ReceivableModal from "../../modals/ReceivableModal.jsx";
@@ -30,8 +31,8 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
-import { defaultInstallmentForm, defaultInvoiceForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, nextDueDateFromDay, normalizeTransactionPayload, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, createCategory, createInstallment, createInvoice, createInvoiceTemplate, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteInvoiceTemplate, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getInstallment, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCategories, listInvoices, listInvoiceTemplates, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, toggleInvoiceTemplate, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateInvoiceTemplate, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
+import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -46,8 +47,9 @@ export default function AppShell() {
   const [comparisons, setComparisons] = useState([]);
   const [monthCards, setMonthCards] = useState([]);
   const [invoices, setInvoices] = useState([]);
-  const [invoiceTemplates, setInvoiceTemplates] = useState([]);
+  const [cards, setCards] = useState([]);
   const [installmentsRevision, setInstallmentsRevision] = useState(0);
+  const [subscriptionsRevision, setSubscriptionsRevision] = useState(0);
   const [categories, setCategories] = useState([]);
   const [walletSummary, setWalletSummary] = useState({ total_balance: 0, active_count: 0, wallets: [] });
   const [categoryBreakdown, setCategoryBreakdown] = useState({ total_expenses: 0, categorized_total: 0, items: [], chart_items: [], total_income: 0, income_categorized_total: 0, income_items: [], income_chart_items: [] });
@@ -100,8 +102,6 @@ export default function AppShell() {
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [invoiceModal, setInvoiceModal] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState(defaultInvoiceForm);
   const [installmentModal, setInstallmentModal] = useState(false);
   const [installmentForm, setInstallmentForm] = useState(defaultInstallmentForm);
   const [installmentDetails, setInstallmentDetails] = useState(null);
@@ -152,7 +152,7 @@ export default function AppShell() {
     () => receivableGroupForId(receivables, receivableDetailsId),
     [receivableDetailsId, receivables]
   );
-  const overlayOpen = drawerOpen || batchModalOpen || invoiceModal || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
+  const overlayOpen = drawerOpen || batchModalOpen || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
   // Lock the body (preserving scroll position) for overlays and, on mobile, for
   // the sidebar drawer so the content behind it does not jump back to the top.
   const bodyLocked = overlayOpen || (menuOpen && isMobile);
@@ -239,14 +239,15 @@ export default function AppShell() {
     if (location.pathname === "/meses") return ["month", "summary", "monthCards", "invoiceHeaders", "expenseOptions", "receivables"];
     if (location.pathname === "/categorias") return ["categories", "categoryBreakdown", "previousBreakdown", "budgetPlan"];
     if (location.pathname === "/carteiras") return ["wallets"];
-    if (location.pathname === "/faturas" || location.pathname === "/parcelamentos") return ["invoiceHeaders", "categories"];
-    if (location.pathname === "/simulador") return ["invoiceHeaders", "monthCards"];
+    if (location.pathname === "/faturas" || location.pathname === "/parcelamentos") return ["invoiceHeaders", "categories", "cards"];
+    if (location.pathname === "/assinaturas") return ["categories", "cards"];
+    if (location.pathname === "/cartoes") return [];
+    if (location.pathname === "/simulador") return ["invoiceHeaders", "monthCards", "cards"];
     if (location.pathname === "/recebiveis") return ["receivables", "linked", "categories"];
     if (location.pathname === "/configuracoes") {
-      if (settingsSection === "modelos") return ["templates"];
       if (settingsSection === "financeiro") return ["summary", "categories"];
-      if (settingsSection === "dados") return ["monthSlim"];
-      return [];
+      if (settingsSection === "dados") return ["summary", "monthSlim"];
+      return ["summary"];
     }
     return ["monthSlim", "summary", "summaryPrevious", "invoiceHeaders"];
   }
@@ -319,12 +320,12 @@ export default function AppShell() {
         markFresh("wallets");
       })());
     }
-    if (missing.includes("templates")) {
+    if (missing.includes("cards")) {
       tasks.push((async () => {
-        const payload = await listInvoiceTemplates(undefined, { signal });
+        const payload = await listCards(undefined, { signal });
         if (!alive()) return;
-        setInvoiceTemplates(payload);
-        markFresh("templates");
+        setCards(payload);
+        markFresh("cards");
       })());
     }
     if (missing.includes("categoryBreakdown")) {
@@ -452,7 +453,8 @@ export default function AppShell() {
     loadFailedRef.current = false;
   }
   const viewBlocked = resourcesForView().some((name) => blocksFirstPaint(name) && !isFresh(name));
-  if (viewBlocked && !loading && !loadFailedRef.current) setLoading(true);
+  const monthsAlreadyVisible = location.pathname === "/meses" && Number(monthData?.year) === Number(year) && Number(monthData?.month) === Number(month);
+  if (viewBlocked && !loading && !loadFailedRef.current && !monthsAlreadyVisible) setLoading(true);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -505,10 +507,17 @@ export default function AppShell() {
     await loadView({ signal: controller.signal, showSkeleton: false });
   };
 
+  const refreshCards = async () => {
+    const payload = await listCards();
+    setCards(payload);
+    markFresh("cards");
+  };
+
   const syncInvoiceAndMonthCollections = async () => {
     await Promise.all([
       syncInvoiceCollections(),
-      syncMonthCollections()
+      syncMonthCollections(),
+      refreshCards()
     ]);
   };
 
@@ -648,7 +657,18 @@ export default function AppShell() {
             wallet_id: normalizedData.wallet_id
           });
         } else {
-          await createTransaction(normalizedData);
+          const created = await createTransaction(normalizedData);
+          setDrawerOpen(false);
+          if (location.pathname === "/meses" && mergeCreatedTransaction(monthData, created)) {
+            toast.success("Lançamento adicionado!");
+            setMonthData((current) => mergeCreatedTransaction(current, created) || current);
+            setSummary((current) => patchSummaryForTransaction(current, created));
+            setMonthCards((current) => patchMonthCardsForTransaction(current, created));
+            setComparisons((current) => current.map((item) => patchSummaryForTransaction(item, created)));
+            invalidateResources(["summarySeries", "categoryBreakdown", "previousBreakdown", "budgetPlan", "wallets", "expenseOptions"]);
+            void ensureExtras(["expenseOptions"]);
+            return;
+          }
         }
       }
       toast.success(payload.recurrenceUpdate?.enabled ? "Recorrência atualizada" : editing ? "Lançamento salvo" : "Lançamento adicionado!");
@@ -677,89 +697,21 @@ export default function AppShell() {
     }
   };
 
-  const createNewInvoice = async (drafts) => {
+  const addPurchase = async (cardId, payload) => {
     try {
-      const createdInvoices = await Promise.all(drafts.map((draft) => createInvoice({
-        template_id: Number(draft.template_id),
-        due_date: draft.due_date,
-        wallet_id: Number(draft.wallet_id)
-      })));
-      const createdIds = new Set(createdInvoices.map((invoice) => invoice.id));
-      setInvoices((current) => sortInvoicesByDueDate([
-        ...current.filter((invoice) => !createdIds.has(invoice.id)),
-        ...createdInvoices
-      ]));
-      setInvoiceForm(defaultInvoiceForm());
-      setInvoiceModal(false);
-      toast.success(`${drafts.length} ${drafts.length === 1 ? "fatura criada" : "faturas criadas"} com sucesso!`);
-      await syncMonthCollections();
-    } catch {
-      toast.error("Erro ao criar fatura");
-    }
-  };
-
-  const openNewInvoiceModal = async () => {
-    try {
-      let templates = invoiceTemplates;
-      let wallets = walletSummary.wallets;
-      const needsTemplates = !isFresh("templates");
-      const needsWallets = !isFresh("wallets");
-      if (needsTemplates || needsWallets) {
-        const [templatePayload, walletPayload] = await Promise.all([
-          needsTemplates ? listInvoiceTemplates() : null,
-          needsWallets ? listWallets() : null
-        ]);
-        if (templatePayload) {
-          templates = templatePayload;
-          setInvoiceTemplates(templatePayload);
-          markFresh("templates");
-        }
-        if (walletPayload) {
-          wallets = walletPayload.wallets || [];
-          setWalletSummary(walletPayload);
-          markFresh("wallets");
-        }
-      }
-      const activeTemplate = templates.find((template) => template.active);
-      const activeWallet = wallets.find((wallet) => wallet.active && wallet.is_primary) || wallets.find((wallet) => wallet.active);
-      const initialForm = { ...defaultInvoiceForm(), wallet_id: String(activeWallet?.id || "") };
-      setInvoiceForm(activeTemplate ? { ...initialForm, template_id: String(activeTemplate.id), due_date: nextDueDateFromDay(activeTemplate.default_due_day) } : initialForm);
-      setInvoiceModal(true);
-    } catch {
-      toast.error("Erro ao preparar a nova fatura");
-    }
-  };
-
-  const saveInvoiceTemplate = async (payload, id = null) => {
-    const saved = id ? await updateInvoiceTemplate(id, payload) : await createInvoiceTemplate(payload);
-    const templatesPayload = await listInvoiceTemplates();
-    setInvoiceTemplates(templatesPayload);
-    markFresh("templates");
-    return saved;
-  };
-
-  const toggleTemplate = async (template) => {
-    try {
-      await toggleInvoiceTemplate(template.id);
-      toast.success(template.active ? "Modelo desativado" : "Modelo reativado");
-      await refresh();
-    } catch {
-      toast.error("Erro ao atualizar modelo");
-    }
-  };
-
-  const removeTemplate = async (template) => {
-    try {
-      await deleteInvoiceTemplate(template.id);
-      toast.success("Modelo excluído");
-      await refresh();
+      const updated = await createCardPurchase(cardId, payload);
+      upsertInvoice(updated);
+      if (payload.recurring) setSubscriptionsRevision((current) => current + 1);
+      toast.success(payload.recurring ? "Assinatura adicionada" : "Compra adicionada");
+      await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch (error) {
-      toast.error(error.message?.includes("Existem") ? "Existem faturas pendentes vinculadas a este modelo" : "Erro ao excluir modelo");
+      toast.error(String(error?.message || "").includes("no longer accepts") ? "A fatura deste ciclo não aceita novas compras" : "Erro ao adicionar compra");
+      throw error;
     }
   };
 
-  const openInstallmentModal = (invoice = null) => {
-    setInstallmentForm(defaultInstallmentForm(invoice?.id || ""));
+  const openInstallmentModal = (cardId = "") => {
+    setInstallmentForm(defaultInstallmentForm(cardId));
     setInstallmentModal(true);
   };
 
@@ -870,7 +822,7 @@ export default function AppShell() {
       const updated = await addInvoiceItem(invoiceId, payload);
       upsertInvoice(updated);
       toast.success(Number(payload.amount) < 0 ? "Reembolso adicionado" : "Item adicionado");
-      await syncMonthCollections();
+      await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch (error) {
       toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "Esta fatura não aceita novos itens" : Number(payload.amount) < 0 ? "Erro ao adicionar reembolso" : "Erro ao adicionar item");
       throw error;
@@ -881,8 +833,9 @@ export default function AppShell() {
     try {
       const updated = await updateInvoiceItem(invoiceId, itemId, payload);
       upsertInvoice(updated);
+      if (Number(updated.id) !== Number(invoiceId)) upsertInvoice(await getInvoice(invoiceId));
       toast.success(Number(payload.amount) < 0 ? "Reembolso atualizado" : "Item atualizado");
-      await syncMonthCollections();
+      await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch (error) {
       toast.error(Number(payload.amount) < 0 ? "Erro ao atualizar reembolso" : "Erro ao atualizar item");
       throw error;
@@ -894,7 +847,7 @@ export default function AppShell() {
       const updated = await deleteInvoiceItem(invoiceId, itemId);
       upsertInvoice(updated);
       toast.success("Item removido");
-      await syncMonthCollections();
+      await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch {
       toast.error("Erro ao remover item");
     }
@@ -981,7 +934,7 @@ export default function AppShell() {
       await deleteInvoice(invoiceId);
       setInvoices((current) => current.filter((invoice) => invoice.id !== invoiceId));
       toast.success("Fatura excluída");
-      await syncMonthCollections();
+      await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch (error) {
       toast.error(error?.status === 409 ? error.message : "Erro ao excluir fatura");
       throw error;
@@ -993,7 +946,7 @@ export default function AppShell() {
       const updated = await setInvoicePaid(invoiceId, paid);
       upsertInvoice(updated);
       toast.success(paid ? "Fatura marcada como paga" : "Fatura marcada como pendente");
-      await syncMonthCollections();
+      await Promise.all([syncMonthCollections(), refreshCards()]);
     } catch {
       toast.error("Erro ao atualizar fatura");
     }
@@ -1184,12 +1137,26 @@ export default function AppShell() {
     }
   };
 
+  const cancelSubscription = async (subscriptionId) => {
+    try {
+      await cancelCardSubscription(subscriptionId);
+      setSubscriptionsRevision((current) => current + 1);
+      toast.success("Recorrência encerrada");
+      await Promise.all([syncInvoiceCollections(), refreshCards()]);
+    } catch (error) {
+      toast.error("Erro ao encerrar recorrência");
+      throw error;
+    }
+  };
+
   const invoiceModals = useInvoiceItemModals({
     invoices,
     categories,
+    cards,
     expenseOptions: receivableExpenseOptions,
     allowOverdueInvoiceEdits,
     addItem,
+    addPurchase,
     updateItem: saveItem,
     updateDueDate: saveInvoiceDueDate,
     createInstallment: createNewInstallment,
@@ -1202,11 +1169,20 @@ export default function AppShell() {
     onLoadInvoiceItems: loadInvoiceDetails,
     onEnsureExpenseContext: () => ensureExtras(["expenseOptions"]),
     onViewInstallment: showInstallmentDetails,
+    onCancelSubscription: cancelSubscription,
   });
 
   useEffect(() => {
     setInvoiceItemsOverlay(invoiceModals.overlayOpen);
   }, [invoiceModals.overlayOpen]);
+
+  const viewCurrentCardInvoice = async (card) => {
+    const invoice = await getCurrentCardInvoice(card.id);
+    upsertInvoice({ ...invoice, items_included: true });
+    invoiceModals.openItems(invoice);
+    void ensureExtras(["categories", "expenseOptions"]);
+    await refreshCards();
+  };
 
   return (
     <div className={`app-layout ${menuOpen ? "sidebar-open" : "sidebar-closed"}`}>
@@ -1249,13 +1225,15 @@ export default function AppShell() {
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
-              <Route path="/faturas" element={<InvoicesPage invoices={invoices} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} openModal={openNewInvoiceModal} onViewInstallment={showInstallmentDetails} />} />
-              <Route path="/modelos-de-fatura" element={<Navigate to="/configuracoes?secao=modelos" replace />} />
+              <Route path="/faturas" element={<InvoicesPage invoices={invoices} cards={cards} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} addPurchase={addPurchase} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} onViewInstallment={showInstallmentDetails} onCancelSubscription={cancelSubscription} />} />
+              <Route path="/cartoes" element={<CardsPage onChanged={refreshCards} onViewCurrentInvoice={viewCurrentCardInvoice} />} />
+              <Route path="/modelos-de-fatura" element={<Navigate to="/cartoes" replace />} />
               <Route path="/parcelamentos" element={<InstallmentsPage categories={categories} invoices={invoices} revision={installmentsRevision} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} onRequestDelete={requestInstallmentDelete} />} />
-              <Route path="/simulador" element={<SimulationPage invoices={invoices} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
+              <Route path="/assinaturas" element={<SubscriptionsPage revision={subscriptionsRevision} onNew={() => invoiceModals.openSubscription()} onCancel={cancelSubscription} />} />
+              <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
               <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
-              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} invoiceTemplates={invoiceTemplates} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} onSaveInvoiceTemplate={saveInvoiceTemplate} onToggleInvoiceTemplate={toggleTemplate} onDeleteInvoiceTemplate={removeTemplate} refresh={refresh} />} />
+              <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
@@ -1264,8 +1242,7 @@ export default function AppShell() {
 
       <TransactionForm open={drawerOpen && !isInvoiceTransaction(editing)} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
-      {invoiceModal && <InvoiceModal form={invoiceForm} setForm={setInvoiceForm} templates={invoiceTemplates.filter((template) => template.active)} wallets={walletSummary.wallets} onCreateTemplate={(payload) => saveInvoiceTemplate(payload)} onSubmit={createNewInvoice} onClose={() => setInvoiceModal(false)} />}
-      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
+      {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} cards={cards} categories={categories} onCreateCategory={saveCategory} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
       {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onRequestDelete={requestInstallmentDelete} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
       {installmentToDelete && <DeleteInstallmentModal purchase={installmentToDelete} deleting={deletingInstallment} onClose={() => setInstallmentToDelete(null)} onConfirm={() => removeInstallment(installmentToDelete.id)} />}
       {receivableDetailsGroup && (

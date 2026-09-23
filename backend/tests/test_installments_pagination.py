@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceTemplate, User
+from app.models import Category, CreditCard, InstallmentItem, InstallmentPurchase, Invoice, User
 from app.routers.installments import list_installments_page
 from app.schemas.installments import InstallmentPageOut
 
@@ -19,11 +19,11 @@ class InstallmentPaginationTests(unittest.TestCase):
         self.user = User(name="Parcelamentos", email="installments@example.com", password_hash="hash")
         self.db.add(self.user)
         self.db.flush()
-        template = InvoiceTemplate(user_id=self.user.id, name="Cartão", color="#14A078", default_due_day=10, active=True)
+        template = CreditCard(user_id=self.user.id, name="Cartão", color="#14A078", due_day=10, closing_day=3, active=True)
         self.db.add(template)
         self.db.flush()
-        self.pending_invoice = Invoice(user_id=self.user.id, template_id=template.id, due_date=date.today() + timedelta(days=30), total_amount=Decimal("1300.00"), paid=False)
-        self.paid_invoice = Invoice(user_id=self.user.id, template_id=template.id, due_date=date.today() - timedelta(days=30), total_amount=Decimal("200.00"), paid=True)
+        self.pending_invoice = Invoice(user_id=self.user.id, credit_card_id=template.id, due_date=date.today() + timedelta(days=30), total_amount=Decimal("1300.00"), paid=False)
+        self.paid_invoice = Invoice(user_id=self.user.id, credit_card_id=template.id, due_date=date.today() - timedelta(days=30), total_amount=Decimal("200.00"), paid=True)
         self.category = Category(user_id=self.user.id, name="Eletrônicos", color="#14A078")
         self.db.add_all([self.pending_invoice, self.paid_invoice, self.category])
         self.db.flush()
@@ -49,7 +49,7 @@ class InstallmentPaginationTests(unittest.TestCase):
     def _page(self, **overrides):
         params = {
             "tab": "active", "search": "", "category_ids": None,
-            "invoice_template_id": None, "situation": "all", "sort_by": "alphabetical",
+            "credit_card_id": None, "situation": "all", "sort_by": "alphabetical",
             "page": 1, "page_size": 5, "db": self.db, "current_user": self.user,
         }
         params.update(overrides)

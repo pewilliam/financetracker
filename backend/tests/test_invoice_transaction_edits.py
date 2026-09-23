@@ -7,11 +7,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Category, InvoiceTemplate, User, Wallet
-from app.routers.invoice_templates import update_invoice_template
+from app.models import Category, CreditCard, User, Wallet
+from app.routers.cards import update_card
 from app.routers.invoices import add_invoice_item
 from app.routers.transactions import create_transaction, update_transaction
-from app.schemas.invoice_templates import InvoiceTemplateUpdate
+from app.schemas.cards import CardUpdate
 from app.schemas.invoices import InvoiceItemCreate
 from app.schemas.transactions import TransactionCreate, TransactionUpdate
 from app.services.invoices import (
@@ -37,11 +37,12 @@ class InvoiceTransactionEditTests(unittest.TestCase):
             tracking_started_on=date.today(),
             is_primary=True,
         )
-        self.template = InvoiceTemplate(
+        self.template = CreditCard(
             user_id=self.user.id,
             name="Cartão",
             color="#14A078",
-            default_due_day=10,
+            due_day=10,
+            closing_day=3,
             active=True,
         )
         self.category = Category(user_id=self.user.id, name="Alimentação", color="#14A078")
@@ -191,9 +192,9 @@ class InvoiceTransactionEditTests(unittest.TestCase):
         self.assertEqual(self.invoice.linked_transaction.description, "Fatura: Cartão")
         self.assertEqual(self.invoice.items[0].category_ids, [self.category.id])
 
-        update_invoice_template(
+        update_card(
             self.template.id,
-            InvoiceTemplateUpdate(name="Nubank"),
+            CardUpdate(name="Nubank"),
             self.db,
             self.user,
         )

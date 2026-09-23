@@ -25,6 +25,9 @@ installment_purchase_categories = _category_link_table(
 recurrence_categories = _category_link_table(
     "recurrence_categories", "recurrences", "recurrence_id"
 )
+card_subscription_categories = _category_link_table(
+    "card_subscription_categories", "card_subscriptions", "card_subscription_id"
+)
 receivable_categories = _category_link_table(
     "receivable_categories", "receivables", "receivable_id"
 )

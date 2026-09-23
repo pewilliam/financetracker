@@ -62,9 +62,9 @@ def _load_receivable(db: Session, receivable_id: int, user_id: int) -> Receivabl
             selectinload(Receivable.person),
             selectinload(Receivable.payments),
             selectinload(Receivable.source_transaction),
-            selectinload(Receivable.source_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.template),
+            selectinload(Receivable.source_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.card),
             selectinload(Receivable.source_installment_item).selectinload(InstallmentItem.purchase),
-            selectinload(Receivable.source_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.template),
+            selectinload(Receivable.source_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.card),
         )
         .filter(Receivable.id == receivable_id, Receivable.user_id == user_id)
         .first()
@@ -80,9 +80,9 @@ def _receivable_load_options():
         selectinload(Receivable.categories),
         selectinload(Receivable.payments),
         selectinload(Receivable.source_transaction),
-        selectinload(Receivable.source_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.template),
+        selectinload(Receivable.source_invoice_item).selectinload(InvoiceItem.invoice).selectinload(Invoice.card),
         selectinload(Receivable.source_installment_item).selectinload(InstallmentItem.purchase),
-        selectinload(Receivable.source_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.template),
+        selectinload(Receivable.source_installment_item).selectinload(InstallmentItem.invoice).selectinload(Invoice.card),
     )
 
 
@@ -710,7 +710,7 @@ def list_receivable_expense_options(
     invoice_items = (
         db.query(InvoiceItem)
         .join(Invoice, Invoice.id == InvoiceItem.invoice_id)
-        .options(selectinload(InvoiceItem.invoice).selectinload(Invoice.template))
+        .options(selectinload(InvoiceItem.invoice).selectinload(Invoice.card))
         .filter(Invoice.user_id == current_user.id, InvoiceItem.amount > 0)
         .order_by(Invoice.due_date.desc(), InvoiceItem.id.desc())
         .all()
@@ -738,7 +738,7 @@ def list_receivable_expense_options(
     purchases = (
         db.query(InstallmentPurchase)
         .options(
-            selectinload(InstallmentPurchase.items).selectinload(InstallmentItem.invoice).selectinload(Invoice.template)
+            selectinload(InstallmentPurchase.items).selectinload(InstallmentItem.invoice).selectinload(Invoice.card)
         )
         .filter(InstallmentPurchase.user_id == current_user.id)
         .order_by(InstallmentPurchase.id.desc())
