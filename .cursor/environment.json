@@ -12,5 +12,14 @@
       "command": "cd frontend && npm run dev"
     }
   ],
-  "ports": [5173, 8010]
+  "ports": [
+    {
+      "name": "frontend",
+      "port": 5173
+    },
+    {
+      "name": "backend",
+      "port": 8010
+    }
+  ]
 }
