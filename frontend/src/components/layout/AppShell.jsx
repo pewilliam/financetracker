@@ -172,16 +172,7 @@ export default function AppShell() {
         setChromeHidden(false);
         return;
       }
-      const header = document.querySelector(".page-header-sticky");
-      const sentinel = document.querySelector(".sticky-header-sentinel");
-      const topbar = document.querySelector(".mobile-topbar");
-      const topbarVisible = topbar && getComputedStyle(topbar).display !== "none";
-      const topbarHeight = topbarVisible ? topbar.offsetHeight : 0;
-      const headerClearance = header
-        ? (sentinel ? sentinel.getBoundingClientRect().top + y : 0) + header.offsetHeight
-        : 0;
-      const threshold = header ? Math.max(topbarHeight, headerClearance) : Math.max(80, topbarHeight + 24);
-      if (y <= threshold) {
+      if (y <= 8) {
         anchor = y;
         setChromeHidden(false);
         return;
