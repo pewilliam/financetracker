@@ -12,6 +12,7 @@ import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/
 import { getMonthPeriod, isInvoiceTransaction } from "../app/helpers.js";
 import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
+import DashboardWallets from "./DashboardWallets.jsx";
 
 const EMPTY_CATEGORY_BREAKDOWN = {
   total_expenses: 0, categorized_total: 0, items: [], chart_items: [],
@@ -123,7 +124,7 @@ function ComparisonMeta({ value, inverse = false, language }) {
   );
 }
 
-export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, historyLoading = false, categoriesLoading = false, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction, activeSection = "overview", onActiveSectionChange }) {
+export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, historyLoading = false, categoriesLoading = false, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction, activeSection = "overview", onActiveSectionChange, year, month, walletRefreshKey = 0 }) {
   const { t, language } = useI18n();
   const safeSummary = summary || {};
   const safeCategoryBreakdown = categoryBreakdown || EMPTY_CATEGORY_BREAKDOWN;
@@ -353,8 +354,10 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
     { id: "expense", label: t("dashboard.monthExpenses"), value: formatMoney(safeSummary.total_expenses, language), tone: "expense", icon: TrendingDown, comparison: <ComparisonMeta value={expenseChange} inverse language={language} /> },
     closingCard
   ];
+  const todayTransactions = (monthData?.days || []).find((day) => day.date === todayIso)?.transactions || [];
   const sections = [
     { id: "overview", label: copy("Visão geral", "Overview") },
+    { id: "wallets", label: copy("Carteiras", "Wallets") },
     { id: "history", label: copy("Histórico", "History") },
     { id: "categories", label: copy("Categorias", "Categories") }
   ];
@@ -468,6 +471,12 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
               {allExpenses.length > 5 && <ShowMore expanded={showAllExpenses} onClick={() => setShowAllExpenses((current) => !current)} copy={copy} />}
             </section>
           </div>
+        </section>
+      )}
+
+      {activeSection === "wallets" && (
+        <section className="dashboard-section" id="dashboard-panel-wallets" role="tabpanel" aria-labelledby="dashboard-tab-wallets">
+          <DashboardWallets year={year ?? monthData?.year ?? safeSummary.year} month={month ?? monthData?.month ?? safeSummary.month} refreshKey={walletRefreshKey} dayTransactions={todayTransactions} />
         </section>
       )}
 

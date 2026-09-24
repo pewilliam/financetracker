@@ -99,6 +99,27 @@ class WalletSummaryOut(APIModel):
     needs_organization: bool = False
 
 
+class DashboardWalletOut(APIModel):
+    wallet_id: int
+    name: str
+    type: str
+    institution: Optional[str] = None
+    color: str
+    active: bool
+    current_balance: Decimal
+    period_income: Decimal
+    period_expenses: Decimal
+    period_adjustments: Decimal
+    period_variation: Decimal
+    changed_in_period: bool
+
+
+class DashboardWalletSummaryOut(APIModel):
+    total_balance: Decimal
+    active_count: int
+    wallets: list[DashboardWalletOut]
+
+
 class WalletAdjustmentCreate(APIModel):
     actual_balance: MoneyValue
     date: date

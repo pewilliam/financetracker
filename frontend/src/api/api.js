@@ -127,6 +127,11 @@ export function listWallets(includeArchived = true, { signal } = {}) {
   return request(`/wallets?include_archived=${includeArchived ? "true" : "false"}`, { signal });
 }
 
+export function getDashboardWallets(year, month, { signal } = {}) {
+  const params = new URLSearchParams({ year: String(year), month: String(month) });
+  return request(`/wallets/dashboard?${params}`, { signal });
+}
+
 export function getWallet(id) {
   return request(`/wallets/${id}`);
 }

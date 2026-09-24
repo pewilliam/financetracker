@@ -10943,6 +10943,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .dashboard-redesign .stat-comparison.neutral { color: var(--muted); }
 .dashboard-section-tabs {
   grid-column: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(760px, 100%);
   order: initial;
   margin: 2px auto 0;
 }
@@ -11019,6 +11021,50 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .dashboard-chart-tooltip b { color: var(--text); font-size: 11px; white-space: nowrap; }
 .dashboard-chart-tooltip .positive b { color: var(--income); }
 .dashboard-chart-tooltip .negative b { color: var(--expense); }
+.dashboard-wallets { display: grid; gap: 14px; padding: 18px 20px 16px; }
+.dashboard-wallets-head-actions { display: flex; align-items: center; gap: 14px; }
+.dashboard-wallets-link { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); font-size: 12px; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.dashboard-wallets-link:hover { text-decoration: underline; }
+.dashboard-wallets-state { min-height: 140px; display: grid; place-items: center; align-content: center; gap: 6px; color: var(--muted); text-align: center; }
+.dashboard-wallets-state strong { color: var(--text); font-size: 13px; }
+.dashboard-wallets-state span { max-width: 420px; font-size: 12px; }
+.dashboard-wallet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.dashboard-wallet-card { position: relative; display: grid; gap: 8px; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; padding: 12px 12px 10px 14px; background: color-mix(in srgb, var(--wallet-color) 4%, var(--card)); }
+.dashboard-wallet-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--wallet-color); }
+.dashboard-wallet-card.archived { opacity: .62; filter: saturate(.45); }
+.dashboard-wallet-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.dashboard-wallet-heading > i { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--wallet-color); background: color-mix(in srgb, var(--wallet-color) 12%, transparent); }
+.dashboard-wallet-heading small { display: block; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-wallet-heading strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-wallet-heading em { border-radius: 999px; padding: 3px 7px; background: color-mix(in srgb, var(--wallet-color) 14%, transparent); color: var(--wallet-color); font-size: 10px; font-style: normal; font-weight: 800; }
+.dashboard-wallet-balance { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.dashboard-wallet-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.dashboard-wallet-flow span { display: grid; gap: 2px; min-width: 0; }
+.dashboard-wallet-flow small { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.dashboard-wallet-flow strong { overflow: hidden; font-size: 12px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-wallet-flow .positive strong { color: var(--income); }
+.dashboard-wallet-flow .negative strong { color: var(--expense); }
+.dashboard-day-summary { display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--bg) 55%, var(--card)); }
+.dashboard-day-summary-head { display: flex; align-items: center; gap: 10px; }
+.dashboard-day-summary-head > strong { font-size: 13px; }
+.dashboard-day-summary-head > small { color: var(--muted); font-size: 11px; }
+.dashboard-day-totals { display: flex; gap: 16px; margin-left: auto; }
+.dashboard-day-totals span { display: grid; justify-items: end; gap: 1px; }
+.dashboard-day-totals small { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.dashboard-day-totals b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.dashboard-day-totals .income b { color: var(--income); }
+.dashboard-day-totals .expense b { color: var(--expense); }
+.dashboard-day-summary p { margin: 0; color: var(--muted); font-size: 12px; }
+.dashboard-day-groups { display: grid; gap: 10px; }
+.dashboard-day-groups > section { display: grid; gap: 6px; }
+.dashboard-day-groups > section + section { border-top: 1px solid var(--border); padding-top: 10px; }
+.dashboard-day-groups header { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 8px; padding: 6px 8px; background: color-mix(in srgb, var(--border) 55%, transparent); }
+.dashboard-day-groups header strong { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.dashboard-day-groups header small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.dashboard-day-summary ul { display: grid; gap: 2px; margin: 0; padding: 0 0 0 8px; list-style: none; }
+.dashboard-day-summary li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 28px; }
+.dashboard-day-summary li span { overflow: hidden; color: var(--muted); font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-day-summary li strong { font-size: 12px; font-variant-numeric: tabular-nums; }
 .dashboard-overview-lists {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11201,9 +11247,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .dashboard-stat-card .stat-label { font-size: 11px; }
   .dashboard-stat-card .stat-value { font-size: clamp(19px, 6vw, 25px); }
   .dashboard-stat-card.stat-card-projection .stat-value { font-size: clamp(18px, 5.3vw, 23px); }
-  .dashboard-section-tabs { width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
-  .dashboard-section-tabs::-webkit-scrollbar { display: none; }
-  .dashboard-section-tabs button { min-width: 106px; }
+  .dashboard-section-tabs { width: 100%; overflow: visible; }
+  .dashboard-section-tabs button { min-width: 0; padding: 0 4px; font-size: 11px; white-space: nowrap; }
   .dashboard-balance-card,
   .dashboard-history-card,
   .dashboard-category-card { padding: 17px 14px; }
@@ -11214,6 +11259,12 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .balance-head-summary > span + span { border-top: 1px solid var(--border); border-left: 0; }
   .dashboard-balance-chart { height: 215px; margin-left: -8px; }
   .dashboard-overview-lists { grid-template-columns: minmax(0, 1fr); gap: 15px; }
+  .dashboard-wallets { padding: 16px 14px 14px; }
+  .dashboard-wallets .dashboard-card-head.list-head { align-items: flex-start; flex-wrap: wrap; }
+  .dashboard-wallets-head-actions { width: 100%; justify-content: space-between; }
+  .dashboard-wallet-grid { grid-template-columns: 1fr; }
+  .dashboard-wallet-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-day-summary-head { flex-wrap: wrap; }
   .dashboard-list-card { padding: 17px 14px 13px; }
   .dashboard-history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .dashboard-history-summary .card { padding: 12px; }
