@@ -92,6 +92,10 @@ export function getMonth(year, month, { includeLinks = true, signal } = {}) {
   return request(`/months/${year}/${month}${query}`, { signal });
 }
 
+export function getDayWallets(year, month, day, { signal } = {}) {
+  return request(`/months/${year}/${month}/days/${day}/wallets`, { signal });
+}
+
 export function getMonthSummary(year, month, { signal } = {}) {
   return request(`/months/${year}/${month}/summary`, { signal });
 }

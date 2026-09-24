@@ -11,6 +11,7 @@ from app.schemas.months import (
     CategoryBreakdownOut,
     CategoryExpenseOut,
     MonthCardSummaryOut,
+    DayWalletsOut,
     MonthDayOut,
     MonthPlannedReceivableOut,
     MonthResponse,
@@ -18,6 +19,8 @@ from app.schemas.months import (
     OpeningBalancePayload,
 )
 from app.security import get_current_user
+from app.services.dates import app_today
+from app.services.daily_wallets import build_day_wallets
 from app.services.invoices import invoice_payment_date, refresh_open_payment_dates
 from app.services.wallets import money, wallet_balances_as_of
 
@@ -122,12 +125,38 @@ def _wallet_balance_effects(db: Session, start: date, end: date, user_id: int) -
     for wallet in wallets:
         if start < wallet.tracking_started_on <= end:
             effects[wallet.tracking_started_on] = effects.get(wallet.tracking_started_on, Decimal("0.00")) + money(wallet.initial_balance)
-    for row in db.query(WalletAdjustment.date, WalletAdjustment.amount).filter(
+    tracking_started = {wallet.id: wallet.tracking_started_on for wallet in wallets}
+    for row in db.query(WalletAdjustment.date, WalletAdjustment.amount, WalletAdjustment.wallet_id).filter(
         WalletAdjustment.wallet_id.in_(wallet_ids),
         WalletAdjustment.date >= start,
         WalletAdjustment.date <= end,
     ).all():
-        effects[row.date] = effects.get(row.date, Decimal("0.00")) + money(row.amount)
+        if row.date >= tracking_started[row.wallet_id]:
+            effects[row.date] = effects.get(row.date, Decimal("0.00")) + money(row.amount)
+    active_ids = set(wallet_ids)
+    transfers = db.query(
+        WalletTransfer.date,
+        WalletTransfer.amount,
+        WalletTransfer.source_wallet_id,
+        WalletTransfer.destination_wallet_id,
+    ).filter(
+        WalletTransfer.user_id == user_id,
+        WalletTransfer.date >= start,
+        WalletTransfer.date <= end,
+        or_(
+            WalletTransfer.source_wallet_id.in_(wallet_ids),
+            WalletTransfer.destination_wallet_id.in_(wallet_ids),
+        ),
+    ).all()
+    for row in transfers:
+        source_counts = row.source_wallet_id in active_ids and row.date >= tracking_started[row.source_wallet_id]
+        destination_counts = row.destination_wallet_id in active_ids and row.date >= tracking_started[row.destination_wallet_id]
+        if source_counts and destination_counts:
+            continue
+        if source_counts:
+            effects[row.date] = effects.get(row.date, Decimal("0.00")) - money(row.amount)
+        if destination_counts:
+            effects[row.date] = effects.get(row.date, Decimal("0.00")) + money(row.amount)
     return effects
 
 
@@ -297,7 +326,7 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int, *, inclu
     total_income = Decimal("0.00")
     total_expenses = Decimal("0.00")
     days: list[MonthDayOut] = []
-    today = date.today()
+    today = app_today()
 
     for day in range(1, last_day + 1):
         current_date = date(year, month, day)
@@ -352,7 +381,7 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int, *, inclu
 
 
 def _summarize_month_data(data: MonthResponse, today: date | None = None) -> MonthSummaryOut:
-    current_date = today or date.today()
+    current_date = today or app_today()
     start, end, _ = _month_bounds(data.year, data.month)
     prior_planned_receivables_total = _to_decimal(data.prior_planned_receivables_total)
 
@@ -414,7 +443,7 @@ def _build_month_summary(
     today: date | None = None,
 ) -> MonthSummaryOut:
     start, end, _ = _month_bounds(year, month)
-    current_date = today or date.today()
+    current_date = today or app_today()
     opening_balance = _opening_balance(db, start, user_id)
     prior_planned_receivables_total = _prior_planned_receivables_total(db, start, user_id)
     balance_effects = _wallet_balance_effects(db, start, end, user_id)
@@ -491,6 +520,23 @@ def get_summary_series(
         _build_month_summary(db, (anchor + offset) // 12, (anchor + offset) % 12 + 1, current_user.id)
         for offset in range(1 - count, 1)
     ]
+
+
+@router.get("/{year}/{month}/days/{day}/wallets", response_model=DayWalletsOut)
+def get_day_wallets(
+    year: int,
+    month: int,
+    day: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    start, end, last_day = _month_bounds(year, month)
+    if day < 1 or day > last_day:
+        raise HTTPException(status_code=400, detail="Invalid day")
+    target = date(year, month, day)
+    if target < start or target > end:
+        raise HTTPException(status_code=400, detail="Invalid day")
+    return DayWalletsOut(**build_day_wallets(db, current_user.id, target))
 
 
 @router.get("/{year}/{month}", response_model=MonthResponse)
@@ -795,7 +841,7 @@ def list_month_summaries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    current_date = date.today()
+    current_date = app_today()
     current_period = (current_date.year, current_date.month)
     receivable_remainings = _open_receivable_remainings(db, current_user.id)
     transaction_rows = (
