@@ -83,7 +83,7 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         self.db.commit()
         current_user = type("CurrentUser", (), {"id": self.user.id})()
 
-        with patch("app.routers.months.date", FixedDate):
+        with patch("app.routers.months.app_today", return_value=date(2026, 2, 15)):
             result = list_month_summaries(self.db, current_user)
 
         self.assertEqual(len(result), 1)
@@ -120,7 +120,7 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         ])
         self.db.commit()
 
-        with patch("app.routers.months.date", FixedDate):
+        with patch("app.routers.months.app_today", return_value=date(2026, 2, 15)):
             summary = _build_month_summary(self.db, 2026, 2, self.user.id)
             month = get_month(2026, 2, self.db, type("CurrentUser", (), {"id": self.user.id})())
 
@@ -248,7 +248,7 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         self.db.commit()
         current_user = type("CurrentUser", (), {"id": self.user.id})()
 
-        with patch("app.routers.months.date", FixedDate):
+        with patch("app.routers.months.app_today", return_value=date(2026, 9, 15)):
             result = { (item.year, item.month): item for item in list_month_summaries(self.db, current_user) }
 
         august = result[(2026, 8)]

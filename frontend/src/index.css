@@ -1274,6 +1274,53 @@ select {
 .categories-detail-item > strong { color: var(--text); font-size: 13px; white-space: nowrap; }
 .categories-detail-item > strong.refund { color: var(--income); }
 .categories-detail-item > strong.income { color: var(--income); }
+.categories-detail-item > strong.money-expense { color: var(--expense); }
+.day-wallets-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.day-wallet-group {
+  border: 1px solid color-mix(in srgb, var(--category-color) 42%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--category-color) 8%, var(--card));
+  overflow: hidden;
+}
+.day-wallet-trigger {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.day-wallet-trigger > i {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--category-color);
+  color: #fff;
+  font-style: normal;
+}
+.day-wallet-trigger > span { display: grid; gap: 3px; min-width: 0; }
+.day-wallet-trigger > span strong { font-size: 14px; }
+.day-wallet-trigger small { display: flex; flex-wrap: wrap; gap: 5px; color: var(--muted); font-size: 11px; }
+.day-wallet-trigger small em { font-style: normal; }
+.day-wallet-trigger > strong { font-size: 14px; white-space: nowrap; }
+.day-wallet-trigger > strong.income { color: var(--income); }
+.day-wallet-trigger > strong.money-expense { color: var(--expense); }
+.day-wallet-trigger > svg { color: var(--muted); transition: transform .15s ease; }
+.day-wallet-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.day-wallet-panel { display: grid; gap: 8px; padding: 0 12px 12px 18px; }
+.day-wallet-panel .categories-detail-item.is-expense > i {
+  background: color-mix(in srgb, var(--expense) 14%, var(--card));
+  color: var(--expense);
+}
+.day-wallet-empty { margin: 0; color: var(--muted); font-size: 12px; }
 .categories-detail-empty { display: grid; place-items: center; gap: 8px; min-height: 150px; border: 1px dashed var(--border); border-radius: 11px; color: var(--muted); font-size: 12px; }
 .categories-detail-status { display: grid; place-items: center; align-content: center; gap: 9px; min-height: 170px; color: var(--muted); font-size: 12px; }
 .categories-detail-status > svg { color: var(--primary); }
@@ -1494,6 +1541,8 @@ select {
   .categories-detail-summary > div { padding: 0 12px; }
   .categories-detail-summary > div:first-child { grid-column: 1 / -1; border-bottom: 1px solid var(--border); padding: 0 0 12px; }
   .categories-detail-summary > div:nth-child(2) { border-left: 0; padding-left: 0; }
+  .day-wallets-summary > div:first-child { grid-column: auto; border-bottom: 0; padding: 0 12px 0 0; }
+  .day-wallets-summary > div:nth-child(2) { padding-left: 12px; }
   .categories-detail-list { padding: 13px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
   .categories-detail-item { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; padding: 10px; }
   .categories-detail-item > i { width: 36px; height: 36px; }
@@ -1761,6 +1810,21 @@ select {
   font-size: 11px;
   font-weight: 900;
   vertical-align: middle;
+}
+button.day-balance {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px 6px;
+  justify-self: end;
+}
+button.day-balance:hover,
+button.day-balance:focus-visible {
+  background: rgba(20, 160, 120, 0.08);
+  outline: none;
 }
 .day-balance { text-align: right; }
 .day-balance span { display: block; color: var(--muted); font-size: 12px; }

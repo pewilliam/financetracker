@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 import { isInvoiceTransaction, todayIsoDate } from "../app/helpers.js";
+import DayWalletsModal from "../modals/DayWalletsModal.jsx";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 
 function isFutureDate(dateString) {
@@ -27,11 +28,13 @@ export default function MonthlyTable({
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [viewingTransaction, setViewingTransaction] = useState(null);
+  const [walletDay, setWalletDay] = useState(null);
+  const walletRefreshKey = `${summary?.current_balance ?? ""}|${summary?.total_income ?? ""}|${summary?.total_expenses ?? ""}|${days.map((day) => `${day.date}:${day.balance}`).join(",")}`;
 
   useEffect(() => {
-    onOverlayChange?.(Boolean(viewingTransaction));
+    onOverlayChange?.(Boolean(viewingTransaction || walletDay));
     return () => onOverlayChange?.(false);
-  }, [viewingTransaction, onOverlayChange]);
+  }, [viewingTransaction, walletDay, onOverlayChange]);
 
   const transactionInsight = (transaction) => {
     if (isInvoiceTransaction(transaction)) return null;
@@ -207,7 +210,12 @@ export default function MonthlyTable({
                 )}
               </div>
 
-              <div className={`day-balance${hasSplitBalance ? " has-split" : ""}`}>
+              <button
+                type="button"
+                className={`day-balance${hasSplitBalance ? " has-split" : ""}`}
+                onClick={() => setWalletDay(day)}
+                aria-label={`${tt("monthlyTable.openDayWallets", "Ver saldo por carteira")} ${formatDateWithWeekday(day.date)}`}
+              >
                 {hasSplitBalance ? (
                   <>
                     <div>
@@ -225,7 +233,7 @@ export default function MonthlyTable({
                     <strong>{formatMoney(day.balance)}</strong>
                   </>
                 )}
-              </div>
+              </button>
               <button className="icon-btn add-day" onClick={() => onAdd(day.date)} aria-label="Adicionar">
                 <Plus size={17} />
               </button>
@@ -258,6 +266,15 @@ export default function MonthlyTable({
           </div>
         )}
       </div>
+      {walletDay && (
+        <DayWalletsModal
+          date={walletDay.date}
+          expectedBalance={walletDay.balance}
+          summary={summary}
+          refreshKey={walletRefreshKey}
+          onClose={() => setWalletDay(null)}
+        />
+      )}
       {viewingTransaction && (
         <EntryDetailsModal
           item={viewingTransaction}

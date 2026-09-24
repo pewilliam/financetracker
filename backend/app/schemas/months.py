@@ -95,6 +95,35 @@ class CategoryExpenseOut(APIModel):
     details: List[CategoryExpenseDetailOut] = []
 
 
+class DayWalletMovementOut(APIModel):
+    kind: str
+    amount: Decimal
+    description: Optional[str] = None
+    date: date
+    counterpart_wallet_name: Optional[str] = None
+    counterpart_archived: bool = False
+
+
+class DayWalletOut(APIModel):
+    wallet_id: int
+    wallet_name: str
+    color: str
+    opening_balance: Decimal
+    balance_before: Decimal
+    variation: Decimal
+    balance: Decimal
+    changed: bool
+    reasons: List[str] = []
+    movements: List[DayWalletMovementOut] = []
+
+
+class DayWalletsOut(APIModel):
+    date: date
+    consolidated_balance: Decimal
+    wallets_total: Decimal
+    wallets: List[DayWalletOut] = []
+
+
 class CategoryBreakdownOut(APIModel):
     total_expenses: Decimal
     categorized_total: Decimal
