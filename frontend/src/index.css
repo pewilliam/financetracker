@@ -737,6 +737,10 @@ button:focus-visible {
   color: var(--muted);
   opacity: .55;
 }
+.date-days button:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
 .date-days button.today {
   box-shadow: inset 0 0 0 1px rgba(20,160,120,0.48);
 }

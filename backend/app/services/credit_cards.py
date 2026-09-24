@@ -1,5 +1,5 @@
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -22,6 +22,28 @@ def date_on_day(year: int, month: int, day: int) -> date:
 def add_months(source: date, amount: int) -> date:
     year, month = shift_month(source.year, source.month, amount)
     return date_on_day(year, month, source.day)
+
+
+def first_installment_due_month(today: date | None = None) -> tuple[int, int]:
+    """Last year-month allowed for the first installment invoice, inclusive."""
+    today = today or date.today()
+    return shift_month(today.year, today.month, 12)
+
+
+def first_installment_due_allowed(due_date: date, today: date | None = None) -> bool:
+    limit_year, limit_month = first_installment_due_month(today)
+    return (due_date.year, due_date.month) <= (limit_year, limit_month)
+
+
+def latest_first_installment_purchase_date(closing_day: int, due_day: int, today: date | None = None) -> date:
+    """Last purchase date whose invoice is still due inside the 12-month window."""
+    limit_year, limit_month = first_installment_due_month(today)
+    if due_day <= closing_day:
+        close_year, close_month = shift_month(limit_year, limit_month, -1)
+    else:
+        close_year, close_month = limit_year, limit_month
+    closing_date = date_on_day(close_year, close_month, closing_day)
+    return closing_date - timedelta(days=1)
 
 
 def legacy_closing_day(due_day: int) -> int:

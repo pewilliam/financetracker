@@ -29,8 +29,48 @@ export function invoicePeriod(closingDay, dueDay, purchaseDate) {
   };
 }
 
-export function nextMonthDate(dateString) {
-  return addMonthsToDate(dateString, 1);
+export function firstInstallmentDueLimit(today = todayIsoDate()) {
+  const [year, month] = today.split("-").map(Number);
+  return shiftMonth(year, month, 12);
+}
+
+export function dueMonthWithinFirstInstallmentWindow(dueDate, today = todayIsoDate()) {
+  const [year, month] = String(dueDate).slice(0, 10).split("-").map(Number);
+  const limit = firstInstallmentDueLimit(today);
+  return year * 12 + month <= limit.year * 12 + limit.month;
+}
+
+function dayBefore(dateString) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const previous = new Date(year, month - 1, day - 1);
+  return isoDate(previous.getFullYear(), previous.getMonth() + 1, previous.getDate());
+}
+
+export function latestFirstInstallmentPurchaseDate(closingDay, dueDay, today = todayIsoDate()) {
+  const limit = firstInstallmentDueLimit(today);
+  const close = Number(dueDay) <= Number(closingDay) ? shiftMonth(limit.year, limit.month, -1) : limit;
+  return dayBefore(isoDate(close.year, close.month, Number(closingDay)));
+}
+
+export function firstInstallmentInvoiceOptions(closingDay, dueDay, today = todayIsoDate()) {
+  const currentDue = invoicePeriod(closingDay, dueDay, today).dueDate;
+  const [startYear, startMonth] = currentDue.split("-").map(Number);
+  const limit = firstInstallmentDueLimit(today);
+  const options = [];
+  let year = startYear;
+  let month = startMonth;
+  while (year * 12 + month <= limit.year * 12 + limit.month && options.length < 18) {
+    const dueDate = isoDate(year, month, Number(dueDay));
+    const close = Number(dueDay) <= Number(closingDay) ? shiftMonth(year, month, -1) : { year, month };
+    const purchaseDate = currentDue.slice(0, 7) === dueDate.slice(0, 7)
+      ? today
+      : dayBefore(isoDate(close.year, close.month, Number(closingDay)));
+    options.push({ dueDate, purchaseDate });
+    const next = shiftMonth(year, month, 1);
+    year = next.year;
+    month = next.month;
+  }
+  return options;
 }
 
 export function isMobileViewport() {

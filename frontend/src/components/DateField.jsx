@@ -65,7 +65,7 @@ function buildMonthDays(cursor) {
   });
 }
 
-export default function DateField({ value, onChange, onBlur, className = "", ariaInvalid = false }) {
+export default function DateField({ value, onChange, onBlur, className = "", ariaInvalid = false, max = "" }) {
   const { language } = useI18n();
   const parsedValue = parseIsoDate(value);
   const [open, setOpen] = useState(false);
@@ -138,7 +138,10 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1));
   };
 
+  const blocked = (iso) => Boolean(max) && iso > max;
+
   const selectDate = (nextValue) => {
+    if (blocked(nextValue)) return;
     onChange(nextValue);
     setText(formatDisplayDate(nextValue, language));
     setCursor(parseIsoDate(nextValue) || cursor);
@@ -154,7 +157,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   const handleInputBlur = () => {
     const nextValue = parseDisplayDate(text, language);
-    if (nextValue) onChange(nextValue);
+    if (nextValue && !blocked(nextValue)) onChange(nextValue);
     else setText(formatDisplayDate(value, language));
     onBlur?.();
   };
@@ -172,8 +175,12 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
           className="date-native-input"
           type="date"
           value={value || ""}
+          max={max || undefined}
           onBlur={onBlur}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            if (blocked(event.target.value)) return;
+            onChange(event.target.value);
+          }}
           aria-invalid={ariaInvalid}
         />
       </div>
@@ -221,6 +228,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
                 type="button"
                 key={day.iso}
                 className={`${day.currentMonth ? "" : "muted"} ${day.iso === value ? "selected" : ""} ${day.iso === todayIso ? "today" : ""}`}
+                disabled={blocked(day.iso)}
                 onClick={() => selectDate(day.iso)}
               >
                 {day.date.getDate()}

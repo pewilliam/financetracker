@@ -4,7 +4,7 @@ import { CreditCard, Loader2, Pencil, X } from "lucide-react";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useI18n } from "../i18n/index.ts";
-import { invoiceAcceptsNewCharges, isMobileViewport, normalizeInvoiceColor } from "../app/helpers.js";
+import { dueMonthWithinFirstInstallmentWindow, invoiceAcceptsNewCharges, isMobileViewport, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 const cents = (value) => Math.round(Math.abs(Number(value || 0)) * 100);
@@ -46,8 +46,10 @@ export default function EditInstallmentItemModal({
   const invoicesById = useMemo(() => new Map(invoices.map((invoice) => [String(invoice.id), invoice])), [invoices]);
 
   const invoiceOptions = useMemo(() => {
+    const limitsFirstInvoice = Number(item.installment_number) === 1;
     const openInvoices = [...invoices]
       .filter((invoice) => invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits))
+      .filter((invoice) => !limitsFirstInvoice || dueMonthWithinFirstInstallmentWindow(invoice.due_date) || String(invoice.id) === String(item.invoice_id))
       .sort((left, right) => left.due_date.localeCompare(right.due_date) || left.name.localeCompare(right.name, language));
 
     const options = [
