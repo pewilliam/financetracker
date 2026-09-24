@@ -52,25 +52,8 @@ export function latestFirstInstallmentPurchaseDate(closingDay, dueDay, today = t
   return dayBefore(isoDate(close.year, close.month, Number(closingDay)));
 }
 
-export function firstInstallmentInvoiceOptions(closingDay, dueDay, today = todayIsoDate()) {
-  const currentDue = invoicePeriod(closingDay, dueDay, today).dueDate;
-  const [startYear, startMonth] = currentDue.split("-").map(Number);
-  const limit = firstInstallmentDueLimit(today);
-  const options = [];
-  let year = startYear;
-  let month = startMonth;
-  while (year * 12 + month <= limit.year * 12 + limit.month && options.length < 18) {
-    const dueDate = isoDate(year, month, Number(dueDay));
-    const close = Number(dueDay) <= Number(closingDay) ? shiftMonth(year, month, -1) : { year, month };
-    const purchaseDate = currentDue.slice(0, 7) === dueDate.slice(0, 7)
-      ? today
-      : dayBefore(isoDate(close.year, close.month, Number(closingDay)));
-    options.push({ dueDate, purchaseDate });
-    const next = shiftMonth(year, month, 1);
-    year = next.year;
-    month = next.month;
-  }
-  return options;
+export function nextMonthDate(dateString) {
+  return addMonthsToDate(dateString, 1);
 }
 
 export function isMobileViewport() {

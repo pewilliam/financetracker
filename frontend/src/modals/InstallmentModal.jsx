@@ -3,7 +3,7 @@ import { Check, CreditCard, Layers3, ReceiptText, Repeat2, Trash2, X } from "luc
 import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { addMonthsToDate, dueMonthWithinFirstInstallmentWindow, firstInstallmentInvoiceOptions, formatMonthShort, invoicePeriod, latestFirstInstallmentPurchaseDate, normalizeInvoiceColor } from "../app/helpers.js";
+import { addMonthsToDate, dueMonthWithinFirstInstallmentWindow, formatMonthShort, invoicePeriod, latestFirstInstallmentPurchaseDate, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 export default function InstallmentModal({ form, setForm, cards = [], categories = [], onCreateCategory, onOpenSingle, onOpenSubscription, onSubmit, onClose }) {
@@ -22,9 +22,6 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
   const installmentAmount = baseInstallmentCents / 100;
   const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
   const selectedCard = activeCards.find((card) => String(card.id) === String(form.credit_card_id));
-  const firstInvoiceOptions = selectedCard?.closing_day && selectedCard?.due_day
-    ? firstInstallmentInvoiceOptions(selectedCard.closing_day, selectedCard.due_day)
-    : [];
   const maxFirstPurchaseDate = selectedCard?.closing_day && selectedCard?.due_day
     ? latestFirstInstallmentPurchaseDate(selectedCard.closing_day, selectedCard.due_day)
     : "";
@@ -163,27 +160,6 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
                 <span>{tt("installmentModal.firstPurchaseDate", "Data da primeira compra")}</span>
                 <DateField value={form.first_purchase_date} max={maxFirstPurchaseDate} onChange={(first_purchase_date) => updateForm({ first_purchase_date })} />
               </div>
-              {firstInvoiceOptions.length > 0 && (
-                <div className="invoice-field">
-                  <span>{tt("installmentModal.firstInstallmentMonth", "Fatura da 1ª parcela")}</span>
-                  <div className="month-chip-row" role="listbox" aria-label={tt("installmentModal.firstInstallmentMonth", "Fatura da 1ª parcela")}>
-                    {firstInvoiceOptions.map((option) => (
-                      <button
-                        key={option.dueDate}
-                        className={`month-chip ${firstDueDate.slice(0, 7) === option.dueDate.slice(0, 7) ? "active" : ""}`}
-                        type="button"
-                        role="option"
-                        aria-selected={firstDueDate.slice(0, 7) === option.dueDate.slice(0, 7)}
-                        style={{ "--template-color": normalizeInvoiceColor(selectedCard?.color) }}
-                        onClick={() => updateForm({ first_purchase_date: option.purchaseDate })}
-                      >
-                        <strong>{formatMonthShort(option.dueDate)}</strong>
-                        <span>{formatDateShort(option.dueDate, language)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               <p className="duplicate-summary">{!firstInvoiceAllowed ? (language === "en-US" ? "The first installment can only join an invoice due within 12 months." : "A primeira parcela só pode entrar em uma fatura com vencimento em até 12 meses.") : (cycleHint || tt("installmentModal.selectCardDate", "Selecione o cartão e a data da primeira compra."))}</p>
             </div>
             <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button><button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button></div>
