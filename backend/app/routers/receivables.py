@@ -1,9 +1,10 @@
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Receivable, ReceivablePayment, ReceivablePerson, Transaction, User
@@ -16,6 +17,8 @@ from app.schemas.receivables import (
     ReceivablePaymentCreate,
     ReceivablePersonCreate,
     ReceivablePersonOut,
+    ReceivableBoardSummary,
+    ReceivableGroupCounts,
     ReceivableUpdate,
 )
 from app.schemas.transactions import TransactionOut
@@ -53,6 +56,103 @@ def _sync_status(receivable: Receivable) -> None:
     receivable.status = _status_for(receivable)
     if receivable.status != "paid":
         receivable.paid_at = None
+
+
+def _normalize_scope(scope) -> str | None:
+    if not isinstance(scope, str):
+        return None
+    if scope not in {"open", "paid"}:
+        raise HTTPException(status_code=400, detail="Invalid scope")
+    return scope
+
+
+def _linked_income_filters(user_id: int):
+    return (
+        Transaction.user_id == user_id,
+        Transaction.type == "income",
+        or_(
+            Transaction.linked_expense_transaction_id.is_not(None),
+            Transaction.linked_expense_invoice_item_id.is_not(None),
+            Transaction.linked_expense_installment_item_id.is_not(None),
+        ),
+    )
+
+
+def _light_receivable_groups(db: Session, user_id: int, today: date):
+    rows = (
+        db.query(
+            Receivable.id,
+            Receivable.series_id,
+            Receivable.person_id,
+            Receivable.source_installment_item_id,
+            Receivable.source_invoice_item_id,
+            Receivable.source_transaction_id,
+            Receivable.received_amount,
+            Receivable.total_amount,
+            Receivable.due_date,
+        )
+        .filter(Receivable.user_id == user_id)
+        .all()
+    )
+    item_ids = [row.source_installment_item_id for row in rows if row.source_installment_item_id and not row.series_id]
+    purchase_by_item = {}
+    if item_ids:
+        purchase_by_item = dict(
+            db.query(InstallmentItem.id, InstallmentItem.purchase_id)
+            .filter(InstallmentItem.id.in_(item_ids))
+            .all()
+        )
+
+    groups = defaultdict(list)
+    for row in rows:
+        if row.series_id:
+            key = ("series", row.series_id)
+        elif row.source_installment_item_id and purchase_by_item.get(row.source_installment_item_id) is not None:
+            key = ("purchase", purchase_by_item[row.source_installment_item_id], row.person_id)
+        elif row.source_installment_item_id:
+            key = ("installment_item", row.source_installment_item_id)
+        elif row.source_invoice_item_id:
+            key = ("invoice_item", row.source_invoice_item_id)
+        elif row.source_transaction_id:
+            key = ("transaction", row.source_transaction_id)
+        else:
+            key = ("receivable", row.id)
+        received = _money(row.received_amount)
+        total = _money(row.total_amount)
+        if received >= total:
+            status = "paid"
+        elif received > 0:
+            status = "partial"
+        elif row.due_date < today:
+            status = "overdue"
+        else:
+            status = "pending"
+        groups[key].append((row, status))
+    return groups
+
+
+def _group_status(statuses: list[str]) -> str:
+    if any(status == "overdue" for status in statuses):
+        return "overdue"
+    if statuses and all(status == "paid" for status in statuses):
+        return "paid"
+    if any(status == "partial" for status in statuses):
+        return "partial"
+    if any(status == "pending" for status in statuses):
+        return "pending"
+    return statuses[0] if statuses else "pending"
+
+
+def _receivable_ids_for_scope(db: Session, user_id: int, scope: str, today: date) -> list[int]:
+    selected = []
+    for members in _light_receivable_groups(db, user_id, today).values():
+        statuses = [status for _, status in members]
+        fully_paid = bool(statuses) and all(status == "paid" for status in statuses)
+        if scope == "paid" and fully_paid:
+            selected.extend(row.id for row, _ in members)
+        elif scope == "open" and not fully_paid:
+            selected.extend(row.id for row, _ in members)
+    return selected
 
 
 def _load_receivable(db: Session, receivable_id: int, user_id: int) -> Receivable:
@@ -636,19 +736,94 @@ def _register_payment(
     return _load_receivable(db, receivable.id, user_id)
 
 
-@router.get("", response_model=list[ReceivableOut])
-def list_receivables(
-    status: str | None = Query(default=None),
+@router.get("/summary", response_model=ReceivableBoardSummary)
+def receivable_board_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    receivables = (
+    today = date.today()
+    month_start = today.replace(day=1)
+    month_end = today.replace(day=monthrange(today.year, today.month)[1])
+    groups = _light_receivable_groups(db, current_user.id, today)
+    counts = {"overdue": 0, "pending": 0, "partial": 0, "paid": 0}
+    total_open = Decimal("0.00")
+    open_count = 0
+    total_overdue = Decimal("0.00")
+    overdue_count = 0
+    due_this_month = Decimal("0.00")
+    for members in groups.values():
+        counts[_group_status([status for _, status in members])] += 1
+        for row, status in members:
+            remaining = max(_money(row.total_amount) - _money(row.received_amount), Decimal("0.00"))
+            if status != "paid":
+                total_open += remaining
+                open_count += 1
+                if month_start <= row.due_date <= month_end and row.due_date >= today:
+                    due_this_month += remaining
+            if status == "overdue":
+                total_overdue += remaining
+                overdue_count += 1
+
+    received_this_month = _money(
+        db.query(func.coalesce(func.sum(ReceivablePayment.amount), 0))
+        .join(Receivable, Receivable.id == ReceivablePayment.receivable_id)
+        .filter(
+            Receivable.user_id == current_user.id,
+            ReceivablePayment.paid_at >= month_start,
+            ReceivablePayment.paid_at <= month_end,
+        )
+        .scalar()
+    )
+    linked_rows = (
+        db.query(Transaction.date, Transaction.amount)
+        .filter(*_linked_income_filters(current_user.id))
+        .all()
+    )
+    for linked_date, amount in linked_rows:
+        value = _money(amount)
+        if linked_date > today:
+            counts["pending"] += 1
+            total_open += value
+            open_count += 1
+            if month_start <= linked_date <= month_end:
+                due_this_month += value
+        else:
+            counts["paid"] += 1
+            if month_start <= linked_date <= month_end:
+                received_this_month += value
+
+    return ReceivableBoardSummary(
+        total_open=total_open,
+        open_count=open_count,
+        total_overdue=total_overdue,
+        overdue_count=overdue_count,
+        due_this_month=due_this_month,
+        received_this_month=received_this_month,
+        group_counts=ReceivableGroupCounts(**counts),
+    )
+
+
+@router.get("", response_model=list[ReceivableOut])
+def list_receivables(
+    status: str | None = Query(default=None),
+    scope: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    scope = _normalize_scope(scope)
+    if not isinstance(status, str):
+        status = None
+    query = (
         db.query(Receivable)
         .options(*_receivable_load_options())
         .filter(Receivable.user_id == current_user.id)
-        .order_by(Receivable.due_date, Receivable.id)
-        .all()
     )
+    if scope:
+        ids = _receivable_ids_for_scope(db, current_user.id, scope, date.today())
+        if not ids:
+            return []
+        query = query.filter(Receivable.id.in_(ids))
+    receivables = query.order_by(Receivable.due_date, Receivable.id).all()
     changed = False
     for receivable in receivables:
         previous = receivable.status
@@ -806,21 +981,16 @@ def list_receivable_expense_options(
 def list_linked_receivable_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    scope: str | None = Query(default=None),
 ):
-    return (
-        db.query(Transaction)
-        .filter(
-            Transaction.user_id == current_user.id,
-            Transaction.type == "income",
-            or_(
-                Transaction.linked_expense_transaction_id.is_not(None),
-                Transaction.linked_expense_invoice_item_id.is_not(None),
-                Transaction.linked_expense_installment_item_id.is_not(None),
-            ),
-        )
-        .order_by(Transaction.date, Transaction.id)
-        .all()
-    )
+    scope = _normalize_scope(scope)
+    query = db.query(Transaction).filter(*_linked_income_filters(current_user.id))
+    today = date.today()
+    if scope == "open":
+        query = query.filter(Transaction.date > today)
+    elif scope == "paid":
+        query = query.filter(Transaction.date <= today)
+    return query.order_by(Transaction.date, Transaction.id).all()
 
 
 @router.get("/people", response_model=list[ReceivablePersonOut])

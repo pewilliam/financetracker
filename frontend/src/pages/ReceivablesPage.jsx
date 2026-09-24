@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Filter, Plus } from "lucide-react";
+import { ChevronDown, Filter, Plus } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney, formatMonthLabel } from "../utils/format.js";
 import { receivableStatusText, todayIsoDate } from "../app/helpers.js";
@@ -142,9 +142,16 @@ function ReceivableSummaryCard({ group, language, tt, onOpen }) {
   );
 }
 
+const ACTIVE_STATUSES = ["overdue", "pending", "partial"];
+const STATUS_SECTIONS = [...ACTIVE_STATUSES, "paid"];
+
 export default function ReceivablesPage({
   receivables,
   linkedTransactions = [],
+  summary = null,
+  paidLoaded = false,
+  paidLoading = false,
+  onExpandPaid,
   onNew,
   onEdit,
   onEditLinkedTransaction,
@@ -157,9 +164,12 @@ export default function ReceivablesPage({
 }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
-  const [filters, setFilters] = useState({ search: "", status: "all" });
+  const [filters, setFilters] = useState({ search: "" });
   const [filterOpen, setFilterOpen] = useState(false);
   const [detailsKey, setDetailsKey] = useState(null);
+  const [openSections, setOpenSections] = useState(() => new Set(
+    ACTIVE_STATUSES.filter((status) => Number(summary?.group_counts?.[status] ?? 1) > 0)
+  ));
   const today = todayIsoDate();
   const currentMonth = today.slice(0, 7);
   const linkedReceivables = linkedTransactions.map((transaction) => {
@@ -202,23 +212,53 @@ export default function ReceivablesPage({
         .reduce((sum, item) => sum + Number(item.total_amount || 0), 0)
   };
 
-  const statusOptions = [
-    ["all", tt("receivables.all", "Todas")],
-    ["pending", tt("receivables.pending", "Pendentes")],
-    ["partial", tt("receivables.partial", "Parciais")],
-    ["overdue", tt("receivables.overdue", "Atrasadas")],
-    ["paid", tt("receivables.paid", "Pagas")]
-  ];
+  const statusLabels = {
+    overdue: tt("receivables.overdue", "Atrasadas"),
+    pending: tt("receivables.pending", "Pendentes"),
+    partial: tt("receivables.partial", "Parciais"),
+    paid: tt("receivables.paid", "Pagas")
+  };
 
   const filtered = allReceivables.filter((item) => {
     const search = filters.search.trim().toLowerCase();
-    const matchesSearch = !search || `${item.person_name} ${item.description} ${item.due_date}`.toLowerCase().includes(search);
-    const matchesStatus = filters.status === "all" || item.status === filters.status;
-    return matchesSearch && matchesStatus;
+    return !search || `${item.person_name} ${item.description} ${item.due_date}`.toLowerCase().includes(search);
   });
   const groups = buildReceivableGroups(filtered);
+  const groupsByStatus = Object.fromEntries(STATUS_SECTIONS.map((status) => [
+    status,
+    groups.filter((group) => group.status === status)
+  ]));
   const detailsGroup = detailsKey ? groups.find((group) => group.key === detailsKey) || null : null;
-  const hasActiveFilters = filters.search || filters.status !== "all";
+  const hasActiveFilters = Boolean(filters.search);
+  const cards = summary ? {
+    totalOpen: summary.total_open,
+    openCount: summary.open_count,
+    overdue: summary.total_overdue,
+    overdueCount: summary.overdue_count,
+    dueThisMonth: summary.due_this_month,
+    receivedThisMonth: summary.received_this_month
+  } : {
+    totalOpen: summaries.totalOpen,
+    openCount: openReceivables.length,
+    overdue: summaries.overdue,
+    overdueCount: allReceivables.filter((item) => item.status === "overdue").length,
+    dueThisMonth: summaries.dueThisMonth,
+    receivedThisMonth: summaries.receivedThisMonth
+  };
+
+  const toggleSection = async (status) => {
+    const willOpen = !openSections.has(status);
+    if (willOpen && status === "paid" && !paidLoaded) {
+      const loaded = await onExpandPaid?.();
+      if (!loaded) return;
+    }
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  };
 
   useEffect(() => {
     onOverlayChange?.(Boolean(detailsGroup));
@@ -244,22 +284,22 @@ export default function ReceivablesPage({
       <section className="summary-grid receivable-summary">
         <article className="card stat-card stat-card-income">
           <p className="stat-label">{tt("receivables.totalOpen", "Total a receber")}</p>
-          <p className="stat-value">{formatMoney(summaries.totalOpen, language)}</p>
-          <p className="stat-meta">{openReceivables.length} {openReceivables.length === 1 ? tt("receivables.openItem", "conta aberta") : tt("receivables.openItems", "contas abertas")}</p>
+          <p className="stat-value">{formatMoney(cards.totalOpen, language)}</p>
+          <p className="stat-meta">{cards.openCount} {cards.openCount === 1 ? tt("receivables.openItem", "conta aberta") : tt("receivables.openItems", "contas abertas")}</p>
         </article>
         <article className="card stat-card stat-card-expense">
           <p className="stat-label">{tt("receivables.totalOverdue", "Total vencido")}</p>
-          <p className="stat-value">{formatMoney(summaries.overdue, language)}</p>
-          <p className="stat-meta">{allReceivables.filter((item) => item.status === "overdue").length} {tt("receivables.overdue", "atrasadas")}</p>
+          <p className="stat-value">{formatMoney(cards.overdue, language)}</p>
+          <p className="stat-meta">{cards.overdueCount} {tt("receivables.overdue", "atrasadas")}</p>
         </article>
         <article className="card stat-card">
           <p className="stat-label">{tt("receivables.dueThisMonth", "A vencer este mês")}</p>
-          <p className="stat-value">{formatMoney(summaries.dueThisMonth, language)}</p>
+          <p className="stat-value">{formatMoney(cards.dueThisMonth, language)}</p>
           <p className="stat-meta">{formatMonthLabel(new Date().getFullYear(), new Date().getMonth() + 1, language)}</p>
         </article>
         <article className="card stat-card stat-card-balance">
           <p className="stat-label">{tt("receivables.receivedThisMonth", "Recebido no mês")}</p>
-          <p className="stat-value">{formatMoney(summaries.receivedThisMonth, language)}</p>
+          <p className="stat-value">{formatMoney(cards.receivedThisMonth, language)}</p>
           <p className="stat-meta">{tt("receivables.realizedIncome", "Ganho realizado")}</p>
         </article>
       </section>
@@ -274,33 +314,60 @@ export default function ReceivablesPage({
             <span>{tt("receivables.search", "Pessoa ou descrição")}</span>
             <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder={tt("receivables.searchPlaceholder", "Buscar por pessoa, descrição ou data")} />
           </label>
-          <label className="invoice-filter-status">
-            <span>{tt("receivables.status", "Status")}</span>
-            <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
-              {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </label>
         </div>
         {hasActiveFilters && (
-          <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "", status: "all" })}>
+          <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "" })}>
             Limpar filtros
           </button>
         )}
       </div>}
 
-      {groups.length ? (
-        <div className="receivable-list">
-          {groups.map((group) => (
-            <ReceivableSummaryCard
-              key={group.key}
-              group={group}
-              language={language}
-              tt={tt}
-              onOpen={setDetailsKey}
-            />
-          ))}
-        </div>
-      ) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>{tt("receivables.empty", "Nenhuma conta a receber encontrada.")}</h3><p>{tt("receivables.emptyHint", "Cadastre uma nova conta ou ajuste os filtros.")}</p></div>}
+      <div className="receivable-status-list">
+        {STATUS_SECTIONS.map((status) => {
+          const sectionGroups = groupsByStatus[status];
+          const expanded = openSections.has(status);
+          const count = status === "paid" && !paidLoaded
+            ? Number(summary?.group_counts?.paid || 0)
+            : sectionGroups.length;
+          const panelId = `receivable-status-${status}`;
+          return (
+            <section className={`receivable-status-accordion ${status}`} key={status}>
+              <button
+                className="receivable-status-accordion-trigger"
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                onClick={() => toggleSection(status)}
+              >
+                <ChevronDown size={18} />
+                <span>{statusLabels[status]}</span>
+                <small className="receivable-status-count">{count}</small>
+              </button>
+              {expanded && (
+                <div id={panelId}>
+                  {status === "paid" && paidLoading ? (
+                    <p className="receivable-status-loading">{tt("receivables.loading", "Carregando...")}</p>
+                  ) : sectionGroups.length ? (
+                    <div className="receivable-list">
+                      {sectionGroups.map((group) => (
+                        <ReceivableSummaryCard
+                          key={group.key}
+                          group={group}
+                          language={language}
+                          tt={tt}
+                          onOpen={setDetailsKey}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="receivable-status-empty">{tt("receivables.statusEmpty", "Nenhum recebível neste status.")}</p>
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
 
       <button className="fab" onClick={onNew} aria-label="Criar recebível"><Plus /></button>
 

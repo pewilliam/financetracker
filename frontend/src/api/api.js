@@ -360,16 +360,26 @@ export function listInstallmentPage({ tab = "active", search = "", categoryIds =
   return request(`/installments/page?${params}`);
 }
 
-export function listReceivables({ signal } = {}) {
-  return request("/receivables", { signal });
+export function listReceivables({ signal, scope } = {}) {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  const query = params.toString();
+  return request(`/receivables${query ? `?${query}` : ""}`, { signal });
+}
+
+export function getReceivableSummary({ signal } = {}) {
+  return request("/receivables/summary", { signal });
 }
 
 export function listReceivableExpenseOptions({ signal } = {}) {
   return request("/receivables/expense-options", { signal });
 }
 
-export function listLinkedReceivableTransactions({ signal } = {}) {
-  return request("/receivables/linked-transactions", { signal });
+export function listLinkedReceivableTransactions({ signal, scope } = {}) {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  const query = params.toString();
+  return request(`/receivables/linked-transactions${query ? `?${query}` : ""}`, { signal });
 }
 
 export function listReceivablePeople({ signal } = {}) {

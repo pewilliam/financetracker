@@ -140,3 +140,20 @@ class ReceivableOut(APIModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     payments: List[ReceivablePaymentOut] = []
+
+
+class ReceivableGroupCounts(APIModel):
+    overdue: int = 0
+    pending: int = 0
+    partial: int = 0
+    paid: int = 0
+
+
+class ReceivableBoardSummary(APIModel):
+    total_open: Decimal
+    open_count: int
+    total_overdue: Decimal
+    overdue_count: int
+    due_this_month: Decimal
+    received_this_month: Decimal
+    group_counts: ReceivableGroupCounts
