@@ -387,6 +387,8 @@ export const enUS = {
     editLinkedEntry: "Edit entry",
     empty: "No receivables found.",
     emptyHint: "Create a new receivable or adjust the filters.",
+    loading: "Loading...",
+    statusEmpty: "No receivables in this status.",
     linkedExpense: "Linked expense",
     installmentOf: "Installment {{current}}/{{total}}",
     groupCount: "{{count}} installments",

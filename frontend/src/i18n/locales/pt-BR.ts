@@ -342,6 +342,8 @@ export const ptBR = {
     deleteReceivableMessage: "Deseja realmente excluir este recebível? Esta ação não pode ser desfeita.",
     empty: "Nenhuma conta a receber encontrada.",
     emptyHint: "Cadastre uma nova conta ou ajuste os filtros.",
+    loading: "Carregando...",
+    statusEmpty: "Nenhum recebível neste status.",
     linkedExpense: "Gasto associado",
     linkedEntry: "Lançamento associado",
     linkedEntryBadge: "Vinculado por um lançamento",

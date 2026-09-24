@@ -32,7 +32,7 @@ import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 export default function AppShell() {
@@ -57,6 +57,11 @@ export default function AppShell() {
   const [budgetPlan, setBudgetPlan] = useState(null);
   const [receivables, setReceivables] = useState([]);
   const [linkedReceivableTransactions, setLinkedReceivableTransactions] = useState([]);
+  const [receivableBoardSummary, setReceivableBoardSummary] = useState(null);
+  const [paidReceivablesLoaded, setPaidReceivablesLoaded] = useState(false);
+  const [paidReceivablesLoading, setPaidReceivablesLoading] = useState(false);
+  const paidReceivablesLoadedRef = useRef(false);
+  const receivableBoardGeneration = useRef(0);
   const [receivablePeople, setReceivablePeople] = useState([]);
   const [receivableExpenseOptions, setReceivableExpenseOptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -289,7 +294,7 @@ export default function AppShell() {
     if (location.pathname === "/assinaturas") return ["categories", "cards"];
     if (location.pathname === "/cartoes") return [];
     if (location.pathname === "/simulador") return ["invoiceHeaders", "monthCards", "cards"];
-    if (location.pathname === "/recebiveis") return ["receivables", "linked", "categories"];
+    if (location.pathname === "/recebiveis") return ["receivablesBoard", "categories"];
     if (location.pathname === "/configuracoes") {
       if (settingsSection === "financeiro") return ["summary", "categories"];
       if (settingsSection === "dados") return ["summary", "monthSlim"];
@@ -405,6 +410,7 @@ export default function AppShell() {
         if (!alive()) return;
         setReceivables(payload);
         markFresh("receivables");
+        invalidateResources(["receivablesBoard"]);
       })());
     }
     if (missing.includes("linked")) {
@@ -413,6 +419,32 @@ export default function AppShell() {
         if (!alive()) return;
         setLinkedReceivableTransactions(payload);
         markFresh("linked");
+        invalidateResources(["receivablesBoard"]);
+      })());
+    }
+    if (missing.includes("receivablesBoard")) {
+      tasks.push((async () => {
+        const generation = ++receivableBoardGeneration.current;
+        paidReceivablesLoadedRef.current = false;
+        setPaidReceivablesLoaded(false);
+        const [openReceivables, openLinked, boardSummary] = await Promise.all([
+          listReceivables({ scope: "open", signal }),
+          listLinkedReceivableTransactions({ scope: "open", signal }),
+          getReceivableSummary({ signal })
+        ]);
+        if (!alive() || generation !== receivableBoardGeneration.current) return;
+        if (paidReceivablesLoadedRef.current) {
+          setReceivables((current) => mergeById(openReceivables, current));
+          setLinkedReceivableTransactions((current) => mergeById(openLinked, current));
+        } else {
+          paidReceivablesLoadedRef.current = false;
+          setPaidReceivablesLoaded(false);
+          setReceivables(openReceivables);
+          setLinkedReceivableTransactions(openLinked);
+        }
+        setReceivableBoardSummary(boardSummary);
+        markFresh("receivablesBoard");
+        invalidateResources(["receivables", "linked"]);
       })());
     }
     if (missing.includes("people")) {
@@ -527,21 +559,84 @@ export default function AppShell() {
     markFresh("invoiceHeaders");
   };
 
+  const mergeById = (current, incoming) => {
+    const incomingIds = new Set(incoming.map((item) => item.id));
+    return [...current.filter((item) => !incomingIds.has(item.id)), ...incoming];
+  };
+
+  const ensurePaidReceivables = async () => {
+    if (paidReceivablesLoadedRef.current) return true;
+    const generation = receivableBoardGeneration.current;
+    setPaidReceivablesLoading(true);
+    try {
+      const [paidReceivables, paidLinked, boardSummary] = await Promise.all([
+        listReceivables({ scope: "paid" }),
+        listLinkedReceivableTransactions({ scope: "paid" }),
+        getReceivableSummary()
+      ]);
+      if (generation !== receivableBoardGeneration.current) return false;
+      setReceivables((current) => mergeById(current, paidReceivables));
+      setLinkedReceivableTransactions((current) => mergeById(current, paidLinked));
+      setReceivableBoardSummary(boardSummary);
+      paidReceivablesLoadedRef.current = true;
+      setPaidReceivablesLoaded(true);
+      return true;
+    } catch {
+      toast.error(language === "en-US" ? "Could not load paid receivables." : "Não foi possível carregar os recebíveis pagos.");
+      return false;
+    } finally {
+      setPaidReceivablesLoading(false);
+    }
+  };
+
   const syncReceivableCollections = async () => {
-    const [receivablesPayload, linkedReceivablesPayload, peoplePayload, expenseOptionsPayload] = await Promise.all([
+    const onReceivablesPage = location.pathname === "/recebiveis";
+    const peoplePayload = listReceivablePeople();
+    const expenseOptionsPayload = listReceivableExpenseOptions();
+    if (onReceivablesPage) {
+      const requests = [
+        listReceivables({ scope: "open" }),
+        listLinkedReceivableTransactions({ scope: "open" }),
+        getReceivableSummary()
+      ];
+      if (paidReceivablesLoadedRef.current) {
+        requests.push(listReceivables({ scope: "paid" }), listLinkedReceivableTransactions({ scope: "paid" }));
+      }
+      const results = await Promise.all([...requests, peoplePayload, expenseOptionsPayload]);
+      const openReceivables = results[0];
+      const openLinked = results[1];
+      const boardSummary = results[2];
+      const includePaid = paidReceivablesLoadedRef.current;
+      const paidReceivables = includePaid ? results[3] : [];
+      const paidLinked = includePaid ? results[4] : [];
+      const people = results[includePaid ? 5 : 3];
+      const expenseOptions = results[includePaid ? 6 : 4];
+      setReceivables(includePaid ? mergeById(openReceivables, paidReceivables) : openReceivables);
+      setLinkedReceivableTransactions(includePaid ? mergeById(openLinked, paidLinked) : openLinked);
+      setReceivableBoardSummary(boardSummary);
+      setReceivablePeople(people);
+      setReceivableExpenseOptions(expenseOptions);
+      markFresh("receivablesBoard");
+      markFresh("people");
+      markFresh("expenseOptions");
+      invalidateResources(["receivables", "linked"]);
+      return;
+    }
+    const [receivablesPayload, linkedReceivablesPayload, people, expenseOptions] = await Promise.all([
       listReceivables(),
       listLinkedReceivableTransactions(),
-      listReceivablePeople(),
-      listReceivableExpenseOptions()
+      peoplePayload,
+      expenseOptionsPayload
     ]);
     setReceivables(receivablesPayload);
     setLinkedReceivableTransactions(linkedReceivablesPayload);
-    setReceivablePeople(peoplePayload);
-    setReceivableExpenseOptions(expenseOptionsPayload);
+    setReceivablePeople(people);
+    setReceivableExpenseOptions(expenseOptions);
     markFresh("receivables");
     markFresh("linked");
     markFresh("people");
     markFresh("expenseOptions");
+    invalidateResources(["receivablesBoard"]);
   };
 
   const syncMonthCollections = async () => {
@@ -624,6 +719,7 @@ export default function AppShell() {
         const payload = await listReceivables();
         setReceivables(payload);
         markFresh("receivables");
+        invalidateResources(["receivablesBoard"]);
         group = receivableGroupForId(payload, receivable.id);
       } catch {
         group = null;
@@ -1292,7 +1388,7 @@ export default function AppShell() {
               <Route path="/parcelamentos" element={<InstallmentsPage categories={categories} invoices={invoices} revision={installmentsRevision} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} onRequestDelete={requestInstallmentDelete} />} />
               <Route path="/assinaturas" element={<SubscriptionsPage revision={subscriptionsRevision} cards={cards} categories={categories} onCreateCategory={saveCategory} onNew={() => invoiceModals.openSubscription()} onSave={saveSubscription} onCancel={cancelSubscription} />} />
               <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
-              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
+              <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />

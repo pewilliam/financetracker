@@ -5627,11 +5627,59 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-filter-grid {
   grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
 }
+.receivable-status-list {
+  display: grid;
+  gap: 14px;
+}
+.receivable-status-accordion {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 96%, transparent);
+}
+.receivable-status-accordion-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+}
+.receivable-status-accordion-trigger svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform .15s ease;
+}
+.receivable-status-accordion-trigger[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.receivable-status-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.receivable-status-empty,
+.receivable-status-loading {
+  margin: 0;
+  padding: 0 16px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .receivable-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 20px;
   align-items: start;
+}
+.receivable-status-accordion .receivable-list {
+  padding: 0 16px 16px;
 }
 .receivable-card {
   display: grid;
