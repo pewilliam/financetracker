@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from app.database import get_db
 from app.models import Recurrence, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.schemas.wallets import (
+    DashboardWalletSummaryOut,
     WalletAdjustmentCreate,
     WalletDetailOut,
     WalletConsolidationCreate,
@@ -21,7 +22,7 @@ from app.schemas.wallets import (
     WalletCreate,
 )
 from app.security import get_current_user
-from app.services.wallets import money, serialize_wallet, serialize_wallets, set_primary_wallet, user_wallet, wallet_balance
+from app.services.wallets import dashboard_wallet_summary, money, serialize_wallet, serialize_wallets, set_primary_wallet, user_wallet, wallet_balance
 
 router = APIRouter(prefix="/api/wallets", tags=["wallets"])
 
@@ -147,6 +148,16 @@ def _wallet_consolidation_preview(
         "tracking_start_changes": tracking_after != destination.tracking_started_on,
         "destination_becomes_primary": bool(source.is_primary),
     }, source, destination
+
+
+@router.get("/dashboard", response_model=DashboardWalletSummaryOut)
+def dashboard_wallets(
+    year: int = Query(ge=1),
+    month: int = Query(ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return dashboard_wallet_summary(db, current_user.id, year, month)
 
 
 @router.get("", response_model=WalletSummaryOut)

@@ -1,4 +1,5 @@
-from datetime import date
+import calendar
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import and_, case, func
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.wallet import Wallet, WalletAdjustment, WalletTransfer
 from app.models.transaction import Transaction
+from app.services.dates import app_today
 
 
 def money(value) -> Decimal:
@@ -249,3 +251,133 @@ def serialize_wallets(db: Session, wallets: list[Wallet]) -> list[dict]:
             "transaction_count": transaction_count,
         })
     return result
+
+
+def _opening_balance(wallet: Wallet, start: date, balances_before: dict[int, Decimal]) -> Decimal:
+    if wallet.tracking_started_on == start:
+        return money(wallet.initial_balance)
+    if wallet.tracking_started_on < start:
+        return money(balances_before.get(wallet.id))
+    return Decimal("0.00")
+
+
+def dashboard_wallet_summary(
+    db: Session,
+    user_id: int,
+    year: int,
+    month: int,
+    today: date | None = None,
+) -> dict:
+    """Wallet cards for the selected month, using the same balance rules as months."""
+    today = today or app_today()
+    start = date(year, month, 1)
+    end = date(year, month, calendar.monthrange(year, month)[1])
+    if end < today:
+        snapshot_date = end
+    elif start > today:
+        snapshot_date = None
+    else:
+        snapshot_date = today
+
+    wallets = (
+        db.query(Wallet)
+        .filter(Wallet.user_id == user_id, Wallet.active.is_(True))
+        .order_by(Wallet.is_primary.desc(), Wallet.name, Wallet.id)
+        .all()
+    )
+    if not wallets:
+        return {"total_balance": Decimal("0.00"), "active_count": 0, "wallets": []}
+
+    wallet_ids = [wallet.id for wallet in wallets]
+    day_before = start - timedelta(days=1)
+    balances_before = wallet_balances_as_of(db, wallets, day_before)
+    balances_snapshot = wallet_balances_as_of(db, wallets, snapshot_date) if snapshot_date else {}
+
+    flow_rows = db.query(
+        Transaction.wallet_id,
+        func.coalesce(func.sum(case((Transaction.type == "income", Transaction.amount), else_=0)), 0).label("income"),
+        func.coalesce(func.sum(case((Transaction.type == "expense", Transaction.amount), else_=0)), 0).label("expenses"),
+        func.count(Transaction.id).label("movements"),
+    ).join(Wallet, Wallet.id == Transaction.wallet_id).filter(
+        Transaction.wallet_id.in_(wallet_ids),
+        Transaction.date >= start,
+        Transaction.date <= end,
+        Transaction.date >= Wallet.tracking_started_on,
+    ).group_by(Transaction.wallet_id).all()
+    flows = {
+        row.wallet_id: (money(row.income), money(row.expenses), int(row.movements or 0))
+        for row in flow_rows
+    }
+    adjustment_rows = db.query(
+        WalletAdjustment.wallet_id,
+        func.coalesce(func.sum(WalletAdjustment.amount), 0),
+        func.count(WalletAdjustment.id),
+    ).join(Wallet, Wallet.id == WalletAdjustment.wallet_id).filter(
+        WalletAdjustment.wallet_id.in_(wallet_ids),
+        WalletAdjustment.date >= start,
+        WalletAdjustment.date <= end,
+        WalletAdjustment.date >= Wallet.tracking_started_on,
+    ).group_by(WalletAdjustment.wallet_id).all()
+    adjustments = {
+        wallet_id: (money(amount), int(count or 0))
+        for wallet_id, amount, count in adjustment_rows
+    }
+    incoming_rows = db.query(
+        WalletTransfer.destination_wallet_id,
+        func.count(WalletTransfer.id),
+    ).join(Wallet, Wallet.id == WalletTransfer.destination_wallet_id).filter(
+        WalletTransfer.destination_wallet_id.in_(wallet_ids),
+        WalletTransfer.date >= start,
+        WalletTransfer.date <= end,
+        WalletTransfer.date >= Wallet.tracking_started_on,
+    ).group_by(WalletTransfer.destination_wallet_id).all()
+    outgoing_rows = db.query(
+        WalletTransfer.source_wallet_id,
+        func.count(WalletTransfer.id),
+    ).join(Wallet, Wallet.id == WalletTransfer.source_wallet_id).filter(
+        WalletTransfer.source_wallet_id.in_(wallet_ids),
+        WalletTransfer.date >= start,
+        WalletTransfer.date <= end,
+        WalletTransfer.date >= Wallet.tracking_started_on,
+    ).group_by(WalletTransfer.source_wallet_id).all()
+    transfer_counts = {wallet_id: int(count or 0) for wallet_id, count in incoming_rows}
+    for wallet_id, count in outgoing_rows:
+        transfer_counts[wallet_id] = transfer_counts.get(wallet_id, 0) + int(count or 0)
+
+    items = []
+    total_balance = Decimal("0.00")
+    active_count = 0
+    for wallet in wallets:
+        opening = _opening_balance(wallet, start, balances_before)
+        if snapshot_date is None:
+            current_balance = opening
+        elif snapshot_date < wallet.tracking_started_on:
+            current_balance = Decimal("0.00")
+        else:
+            current_balance = money(balances_snapshot.get(wallet.id))
+        income, expenses, movement_count = flows.get(wallet.id, (Decimal("0.00"), Decimal("0.00"), 0))
+        adjustment_total, adjustment_count = adjustments.get(wallet.id, (Decimal("0.00"), 0))
+        started_in_period = start <= wallet.tracking_started_on <= end and money(wallet.initial_balance) != 0
+        changed = bool(movement_count or adjustment_count or transfer_counts.get(wallet.id) or started_in_period)
+        if wallet.active:
+            total_balance += current_balance
+            active_count += 1
+        items.append({
+            "wallet_id": wallet.id,
+            "name": wallet.name,
+            "type": wallet.type,
+            "institution": wallet.institution,
+            "color": wallet.color,
+            "active": wallet.active,
+            "current_balance": current_balance,
+            "period_income": income,
+            "period_expenses": expenses,
+            "period_adjustments": adjustment_total,
+            "period_variation": money(current_balance - opening),
+            "changed_in_period": changed,
+        })
+    return {
+        "total_balance": money(total_balance),
+        "active_count": active_count,
+        "wallets": items,
+    }
