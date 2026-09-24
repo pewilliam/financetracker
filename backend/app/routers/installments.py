@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import Category, CreditCard, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, User
 from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPageOut, InstallmentPurchaseOut
 from app.security import get_current_user
-from app.services.credit_cards import add_months, get_or_create_invoice
+from app.services.credit_cards import add_months, first_installment_due_allowed, get_or_create_invoice, invoice_period
 from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
 from app.services.categories import category_ids_from_payload, get_user_categories, set_item_categories
 
@@ -81,6 +81,12 @@ def _sync_refund_invoice_item(db: Session, item: InstallmentItem) -> set[int]:
 
     touched_invoice_ids.add(item.invoice_id)
     return touched_invoice_ids
+
+
+def _ensure_first_installment_due_allowed(card: CreditCard, purchase_date: date) -> None:
+    _, due_date = invoice_period(card.closing_day, card.due_day, purchase_date)
+    if not first_installment_due_allowed(due_date):
+        raise HTTPException(status_code=400, detail="First installment invoice is more than 12 months ahead")
 
 
 def _invoice_for_purchase(
@@ -424,6 +430,7 @@ def create_installment(
 
     if any(value <= 0 for value in raw_values):
         raise HTTPException(status_code=400, detail="Installment values must be greater than zero")
+    _ensure_first_installment_due_allowed(card, purchase_dates[0])
 
     confirmed_total = _money(sum(raw_values, Decimal("0.00")))
     purchase = InstallmentPurchase(
@@ -569,6 +576,8 @@ def update_installment_item(
             raise HTTPException(status_code=404, detail="Invoice not found")
         if target_invoice.id != item.invoice_id:
             _ensure_invoice_accepts_new_charges(target_invoice, current_user.allow_overdue_invoice_edits)
+            if item.installment_number == 1 and not first_installment_due_allowed(target_invoice.due_date):
+                raise HTTPException(status_code=400, detail="First installment invoice is more than 12 months ahead")
 
     if payload.status == "refunded" and not target_invoice:
         raise HTTPException(status_code=400, detail="Refunded installment requires an invoice")

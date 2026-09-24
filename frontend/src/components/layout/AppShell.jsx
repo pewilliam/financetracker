@@ -870,7 +870,7 @@ export default function AppShell() {
       await syncInvoiceAndMonthCollections();
       return true;
     } catch (error) {
-      toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao criar compra parcelada");
+      toast.error(String(error?.message || "").includes("more than 12 months") ? "A primeira parcela só pode entrar em uma fatura com vencimento em até 12 meses" : String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao criar compra parcelada");
       return false;
     }
   };
@@ -916,7 +916,7 @@ export default function AppShell() {
       toast.success("Parcela atualizada");
       await syncInvoiceAndMonthCollections();
     } catch (error) {
-      toast.error(String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao atualizar parcela");
+      toast.error(String(error?.message || "").includes("more than 12 months") ? "A primeira parcela só pode entrar em uma fatura com vencimento em até 12 meses" : String(error?.message || "").includes("Invoice no longer accepts") ? "A fatura escolhida não aceita novos itens" : "Erro ao atualizar parcela");
       throw error;
     }
   };

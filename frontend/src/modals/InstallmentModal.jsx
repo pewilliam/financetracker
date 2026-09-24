@@ -3,7 +3,7 @@ import { Check, CreditCard, Layers3, ReceiptText, Repeat2, Trash2, X } from "luc
 import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { addMonthsToDate, formatMonthShort, invoicePeriod, normalizeInvoiceColor } from "../app/helpers.js";
+import { addMonthsToDate, dueMonthWithinFirstInstallmentWindow, formatMonthShort, invoicePeriod, latestFirstInstallmentPurchaseDate, normalizeInvoiceColor } from "../app/helpers.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 export default function InstallmentModal({ form, setForm, cards = [], categories = [], onCreateCategory, onOpenSingle, onOpenSubscription, onSubmit, onClose }) {
@@ -22,6 +22,13 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
   const installmentAmount = baseInstallmentCents / 100;
   const adjustedLastInstallmentAmount = lastInstallmentCents / 100;
   const selectedCard = activeCards.find((card) => String(card.id) === String(form.credit_card_id));
+  const maxFirstPurchaseDate = selectedCard?.closing_day && selectedCard?.due_day
+    ? latestFirstInstallmentPurchaseDate(selectedCard.closing_day, selectedCard.due_day)
+    : "";
+  const firstDueDate = selectedCard?.closing_day && selectedCard?.due_day && form.first_purchase_date
+    ? invoicePeriod(selectedCard.closing_day, selectedCard.due_day, form.first_purchase_date).dueDate
+    : "";
+  const firstInvoiceAllowed = !firstDueDate || dueMonthWithinFirstInstallmentWindow(firstDueDate);
   const endDate = form.first_purchase_date ? addMonthsToDate(form.first_purchase_date, count - 1) : "";
   const cycleHint = (() => {
     if (!selectedCard?.closing_day || !selectedCard?.due_day || !form.first_purchase_date || !endDate) return "";
@@ -61,7 +68,7 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
 
   const goToReview = (event) => {
     event.preventDefault();
-    if (!form.description || !total || !selectedCard || !form.first_purchase_date) return;
+    if (!form.description || !total || !selectedCard || !form.first_purchase_date || !firstInvoiceAllowed) return;
     setDrafts(buildDrafts());
     setStep(2);
   };
@@ -72,7 +79,10 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
 
   const removeDraft = (id) => setDrafts((current) => current.filter((draft) => draft.id !== id));
   const confirmedTotal = drafts.reduce((sum, draft) => sum + parseTypedMoneyInput(draft.amount, language), 0);
-  const canCreate = drafts.length && drafts.every((draft) => parseTypedMoneyInput(draft.amount, language) > 0) && selectedCard;
+  const firstDraftAllowed = !drafts[0] || !selectedCard?.closing_day
+    ? true
+    : dueMonthWithinFirstInstallmentWindow(invoicePeriod(selectedCard.closing_day, selectedCard.due_day, drafts[0].purchase_date).dueDate);
+  const canCreate = drafts.length && drafts.every((draft) => parseTypedMoneyInput(draft.amount, language) > 0) && selectedCard && firstDraftAllowed;
 
   const submitDrafts = (event) => {
     event.preventDefault();
@@ -148,9 +158,9 @@ export default function InstallmentModal({ form, setForm, cards = [], categories
               </div>
               <div className="field-label">
                 <span>{tt("installmentModal.firstPurchaseDate", "Data da primeira compra")}</span>
-                <DateField value={form.first_purchase_date} onChange={(first_purchase_date) => updateForm({ first_purchase_date })} />
+                <DateField value={form.first_purchase_date} max={maxFirstPurchaseDate} onChange={(first_purchase_date) => updateForm({ first_purchase_date })} />
               </div>
-              <p className="duplicate-summary">{cycleHint || tt("installmentModal.selectCardDate", "Selecione o cartão e a data da primeira compra.")}</p>
+              <p className="duplicate-summary">{!firstInvoiceAllowed ? (language === "en-US" ? "The first installment can only join an invoice due within 12 months." : "A primeira parcela só pode entrar em uma fatura com vencimento em até 12 meses.") : (cycleHint || tt("installmentModal.selectCardDate", "Selecione o cartão e a data da primeira compra."))}</p>
             </div>
             <div className="modal-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button><button className="btn btn-primary">{tt("installmentModal.next", "Próximo →")}</button></div>
           </>

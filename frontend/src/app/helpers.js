@@ -29,6 +29,29 @@ export function invoicePeriod(closingDay, dueDay, purchaseDate) {
   };
 }
 
+export function firstInstallmentDueLimit(today = todayIsoDate()) {
+  const [year, month] = today.split("-").map(Number);
+  return shiftMonth(year, month, 12);
+}
+
+export function dueMonthWithinFirstInstallmentWindow(dueDate, today = todayIsoDate()) {
+  const [year, month] = String(dueDate).slice(0, 10).split("-").map(Number);
+  const limit = firstInstallmentDueLimit(today);
+  return year * 12 + month <= limit.year * 12 + limit.month;
+}
+
+function dayBefore(dateString) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const previous = new Date(year, month - 1, day - 1);
+  return isoDate(previous.getFullYear(), previous.getMonth() + 1, previous.getDate());
+}
+
+export function latestFirstInstallmentPurchaseDate(closingDay, dueDay, today = todayIsoDate()) {
+  const limit = firstInstallmentDueLimit(today);
+  const close = Number(dueDay) <= Number(closingDay) ? shiftMonth(limit.year, limit.month, -1) : limit;
+  return dayBefore(isoDate(close.year, close.month, Number(closingDay)));
+}
+
 export function nextMonthDate(dateString) {
   return addMonthsToDate(dateString, 1);
 }
