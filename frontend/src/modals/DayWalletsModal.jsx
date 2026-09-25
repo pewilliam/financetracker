@@ -79,7 +79,7 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
   return createPortal(
     <div className="modal-layer categories-detail-layer">
       <button className="modal-backdrop" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close details" : "Fechar detalhes"} />
-      <section className="modal-card categories-detail-modal" style={{ "--category-color": "var(--primary)" }} role="dialog" aria-modal="true" aria-labelledby="day-wallets-title">
+      <section className="modal-card categories-detail-modal day-wallets-modal" style={{ "--category-color": "var(--primary)" }} role="dialog" aria-modal="true" aria-labelledby="day-wallets-title">
         <header className="categories-detail-header">
           <i><Wallet size={20} /></i>
           <div>

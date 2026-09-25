@@ -1333,7 +1333,27 @@ select {
 .day-wallet-trigger > strong.money-expense { color: var(--expense); }
 .day-wallet-trigger > svg { color: var(--muted); transition: transform .15s ease; }
 .day-wallet-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
-.day-wallet-panel { display: grid; gap: 8px; padding: 0 12px 12px 18px; }
+.day-wallet-panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  max-height: min(280px, calc(100dvh - 280px));
+  margin: 0 8px 8px;
+  padding: 0 8px 8px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) transparent;
+}
+.day-wallet-panel::-webkit-scrollbar { width: 8px; }
+.day-wallets-modal {
+  height: min(760px, calc(100dvh - 32px));
+}
+.day-wallets-modal .categories-detail-list {
+  flex: 1;
+  max-height: none;
+}
 .day-wallet-panel .categories-detail-item.is-expense > i {
   background: color-mix(in srgb, var(--expense) 14%, var(--card));
   color: var(--expense);
@@ -1567,6 +1587,18 @@ select {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
+  }
+  .day-wallets-modal {
+    height: 92dvh;
+    max-height: 92dvh;
+    overflow: hidden;
+  }
+  .day-wallets-modal .categories-detail-list {
+    max-height: none;
+    touch-action: pan-y;
+  }
+  .day-wallet-panel {
+    max-height: min(220px, calc(92dvh - 260px));
   }
   .categories-detail-item { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; padding: 10px; }
   .categories-detail-item > i { width: 36px; height: 36px; }
@@ -8491,6 +8523,11 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     border-radius: 16px 16px 0 0;
     overflow-y: auto;
     animation: modal-sheet-up .24s ease both;
+  }
+  .modal-card.day-wallets-modal {
+    height: 92dvh;
+    max-height: 92dvh;
+    overflow: hidden;
   }
   .modal-card::before {
     content: "";
