@@ -136,6 +136,20 @@ def present_invoices(
     return combined
 
 
+def present_saved_invoice(db: Session, user: User, invoice_id: int):
+    presented = present_invoices(
+        db,
+        user,
+        include_items=True,
+        ids=[invoice_id],
+        materialize=False,
+    )
+    chosen = next((invoice for invoice in presented if invoice.id == invoice_id), None)
+    if chosen is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return chosen
+
+
 def load_user_invoice(db: Session, user_id: int, invoice_id: int) -> Invoice:
     invoice = (
         _invoice_query(db, user_id, include_items=True)
@@ -203,7 +217,7 @@ def update_invoice(
     recalculate_invoice_total(db, invoice)
     db.commit()
     db.refresh(invoice)
-    return invoice
+    return present_saved_invoice(db, current_user, invoice.id)
 
 
 @router.patch("/{invoice_id}/paid", response_model=InvoiceOut)
@@ -238,7 +252,7 @@ def set_invoice_paid(
 
     db.commit()
     db.refresh(invoice)
-    return invoice
+    return present_saved_invoice(db, current_user, invoice.id)
 
 
 @router.delete("/{invoice_id}", status_code=204)
@@ -312,7 +326,7 @@ def add_invoice_item(
 
     db.commit()
     db.refresh(invoice)
-    return invoice
+    return present_saved_invoice(db, current_user, invoice.id)
 
 
 @router.delete("/{invoice_id}/items/{item_id}", response_model=InvoiceOut)
@@ -367,7 +381,7 @@ def delete_invoice_item(
 
     db.commit()
     db.refresh(invoice)
-    return invoice
+    return present_saved_invoice(db, current_user, invoice.id)
 
 
 @router.put("/{invoice_id}/items/{item_id}", response_model=InvoiceOut)
@@ -409,4 +423,4 @@ def update_invoice_item(
     recalculate_invoice_total(db, invoice)
 
     db.commit()
-    return load_user_invoice(db, current_user.id, invoice.id)
+    return present_saved_invoice(db, current_user, invoice.id)
