@@ -35,7 +35,7 @@ from app.services.subscriptions import (
     materialize_due_subscriptions,
     subscription_plan,
 )
-from app.routers.invoices import load_user_invoice, present_invoices
+from app.routers.invoices import present_invoices, present_saved_invoice
 
 router = APIRouter(prefix="/api/cards", tags=["cards"])
 
@@ -491,4 +491,4 @@ def create_card_purchase(
     db.flush()
     recalculate_invoice_total(db, invoice)
     db.commit()
-    return load_user_invoice(db, current_user.id, invoice.id)
+    return present_saved_invoice(db, current_user, invoice.id)
