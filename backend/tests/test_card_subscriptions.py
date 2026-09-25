@@ -9,7 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import CardSubscription, CardSubscriptionSkip, CreditCard, Invoice, InvoiceItem, User, Wallet
 from app.routers.cards import create_card_purchase
-from app.routers.invoices import delete_invoice_item, present_invoices
+from app.routers.invoices import add_invoice_item, delete_invoice_item, present_invoices
+from app.schemas.invoices import InvoiceItemCreate
 from app.routers.subscriptions import cancel_card_subscription, list_card_subscriptions, update_card_subscription
 from app.schemas.invoices import PurchaseCreate
 from app.schemas.subscriptions import CardSubscriptionOut, CardSubscriptionPreview, CardSubscriptionUpdate
@@ -199,6 +200,35 @@ class CardSubscriptionTests(unittest.TestCase):
         self.assertEqual(self.db.query(Invoice).count(), 2)
         committed = committed_by_card(self.db, self.user.id, [self.card.id])[self.card.id]
         self.assertEqual(committed, Decimal("200.00"))
+
+    def test_adding_an_item_keeps_and_recalculates_the_projection(self):
+        create_installment(
+            InstallmentCreate(
+                description="Notebook",
+                total_amount=Decimal("100.00"),
+                installment_count=1,
+                credit_card_id=self.card.id,
+                first_purchase_date=date(2026, 9, 28),
+                items=[InstallmentDraftIn(amount=Decimal("100.00"), purchase_date=date(2026, 9, 28))],
+            ),
+            self.db,
+            self.user,
+        )
+        self._add_subscription(charge_day=28, start=date(2026, 9, 28))
+        invoice = next(invoice for invoice in self._project() if invoice.due_date == date(2026, 11, 5))
+        self.assertEqual(invoice.projected_amount, Decimal("55.00"))
+
+        updated = add_invoice_item(
+            invoice.id,
+            InvoiceItemCreate(description="Mercado", amount=Decimal("20.00")),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(updated.total_amount, Decimal("120.00"))
+        self.assertEqual(updated.projected_amount, Decimal("55.00"))
+        self.assertEqual(updated.projected_total, Decimal("175.00"))
+        self.assertEqual(len(updated.projected_items), 1)
 
     def test_charge_on_the_anchor_day_becomes_a_real_item(self):
         self._add_subscription(start=date(2026, 9, 20))
