@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Receivable, ReceivablePerson, Transaction, User
+from app.models import CardSubscription, CreditCard, Receivable, ReceivablePerson, Transaction, User
 from app.routers.months import _build_month_data, _build_month_summary, _summarize_month_data
 
 
@@ -79,7 +79,7 @@ class MonthPlannedReceivablesTests(unittest.TestCase):
         self.assertEqual(data.days[24].projected_balance, Decimal("1100.00"))
 
         summary = _build_month_summary(self.db, 2026, 9, self.user.id, today=date(2026, 9, 12))
-        self.assertEqual(summary, _summarize_month_data(data, today=date(2026, 9, 12)))
+        self.assertEqual(summary, _summarize_month_data(data, today=date(2026, 9, 12), db=self.db, user_id=self.user.id))
         self.assertEqual(summary.current_balance, Decimal("800.00"))
         self.assertEqual(summary.future_net, Decimal("-50.00"))
         self.assertEqual(summary.planned_receivables_total, Decimal("350.00"))
@@ -164,7 +164,7 @@ class MonthPlannedReceivablesTests(unittest.TestCase):
         self.assertEqual(day_18.projected_balance, Decimal("1450.00"))
 
         summary = _build_month_summary(self.db, 2026, 9, self.user.id, today=date(2026, 9, 12))
-        self.assertEqual(summary, _summarize_month_data(september, today=date(2026, 9, 12)))
+        self.assertEqual(summary, _summarize_month_data(september, today=date(2026, 9, 12), db=self.db, user_id=self.user.id))
         self.assertEqual(summary.prior_planned_receivables_total, Decimal("370.00"))
         self.assertEqual(summary.planned_receivables_total, Decimal("450.00"))
         self.assertEqual(summary.transactions_projected_closing, Decimal("1000.00"))
@@ -187,6 +187,53 @@ class MonthPlannedReceivablesTests(unittest.TestCase):
         september = _build_month_data(self.db, 2026, 9, self.user.id)
         self.assertEqual(september.prior_planned_receivables_total, Decimal("0.00"))
         self.assertEqual(september.opening_balance_projected, september.opening_balance)
+
+    def test_open_invoice_projection_reduces_the_projected_closing(self):
+        card = CreditCard(
+            user_id=self.user.id,
+            name="Nubank",
+            color="#820AD1",
+            due_day=5,
+            closing_day=25,
+            credit_limit=Decimal("1000.00"),
+            active=True,
+        )
+        self.db.add(card)
+        self.db.flush()
+        self.db.add(CardSubscription(
+            user_id=self.user.id,
+            credit_card_id=card.id,
+            description="Streaming",
+            amount=Decimal("55.00"),
+            charge_day=28,
+            start_date=date(2026, 9, 28),
+            billing_interval_months=1,
+            term_kind="indefinite",
+            active=True,
+        ))
+        self.db.add(Transaction(
+            user_id=self.user.id,
+            date=date(2026, 11, 2),
+            type="income",
+            amount=Decimal("200.00"),
+            description="Salário",
+        ))
+        self.db.commit()
+
+        november = _build_month_summary(self.db, 2026, 11, self.user.id, today=date(2026, 9, 25))
+        self.assertEqual(november.total_income, Decimal("200.00"))
+        self.assertEqual(november.total_expenses, Decimal("0.00"))
+        self.assertEqual(november.transactions_projected_closing, Decimal("200.00"))
+        self.assertEqual(november.open_invoices_projected_total, Decimal("55.00"))
+        self.assertEqual(november.projected_closing, Decimal("145.00"))
+        self.assertEqual(november.projection_invoices[0].card_name, "Nubank")
+        self.assertEqual(november.projection_invoices[0].current_total, Decimal("0.00"))
+        self.assertEqual(november.projection_invoices[0].projected_total, Decimal("55.00"))
+        self.assertEqual(november.projection_invoices[0].difference, Decimal("55.00"))
+
+        september = _build_month_summary(self.db, 2026, 9, self.user.id, today=date(2026, 9, 25))
+        self.assertEqual(september.open_invoices_projected_total, Decimal("0.00"))
+        self.assertEqual(september.projected_closing, september.transactions_projected_closing)
 
 
 if __name__ == "__main__":

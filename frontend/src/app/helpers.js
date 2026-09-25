@@ -293,6 +293,7 @@ export function patchSummaryForTransaction(summary, transaction) {
   else futureNet += delta;
   const transactionsClosing = roundMoney(currentBalance + futureNet);
   const planned = Number(summary.planned_receivables_total || 0);
+  const invoiceProjection = Number(summary.open_invoices_projected_total || 0);
   return {
     ...summary,
     total_income: totalIncome,
@@ -301,7 +302,7 @@ export function patchSummaryForTransaction(summary, transaction) {
     current_balance: roundMoney(currentBalance),
     future_net: roundMoney(futureNet),
     transactions_projected_closing: transactionsClosing,
-    projected_closing: roundMoney(transactionsClosing + planned),
+    projected_closing: roundMoney(transactionsClosing + planned - invoiceProjection),
   };
 }
 

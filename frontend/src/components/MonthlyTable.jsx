@@ -5,6 +5,7 @@ import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
 import { isInvoiceTransaction, todayIsoDate } from "../app/helpers.js";
 import DayWalletsModal from "../modals/DayWalletsModal.jsx";
+import ProjectionBreakdownModal from "../modals/ProjectionBreakdownModal.jsx";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
 
 function isFutureDate(dateString) {
@@ -29,6 +30,7 @@ export default function MonthlyTable({
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [viewingTransaction, setViewingTransaction] = useState(null);
   const [walletDay, setWalletDay] = useState(null);
+  const [projectionOpen, setProjectionOpen] = useState(false);
   const walletRefreshKey = `${summary?.current_balance ?? ""}|${summary?.total_income ?? ""}|${summary?.total_expenses ?? ""}|${days.map((day) => `${day.date}:${day.balance}`).join(",")}`;
 
   useEffect(() => {
@@ -87,7 +89,8 @@ export default function MonthlyTable({
 
   const invoiceFor = (transaction) => invoices.find((invoice) => invoice.id === transaction.invoice_id) || null;
   const plannedTotal = Number(summary?.planned_receivables_total || 0);
-  const hasPlannedGap = plannedTotal > 0;
+  const invoiceProjection = Number(summary?.open_invoices_projected_total || 0);
+  const hasPlannedGap = plannedTotal > 0 || invoiceProjection > 0;
   const transactionsClosing = summary?.transactions_projected_closing ?? (
     summary
       ? Number(summary.projected_closing || 0) - plannedTotal
@@ -248,24 +251,22 @@ export default function MonthlyTable({
             <span>{tt("monthlyTable.income", "Ganhos")} {formatMoney(summary.total_income)}</span>
             <span>{tt("monthlyTable.expenses", "Gastos")} {formatMoney(summary.total_expenses)}</span>
             {hasPlannedGap && (
-              <>
-                <span className="month-total-planned">
-                  {tt("monthlyTable.plannedReceivables", "Recebíveis previstos")} {formatMoney(plannedTotal)}
-                </span>
-                <span>
-                  {tt("monthlyTable.realizedClosing", "Fechamento real")} {formatMoney(transactionsClosing)}
-                </span>
-              </>
+              <span>
+                {tt("monthlyTable.realizedClosing", "Fechamento real")} {formatMoney(transactionsClosing)}
+              </span>
             )}
-            <strong>
+            <button className="month-projection-trigger" type="button" onClick={() => setProjectionOpen(true)}>
               {hasPlannedGap
                 ? tt("monthlyTable.projectedClosing", "Fechamento previsto")
                 : tt("monthlyTable.closing", "Fechamento")}{" "}
               {formatMoney(summary.projected_closing)}
-            </strong>
+            </button>
           </div>
         )}
       </div>
+      {projectionOpen && summary && (
+        <ProjectionBreakdownModal summary={summary} onClose={() => setProjectionOpen(false)} />
+      )}
       {walletDay && (
         <DayWalletsModal
           date={walletDay.date}

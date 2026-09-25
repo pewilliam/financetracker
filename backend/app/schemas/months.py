@@ -41,6 +41,21 @@ class MonthResponse(APIModel):
     days: List[MonthDayOut]
 
 
+class ProjectionReceivableOut(APIModel):
+    origin: str
+    description: str
+    amount: Decimal
+    due_date: date
+
+
+class ProjectionInvoiceOut(APIModel):
+    card_name: str
+    current_total: Decimal
+    projected_total: Decimal
+    difference: Decimal
+    payment_date: date
+
+
 class MonthSummaryOut(APIModel):
     year: int
     month: int
@@ -53,6 +68,9 @@ class MonthSummaryOut(APIModel):
     planned_receivables_total: Decimal = Decimal("0.00")
     prior_planned_receivables_total: Decimal = Decimal("0.00")
     transactions_projected_closing: Decimal = Decimal("0.00")
+    open_invoices_projected_total: Decimal = Decimal("0.00")
+    projection_receivables: List[ProjectionReceivableOut] = []
+    projection_invoices: List[ProjectionInvoiceOut] = []
 
 
 class MonthCardSummaryOut(APIModel):

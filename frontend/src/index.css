@@ -1904,6 +1904,80 @@ button.day-balance:focus-visible {
 .week-separator { border-top: 1px dashed var(--border); margin: 8px 0; }
 .month-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .month-totals { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); }
+.month-projection-trigger {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.dashboard-stat-card.is-clickable { cursor: pointer; }
+.projection-breakdown-layer { z-index: 80; }
+.projection-breakdown-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100% - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+.projection-breakdown-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px 12px;
+}
+.projection-breakdown-header h2 { margin: 0; font-size: 20px; }
+.projection-breakdown-list {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px 22px 16px;
+  overflow-y: auto;
+}
+.projection-breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--card) 96%, var(--border));
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+button.projection-breakdown-row { grid-template-columns: minmax(0, 1fr) auto auto; cursor: pointer; }
+.projection-breakdown-row strong.income { color: var(--income); }
+.projection-breakdown-row strong.money-expense { color: var(--expense); }
+.projection-breakdown-group.open svg { transform: rotate(180deg); }
+.projection-breakdown-details { display: grid; gap: 8px; padding: 8px 4px 0 12px; }
+.projection-breakdown-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.projection-breakdown-detail span { display: grid; gap: 2px; min-width: 0; }
+.projection-breakdown-detail small { color: var(--muted); font-size: 11px; }
+.projection-breakdown-detail .income { color: var(--income); }
+.projection-breakdown-detail .money-expense { color: var(--expense); }
+.projection-breakdown-details p { margin: 0; color: var(--muted); font-size: 12px; }
+.projection-breakdown-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding: 14px 22px 18px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+.projection-breakdown-total strong { color: var(--primary); font-size: 18px; }
 .view-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .view-toggle {
   display: inline-grid;

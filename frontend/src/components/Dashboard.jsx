@@ -12,6 +12,7 @@ import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/
 import { getMonthPeriod, isInvoiceTransaction } from "../app/helpers.js";
 import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
+import ProjectionBreakdownModal from "../modals/ProjectionBreakdownModal.jsx";
 import DashboardWallets from "./DashboardWallets.jsx";
 
 const EMPTY_CATEGORY_BREAKDOWN = {
@@ -136,6 +137,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllDueDates, setShowAllDueDates] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
+  const [projectionOpen, setProjectionOpen] = useState(false);
   const detailsRequestRef = useRef(null);
   const detailsGenerationRef = useRef(0);
   const copy = (pt, en) => language === "en-US" ? en : pt;
@@ -292,16 +294,11 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
 
   const projectionMeta = !hasProjection
     ? copy("Sem projeção para este período", "No projection for this period")
-    : plannedReceivablesTotal > 0
-      ? (
-        <>
-          <span>{t("dashboard.realizedVsProjected", {
-            realized: formatMoney(transactionsProjectedClosing, language),
-            projected: formatMoney(safeSummary.projected_closing, language),
-          })}</span>
-          <span className="stat-meta-secondary">{t("dashboard.plannedReceivables", { value: formatMoney(plannedReceivablesTotal, language) })}</span>
-        </>
-      )
+    : (plannedReceivablesTotal > 0 || Number(safeSummary.open_invoices_projected_total || 0) > 0)
+      ? t("dashboard.realizedVsProjected", {
+        realized: formatMoney(transactionsProjectedClosing, language),
+        projected: formatMoney(safeSummary.projected_closing, language),
+      })
       : t("dashboard.futureNet", { value: formatMoney(safeSummary.future_net, language) });
 
   const balanceCard = isPastMonth || isFutureMonth
@@ -382,8 +379,21 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       <section className="summary-grid dashboard-summary-grid" aria-label={copy("Indicadores financeiros", "Financial indicators")}>
         {cards.map((card) => {
           const Icon = card.icon;
+          const opensProjection = card.id === "projection" && !isPastMonth && hasProjection;
           return (
-            <article className={`card stat-card dashboard-stat-card stat-card-${card.tone}`} key={card.id}>
+            <article
+              className={`card stat-card dashboard-stat-card stat-card-${card.tone}${opensProjection ? " is-clickable" : ""}`}
+              key={card.id}
+              role={opensProjection ? "button" : undefined}
+              tabIndex={opensProjection ? 0 : undefined}
+              onClick={opensProjection ? () => setProjectionOpen(true) : undefined}
+              onKeyDown={opensProjection ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setProjectionOpen(true);
+                }
+              } : undefined}
+            >
               <div className="dashboard-stat-head">
                 <span className="dashboard-stat-icon"><Icon size={17} /></span>
                 {card.opening && (
@@ -523,6 +533,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       )}
 
       {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
+      {projectionOpen && safeSummary && <ProjectionBreakdownModal summary={safeSummary} onClose={() => setProjectionOpen(false)} />}
       <button className="dashboard-new-fab" type="button" onClick={onNewTransaction} aria-label={copy("Novo lançamento", "New transaction")}><Plus size={24} /></button>
     </div>
   );
