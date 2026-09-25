@@ -1351,8 +1351,30 @@ select {
   height: min(760px, calc(100dvh - 32px));
 }
 .day-wallets-modal .categories-detail-list {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  min-height: 0;
   max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.day-wallets-modal .day-wallet-group {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.day-wallets-modal .day-wallet-group:has([aria-expanded="true"]) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.day-wallets-modal .day-wallet-panel {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
 }
 .day-wallet-panel .categories-detail-item.is-expense > i {
   background: color-mix(in srgb, var(--expense) 14%, var(--card));
@@ -1595,10 +1617,11 @@ select {
   }
   .day-wallets-modal .categories-detail-list {
     max-height: none;
+    overflow-y: auto;
     touch-action: pan-y;
   }
   .day-wallet-panel {
-    max-height: min(220px, calc(92dvh - 260px));
+    max-height: none;
   }
   .categories-detail-item { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; padding: 10px; }
   .categories-detail-item > i { width: 36px; height: 36px; }
@@ -1917,8 +1940,49 @@ button.day-balance:focus-visible {
 .categories-detail-summary strong.income { color: var(--income); }
 .categories-detail-summary strong.money-expense { color: var(--expense); }
 .projection-breakdown-modal .categories-detail-list {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+.projection-breakdown-modal .day-wallet-group {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.projection-breakdown-modal .day-wallet-group:has([aria-expanded="true"]) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.projection-breakdown-modal .day-wallet-panel {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+@media (max-width: 767px) {
+  .projection-breakdown-modal .categories-detail-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+  .projection-breakdown-modal .categories-detail-summary > div:first-child {
+    grid-column: auto;
+    border-bottom: 0;
+    padding: 0 8px 0 0;
+  }
+  .projection-breakdown-modal .categories-detail-summary > div:nth-child(2) {
+    border-left: 1px solid var(--border);
+    padding-left: 8px;
+  }
+  .projection-breakdown-modal .categories-detail-summary > div { padding-right: 8px; padding-left: 8px; }
+  .projection-breakdown-modal .categories-detail-summary > div:first-child { padding-left: 0; }
+  .projection-breakdown-modal .categories-detail-summary strong { font-size: 15px; }
 }
 .projection-breakdown-total {
   display: flex;
