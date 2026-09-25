@@ -230,6 +230,24 @@ class CardSubscriptionTests(unittest.TestCase):
         self.assertEqual(updated.projected_total, Decimal("175.00"))
         self.assertEqual(len(updated.projected_items), 1)
 
+    def test_adding_a_purchase_keeps_and_recalculates_the_projection(self):
+        self._add_subscription(charge_day=28, start=date(2026, 9, 28))
+        invoice = next(invoice for invoice in self._project() if invoice.due_date == date(2026, 11, 5))
+        self.assertEqual(invoice.projected_amount, Decimal("55.00"))
+
+        updated = create_card_purchase(
+            self.card.id,
+            PurchaseCreate(description="Mercado", amount=Decimal("20.00"), purchase_date=date(2026, 9, 28)),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(updated.due_date, invoice.due_date)
+        self.assertEqual(updated.total_amount, Decimal("20.00"))
+        self.assertEqual(updated.projected_amount, Decimal("55.00"))
+        self.assertEqual(updated.projected_total, Decimal("75.00"))
+        self.assertEqual(len(updated.projected_items), 1)
+
     def test_charge_on_the_anchor_day_becomes_a_real_item(self):
         self._add_subscription(start=date(2026, 9, 20))
         materialize_due_subscriptions(self.db, self.user, today=date(2026, 9, 20))
