@@ -1351,20 +1351,37 @@ select {
   height: auto;
   max-height: min(760px, calc(100dvh - 32px));
 }
-.day-wallets-modal .categories-detail-list {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: min(640px, calc(100dvh - 180px));
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-.day-wallets-modal .day-wallet-group {
-  flex: 0 0 auto;
-}
 .day-wallets-modal .day-wallet-panel {
-  max-height: min(480px, calc(100dvh - 220px));
   overflow-y: auto;
   touch-action: pan-y;
+}
+@media (min-width: 768px) {
+  .day-wallets-modal .categories-detail-list {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 200px);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .day-wallets-modal .day-wallet-group {
+    flex: 0 0 auto;
+    min-height: max-content;
+    overflow: hidden;
+  }
+  .day-wallets-modal .day-wallet-panel {
+    max-height: calc(100dvh - 520px);
+    overflow-y: auto;
+  }
+  .projection-breakdown-modal .day-wallet-group:has([aria-expanded="true"]) {
+    flex: 0 0 auto;
+    min-height: max-content;
+    overflow: hidden;
+  }
+  .projection-breakdown-modal .day-wallet-panel {
+    flex: 0 0 auto;
+    max-height: calc(100dvh - 380px);
+    overflow-y: auto;
+  }
 }
 .day-wallet-panel .categories-detail-item.is-expense > i {
   background: color-mix(in srgb, var(--expense) 14%, var(--card));
