@@ -59,6 +59,7 @@ class TransactionUpdate(APIModel):
     recurrence_id: Optional[int] = None
     category_id: Optional[int] = None
     category_ids: Optional[List[int]] = None
+    wallet_id: Optional[int] = None
     expense_link: Optional[ReceivableExpenseLinkIn] = None
 
 
