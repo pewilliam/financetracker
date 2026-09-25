@@ -1904,6 +1904,42 @@ button.day-balance:focus-visible {
 .week-separator { border-top: 1px dashed var(--border); margin: 8px 0; }
 .month-footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .month-totals { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); }
+.month-projection-trigger {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.dashboard-stat-card.is-clickable { cursor: pointer; }
+.categories-detail-summary strong.income { color: var(--income); }
+.categories-detail-summary strong.money-expense { color: var(--expense); }
+.projection-breakdown-modal .categories-detail-list {
+  flex: 1;
+  min-height: 0;
+}
+.projection-breakdown-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 16px 22px 18px;
+  background:
+    radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 52%),
+    color-mix(in srgb, var(--card) 94%, var(--primary));
+}
+.projection-breakdown-total span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.projection-breakdown-total strong { color: var(--primary); font-size: 20px; line-height: 1.2; }
 .view-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .view-toggle {
   display: inline-grid;
@@ -8524,7 +8560,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     overflow-y: auto;
     animation: modal-sheet-up .24s ease both;
   }
-  .modal-card.day-wallets-modal {
+  .modal-card.day-wallets-modal,
+  .modal-card.projection-breakdown-modal {
     height: 92dvh;
     max-height: 92dvh;
     overflow: hidden;

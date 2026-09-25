@@ -66,7 +66,7 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
             month_data = get_month(2026, target_month, self.db, current_user)
             self.assertEqual(
                 _build_month_summary(self.db, 2026, target_month, current_user.id, today=comparison_date),
-                _summarize_month_data(month_data, today=comparison_date),
+                _summarize_month_data(month_data, today=comparison_date, db=self.db, user_id=current_user.id),
             )
 
     def test_current_month_card_uses_only_realized_transactions_for_current_balance(self):

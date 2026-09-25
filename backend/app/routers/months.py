@@ -17,11 +17,14 @@ from app.schemas.months import (
     MonthResponse,
     MonthSummaryOut,
     OpeningBalancePayload,
+    ProjectionInvoiceOut,
+    ProjectionReceivableOut,
 )
 from app.security import get_current_user
 from app.services.dates import app_today
 from app.services.daily_wallets import build_day_wallets
-from app.services.invoices import invoice_payment_date, refresh_open_payment_dates
+from app.services.invoices import card_payment_date, invoice_payment_date, refresh_open_payment_dates
+from app.services.subscriptions import apply_subscription_projections
 from app.services.wallets import money, wallet_balances_as_of
 
 router = APIRouter(prefix="/api/months", tags=["months"])
@@ -380,7 +383,82 @@ def _build_month_data(db: Session, year: int, month: int, user_id: int, *, inclu
     )
 
 
-def _summarize_month_data(data: MonthResponse, today: date | None = None) -> MonthSummaryOut:
+def _projection_details(
+    db: Session,
+    user_id: int,
+    year: int,
+    month: int,
+    current_date: date,
+) -> tuple[list[ProjectionReceivableOut], list[ProjectionInvoiceOut], Decimal]:
+    """Open receivables and the unpaid invoice forecast that still change this month's closing."""
+    start, end, _ = _month_bounds(year, month)
+    if end < current_date:
+        return [], [], Decimal("0.00")
+
+    receivables = (
+        db.query(Receivable)
+        .options(selectinload(Receivable.person))
+        .filter(
+            Receivable.user_id == user_id,
+            Receivable.due_date <= end,
+            Receivable.status != "paid",
+        )
+        .order_by(Receivable.due_date, Receivable.id)
+        .all()
+    )
+    receivable_rows = [
+        ProjectionReceivableOut(
+            origin=item.person_name or "",
+            description=item.description,
+            amount=_remaining_amount(item),
+            due_date=item.due_date,
+        )
+        for item in receivables
+        if _remaining_amount(item) > 0
+    ]
+
+    invoices = (
+        db.query(Invoice)
+        .options(selectinload(Invoice.card))
+        .filter(Invoice.user_id == user_id, Invoice.paid.is_(False))
+        .all()
+    )
+    presented = apply_subscription_projections(
+        db,
+        user_id,
+        invoices,
+        include_virtual=True,
+        today=current_date,
+    )
+    invoice_rows: list[ProjectionInvoiceOut] = []
+    invoice_total = Decimal("0.00")
+    for invoice in presented:
+        if getattr(invoice, "paid", False):
+            continue
+        difference = _to_decimal(getattr(invoice, "projected_amount", 0))
+        if difference <= 0:
+            continue
+        payment_date = getattr(invoice, "planned_payment_date", None) or getattr(invoice, "payment_date", None)
+        if payment_date is None:
+            payment_date = card_payment_date(invoice.due_date, getattr(invoice, "card", None))
+        if payment_date > end:
+            continue
+        current_total = _to_decimal(invoice.total_amount)
+        invoice_rows.append(
+            ProjectionInvoiceOut(
+                card_name=invoice.name,
+                current_total=current_total,
+                projected_total=current_total + difference,
+                difference=difference,
+                payment_date=payment_date,
+            )
+        )
+        invoice_total += difference
+    invoice_rows.sort(key=lambda item: (item.payment_date, item.card_name))
+    return receivable_rows, invoice_rows, invoice_total
+
+
+def _summarize_month_data(data: MonthResponse, today: date | None = None, db: Session | None = None, user_id: int | None = None) -> MonthSummaryOut:
     current_date = today or app_today()
     start, end, _ = _month_bounds(data.year, data.month)
     prior_planned_receivables_total = _to_decimal(data.prior_planned_receivables_total)
@@ -420,6 +498,11 @@ def _summarize_month_data(data: MonthResponse, today: date | None = None) -> Mon
         in_month_planned, prior_planned_receivables_total, end, current_date
     )
     transactions_projected_closing = current_balance + future_net
+    receivable_rows, invoice_rows, invoice_total = (
+        _projection_details(db, user_id, data.year, data.month, current_date)
+        if db is not None and user_id is not None
+        else ([], [], Decimal("0.00"))
+    )
     return MonthSummaryOut(
         year=data.year,
         month=data.month,
@@ -427,11 +510,14 @@ def _summarize_month_data(data: MonthResponse, today: date | None = None) -> Mon
         total_income=data.total_income,
         difference=data.total_expenses - data.total_income,
         current_balance=current_balance,
-        projected_closing=transactions_projected_closing + planned_receivables_total,
+        projected_closing=transactions_projected_closing + planned_receivables_total - invoice_total,
         future_net=future_net,
         planned_receivables_total=planned_receivables_total,
         prior_planned_receivables_total=prior_planned_receivables_total,
         transactions_projected_closing=transactions_projected_closing,
+        open_invoices_projected_total=invoice_total,
+        projection_receivables=receivable_rows,
+        projection_invoices=invoice_rows,
     )
 
 
@@ -491,6 +577,7 @@ def _build_month_summary(
         current_balance = opening_balance + current_net + current_balance_effect
 
     transactions_projected_closing = current_balance + future_net
+    receivable_rows, invoice_rows, invoice_total = _projection_details(db, user_id, year, month, current_date)
     return MonthSummaryOut(
         year=year,
         month=month,
@@ -498,11 +585,14 @@ def _build_month_summary(
         total_income=total_income,
         difference=total_expenses - total_income,
         current_balance=current_balance,
-        projected_closing=transactions_projected_closing + planned_receivables_total,
+        projected_closing=transactions_projected_closing + planned_receivables_total - invoice_total,
         future_net=future_net,
         planned_receivables_total=planned_receivables_total,
         prior_planned_receivables_total=prior_planned_receivables_total,
         transactions_projected_closing=transactions_projected_closing,
+        open_invoices_projected_total=invoice_total,
+        projection_receivables=receivable_rows,
+        projection_invoices=invoice_rows,
     )
 
 
