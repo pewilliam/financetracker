@@ -8,6 +8,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.routers.months import get_day_wallets, get_month
+from app.routers.transactions import create_transaction, update_transaction
+from app.schemas.transactions import TransactionCreate, TransactionUpdate
 from app.services.dates import APP_TIMEZONE, app_today
 
 
@@ -188,6 +190,30 @@ class DayWalletDetailTests(unittest.TestCase):
         self.assertEqual(reserve.reasons, ["unchanged"])
         self.assertEqual(reserve.variation, Decimal("0.00"))
         self.assertEqual(reserve.balance, Decimal("500.00"))
+
+    def test_updating_an_expense_keeps_the_selected_wallet(self):
+        created = create_transaction(
+            TransactionCreate(
+                date=date(2026, 9, 14),
+                type="expense",
+                amount=Decimal("26.00"),
+                description="Ônibus",
+                wallet_id=self.primary.id,
+            ),
+            self.db,
+            self.current_user,
+        )
+
+        updated = update_transaction(
+            created.id,
+            TransactionUpdate(wallet_id=self.reserve.id),
+            self.db,
+            self.current_user,
+        )
+
+        self.assertEqual(updated.wallet_id, self.reserve.id)
+        self.db.refresh(created)
+        self.assertEqual(created.wallet_id, self.reserve.id)
 
     def test_app_today_uses_sao_paulo_timezone(self):
         utc_evening = datetime(2026, 9, 24, 1, 30, tzinfo=timezone.utc)
