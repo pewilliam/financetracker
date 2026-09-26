@@ -27,12 +27,38 @@ describe("ProjectionBreakdownModal", () => {
       </I18nProvider>,
     );
 
-    await user.click(screen.getByRole("button", { name: /entenda a diferença/i }));
+    const helper = screen.getByRole("button", { name: /entenda a diferença/i });
+    expect(helper.closest(".finance-sheet-header")).toBeTruthy();
+    await user.click(helper);
 
     const explanation = screen.getByRole("note");
     expect(explanation).toHaveTextContent("Por que os valores são diferentes?");
     expect(explanation).toHaveTextContent("movimentações já cadastradas para o mês");
     expect(explanation).toHaveTextContent("soma os valores que você ainda espera receber");
     expect(explanation).toHaveTextContent("ainda são expectativas");
+  });
+
+  it("hides the helper when actual and projected closing are equal", () => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
+
+    render(
+      <I18nProvider>
+        <ProjectionBreakdownModal
+          summary={{
+            total_income: "1000.00",
+            total_expenses: "200.00",
+            transactions_projected_closing: "800.00",
+            planned_receivables_total: "0.00",
+            open_invoices_projected_total: "0.00",
+            projected_closing: "800.00",
+            projection_receivables: [],
+            projection_invoices: [],
+          }}
+          onClose={() => {}}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: /entenda a diferença/i })).toBeNull();
   });
 });

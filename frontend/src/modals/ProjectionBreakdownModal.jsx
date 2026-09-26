@@ -23,12 +23,16 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt) => (language === "en-US" ? t(`dashboard.projectionBreakdown.${key}`) : pt);
   const closeButtonRef = useRef(null);
+  const helpRef = useRef(null);
   const [openSection, setOpenSection] = useState(null);
   const [realClosingHelpOpen, setRealClosingHelpOpen] = useState(false);
   const receivables = summary?.projection_receivables || [];
   const invoices = summary?.projection_invoices || [];
   const receivableTotal = Number(summary?.planned_receivables_total || 0);
   const invoiceTotal = Number(summary?.open_invoices_projected_total || 0);
+  const hasClosingDifference = Math.abs(
+    Number(summary?.projected_closing || 0) - Number(summary?.transactions_projected_closing || 0)
+  ) >= 0.005;
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -41,6 +45,19 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    if (!realClosingHelpOpen) return undefined;
+    const closeHelpOnOutsidePress = (event) => {
+      if (!helpRef.current?.contains(event.target)) setRealClosingHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", closeHelpOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", closeHelpOnOutsidePress, true);
+  }, [realClosingHelpOpen]);
+
+  useEffect(() => {
+    if (!hasClosingDifference) setRealClosingHelpOpen(false);
+  }, [hasClosingDifference]);
 
   const countHint = (count, ptSingular, ptPlural, enSingular, enPlural) => (
     language === "en-US"
@@ -60,45 +77,44 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
             <small>{tt("eyebrow", "Projeção")}</small>
             <h2 id="projection-sheet-title">{tt("title", "Fechamento previsto")}</h2>
           </div>
-          <button ref={closeButtonRef} className="finance-sheet-close" type="button" onClick={onClose} aria-label={tt("close", "Fechar")}><X size={18} /></button>
+          <div ref={helpRef} className="finance-sheet-header-actions" onBlur={(event) => {
+            if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setRealClosingHelpOpen(false);
+          }}>
+            {hasClosingDifference && (
+              <button
+                className="finance-projection-help"
+                type="button"
+                aria-label={tt("realizedHelpLabel", "Entenda a diferença entre fechamento real e previsto")}
+                aria-expanded={realClosingHelpOpen}
+                aria-controls="projection-real-closing-help"
+                onClick={() => setRealClosingHelpOpen((current) => !current)}
+              >
+                <CircleHelp size={19} />
+              </button>
+            )}
+            <button ref={closeButtonRef} className="finance-sheet-close" type="button" onClick={onClose} aria-label={tt("close", "Fechar")}><X size={18} /></button>
+            {hasClosingDifference && realClosingHelpOpen && (
+              <div className="finance-summary-help-popover" id="projection-real-closing-help" role="note">
+                <strong>{tt("realizedHelpTitle", "Por que os valores são diferentes?")}</strong>
+                <p>
+                  <b>{tt("realizedHelpRealLabel", "Fechamento real")}</b>
+                  {tt("realizedHelpReal", "É o saldo final calculado com as movimentações já cadastradas para o mês, como ganhos, gastos e ajustes de saldo.")}
+                </p>
+                <p>
+                  <b>{tt("realizedHelpProjectedLabel", "Fechamento previsto")}</b>
+                  {tt("realizedHelpProjected", "Parte do fechamento real, soma os valores que você ainda espera receber e desconta cobranças previstas que ainda podem entrar nas faturas.")}
+                </p>
+                <small>{tt("realizedHelpDifference", "A diferença existe porque esses recebimentos e cobranças ainda são expectativas. Quando forem registrados de fato, passam a fazer parte do fechamento real.")}</small>
+              </div>
+            )}
+          </div>
         </header>
 
         <div className="finance-sheet-scroll">
           <div className="finance-sheet-summary finance-sheet-summary--three">
             <div><small>{tt("income", "Ganhos confirmados")}</small><strong className="finance-positive">{formatMoney(summary?.total_income, language)}</strong></div>
             <div><small>{tt("expenses", "Gastos confirmados")}</small><strong className="finance-negative">{formatMoney(summary?.total_expenses, language)}</strong></div>
-            <div className="finance-sheet-summary-with-help" onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) setRealClosingHelpOpen(false);
-            }}>
-              <small>
-                {tt("realized", "Fechamento real")}
-                <button
-                  className="finance-summary-help"
-                  type="button"
-                  aria-label={tt("realizedHelpLabel", "Entenda a diferença entre fechamento real e previsto")}
-                  aria-expanded={realClosingHelpOpen}
-                  aria-controls="projection-real-closing-help"
-                  onClick={() => setRealClosingHelpOpen((current) => !current)}
-                >
-                  <CircleHelp size={14} />
-                </button>
-              </small>
-              <strong>{formatMoney(summary?.transactions_projected_closing, language)}</strong>
-              {realClosingHelpOpen && (
-                <div className="finance-summary-help-popover" id="projection-real-closing-help" role="note">
-                  <strong>{tt("realizedHelpTitle", "Por que os valores são diferentes?")}</strong>
-                  <p>
-                    <b>{tt("realizedHelpRealLabel", "Fechamento real")}</b>
-                    {tt("realizedHelpReal", "É o saldo final calculado com as movimentações já cadastradas para o mês, como ganhos, gastos e ajustes de saldo.")}
-                  </p>
-                  <p>
-                    <b>{tt("realizedHelpProjectedLabel", "Fechamento previsto")}</b>
-                    {tt("realizedHelpProjected", "Parte do fechamento real, soma os valores que você ainda espera receber e desconta cobranças previstas que ainda podem entrar nas faturas.")}
-                  </p>
-                  <small>{tt("realizedHelpDifference", "A diferença existe porque esses recebimentos e cobranças ainda são expectativas. Quando forem registrados de fato, passam a fazer parte do fechamento real.")}</small>
-                </div>
-              )}
-            </div>
+            <div><small>{tt("realized", "Fechamento real")}</small><strong>{formatMoney(summary?.transactions_projected_closing, language)}</strong></div>
           </div>
 
           <div className="finance-sheet-body">
