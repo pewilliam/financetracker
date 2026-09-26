@@ -86,6 +86,8 @@ class MonthCardSummaryOut(APIModel):
     transaction_count: int = 0
     planned_receivables_total: Decimal = Decimal("0.00")
     prior_planned_receivables_total: Decimal = Decimal("0.00")
+    projected_closing: Decimal = Decimal("0.00")
+    open_invoices_projected_total: Decimal = Decimal("0.00")
 
 
 class OpeningBalancePayload(APIModel):

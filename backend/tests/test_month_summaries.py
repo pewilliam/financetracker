@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import MonthlyBalance, Receivable, ReceivablePerson, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
+from app.models import CardSubscription, CreditCard, MonthlyBalance, Receivable, ReceivablePerson, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.routers.months import _build_month_summary, _summarize_month_data, get_month, get_summary_series, list_month_summaries
 
 
@@ -264,6 +264,50 @@ class MonthSummaryPerformanceTests(unittest.TestCase):
         self.assertEqual(october.planned_receivables_total, Decimal("105.00"))
         self.assertEqual(october.opening_balance, Decimal("1500.00"))
         self.assertEqual(october.closing_balance, Decimal("1400.00"))
+
+    def test_month_cards_use_the_same_invoice_projection_as_month_summary(self):
+        card = CreditCard(
+            user_id=self.user.id,
+            name="Nubank",
+            color="#820AD1",
+            due_day=5,
+            closing_day=25,
+            credit_limit=Decimal("1000.00"),
+            active=True,
+        )
+        self.db.add(card)
+        self.db.flush()
+        self.db.add_all([
+            CardSubscription(
+                user_id=self.user.id,
+                credit_card_id=card.id,
+                description="Streaming",
+                amount=Decimal("55.00"),
+                charge_day=28,
+                start_date=date(2026, 9, 28),
+                billing_interval_months=1,
+                term_kind="indefinite",
+                active=True,
+            ),
+            Transaction(
+                user_id=self.user.id,
+                date=date(2026, 11, 2),
+                type="income",
+                amount=Decimal("200.00"),
+                description="Salário",
+            ),
+        ])
+        self.db.commit()
+        current_user = type("CurrentUser", (), {"id": self.user.id})()
+
+        with patch("app.routers.months.app_today", return_value=date(2026, 9, 25)):
+            cards = {(item.year, item.month): item for item in list_month_summaries(self.db, current_user)}
+            month_summary = _build_month_summary(self.db, 2026, 11, self.user.id)
+
+        november = cards[(2026, 11)]
+        self.assertEqual(november.open_invoices_projected_total, Decimal("55.00"))
+        self.assertEqual(november.projected_closing, Decimal("145.00"))
+        self.assertEqual(november.projected_closing, month_summary.projected_closing)
 
 
 if __name__ == "__main__":

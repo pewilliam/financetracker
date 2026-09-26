@@ -66,14 +66,14 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
           <div className="finance-sheet-summary finance-sheet-summary--three">
             <div><small>{tt("income", "Ganhos confirmados")}</small><strong className="finance-positive">{formatMoney(summary?.total_income, language)}</strong></div>
             <div><small>{tt("expenses", "Gastos confirmados")}</small><strong className="finance-negative">{formatMoney(summary?.total_expenses, language)}</strong></div>
-            <div><small>{tt("realized", "Fechamento real")}</small><strong>{formatMoney(summary?.transactions_projected_closing, language)}</strong></div>
+            <div><small>{tt("realized", "Fechamento pelos lançamentos")}</small><strong>{formatMoney(summary?.transactions_projected_closing, language)}</strong></div>
           </div>
 
           <div className="finance-sheet-body">
             <ProjectionGroup
             color="var(--income)"
             icon={<HandCoins size={17} />}
-            label={tt("receivables", "Recebíveis previstos")}
+            label={tt("receivables", "Valores a receber")}
             hint={receivables.length ? countHint(receivables.length, "recebível", "recebíveis", "receivable", "receivables") : tt("emptyReceivables", "Nenhum recebível previsto neste fechamento.")}
             amount={receivableTotal}
             positive
@@ -96,7 +96,7 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
             <ProjectionGroup
             color="var(--expense)"
             icon={<CreditCard size={17} />}
-            label={tt("invoices", "Faturas abertas (previsto)")}
+            label={tt("invoices", "Faturas previstas")}
             hint={invoices.length ? countHint(invoices.length, "fatura", "faturas", "invoice", "invoices") : tt("emptyInvoices", "Nenhuma fatura aberta com valor previsto neste fechamento.")}
             amount={invoiceTotal}
             positive={false}
@@ -110,8 +110,8 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
                 <span className="finance-detail-copy">
                   <strong>{item.card_name}</strong>
                   <small>
-                    {tt("currentTotal", "Total atual")} {formatMoney(item.current_total, language)} <em>·</em>
-                    {tt("projectedTotal", "Previsto")} {formatMoney(item.projected_total, language)} <em>·</em>
+                    {tt("currentTotal", "Fatura hoje")} {formatMoney(item.current_total, language)} <em>·</em>
+                    {tt("projectedTotal", "Com previsão")} {formatMoney(item.projected_total, language)} <em>·</em>
                     <CalendarDays size={12} /> {formatDateShort(item.payment_date, language)}
                   </small>
                 </span>

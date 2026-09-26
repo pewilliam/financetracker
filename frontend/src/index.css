@@ -2183,6 +2183,16 @@ button.day-balance:focus-visible {
 .month-card.featured .month-card-balance.featured-balance-triple {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+button.month-balance-metric {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  appearance: none;
+}
 .month-balance-metric {
   min-width: 0;
   display: grid;
@@ -2219,6 +2229,25 @@ button.day-balance:focus-visible {
   color: color-mix(in srgb, var(--text) 70%, var(--muted));
   font-size: clamp(16px, 1.7vw, 22px);
 }
+.month-balance-metric.projected.is-clickable {
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.month-balance-metric.projected.is-clickable > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.month-balance-metric.projected.is-clickable > span:first-child svg { flex: 0 0 auto; }
+.month-balance-metric.projected.is-clickable:hover {
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+.month-balance-metric.projected.is-clickable:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 72%, white);
+  outline-offset: 4px;
+}
+.month-balance-metric.projected.is-clickable:disabled { cursor: wait; opacity: .72; }
 .month-receivable-note {
   grid-column: 1 / -1;
   display: flex;
@@ -2228,11 +2257,26 @@ button.day-balance:focus-visible {
   padding-top: 8px;
   border-top: 1px solid color-mix(in srgb, var(--planned-text) 32%, transparent);
   color: var(--planned-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 .month-receivable-note svg { flex: 0 0 auto; }
+.month-projection-note { flex-wrap: wrap; }
+.month-projection-note > span.positive { color: var(--planned-text); }
+.month-projection-note > span.negative { color: var(--expense); }
+.month-projection-note > i {
+  color: var(--muted);
+  font-style: normal;
+}
+.month-projection-note.negative {
+  border-top-color: color-mix(in srgb, var(--expense) 34%, transparent);
+  color: var(--expense);
+}
+.month-projection-note.mixed {
+  border-top-color: color-mix(in srgb, var(--muted) 28%, transparent);
+  color: var(--muted);
+}
 .month-card:not(.featured) .month-card-balance.featured-balance {
   column-gap: 16px;
 }

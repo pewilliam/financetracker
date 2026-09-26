@@ -322,6 +322,10 @@ export function patchMonthCardsForTransaction(cards, transaction) {
     if (key === txKey) {
       const opening = Number(card.opening_balance || 0);
       const closing = roundMoney(Number(card.closing_balance || 0) + delta);
+      const projectedClosing = roundMoney(Number(
+        card.projected_closing
+          ?? (Number(card.closing_balance || 0) + Number(card.planned_receivables_total || 0) - Number(card.open_invoices_projected_total || 0))
+      ) + delta);
       let current = Number(card.current_balance || 0);
       if (key < todayKey || (key === todayKey && date <= today)) current += delta;
       return {
@@ -329,6 +333,7 @@ export function patchMonthCardsForTransaction(cards, transaction) {
         total_income: roundMoney(Number(card.total_income || 0) + (transaction.type === "income" ? amount : 0)),
         total_expenses: roundMoney(Number(card.total_expenses || 0) + (transaction.type === "expense" ? amount : 0)),
         closing_balance: closing,
+        projected_closing: projectedClosing,
         current_balance: roundMoney(current),
         transaction_count: Number(card.transaction_count || 0) + 1,
         difference_pct: opening ? roundMoney(((closing - opening) / Math.abs(opening)) * 100) : 0,
@@ -336,10 +341,15 @@ export function patchMonthCardsForTransaction(cards, transaction) {
     }
     const opening = roundMoney(Number(card.opening_balance || 0) + delta);
     const closing = roundMoney(Number(card.closing_balance || 0) + delta);
+    const projectedClosing = roundMoney(Number(
+      card.projected_closing
+        ?? (Number(card.closing_balance || 0) + Number(card.planned_receivables_total || 0) - Number(card.open_invoices_projected_total || 0))
+    ) + delta);
     return {
       ...card,
       opening_balance: opening,
       closing_balance: closing,
+      projected_closing: projectedClosing,
       current_balance: roundMoney(Number(card.current_balance || 0) + delta),
       difference_pct: opening ? roundMoney(((closing - opening) / Math.abs(opening)) * 100) : card.difference_pct,
     };

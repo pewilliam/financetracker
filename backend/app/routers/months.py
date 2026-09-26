@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, noload, selectinload
 from app.database import get_db
-from app.models import Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, CreditCard, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
+from app.models import CardSubscription, Category, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, CreditCard, MonthlyBalance, Receivable, Transaction, User, Wallet, WalletAdjustment, WalletTransfer
 from app.schemas.months import (
     CategoryBreakdownOut,
     CategoryExpenseOut,
@@ -278,6 +278,82 @@ def _card_planned_amounts(
         elif due_date <= end:
             in_month += remaining
     return prior, in_month
+
+
+def _card_invoice_projection_totals(
+    db: Session,
+    user_id: int,
+    periods: list[tuple[int, int]],
+    current_date: date,
+) -> dict[tuple[int, int], Decimal]:
+    """Return the cumulative invoice forecast used by the monthly summary for each card period."""
+    totals = {period: Decimal("0.00") for period in periods}
+    active_periods = [
+        period
+        for period in periods
+        if _month_bounds(*period)[1] >= current_date
+    ]
+    if not active_periods:
+        return totals
+
+    has_subscriptions = db.query(CardSubscription.id).filter(
+        CardSubscription.user_id == user_id,
+        CardSubscription.active.is_(True),
+    ).first()
+    if not has_subscriptions:
+        return totals
+
+    invoices = (
+        db.query(Invoice)
+        .options(selectinload(Invoice.card))
+        .filter(Invoice.user_id == user_id, Invoice.paid.is_(False))
+        .all()
+    )
+    presented = apply_subscription_projections(
+        db,
+        user_id,
+        invoices,
+        include_virtual=True,
+        today=current_date,
+    )
+    projected_payments: list[tuple[date, Decimal]] = []
+    for invoice in presented:
+        if getattr(invoice, "paid", False):
+            continue
+        projected_amount = _to_decimal(getattr(invoice, "projected_amount", 0))
+        if projected_amount <= 0:
+            continue
+        payment_date = getattr(invoice, "planned_payment_date", None) or getattr(invoice, "payment_date", None)
+        if payment_date is None:
+            payment_date = card_payment_date(invoice.due_date, getattr(invoice, "card", None))
+        projected_payments.append((payment_date, projected_amount))
+
+    for period in active_periods:
+        end = _month_bounds(*period)[1]
+        totals[period] = sum(
+            (amount for payment_date, amount in projected_payments if payment_date <= end),
+            Decimal("0.00"),
+        )
+    return totals
+
+
+def _apply_card_closing_projections(
+    db: Session,
+    user_id: int,
+    summaries: list[MonthCardSummaryOut],
+    current_date: date,
+) -> list[MonthCardSummaryOut]:
+    invoice_totals = _card_invoice_projection_totals(
+        db,
+        user_id,
+        [(item.year, item.month) for item in summaries],
+        current_date,
+    )
+    for item in summaries:
+        invoice_total = invoice_totals[(item.year, item.month)]
+        item.open_invoices_projected_total = invoice_total
+        item.projected_closing = item.closing_balance + item.planned_receivables_total - invoice_total
+    return summaries
 
 
 def _transaction_link_options(include_links: bool):
@@ -1069,7 +1145,7 @@ def list_month_summaries(
                 prior_planned_receivables_total=prior_planned,
                 planned_receivables_total=prior_planned + in_month_planned,
             ))
-        return summaries
+        return _apply_card_closing_projections(db, current_user.id, summaries, current_date)
     if not transaction_rows:
         return []
 
@@ -1153,7 +1229,7 @@ def list_month_summaries(
             )
         )
 
-    return summaries
+    return _apply_card_closing_projections(db, current_user.id, summaries, current_date)
 
 
 @router.put("/{year}/{month}/opening-balance", response_model=OpeningBalancePayload)

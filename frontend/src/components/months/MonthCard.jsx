@@ -1,10 +1,10 @@
-import { ArrowRight, CalendarPlus, CircleDollarSign, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, CalendarPlus, ChevronRight, CircleDollarSign, Loader2, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useI18n } from "../../i18n/index.ts";
 import { formatMoney } from "../../utils/format.js";
 import AnimatedMoney from "../common/AnimatedMoney.jsx";
 import { formatTransactionCount, getMonthPeriod } from "../../app/helpers.js";
 
-export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featured = false }) {
+export default function MonthCard({ item, onView, onQuickAdd, onOpenProjection, projectionLoading = false, tourTarget, featured = false }) {
   const { language } = useI18n();
   const period = getMonthPeriod(item);
   const isCurrent = period === "current";
@@ -13,7 +13,11 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
   const priorPlanned = isPast ? 0 : Number(item.prior_planned_receivables_total || 0);
   const plannedReceivables = isPast ? 0 : Number(item.planned_receivables_total || 0);
   const inMonthReceivables = Math.max(0, plannedReceivables - priorPlanned);
-  const projectedClosing = Number(item.closing_balance || 0) + plannedReceivables;
+  const projectedClosing = Number(
+    item.projected_closing
+      ?? (Number(item.closing_balance || 0) + plannedReceivables - Number(item.open_invoices_projected_total || 0))
+  );
+  const invoiceProjection = isPast ? 0 : Number(item.open_invoices_projected_total || 0);
   const openingValue = Number(item.opening_balance || 0) + (isFuture ? priorPlanned : 0);
   const incomeValue = Number(item.total_income || 0) + (isFuture ? inMonthReceivables : 0);
   const expenseValue = Number(item.total_expenses || 0);
@@ -39,7 +43,9 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
     quickAdd: "Add entry",
     view: "Open month",
     flow: "Month cash flow",
-    receivables: `Includes ${formatMoney(plannedReceivables, language)} in receivables`
+    receivablesImpact: `To receive: +${formatMoney(plannedReceivables, language)}`,
+    invoicesImpact: `Projected invoices: −${formatMoney(invoiceProjection, language)}`,
+    viewProjection: "View projection details"
   } : {
     expenses: isFuture ? "Gastos previstos" : "Gastos",
     income: isFuture ? "Ganhos previstos" : "Ganhos",
@@ -54,12 +60,36 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
     quickAdd: "Adicionar",
     view: "Abrir mês",
     flow: "Fluxo do mês",
-    receivables: `Inclui ${formatMoney(plannedReceivables, language)} em recebíveis`
+    receivablesImpact: `A receber: +${formatMoney(plannedReceivables, language)}`,
+    invoicesImpact: `Faturas previstas: −${formatMoney(invoiceProjection, language)}`,
+    viewProjection: "Ver detalhes da projeção"
   };
 
-  const receivableNote = plannedReceivables > 0 ? (
-    <p className="month-receivable-note"><CircleDollarSign size={13} /> {labelText.receivables}</p>
+  const hasReceivables = plannedReceivables > 0;
+  const hasInvoiceProjection = invoiceProjection > 0;
+  const projectionNote = !isPast && (hasReceivables || hasInvoiceProjection) ? (
+    <p className={`month-receivable-note month-projection-note ${hasReceivables && hasInvoiceProjection ? "mixed" : hasInvoiceProjection ? "negative" : "positive"}`}>
+      <CircleDollarSign size={14} />
+      {hasReceivables && <span className="positive">{labelText.receivablesImpact}</span>}
+      {hasReceivables && hasInvoiceProjection && <i aria-hidden="true">·</i>}
+      {hasInvoiceProjection && <span className="negative">{labelText.invoicesImpact}</span>}
+    </p>
   ) : null;
+
+  const projectedMetric = (
+    <button
+      className="month-balance-metric projected is-clickable"
+      type="button"
+      onClick={onOpenProjection}
+      disabled={projectionLoading}
+      aria-busy={projectionLoading}
+      aria-label={`${labelText.viewProjection}: ${normalizedMonthName}, ${formatMoney(projectedClosing, language)}`}
+      title={labelText.viewProjection}
+    >
+      <span>{labelText.projectedClosing}{projectionLoading ? <Loader2 className="spin" size={12} /> : <ChevronRight size={12} />}</span>
+      <AnimatedMoney value={projectedClosing} />
+    </button>
+  );
 
   const balanceBlock = featured && isCurrent ? (
     <div className="month-card-balance featured-balance featured-balance-triple">
@@ -71,11 +101,8 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
         <span>{labelText.current}</span>
         <AnimatedMoney value={item.current_balance} />
       </div>
-      <div className="month-balance-metric projected">
-        <span>{labelText.projectedClosing}</span>
-        <AnimatedMoney value={projectedClosing} />
-      </div>
-      {receivableNote}
+      {projectedMetric}
+      {projectionNote}
     </div>
   ) : isFuture ? (
     <div className="month-card-balance featured-balance">
@@ -83,11 +110,8 @@ export default function MonthCard({ item, onView, onQuickAdd, tourTarget, featur
         <span>{labelText.startedWith}</span>
         <AnimatedMoney value={openingValue} />
       </div>
-      <div className="month-balance-metric projected">
-        <span>{labelText.projectedClosing}</span>
-        <AnimatedMoney value={projectedClosing} />
-      </div>
-      {receivableNote}
+      {projectedMetric}
+      {projectionNote}
     </div>
   ) : isPast ? (
     <div className="month-card-balance featured-balance">

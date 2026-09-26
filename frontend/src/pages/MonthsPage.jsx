@@ -1,12 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronRight, CircleHelp, Grid2X2, List, Plus, X } from "lucide-react";
+import { toast } from "react-hot-toast";
 import MonthlyTable from "../components/MonthlyTable.jsx";
 import MonthCard from "../components/months/MonthCard.jsx";
+import ProjectionBreakdownModal from "../modals/ProjectionBreakdownModal.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney } from "../utils/format.js";
 import { getMonthPeriod, quickAddDate, todayIsoDate } from "../app/helpers.js";
 import { MONTHS_VIEW_MODE_KEY } from "../app/constants.js";
+import { getMonthSummary } from "../api/api.js";
 
 const MONTHS_TUTORIAL_VERSION = 1;
 const TODAY_JUMP_KEY = "months-jump-to-today";
@@ -198,6 +201,9 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   const [todayJump, setTodayJump] = useState(0);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
+  const [projectionSummary, setProjectionSummary] = useState(null);
+  const [projectionLoadingKey, setProjectionLoadingKey] = useState(null);
+  const projectionRequestRef = useRef(0);
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem(MONTHS_VIEW_MODE_KEY);
     return saved === "cards" || saved === "table" ? saved : "table";
@@ -283,6 +289,44 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
     setMonth(target.month);
     changeView("table");
   };
+
+  const openCardProjection = async (target) => {
+    const key = `${target.year}-${target.month}`;
+    const requestId = ++projectionRequestRef.current;
+    setProjectionLoadingKey(key);
+
+    if (Number(summary?.year) === Number(target.year) && Number(summary?.month) === Number(target.month)) {
+      setProjectionSummary(summary);
+      setProjectionLoadingKey(null);
+      onOverlayChange?.(true);
+      return;
+    }
+
+    try {
+      const payload = await getMonthSummary(target.year, target.month);
+      if (requestId !== projectionRequestRef.current) return;
+      setProjectionSummary(payload);
+      onOverlayChange?.(true);
+    } catch {
+      if (requestId === projectionRequestRef.current) {
+        toast.error(language === "en-US" ? "Unable to load projection details." : "Não foi possível carregar os detalhes da projeção.");
+      }
+    } finally {
+      if (requestId === projectionRequestRef.current) setProjectionLoadingKey(null);
+    }
+  };
+
+  const closeCardProjection = () => {
+    projectionRequestRef.current += 1;
+    setProjectionSummary(null);
+    setProjectionLoadingKey(null);
+    onOverlayChange?.(false);
+  };
+
+  useEffect(() => () => {
+    projectionRequestRef.current += 1;
+    onOverlayChange?.(false);
+  }, [onOverlayChange]);
 
   useEffect(() => {
     if (viewMode !== "table" || !pendingTableScroll) return undefined;
@@ -375,7 +419,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
             const isExpanded = expandedYears[groupYear];
             const yearResult = yearSummaries[groupYear];
             const resultClass = yearResult > 0 ? "money-income" : yearResult < 0 ? "money-expense" : "money-neutral";
-            const includesProjections = items.some((item) => getMonthPeriod(item) === "future" || (getMonthPeriod(item) !== "past" && Number(item.planned_receivables_total || 0) > 0));
+            const includesProjections = items.some((item) => getMonthPeriod(item) === "future" || (getMonthPeriod(item) !== "past" && (Number(item.planned_receivables_total || 0) > 0 || Number(item.open_invoices_projected_total || 0) > 0)));
             const currentItems = items.filter((item) => getMonthPeriod(item) === "current");
             const previousItems = items.filter((item) => getMonthPeriod(item) === "past");
             const futureItems = items.filter((item) => getMonthPeriod(item) === "future");
@@ -389,6 +433,8 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
                 featured={featured}
                 onView={() => openMonthTable(item)}
                 onQuickAdd={() => openAddForm(quickAddDate(item.year, item.month))}
+                onOpenProjection={() => openCardProjection(item)}
+                projectionLoading={projectionLoadingKey === `${item.year}-${item.month}`}
                 tourTarget={groupYear === tutorialYear && item === tutorialItem ? "month-card" : undefined}
               />
             );
@@ -468,6 +514,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
       <button className="month-new-fab" data-months-tour="new" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")}>
         <Plus size={24} />
       </button>
+      {projectionSummary && <ProjectionBreakdownModal summary={projectionSummary} onClose={closeCardProjection} />}
       <MonthsTutorial content={tutorialContent} layoutKey={viewMode} open={tutorialOpen} stepIndex={tutorialStep} onBack={() => setTutorialStep((current) => Math.max(0, current - 1))} onClose={closeTutorial} onNext={advanceTutorial} />
     </section>
   );
