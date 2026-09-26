@@ -62,14 +62,15 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
           <button ref={closeButtonRef} className="finance-sheet-close" type="button" onClick={onClose} aria-label={tt("close", "Fechar")}><X size={18} /></button>
         </header>
 
-        <div className="finance-sheet-summary finance-sheet-summary--three">
-          <div><small>{tt("income", "Ganhos confirmados")}</small><strong className="finance-positive">{formatMoney(summary?.total_income, language)}</strong></div>
-          <div><small>{tt("expenses", "Gastos confirmados")}</small><strong className="finance-negative">{formatMoney(summary?.total_expenses, language)}</strong></div>
-          <div><small>{tt("realized", "Fechamento real")}</small><strong>{formatMoney(summary?.transactions_projected_closing, language)}</strong></div>
-        </div>
+        <div className="finance-sheet-scroll">
+          <div className="finance-sheet-summary finance-sheet-summary--three">
+            <div><small>{tt("income", "Ganhos confirmados")}</small><strong className="finance-positive">{formatMoney(summary?.total_income, language)}</strong></div>
+            <div><small>{tt("expenses", "Gastos confirmados")}</small><strong className="finance-negative">{formatMoney(summary?.total_expenses, language)}</strong></div>
+            <div><small>{tt("realized", "Fechamento real")}</small><strong>{formatMoney(summary?.transactions_projected_closing, language)}</strong></div>
+          </div>
 
-        <div className="finance-sheet-body">
-          <ProjectionGroup
+          <div className="finance-sheet-body">
+            <ProjectionGroup
             color="var(--income)"
             icon={<HandCoins size={17} />}
             label={tt("receivables", "Recebíveis previstos")}
@@ -90,9 +91,9 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
                 <strong className="finance-detail-amount finance-positive">{formatMoney(item.amount, language)}</strong>
               </article>
             )) : <p className="finance-accordion-empty">{tt("emptyReceivables", "Nenhum recebível previsto neste fechamento.")}</p>}
-          </ProjectionGroup>
+            </ProjectionGroup>
 
-          <ProjectionGroup
+            <ProjectionGroup
             color="var(--expense)"
             icon={<CreditCard size={17} />}
             label={tt("invoices", "Faturas abertas (previsto)")}
@@ -117,13 +118,14 @@ export default function ProjectionBreakdownModal({ summary, onClose }) {
                 <strong className="finance-detail-amount finance-negative">{formatMoney(item.difference, language)}</strong>
               </article>
             )) : <p className="finance-accordion-empty">{tt("emptyInvoices", "Nenhuma fatura aberta com valor previsto neste fechamento.")}</p>}
-          </ProjectionGroup>
-        </div>
+            </ProjectionGroup>
+          </div>
 
-        <footer className="finance-sheet-total">
-          <span>{tt("total", "Fechamento previsto")}</span>
-          <strong>{formatMoney(summary?.projected_closing, language)}</strong>
-        </footer>
+          <footer className="finance-sheet-total">
+            <span>{tt("total", "Fechamento previsto")}</span>
+            <strong>{formatMoney(summary?.projected_closing, language)}</strong>
+          </footer>
+        </div>
       </section>
     </div>,
     document.body,

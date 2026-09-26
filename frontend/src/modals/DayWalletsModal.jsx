@@ -97,55 +97,57 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
           </div>
         )}
 
-        <div className="finance-sheet-body">
-          {loading ? (
-            <div className="finance-sheet-status"><Loader2 className="spin" size={22} /><span>{tt("monthlyTable.dayWalletsLoading", "Carregando saldos…")}</span></div>
-          ) : error ? (
-            <div className="finance-sheet-status is-error"><AlertTriangle size={22} /><span>{tt("monthlyTable.dayWalletsError", "Não foi possível carregar os saldos das carteiras.")}</span></div>
-          ) : wallets.map((wallet) => {
-            const open = openWalletIds.includes(wallet.wallet_id);
-            const variation = Number(wallet.variation);
-            return (
-              <article className="finance-accordion" style={{ "--finance-accent": wallet.color }} key={wallet.wallet_id}>
-                <button className="finance-accordion-button" type="button" aria-expanded={open} onClick={() => toggleWallet(wallet.wallet_id)}>
-                  <i className="finance-accordion-icon"><Wallet size={17} /></i>
-                  <span className="finance-accordion-copy">
-                    <strong>{wallet.wallet_name}</strong>
-                    <small>
-                      {formatMoney(wallet.balance_before, language)} <em>→</em> {formatMoney(wallet.balance, language)} <em>·</em>{" "}
-                      {(wallet.reasons || []).map((reason) => {
-                        const archived = (wallet.movements || []).some((movement) => movement.kind === reason && movement.counterpart_archived);
-                        return reasonLabel(reason, archived);
-                      }).join(" · ")}
-                    </small>
-                  </span>
-                  <strong className={`finance-accordion-amount${variation > 0 ? " finance-positive" : variation < 0 ? " finance-negative" : ""}`}>{formatMoney(wallet.variation, language)}</strong>
-                  <ChevronDown className="finance-accordion-chevron" size={16} />
-                </button>
+        <div className="finance-sheet-scroll">
+          <div className="finance-sheet-body">
+            {loading ? (
+              <div className="finance-sheet-status"><Loader2 className="spin" size={22} /><span>{tt("monthlyTable.dayWalletsLoading", "Carregando saldos…")}</span></div>
+            ) : error ? (
+              <div className="finance-sheet-status is-error"><AlertTriangle size={22} /><span>{tt("monthlyTable.dayWalletsError", "Não foi possível carregar os saldos das carteiras.")}</span></div>
+            ) : wallets.map((wallet) => {
+              const open = openWalletIds.includes(wallet.wallet_id);
+              const variation = Number(wallet.variation);
+              return (
+                <article className="finance-accordion" style={{ "--finance-accent": wallet.color }} key={wallet.wallet_id}>
+                  <button className="finance-accordion-button" type="button" aria-expanded={open} onClick={() => toggleWallet(wallet.wallet_id)}>
+                    <i className="finance-accordion-icon"><Wallet size={17} /></i>
+                    <span className="finance-accordion-copy">
+                      <strong>{wallet.wallet_name}</strong>
+                      <small>
+                        {formatMoney(wallet.balance_before, language)} <em>→</em> {formatMoney(wallet.balance, language)} <em>·</em>{" "}
+                        {(wallet.reasons || []).map((reason) => {
+                          const archived = (wallet.movements || []).some((movement) => movement.kind === reason && movement.counterpart_archived);
+                          return reasonLabel(reason, archived);
+                        }).join(" · ")}
+                      </small>
+                    </span>
+                    <strong className={`finance-accordion-amount${variation > 0 ? " finance-positive" : variation < 0 ? " finance-negative" : ""}`}>{formatMoney(wallet.variation, language)}</strong>
+                    <ChevronDown className="finance-accordion-chevron" size={16} />
+                  </button>
 
-                {open && (
-                  <div className="finance-accordion-panel">
-                    {wallet.movements?.length ? wallet.movements.map((movement, index) => {
-                      const expense = movement.kind === "expense" || Number(movement.amount) < 0;
-                      return (
-                        <div className={`finance-detail-row${expense ? " is-expense" : ""}`} key={`${movement.kind}-${index}`}>
-                          <i className="finance-detail-icon"><Wallet size={16} /></i>
-                          <span className="finance-detail-copy">
-                            <strong>{movement.description || reasonLabel(movement.kind, movement.counterpart_archived)}</strong>
-                            <small>
-                              {formatDateShort(movement.date, language)} <em>·</em> {reasonLabel(movement.kind, movement.counterpart_archived)}
-                              {movement.counterpart_wallet_name ? ` · ${movement.counterpart_wallet_name}` : ""}
-                            </small>
-                          </span>
-                          <strong className={`finance-detail-amount ${expense ? "finance-negative" : "finance-positive"}`}>{formatMoney(movement.amount, language)}</strong>
-                        </div>
-                      );
-                    }) : <p className="finance-accordion-empty">{tt("monthlyTable.reasonUnchanged", "Sem alteração")}</p>}
-                  </div>
-                )}
-              </article>
-            );
-          })}
+                  {open && (
+                    <div className="finance-accordion-panel">
+                      {wallet.movements?.length ? wallet.movements.map((movement, index) => {
+                        const expense = movement.kind === "expense" || Number(movement.amount) < 0;
+                        return (
+                          <div className={`finance-detail-row${expense ? " is-expense" : ""}`} key={`${movement.kind}-${index}`}>
+                            <i className="finance-detail-icon"><Wallet size={16} /></i>
+                            <span className="finance-detail-copy">
+                              <strong>{movement.description || reasonLabel(movement.kind, movement.counterpart_archived)}</strong>
+                              <small>
+                                {formatDateShort(movement.date, language)} <em>·</em> {reasonLabel(movement.kind, movement.counterpart_archived)}
+                                {movement.counterpart_wallet_name ? ` · ${movement.counterpart_wallet_name}` : ""}
+                              </small>
+                            </span>
+                            <strong className={`finance-detail-amount ${expense ? "finance-negative" : "finance-positive"}`}>{formatMoney(movement.amount, language)}</strong>
+                          </div>
+                        );
+                      }) : <p className="finance-accordion-empty">{tt("monthlyTable.reasonUnchanged", "Sem alteração")}</p>}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
         </div>
       </section>
     </div>,

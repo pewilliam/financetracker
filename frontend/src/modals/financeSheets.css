@@ -14,13 +14,9 @@
   inset: 0;
   z-index: 75;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .finance-sheet-backdrop {
@@ -41,8 +37,8 @@
   flex-direction: column;
   flex: 0 0 auto;
   width: min(720px, 100%);
-  max-height: none;
-  margin-top: auto;
+  max-height: calc(100dvh - 8px);
+  margin: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-bottom: 0;
@@ -140,6 +136,32 @@
   border-bottom: 1px solid var(--border);
   padding: 13px 16px;
   background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+
+.finance-sheet-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: calc(100dvh - 92px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.finance-sheet--wallet .finance-sheet-scroll {
+  max-height: calc(100dvh - 158px);
+}
+
+.finance-sheet-scroll::-webkit-scrollbar { width: 7px; }
+.finance-sheet-scroll::-webkit-scrollbar-track { background: transparent; }
+.finance-sheet-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  background-clip: padding-box;
 }
 
 .finance-sheet-summary--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -385,11 +407,14 @@
   }
 
   .finance-sheet {
-    margin-block: auto;
+    max-height: calc(100dvh - 40px);
     border-bottom: 1px solid var(--border);
     border-radius: 18px;
     box-shadow: 0 24px 70px rgba(0, 0, 0, .32);
   }
+
+  .finance-sheet-scroll { max-height: calc(100dvh - 120px); }
+  .finance-sheet--wallet .finance-sheet-scroll { max-height: calc(100dvh - 185px); }
 
   .finance-sheet-grabber { display: none; }
 
