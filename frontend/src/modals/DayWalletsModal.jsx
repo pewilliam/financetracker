@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronDown, Loader2, Wallet, X } from "lucide-react";
 import { getDayWallets } from "../api/api.js";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
+import "./financeSheets.css";
 
 const REASON_KEYS = {
   income: ["monthlyTable.reasonIncome", "Ganho"],
@@ -63,8 +64,7 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
   const reasonLabel = (kind, archived = false) => {
     const [key, pt] = REASON_KEYS[kind] || REASON_KEYS.unchanged;
     const label = tt(key, pt);
-    if (!archived) return label;
-    return `${label} · ${tt("monthlyTable.archivedWallet", "carteira arquivada")}`;
+    return archived ? `${label} · ${tt("monthlyTable.archivedWallet", "carteira arquivada")}` : label;
   };
 
   const wallets = detail?.wallets || [];
@@ -77,73 +77,75 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
   };
 
   return createPortal(
-    <div className="modal-layer categories-detail-layer">
-      <button className="modal-backdrop" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close details" : "Fechar detalhes"} />
-      <section className="modal-card categories-detail-modal day-wallets-modal" style={{ "--category-color": "var(--primary)" }} role="dialog" aria-modal="true" aria-labelledby="day-wallets-title">
-        <header className="categories-detail-header">
-          <i><Wallet size={20} /></i>
-          <div>
-            <p className="eyebrow">{formatDateShort(date, language)}</p>
-            <h2 id="day-wallets-title">{tt("monthlyTable.dayWalletsTitle", "Saldo por carteira")}</h2>
+    <div className="finance-sheet-layer">
+      <button className="finance-sheet-backdrop" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close details" : "Fechar detalhes"} />
+      <section className="finance-sheet finance-sheet--wallet" role="dialog" aria-modal="true" aria-labelledby="wallet-sheet-title">
+        <div className="finance-sheet-grabber" aria-hidden="true" />
+        <header className="finance-sheet-header">
+          <i className="finance-sheet-heading-icon"><Wallet size={20} /></i>
+          <div className="finance-sheet-heading">
+            <small>{formatDateShort(date, language)}</small>
+            <h2 id="wallet-sheet-title">{tt("monthlyTable.dayWalletsTitle", "Saldo por carteira")}</h2>
           </div>
-          <button ref={closeButtonRef} className="icon-btn" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close" : "Fechar"}><X size={18} /></button>
+          <button ref={closeButtonRef} className="finance-sheet-close" type="button" onClick={onClose} aria-label={language === "en-US" ? "Close" : "Fechar"}><X size={18} /></button>
         </header>
 
         {!loading && !error && (
-          <div className="categories-detail-summary day-wallets-summary">
-            <div>
-              <small>{tt("monthlyTable.startOfDay", "Início do dia")}</small>
-              <strong>{formatMoney(openingTotal, language)}</strong>
-            </div>
-            <div>
-              <small>{tt("monthlyTable.endOfDay", "Fim do dia")}</small>
-              <strong>{formatMoney(closingTotal, language)}</strong>
-            </div>
+          <div className="finance-sheet-summary finance-sheet-summary--two">
+            <div><small>{tt("monthlyTable.startOfDay", "Início do dia")}</small><strong>{formatMoney(openingTotal, language)}</strong></div>
+            <div><small>{tt("monthlyTable.endOfDay", "Fim do dia")}</small><strong>{formatMoney(closingTotal, language)}</strong></div>
           </div>
         )}
 
-        <div className="categories-detail-list">
-          {loading ? <div className="categories-detail-status"><Loader2 className="spin" size={22} /><span>{tt("monthlyTable.dayWalletsLoading", "Carregando saldos…")}</span></div> : error ? <div className="categories-detail-status error"><AlertTriangle size={22} /><span>{tt("monthlyTable.dayWalletsError", "Não foi possível carregar os saldos das carteiras.")}</span></div> : wallets.map((wallet) => (
-            <article className="day-wallet-group" style={{ "--category-color": wallet.color }} key={wallet.wallet_id}>
-              <button className="day-wallet-trigger" type="button" aria-expanded={openWalletIds.includes(wallet.wallet_id)} onClick={() => toggleWallet(wallet.wallet_id)}>
-                <i><Wallet size={17} /></i>
-                <span>
-                  <strong>{wallet.wallet_name}</strong>
-                  <small>
-                    {formatMoney(wallet.balance_before, language)}
-                    <em>→</em>
-                    {formatMoney(wallet.balance, language)}
-                    <em>·</em>
-                    {(wallet.reasons || []).map((reason) => {
-                      const archived = (wallet.movements || []).some((movement) => movement.kind === reason && movement.counterpart_archived);
-                      return reasonLabel(reason, archived);
-                    }).join(" · ")}
-                  </small>
-                </span>
-                <strong className={Number(wallet.variation) > 0 ? "income" : Number(wallet.variation) < 0 ? "money-expense" : ""}>{formatMoney(wallet.variation, language)}</strong>
-                <ChevronDown size={16} />
-              </button>
-              {openWalletIds.includes(wallet.wallet_id) && (
-                <div className="day-wallet-panel">
-                  {wallet.movements?.length ? wallet.movements.map((movement, index) => (
-                    <div className={`categories-detail-item${movement.kind === "expense" ? " is-expense" : ""}`} key={`${movement.kind}-${index}`}>
-                      <i><Wallet size={16} /></i>
-                      <span>
-                        <strong>{movement.description || reasonLabel(movement.kind, movement.counterpart_archived)}</strong>
-                        <small>
-                          {formatDateShort(movement.date, language)}
-                          <em>·</em>
-                          {reasonLabel(movement.kind, movement.counterpart_archived)}
-                          {movement.counterpart_wallet_name ? ` · ${movement.counterpart_wallet_name}` : ""}
-                        </small>
-                      </span>
-                      <strong className={movement.kind === "expense" || Number(movement.amount) < 0 ? "money-expense" : "income"}>{formatMoney(movement.amount, language)}</strong>
-                    </div>
-                  )) : <p className="day-wallet-empty">{tt("monthlyTable.reasonUnchanged", "Sem alteração")}</p>}
-                </div>
-              )}
-            </article>
-          ))}
+        <div className="finance-sheet-body">
+          {loading ? (
+            <div className="finance-sheet-status"><Loader2 className="spin" size={22} /><span>{tt("monthlyTable.dayWalletsLoading", "Carregando saldos…")}</span></div>
+          ) : error ? (
+            <div className="finance-sheet-status is-error"><AlertTriangle size={22} /><span>{tt("monthlyTable.dayWalletsError", "Não foi possível carregar os saldos das carteiras.")}</span></div>
+          ) : wallets.map((wallet) => {
+            const open = openWalletIds.includes(wallet.wallet_id);
+            const variation = Number(wallet.variation);
+            return (
+              <article className="finance-accordion" style={{ "--finance-accent": wallet.color }} key={wallet.wallet_id}>
+                <button className="finance-accordion-button" type="button" aria-expanded={open} onClick={() => toggleWallet(wallet.wallet_id)}>
+                  <i className="finance-accordion-icon"><Wallet size={17} /></i>
+                  <span className="finance-accordion-copy">
+                    <strong>{wallet.wallet_name}</strong>
+                    <small>
+                      {formatMoney(wallet.balance_before, language)} <em>→</em> {formatMoney(wallet.balance, language)} <em>·</em>{" "}
+                      {(wallet.reasons || []).map((reason) => {
+                        const archived = (wallet.movements || []).some((movement) => movement.kind === reason && movement.counterpart_archived);
+                        return reasonLabel(reason, archived);
+                      }).join(" · ")}
+                    </small>
+                  </span>
+                  <strong className={`finance-accordion-amount${variation > 0 ? " finance-positive" : variation < 0 ? " finance-negative" : ""}`}>{formatMoney(wallet.variation, language)}</strong>
+                  <ChevronDown className="finance-accordion-chevron" size={16} />
+                </button>
+
+                {open && (
+                  <div className="finance-accordion-panel">
+                    {wallet.movements?.length ? wallet.movements.map((movement, index) => {
+                      const expense = movement.kind === "expense" || Number(movement.amount) < 0;
+                      return (
+                        <div className={`finance-detail-row${expense ? " is-expense" : ""}`} key={`${movement.kind}-${index}`}>
+                          <i className="finance-detail-icon"><Wallet size={16} /></i>
+                          <span className="finance-detail-copy">
+                            <strong>{movement.description || reasonLabel(movement.kind, movement.counterpart_archived)}</strong>
+                            <small>
+                              {formatDateShort(movement.date, language)} <em>·</em> {reasonLabel(movement.kind, movement.counterpart_archived)}
+                              {movement.counterpart_wallet_name ? ` · ${movement.counterpart_wallet_name}` : ""}
+                            </small>
+                          </span>
+                          <strong className={`finance-detail-amount ${expense ? "finance-negative" : "finance-positive"}`}>{formatMoney(movement.amount, language)}</strong>
+                        </div>
+                      );
+                    }) : <p className="finance-accordion-empty">{tt("monthlyTable.reasonUnchanged", "Sem alteração")}</p>}
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>,

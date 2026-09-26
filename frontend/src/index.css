@@ -1293,101 +1293,6 @@ select {
 .categories-detail-item > strong.refund { color: var(--income); }
 .categories-detail-item > strong.income { color: var(--income); }
 .categories-detail-item > strong.money-expense { color: var(--expense); }
-.day-wallets-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.day-wallet-group {
-  border: 1px solid color-mix(in srgb, var(--category-color) 42%, var(--border));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--category-color) 8%, var(--card));
-  overflow: hidden;
-}
-.day-wallet-trigger {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  border: 0;
-  padding: 12px 14px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.day-wallet-trigger > i {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--category-color);
-  color: #fff;
-  font-style: normal;
-}
-.day-wallet-trigger > span { display: grid; gap: 3px; min-width: 0; }
-.day-wallet-trigger > span strong { font-size: 14px; }
-.day-wallet-trigger small { display: flex; flex-wrap: wrap; gap: 5px; color: var(--muted); font-size: 11px; }
-.day-wallet-trigger small em { font-style: normal; }
-.day-wallet-trigger > strong { font-size: 14px; white-space: nowrap; }
-.day-wallet-trigger > strong.income { color: var(--income); }
-.day-wallet-trigger > strong.money-expense { color: var(--expense); }
-.day-wallet-trigger > svg { color: var(--muted); transition: transform .15s ease; }
-.day-wallet-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
-.day-wallet-panel {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  max-height: min(280px, calc(100dvh - 280px));
-  margin: 0 8px 8px;
-  padding: 0 8px 8px 10px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-primary) transparent;
-}
-.day-wallet-panel::-webkit-scrollbar { width: 8px; }
-.day-wallets-modal {
-  height: auto;
-  max-height: min(760px, calc(100dvh - 32px));
-}
-.day-wallets-modal .day-wallet-panel {
-  overflow-y: auto;
-  touch-action: pan-y;
-}
-@media (min-width: 768px) {
-  .day-wallets-modal .categories-detail-list {
-    display: flex;
-    flex-direction: column;
-    max-height: calc(100dvh - 200px);
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-  .day-wallets-modal .day-wallet-group {
-    flex: 0 0 auto;
-    min-height: max-content;
-    overflow: hidden;
-  }
-  .day-wallets-modal .day-wallet-panel {
-    max-height: calc(100dvh - 520px);
-    overflow-y: auto;
-  }
-  .projection-breakdown-modal .day-wallet-group:has([aria-expanded="true"]) {
-    flex: 0 0 auto;
-    min-height: max-content;
-    overflow: hidden;
-  }
-  .projection-breakdown-modal .day-wallet-panel {
-    flex: 0 0 auto;
-    max-height: calc(100dvh - 380px);
-    overflow-y: auto;
-  }
-}
-.day-wallet-panel .categories-detail-item.is-expense > i {
-  background: color-mix(in srgb, var(--expense) 14%, var(--card));
-  color: var(--expense);
-}
-.day-wallet-empty { margin: 0; color: var(--muted); font-size: 12px; }
 .categories-detail-empty { display: grid; place-items: center; gap: 8px; min-height: 150px; border: 1px dashed var(--border); border-radius: 11px; color: var(--muted); font-size: 12px; }
 .categories-detail-status { display: grid; place-items: center; align-content: center; gap: 9px; min-height: 170px; color: var(--muted); font-size: 12px; }
 .categories-detail-status > svg { color: var(--primary); }
@@ -1608,27 +1513,12 @@ select {
   .categories-detail-summary > div { padding: 0 12px; }
   .categories-detail-summary > div:first-child { grid-column: 1 / -1; border-bottom: 1px solid var(--border); padding: 0 0 12px; }
   .categories-detail-summary > div:nth-child(2) { border-left: 0; padding-left: 0; }
-  .day-wallets-summary > div:first-child { grid-column: auto; border-bottom: 0; padding: 0 12px 0 0; }
-  .day-wallets-summary > div:nth-child(2) { padding-left: 12px; }
   .categories-detail-list {
     padding: 13px 16px calc(18px + env(safe-area-inset-bottom, 0px));
     max-height: calc(92dvh - 168px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
-  }
-  .day-wallets-modal {
-    height: auto;
-    max-height: 92dvh;
-    overflow: hidden;
-  }
-  .day-wallets-modal .categories-detail-list {
-    max-height: calc(92dvh - 160px);
-    overflow-y: auto;
-    touch-action: pan-y;
-  }
-  .day-wallets-modal .day-wallet-panel {
-    max-height: calc(92dvh - 220px);
   }
   .categories-detail-item { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; padding: 10px; }
   .categories-detail-item > i { width: 36px; height: 36px; }
@@ -1946,71 +1836,6 @@ button.day-balance:focus-visible {
 .dashboard-stat-card.is-clickable { cursor: pointer; }
 .categories-detail-summary strong.income { color: var(--income); }
 .categories-detail-summary strong.money-expense { color: var(--expense); }
-.projection-breakdown-modal .categories-detail-list {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-  overflow: hidden;
-}
-.projection-breakdown-modal .day-wallet-group {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
-  min-height: 0;
-}
-.projection-breakdown-modal .day-wallet-group:has([aria-expanded="true"]) {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.projection-breakdown-modal .day-wallet-panel {
-  flex: 1 1 auto;
-  max-height: none;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-}
-@media (max-width: 767px) {
-  .projection-breakdown-modal .categories-detail-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-  }
-  .projection-breakdown-modal .categories-detail-summary > div:first-child {
-    grid-column: auto;
-    border-bottom: 0;
-    padding: 0 8px 0 0;
-  }
-  .projection-breakdown-modal .categories-detail-summary > div:nth-child(2) {
-    border-left: 1px solid var(--border);
-    padding-left: 8px;
-  }
-  .projection-breakdown-modal .categories-detail-summary > div { padding-right: 8px; padding-left: 8px; }
-  .projection-breakdown-modal .categories-detail-summary > div:first-child { padding-left: 0; }
-  .projection-breakdown-modal .categories-detail-summary strong { font-size: 15px; }
-}
-.projection-breakdown-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  padding: 16px 22px 18px;
-  background:
-    radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 52%),
-    color-mix(in srgb, var(--card) 94%, var(--primary));
-}
-.projection-breakdown-total span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-}
-.projection-breakdown-total strong { color: var(--primary); font-size: 20px; line-height: 1.2; }
 .view-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .view-toggle {
   display: inline-grid;
@@ -8630,16 +8455,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     border-radius: 16px 16px 0 0;
     overflow-y: auto;
     animation: modal-sheet-up .24s ease both;
-  }
-  .modal-card.day-wallets-modal {
-    height: auto;
-    max-height: 92dvh;
-    overflow: hidden;
-  }
-  .modal-card.projection-breakdown-modal {
-    height: 92dvh;
-    max-height: 92dvh;
-    overflow: hidden;
   }
   .modal-card::before {
     content: "";
