@@ -3688,8 +3688,10 @@ button.day-balance:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
   min-width: 0;
 }
+.invoice-group-meta:empty { display: none; }
 .invoice-group-meta strong {
   color: var(--text);
   font-size: 14px;
@@ -3882,6 +3884,52 @@ button.day-balance:focus-visible {
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+}
+@media (max-width: 767px) {
+  .invoice-groups { gap: 14px; }
+  .invoice-group { gap: 10px; }
+  .invoice-group-toggle {
+    display: grid;
+    grid-template-areas:
+      "head chevron"
+      "meta meta";
+    grid-template-columns: minmax(0, 1fr) 18px;
+    row-gap: 9px;
+    column-gap: 10px;
+    padding: 13px 14px 13px 18px;
+  }
+  .invoice-group-head {
+    grid-area: head;
+    overflow: hidden;
+  }
+  .invoice-group-head h3 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .invoice-group-chevron {
+    grid-area: chevron;
+    align-self: center;
+    justify-self: end;
+  }
+  .invoice-group-meta {
+    grid-area: meta;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    margin-left: 0;
+    gap: 8px;
+  }
+  .invoice-group-meta strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .invoice-group-meta strong.is-projected {
+    justify-self: end;
+    max-width: 100%;
+    text-align: right;
+  }
 }
 .invoice-items-projected-total {
   color: var(--muted);

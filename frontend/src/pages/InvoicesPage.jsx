@@ -252,8 +252,8 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
                       <div className="invoice-group-meta">
                         {group.items.length > 0 && <strong>{formatMoney(groupTotal)}</strong>}
                         {groupProjected > 0 && <strong className="is-projected">{tt("invoices.projected", "Previsto")} {formatMoney(groupTotal + groupProjected)}</strong>}
-                        <ChevronDown size={18} />
                       </div>
+                      <ChevronDown className="invoice-group-chevron" size={18} />
                     </button>
                     {expanded && (
                       group.items.length ? (
