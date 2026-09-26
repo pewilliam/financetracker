@@ -402,6 +402,10 @@
 
 /* Projection details prioritize at-a-glance reading over compact density. */
 .finance-sheet--projection { overflow: visible; }
+.finance-sheet--projection .finance-sheet-scroll {
+  overflow-x: hidden;
+  scrollbar-gutter: auto;
+}
 .finance-sheet--projection .finance-sheet-header {
   position: relative;
   z-index: 4;
@@ -637,6 +641,7 @@
   }
 
   .finance-sheet-scroll { max-height: calc(100dvh - 120px); }
+  .finance-sheet--projection .finance-sheet-scroll { border-radius: 0 0 17px 17px; }
   .finance-sheet--wallet .finance-sheet-scroll { max-height: calc(100dvh - 185px); }
 
   .finance-sheet-grabber { display: none; }

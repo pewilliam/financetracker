@@ -125,6 +125,16 @@ function ComparisonMeta({ value, inverse = false, language }) {
   );
 }
 
+function SinceMonthStartMeta({ value, language }) {
+  const amount = toNumber(value);
+  const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";
+  return (
+    <span className={`stat-comparison ${movementClass(amount)}`}>
+      {sign}{sign ? " " : ""}{formatMoney(Math.abs(amount), language)} {language === "en-US" ? "since the start of the month" : "desde o início do mês"}
+    </span>
+  );
+}
+
 export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, historyLoading = false, categoriesLoading = false, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction, activeSection = "overview", onActiveSectionChange, year, month, walletRefreshKey = 0 }) {
   const { t, language } = useI18n();
   const safeSummary = summary || {};
@@ -155,6 +165,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const incomeChange = previous ? percentChange(safeSummary.total_income, previous.total_income) : null;
   const expenseChange = previous ? percentChange(safeSummary.total_expenses, previous.total_expenses) : null;
   const balanceChange = previous ? percentChange(safeSummary.current_balance, previous.projected_closing) : null;
+  const closingChange = previous ? percentChange(safeSummary.projected_closing, previous.projected_closing) : null;
   const hasProjection = safeSummary.projected_closing !== null && safeSummary.projected_closing !== undefined;
   const plannedReceivablesTotal = toNumber(safeSummary.planned_receivables_total);
   const transactionsProjectedClosing = toNumber(
@@ -222,6 +233,10 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       ? safeSummary.projected_closing
       : safeSummary.current_balance;
   const balanceVariation = toNumber(balanceEndValue) - toNumber(openingBalance);
+  const projectedClosingVariation = toNumber(safeSummary.projected_closing) - toNumber(openingBalance);
+  const hasClosingDifference = hasProjection && Math.abs(
+    toNumber(safeSummary.projected_closing) - transactionsProjectedClosing
+  ) >= 0.005;
   const containsToday = balanceChartData.some((item) => item.date === todayIso);
   const containsProjection = balanceChartData.some((item) => item.projectedBalance != null);
   const hasBalanceActivity = transactions.length > 0
@@ -292,14 +307,22 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
     }
   };
 
+  const realClosingMeta = hasClosingDifference ? (
+    <span className="projection-real-meta">
+      <span>{copy("Fechamento real", "Actual closing")}</span>
+      <strong>{formatMoney(transactionsProjectedClosing, language)}</strong>
+    </span>
+  ) : null;
   const projectionMeta = !hasProjection
     ? copy("Sem projeção para este período", "No projection for this period")
-    : (plannedReceivablesTotal > 0 || Number(safeSummary.open_invoices_projected_total || 0) > 0)
-      ? t("dashboard.realizedVsProjected", {
-        realized: formatMoney(transactionsProjectedClosing, language),
-        projected: formatMoney(safeSummary.projected_closing, language),
-      })
-      : t("dashboard.futureNet", { value: formatMoney(safeSummary.future_net, language) });
+    : isFutureMonth
+      ? (
+        <div className={`projection-meta-content${hasClosingDifference ? " has-difference" : ""}`}>
+          {realClosingMeta}
+          <ComparisonMeta value={closingChange} language={language} />
+        </div>
+      )
+      : realClosingMeta || <SinceMonthStartMeta value={projectedClosingVariation} language={language} />;
 
   const balanceCard = isPastMonth || isFutureMonth
     ? {
@@ -341,7 +364,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       value: hasProjection ? formatMoney(safeSummary.projected_closing, language) : copy("Indisponível", "Unavailable"),
       tone: "projection",
       icon: CalendarClock,
-      badge: copy("Projeção", "Projection"),
+      badge: hasClosingDifference ? copy("Entenda os valores", "Understand the amounts") : null,
       meta: projectionMeta
     };
 
@@ -402,7 +425,11 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
                     <strong>{card.opening}</strong>
                   </span>
                 )}
-                {card.badge && <span className="projection-badge"><Clock3 size={12} /> {card.badge}</span>}
+                {card.badge && (
+                  <span className={`projection-badge${opensProjection ? " is-action" : ""}`}>
+                    {opensProjection ? <>{card.badge} <ArrowRight size={12} /></> : <><Clock3 size={12} /> {card.badge}</>}
+                  </span>
+                )}
               </div>
               <p className="stat-label">{card.label}</p>
               <p className="stat-value">{card.value}</p>

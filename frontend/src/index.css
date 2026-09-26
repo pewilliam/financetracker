@@ -10946,6 +10946,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .dashboard-stat-card.stat-card-expense { border-left-width: 3px; background: color-mix(in srgb, var(--expense) 3%, var(--card)); }
 .dashboard-stat-card.stat-card-projection {
   border-left: 3px solid color-mix(in srgb, #64748B 70%, var(--border));
+  padding-block: 14px;
   background: color-mix(in srgb, #64748B 4%, var(--card));
 }
 .dashboard-stat-head {
@@ -11029,8 +11030,55 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .stat-card-income .stat-value { color: color-mix(in srgb, var(--income) 80%, var(--text)); }
 .stat-card-expense .stat-value { color: color-mix(in srgb, var(--expense) 83%, var(--text)); }
 .stat-card-projection .stat-value { color: color-mix(in srgb, var(--text) 72%, var(--muted)); font-size: clamp(21px, 2vw, 27px); }
+.dashboard-stat-card.stat-card-projection .stat-label { margin-top: 8px; }
+.dashboard-stat-card.stat-card-projection .stat-value { margin-block: 5px 7px; }
 .dashboard-stat-card .stat-meta { min-height: 20px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .dashboard-stat-card .stat-meta .stat-meta-secondary { margin-top: 3px; color: var(--planned-text); font-weight: 700; }
+.projection-meta-content {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.projection-real-meta {
+  display: inline-flex;
+  align-items: baseline;
+  align-self: flex-start;
+  gap: 7px;
+  max-width: 100%;
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.projection-real-meta > span {
+  color: color-mix(in srgb, var(--muted) 82%, var(--text));
+  font-size: 11px;
+  font-weight: 750;
+}
+.projection-real-meta > strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projection-badge.is-action {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.projection-badge.is-action svg {
+  flex: 0 0 auto;
+  transition: transform .18s ease;
+}
+.dashboard-stat-card.is-clickable:hover .projection-badge.is-action svg,
+.dashboard-stat-card.is-clickable:focus-visible .projection-badge.is-action svg {
+  transform: translateX(2px);
+}
+.stat-card-projection .projection-meta-content .projection-real-meta {
+  padding-block: 3px;
+}
 .stat-comparison {
   min-height: 20px;
   display: inline-flex;
