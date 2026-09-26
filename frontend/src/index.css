@@ -419,22 +419,47 @@ button:focus-visible {
 .app-layout.sidebar-closed .sidebar-action.active::before {
   display: none;
 }
-.app-layout.sidebar-closed .sidebar [data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 80;
-  padding: 7px 9px;
-  border-radius: 8px;
-  color: #E8F5EE;
-  background: #111D17;
-  border: 1px solid rgba(232,245,238,0.10);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+.sidebar-helper-tooltip {
+  position: fixed;
+  z-index: 90;
+  transform: translateY(-50%) translateX(0);
+  max-width: min(220px, calc(100vw - 104px));
+  padding: 8px 11px;
+  border: 1px solid rgba(164,244,194,0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(23,45,36,0.98), rgba(10,24,18,0.98));
+  box-shadow: 0 14px 34px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  color: #F4FFF9;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
   pointer-events: none;
+  animation: sidebarHelperIn .14s ease-out;
+}
+.sidebar-helper-tooltip::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  border-left: 1px solid rgba(164,244,194,0.22);
+  border-bottom: 1px solid rgba(164,244,194,0.22);
+  background: rgba(23,45,36,0.98);
+  transform: translateY(-50%) rotate(45deg);
+}
+@keyframes sidebarHelperIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
 }
 .sidebar-bottom {
   flex: 0 0 auto;
