@@ -277,10 +277,18 @@ export const ptBR = {
     exportCsv: "Exportar CSV",
     expandCategories: "Exibir categorias",
     collapseCategories: "Recolher categorias",
+    editCategorySettings: "Editar e configurar categoria",
+    categoryDefaultConfiguration: "Configuração padrão",
+    categoryIgnoredStatus: "Fora das análises",
+    categoryIncomeStatus: "Fonte de renda",
+    categoryBehaviorTitle: "Como esta categoria deve funcionar?",
+    categoryBehaviorDescription: "Estas opções só mudam como a categoria participa das análises e do planejamento. Elas não alteram o tipo nem o valor dos lançamentos.",
     ignoreInCategoryAnalysis: "Ignorar em Orçamento e gastos",
     ignoreInCategoryAnalysisHint: "Não entra nos totais, limites, gráfico ou alertas dessa tela.",
+    ignoreInCategoryAnalysisDetailedHint: "Ative para transferências, ajustes ou itens que você não quer analisar como gasto. Os lançamentos continuam no histórico e alteram o saldo da carteira, mas ficam fora dos totais, limites, gráficos e alertas de Orçamento e gastos.",
     includeInIncomePlanning: "Considerar como renda",
-    includeInIncomePlanningHint: "Seus recebimentos poderão compor o planejamento mensal."
+    includeInIncomePlanningHint: "Seus recebimentos poderão compor o planejamento mensal.",
+    includeInIncomePlanningDetailedHint: "Ative para categorias como Salário ou Freelance. Ganhos com esta categoria poderão ser escolhidos como renda no planejamento mensal; nada será incluído automaticamente e gastos continuarão sendo gastos."
   },
   actions: {
     new: "Novo",

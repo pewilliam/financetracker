@@ -106,6 +106,10 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
             ) : wallets.map((wallet) => {
               const open = openWalletIds.includes(wallet.wallet_id);
               const variation = Number(wallet.variation);
+              const reasons = (wallet.reasons || []).map((reason) => {
+                const archived = (wallet.movements || []).some((movement) => movement.kind === reason && movement.counterpart_archived);
+                return reasonLabel(reason, archived);
+              }).join(" · ");
               return (
                 <article className="finance-accordion" style={{ "--finance-accent": wallet.color }} key={wallet.wallet_id}>
                   <button className="finance-accordion-button" type="button" aria-expanded={open} onClick={() => toggleWallet(wallet.wallet_id)}>
@@ -113,11 +117,15 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
                     <span className="finance-accordion-copy">
                       <strong>{wallet.wallet_name}</strong>
                       <small>
-                        {formatMoney(wallet.balance_before, language)} <em>→</em> {formatMoney(wallet.balance, language)} <em>·</em>{" "}
-                        {(wallet.reasons || []).map((reason) => {
-                          const archived = (wallet.movements || []).some((movement) => movement.kind === reason && movement.counterpart_archived);
-                          return reasonLabel(reason, archived);
-                        }).join(" · ")}
+                        <span className="finance-balance-transition">
+                          <span>{formatMoney(wallet.balance_before, language)}</span>
+                          <em>→</em>
+                          <span>{formatMoney(wallet.balance, language)}</span>
+                        </span>
+                        {reasons && <>
+                          <em className="finance-meta-separator">·</em>
+                          <span className="finance-reason-list">{reasons}</span>
+                        </>}
                       </small>
                     </span>
                     <strong className={`finance-accordion-amount${variation > 0 ? " finance-positive" : variation < 0 ? " finance-negative" : ""}`}>{formatMoney(wallet.variation, language)}</strong>

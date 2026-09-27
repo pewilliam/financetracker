@@ -33,7 +33,6 @@ export default function SettingsPage({
   const [categoryEditor, setCategoryEditor] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
-  const [savingCategoryPreference, setSavingCategoryPreference] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const validSections = new Set(["conta", "preferencias", "financeiro", "dados"]);
   const requestedSection = searchParams.get("secao") || "conta";
@@ -139,18 +138,6 @@ export default function SettingsPage({
   const removeManagedCategory = async () => {
     await onDeleteCategory(categoryToDelete.id);
     setCategoryToDelete(null);
-  };
-
-  const saveCategoryPreference = async (category, field, value) => {
-    const preferenceKey = `${category.id}:${field}`;
-    setSavingCategoryPreference(preferenceKey);
-    try {
-      await onUpdateCategory(category.id, { [field]: value });
-    } catch {
-      // AppShell already reports the API error to the user.
-    } finally {
-      setSavingCategoryPreference(null);
-    }
   };
 
   return (
@@ -281,39 +268,28 @@ export default function SettingsPage({
 
         {categoriesOpen && (categories.length ? (
           <div className="settings-category-list">
-            {categories.map((category) => (
+            {categories.map((category) => {
+              const ignored = Boolean(category.ignore_in_category_analysis);
+              const incomeSource = Boolean(category.include_in_income_planning);
+              return (
               <div className="settings-category-row" key={category.id}>
                 <div className="settings-category-row-main">
-                  <span className="category-badge" style={{ "--category-color": category.color }}>{category.name}</span>
+                  <div className="settings-category-identity">
+                    <span className="category-badge" style={{ "--category-color": category.color }}>{category.name}</span>
+                    <span className="settings-category-status">
+                      {!ignored && !incomeSource && <small>{tt("settings.categoryDefaultConfiguration", "Configuração padrão")}</small>}
+                      {ignored && <small className="ignored"><EyeOff size={12} /> {tt("settings.categoryIgnoredStatus", "Fora das análises")}</small>}
+                      {incomeSource && <small className="income"><CircleDollarSign size={12} /> {tt("settings.categoryIncomeStatus", "Fonte de renda")}</small>}
+                    </span>
+                  </div>
                   <div className="settings-category-actions">
-                    <button className="icon-btn small" type="button" onClick={() => setCategoryEditor(category)} aria-label={`Editar ${category.name}`}><Edit3 size={15} /></button>
+                    <button className="icon-btn small" type="button" onClick={() => setCategoryEditor(category)} aria-label={`Editar e configurar ${category.name}`} title={tt("settings.editCategorySettings", "Editar e configurar categoria")}><Edit3 size={15} /></button>
                     <button className="icon-btn small danger" type="button" onClick={() => setCategoryToDelete(category)} aria-label={`Excluir ${category.name}`}><Trash2 size={15} /></button>
                   </div>
                 </div>
-                <div className="settings-category-preferences">
-                  <label className={category.ignore_in_category_analysis ? "active" : ""}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(category.ignore_in_category_analysis)}
-                      disabled={savingCategoryPreference?.startsWith(`${category.id}:`)}
-                      onChange={(event) => saveCategoryPreference(category, "ignore_in_category_analysis", event.target.checked)}
-                    />
-                    <EyeOff size={15} />
-                    <span><strong>{t("settings.ignoreInCategoryAnalysis")}</strong><small>{t("settings.ignoreInCategoryAnalysisHint")}</small></span>
-                  </label>
-                  <label className={category.include_in_income_planning ? "active income" : ""}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(category.include_in_income_planning)}
-                      disabled={savingCategoryPreference?.startsWith(`${category.id}:`)}
-                      onChange={(event) => saveCategoryPreference(category, "include_in_income_planning", event.target.checked)}
-                    />
-                    <CircleDollarSign size={15} />
-                    <span><strong>{t("settings.includeInIncomePlanning")}</strong><small>{t("settings.includeInIncomePlanningHint")}</small></span>
-                  </label>
-                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : <p className="settings-category-empty">{tt("settings.noCategories", "Nenhuma categoria cadastrada.")}</p>)}
         </div>
