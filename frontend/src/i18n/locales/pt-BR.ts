@@ -254,6 +254,7 @@ export const ptBR = {
     installments: "Parcelamentos",
     subscriptions: "Assinaturas",
     simulator: "Simulador",
+    theme: "Tema",
     settings: "Configurações",
     more: "Mais"
   },

@@ -702,20 +702,27 @@ button:focus-visible {
     backdrop-filter: saturate(170%) blur(24px);
     animation: bottomNavigationMenuIn .16s ease-out;
   }
-  .bottom-navigation-more-menu a {
+  .bottom-navigation-more-menu a,
+  .bottom-navigation-more-menu button {
     min-height: 42px;
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
+    border: 0;
     border-radius: 12px;
     padding: 0 11px;
+    background: transparent;
     color: var(--text);
     font-size: 12px;
     font-weight: 750;
+    text-align: left;
     text-decoration: none;
+    cursor: pointer;
   }
   .bottom-navigation-more-menu a:hover,
-  .bottom-navigation-more-menu a.active {
+  .bottom-navigation-more-menu a.active,
+  .bottom-navigation-more-menu button:hover {
     background: color-mix(in srgb, var(--primary) 12%, transparent);
     color: var(--color-primary-dark);
   }
@@ -728,8 +735,10 @@ button:focus-visible {
   }
   [data-theme="dark"] .bottom-navigation-more-menu a:hover,
   [data-theme="dark"] .bottom-navigation-more-menu a.active,
+  [data-theme="dark"] .bottom-navigation-more-menu button:hover,
   .dark .bottom-navigation-more-menu a:hover,
-  .dark .bottom-navigation-more-menu a.active { color: var(--color-primary-light); }
+  .dark .bottom-navigation-more-menu a.active,
+  .dark .bottom-navigation-more-menu button:hover { color: var(--color-primary-light); }
 
   .app-layout.navigation-dock .content-inner { padding-bottom: 112px; }
 }
