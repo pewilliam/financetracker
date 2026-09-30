@@ -37,6 +37,8 @@ export default function MonthlyTable({
   const [dropDate, setDropDate] = useState(null);
   const [dragPosition, setDragPosition] = useState(null);
   const dragRef = useRef(null);
+  const pointerDragRef = useRef(null);
+  const dropDateRef = useRef(null);
   const suppressClickRef = useRef(false);
   const desktopQuery = "(min-width: 768px)";
   const [desktopDrag, setDesktopDrag] = useState(() => (
@@ -129,10 +131,17 @@ export default function MonthlyTable({
   );
   const clearDrag = () => {
     dragRef.current = null;
+    dropDateRef.current = null;
     setDraggingId(null);
     setDropDate(null);
     setDragPosition(null);
     document.body.classList.remove("is-transaction-dragging");
+  };
+  const activateDrag = (transaction, x, y) => {
+    dragRef.current = transaction;
+    setDraggingId(transaction.id);
+    setDragPosition({ x, y });
+    document.body.classList.add("is-transaction-dragging");
   };
   const startDrag = (event, transaction) => {
     if (event.target.closest("button")) {
@@ -142,10 +151,7 @@ export default function MonthlyTable({
     const bounds = event.currentTarget.getBoundingClientRect();
     const clientX = Number.isFinite(event.clientX) ? event.clientX : bounds.left + (bounds.width / 2);
     const clientY = Number.isFinite(event.clientY) ? event.clientY : bounds.top + (bounds.height / 2);
-    dragRef.current = transaction;
-    setDraggingId(transaction.id);
-    setDragPosition({ x: clientX, y: clientY });
-    document.body.classList.add("is-transaction-dragging");
+    activateDrag(transaction, clientX, clientY);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", String(transaction.id));
@@ -164,6 +170,56 @@ export default function MonthlyTable({
     if (!dragRef.current || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
     if (event.clientX === 0 && event.clientY === 0) return;
     setDragPosition({ x: event.clientX, y: event.clientY });
+  };
+  const pointerDown = (event, transaction) => {
+    if ((event.button !== undefined && event.button !== 0) || event.target.closest("button")) return;
+    event.preventDefault();
+    pointerDragRef.current = {
+      pointerId: event.pointerId,
+      transaction,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const pointerMove = (event) => {
+    const pending = pointerDragRef.current;
+    if (!pending || pending.pointerId !== event.pointerId) return;
+    const movedEnough = Math.hypot(event.clientX - pending.startX, event.clientY - pending.startY) >= 5;
+    if (!dragRef.current && !movedEnough) return;
+    event.preventDefault();
+    if (!dragRef.current) activateDrag(pending.transaction, event.clientX, event.clientY);
+    else setDragPosition({ x: event.clientX, y: event.clientY });
+
+    const target = document.elementFromPoint?.(event.clientX, event.clientY)?.closest?.("[data-day]");
+    const nextDropDate = target?.dataset?.day || null;
+    const validDropDate = nextDropDate && dayKey(pending.transaction.date) !== nextDropDate
+      ? nextDropDate
+      : null;
+    dropDateRef.current = validDropDate;
+    setDropDate(validDropDate);
+  };
+  const pointerUp = (event) => {
+    const pending = pointerDragRef.current;
+    if (!pending || pending.pointerId !== event.pointerId) return;
+    pointerDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!dragRef.current) return;
+    event.preventDefault();
+    const transaction = dragRef.current;
+    const nextDropDate = dropDateRef.current;
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 80);
+    clearDrag();
+    if (nextDropDate) onMoveTransaction?.(transaction, nextDropDate);
+  };
+  const pointerCancel = () => {
+    pointerDragRef.current = null;
+    if (dragRef.current) clearDrag();
   };
   const finishDrag = () => {
     if (!dragRef.current) return;
@@ -185,6 +241,7 @@ export default function MonthlyTable({
     if (!transaction || dayKey(transaction.date) === date) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    dropDateRef.current = date;
     setDropDate(date);
   };
   const dropOnDay = (event, date) => {
@@ -260,6 +317,10 @@ export default function MonthlyTable({
                         draggable={draggable || undefined}
                         onClick={() => openTransaction(tx)}
                         onKeyDown={(event) => openWithKeyboard(event, () => openTransaction(tx))}
+                        onPointerDown={draggable ? (event) => pointerDown(event, tx) : undefined}
+                        onPointerMove={draggable ? pointerMove : undefined}
+                        onPointerUp={draggable ? pointerUp : undefined}
+                        onPointerCancel={draggable ? pointerCancel : undefined}
                         onDragStart={draggable ? (event) => startDrag(event, tx) : undefined}
                         onDrag={draggable ? trackDrag : undefined}
                         onDragEnd={draggable ? finishDrag : undefined}

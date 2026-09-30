@@ -33,7 +33,7 @@ import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
-import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
+import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, moveTransactionInMonth, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
 import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
@@ -1095,14 +1095,6 @@ export default function AppShell() {
     }
   };
 
-  const applyTransactionDate = async (transaction, date) => {
-    await updateTransaction(transaction.id, {
-      date,
-      is_future: date > todayIsoDate(),
-    });
-    await syncMonthCollections();
-  };
-
   const moveMonthTransaction = async (transaction, date) => {
     const nextDate = String(date || "").slice(0, 10);
     const currentDate = String(transaction?.date || "").slice(0, 10);
@@ -1114,8 +1106,18 @@ export default function AppShell() {
     ) return;
     const undoLabel = language === "en-US" ? "Undo" : "Desfazer";
     const successMessage = language === "en-US" ? "Date updated" : "Data atualizada";
+    const optimisticTransaction = {
+      ...transaction,
+      date: nextDate,
+      is_future: nextDate > todayIsoDate(),
+    };
+    setMonthData((current) => moveTransactionInMonth(current, transaction, nextDate));
     try {
-      await applyTransactionDate(transaction, nextDate);
+      await updateTransaction(transaction.id, {
+        date: nextDate,
+        is_future: optimisticTransaction.is_future,
+      });
+      invalidateResources(["month", "monthSlim", "summary", "summaryPrevious", "summarySeries", "wallets"]);
       if (dateMoveToastId.current) toast.dismiss(dateMoveToastId.current);
       let undone = false;
       dateMoveToastId.current = showDateMoveToast({
@@ -1124,15 +1126,22 @@ export default function AppShell() {
         onUndo: async () => {
           if (undone) return;
           undone = true;
+          setMonthData((current) => moveTransactionInMonth(current, optimisticTransaction, currentDate));
           try {
-            await applyTransactionDate(transaction, currentDate);
+            await updateTransaction(transaction.id, {
+              date: currentDate,
+              is_future: currentDate > todayIsoDate(),
+            });
+            invalidateResources(["month", "monthSlim", "summary", "summaryPrevious", "summarySeries", "wallets"]);
             toast.success(language === "en-US" ? "Change undone" : "Alteração desfeita");
           } catch {
+            setMonthData((current) => moveTransactionInMonth(current, transaction, nextDate));
             toast.error(language === "en-US" ? "Could not undo the date change" : "Erro ao desfazer a alteração");
           }
         },
       });
     } catch {
+      setMonthData((current) => moveTransactionInMonth(current, optimisticTransaction, currentDate));
       toast.error(language === "en-US" ? "Could not change the date" : "Erro ao alterar a data");
     }
   };
@@ -1493,4 +1502,3 @@ export default function AppShell() {
     </div>
   );
 }
-
