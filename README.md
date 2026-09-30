@@ -108,3 +108,8 @@ Depois do primeiro build, use o comando abaixo para popular o banco:
 ```
 docker compose exec api python seed.py
 ```
+
+## Deploy
+
+O frontend é publicado automaticamente pelo Cloudflare a cada atualização da
+branch `main`.
