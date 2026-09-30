@@ -1081,6 +1081,26 @@ export default function AppShell() {
     }
   };
 
+  const moveMonthExpense = async (transaction, date) => {
+    const nextDate = String(date || "").slice(0, 10);
+    const currentDate = String(transaction?.date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate === currentDate) return;
+    if (isInvoiceTransaction(transaction)) {
+      await saveInvoiceDueDate(transaction.invoice_id, nextDate);
+      return;
+    }
+    try {
+      await updateTransaction(transaction.id, {
+        date: nextDate,
+        is_future: nextDate > todayIsoDate(),
+      });
+      toast.success(language === "en-US" ? "Date updated" : "Data atualizada");
+      await syncMonthCollections();
+    } catch {
+      toast.error(language === "en-US" ? "Could not change the date" : "Erro ao alterar a data");
+    }
+  };
+
   const saveInvoiceDueDate = async (invoiceId, dueDate) => {
     try {
       const updated = await updateInvoice(invoiceId, { planned_payment_date: dueDate });
@@ -1401,7 +1421,7 @@ export default function AppShell() {
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisonView} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} historyLoading={historyLoading} categoriesLoading={categoriesLoading} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} year={year} month={month} walletRefreshKey={walletRefreshKey} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveExpense={moveMonthExpense} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} cards={cards} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} addPurchase={addPurchase} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} onViewInstallment={showInstallmentDetails} onCancelSubscription={cancelSubscription} />} />
