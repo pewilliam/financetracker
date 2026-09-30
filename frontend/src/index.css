@@ -2060,6 +2060,28 @@ select {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent);
   }
 }
+
+.toast-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.toast-undo button {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.toast-undo button:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
 .dark .day-row.is-today,
 [data-theme="dark"] .day-row.is-today {
   background: color-mix(in srgb, var(--color-primary) 22%, var(--card));
