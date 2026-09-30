@@ -12,6 +12,7 @@ import { daysUntil, formatDateShort, formatMoney, getDaysUntil } from "../utils/
 import { getMonthPeriod, isInvoiceTransaction } from "../app/helpers.js";
 import { buildVisibleExpenseGroups, expenseGroupKey } from "../utils/categoryGroups.js";
 import CategoryExpenseDetailsModal from "../modals/CategoryExpenseDetailsModal.jsx";
+import MonthlyFlowDetailsModal from "../modals/MonthlyFlowDetailsModal.jsx";
 import ProjectionBreakdownModal from "../modals/ProjectionBreakdownModal.jsx";
 import DashboardWallets from "./DashboardWallets.jsx";
 
@@ -148,6 +149,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
   const [showAllDueDates, setShowAllDueDates] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
   const [projectionOpen, setProjectionOpen] = useState(false);
+  const [flowDetailsType, setFlowDetailsType] = useState(null);
   const detailsRequestRef = useRef(null);
   const detailsGenerationRef = useRef(0);
   const copy = (pt, en) => language === "en-US" ? en : pt;
@@ -403,17 +405,21 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
         {cards.map((card) => {
           const Icon = card.icon;
           const opensProjection = card.id === "projection" && !isPastMonth && hasProjection;
+          const opensFlowDetails = card.id === "income" || card.id === "expense";
+          const isClickable = opensProjection || opensFlowDetails;
+          const openCardDetails = () => opensFlowDetails ? setFlowDetailsType(card.id) : setProjectionOpen(true);
           return (
             <article
-              className={`card stat-card dashboard-stat-card stat-card-${card.tone}${opensProjection ? " is-clickable" : ""}`}
+              className={`card stat-card dashboard-stat-card stat-card-${card.tone}${isClickable ? " is-clickable" : ""}`}
               key={card.id}
-              role={opensProjection ? "button" : undefined}
-              tabIndex={opensProjection ? 0 : undefined}
-              onClick={opensProjection ? () => setProjectionOpen(true) : undefined}
-              onKeyDown={opensProjection ? (event) => {
+              role={isClickable ? "button" : undefined}
+              tabIndex={isClickable ? 0 : undefined}
+              aria-label={opensFlowDetails ? copy(`Ver ${card.id === "income" ? "ganhos" : "gastos"} por dia`, `View ${card.id === "income" ? "income" : "expenses"} by day`) : undefined}
+              onClick={isClickable ? openCardDetails : undefined}
+              onKeyDown={isClickable ? (event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  setProjectionOpen(true);
+                  openCardDetails();
                 }
               } : undefined}
             >
@@ -560,6 +566,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       )}
 
       {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
+      {flowDetailsType && <MonthlyFlowDetailsModal days={monthData?.days || []} type={flowDetailsType} total={flowDetailsType === "income" ? safeSummary.total_income : safeSummary.total_expenses} language={language} year={year ?? monthData?.year ?? safeSummary.year} month={month ?? monthData?.month ?? safeSummary.month} onClose={() => setFlowDetailsType(null)} />}
       {projectionOpen && safeSummary && <ProjectionBreakdownModal summary={safeSummary} onClose={() => setProjectionOpen(false)} />}
       <button className="dashboard-new-fab" type="button" onClick={onNewTransaction} aria-label={copy("Novo lançamento", "New transaction")}><Plus size={24} /></button>
     </div>
