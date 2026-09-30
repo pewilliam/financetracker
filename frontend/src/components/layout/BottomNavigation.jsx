@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Calculator, CalendarDays, ChartPie, Coins, CreditCard, Ellipsis, Layers, LayoutDashboard, Receipt, Repeat2, Settings, Wallet } from "lucide-react";
+import { Calculator, CalendarDays, ChartPie, Coins, CreditCard, Ellipsis, Layers, LayoutDashboard, Moon, Receipt, Repeat2, Settings, Sun, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
 
 export default function BottomNavigation({ hidden = false }) {
   const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const location = useLocation();
   const rootRef = useRef(null);
   const surfaceRef = useRef(null);
@@ -27,7 +29,16 @@ export default function BottomNavigation({ hidden = false }) {
     [t("bottomNavigation.simulator"), "/simulador", Calculator],
     [t("bottomNavigation.settings"), "/configuracoes", Settings],
   ];
+  const settingsPath = "/configuracoes";
+  const menuLinks = secondaryLinks.filter(([, path]) => path !== settingsPath);
+  const settingsLink = secondaryLinks.find(([, path]) => path === settingsPath);
   const moreIsActive = secondaryLinks.some(([, path]) => path === location.pathname);
+  const renderMenuLink = ([label, path, Icon]) => (
+    <NavLink key={path} to={path} role="menuitem" className={({ isActive }) => isActive ? "active" : ""}>
+      <Icon aria-hidden="true" />
+      <span>{label}</span>
+    </NavLink>
+  );
   const directActiveIndex = links.findIndex(([, path]) => path === location.pathname);
   const activeIndex = directActiveIndex >= 0 ? directActiveIndex : moreIsActive ? links.length : 0;
 
@@ -88,12 +99,17 @@ export default function BottomNavigation({ hidden = false }) {
     <nav ref={rootRef} className="bottom-navigation" aria-label={t("bottomNavigation.navigation")} hidden={hidden}>
       {moreOpen && (
         <div className="bottom-navigation-more-menu" role="menu" aria-label={t("bottomNavigation.moreMenu")}>
-          {secondaryLinks.map(([label, path, Icon]) => (
-            <NavLink key={path} to={path} role="menuitem" className={({ isActive }) => isActive ? "active" : ""}>
-              <Icon aria-hidden="true" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+          {menuLinks.map(renderMenuLink)}
+          <button
+            type="button"
+            role="menuitem"
+            className="bottom-navigation-theme"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+            <span>{t("bottomNavigation.theme")}</span>
+          </button>
+          {settingsLink && renderMenuLink(settingsLink)}
         </div>
       )}
       <div ref={surfaceRef} className="bottom-navigation-surface">

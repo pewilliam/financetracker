@@ -277,6 +277,7 @@ export const enUS = {
     installments: "Installments",
     subscriptions: "Subscriptions",
     simulator: "Simulator",
+    theme: "Theme",
     settings: "Settings",
     more: "More"
   },
