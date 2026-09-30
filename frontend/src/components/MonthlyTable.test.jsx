@@ -207,6 +207,34 @@ describe("dragging one-off transactions to another day", () => {
     expect(onMoveTransaction).toHaveBeenCalledWith(income, target);
   });
 
+  it("uses pointer capture so the grabbing cursor remains active while moving", () => {
+    const onMoveTransaction = vi.fn();
+    const { target, expense } = renderDays(onMoveTransaction);
+    const targetDay = document.querySelector(`[data-day="${target}"]`);
+    const mercado = screen.getByRole("button", { name: /ver detalhes de mercado/i });
+    const originalElementFromPoint = document.elementFromPoint;
+    document.elementFromPoint = vi.fn(() => targetDay);
+    const pointerEvent = (type, properties) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, properties);
+      fireEvent(mercado, event);
+    };
+
+    pointerEvent("pointerdown", { button: 0, pointerId: 11, clientX: 120, clientY: 120 });
+    pointerEvent("pointermove", { pointerId: 11, clientX: 180, clientY: 180 });
+
+    expect(document.body).toHaveClass("is-transaction-dragging");
+    expect(mercado).toHaveClass("is-dragging");
+    expect(targetDay).toHaveClass("is-drop-target");
+
+    pointerEvent("pointerup", { pointerId: 11, clientX: 180, clientY: 180 });
+
+    expect(onMoveTransaction).toHaveBeenCalledWith(expense, target);
+    expect(document.body).not.toHaveClass("is-transaction-dragging");
+    if (originalElementFromPoint) document.elementFromPoint = originalElementFromPoint;
+    else delete document.elementFromPoint;
+  });
+
   it("does not drag invoices, recurring entries, or planned receivables", () => {
     const onMoveTransaction = vi.fn();
     renderDays(onMoveTransaction);

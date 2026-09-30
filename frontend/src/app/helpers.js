@@ -273,6 +273,54 @@ export function mergeCreatedTransaction(monthData, transaction) {
   };
 }
 
+export function moveTransactionInMonth(monthData, transaction, nextDate) {
+  const currentDate = transactionDate(transaction);
+  const targetDate = String(nextDate || "").slice(0, 10);
+  if (!monthData?.days || !currentDate || !targetDate || currentDate === targetDate) return monthData;
+
+  const sourceExists = monthData.days.some((day) => (
+    String(day.date).slice(0, 10) === currentDate
+    && (day.transactions || []).some((item) => item.id === transaction.id)
+  ));
+  const targetExists = monthData.days.some((day) => String(day.date).slice(0, 10) === targetDate);
+  if (!sourceExists || !targetExists) return monthData;
+
+  const amount = Math.abs(Number(transaction.amount) || 0);
+  const balanceImpact = transactionDelta(transaction);
+  const movedTransaction = {
+    ...transaction,
+    date: targetDate,
+    is_future: targetDate > todayIso(),
+  };
+
+  const days = monthData.days.map((day) => {
+    const date = String(day.date).slice(0, 10);
+    const leavesSource = date === currentDate;
+    const entersTarget = date === targetDate;
+    const previousImpact = date >= currentDate ? balanceImpact : 0;
+    const nextImpact = date >= targetDate ? balanceImpact : 0;
+    const balanceAdjustment = nextImpact - previousImpact;
+    let transactions = day.transactions || [];
+
+    if (leavesSource) transactions = transactions.filter((item) => item.id !== transaction.id);
+    if (entersTarget) {
+      transactions = [...transactions.filter((item) => item.id !== transaction.id), movedTransaction]
+        .sort((left, right) => Number(left.id) - Number(right.id));
+    }
+
+    return {
+      ...day,
+      transactions,
+      income: roundMoney(Number(day.income || 0) + (transaction.type === "income" ? (entersTarget ? amount : 0) - (leavesSource ? amount : 0) : 0)),
+      expenses: roundMoney(Number(day.expenses || 0) + (transaction.type === "expense" ? (entersTarget ? amount : 0) - (leavesSource ? amount : 0) : 0)),
+      balance: roundMoney(Number(day.balance || 0) + balanceAdjustment),
+      projected_balance: roundMoney(Number(day.projected_balance ?? day.balance ?? 0) + balanceAdjustment),
+    };
+  });
+
+  return { ...monthData, days };
+}
+
 export function patchSummaryForTransaction(summary, transaction) {
   if (!summary) return summary;
   const date = transactionDate(transaction);
