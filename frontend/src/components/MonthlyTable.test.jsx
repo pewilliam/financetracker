@@ -264,6 +264,36 @@ describe("dragging one-off transactions to another day", () => {
     else delete document.elementFromPoint;
   });
 
+  it("returns the item to its original position when dropped outside a day", () => {
+    const onMoveTransaction = vi.fn();
+    const { target } = renderDays(onMoveTransaction);
+    const targetDay = document.querySelector(`[data-day="${target}"]`);
+    const mercado = screen.getByRole("button", { name: /ver detalhes de mercado/i });
+    const originalElementFromPoint = document.elementFromPoint;
+    document.elementFromPoint = vi.fn(() => targetDay);
+    const pointerEvent = (type, properties) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, properties);
+      fireEvent(mercado, event);
+    };
+
+    pointerEvent("pointerdown", { button: 0, pointerId: 13, clientX: 120, clientY: 120 });
+    pointerEvent("pointermove", { pointerId: 13, clientX: 180, clientY: 180 });
+    expect(mercado).toHaveClass("is-dragging");
+    expect(targetDay).toHaveClass("is-drop-target");
+
+    document.elementFromPoint.mockReturnValue(null);
+    pointerEvent("pointermove", { pointerId: 13, clientX: 220, clientY: 220 });
+    pointerEvent("pointerup", { pointerId: 13, clientX: 220, clientY: 220 });
+
+    expect(onMoveTransaction).not.toHaveBeenCalled();
+    expect(mercado).not.toHaveClass("is-dragging");
+    expect(document.querySelector(".transaction-drag-overlay")).toBeNull();
+    expect(targetDay).not.toHaveClass("is-drop-target");
+    if (originalElementFromPoint) document.elementFromPoint = originalElementFromPoint;
+    else delete document.elementFromPoint;
+  });
+
   it("does not drag invoices, recurring entries, or planned receivables", () => {
     const onMoveTransaction = vi.fn();
     renderDays(onMoveTransaction);
