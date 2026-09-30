@@ -257,7 +257,9 @@ describe("dragging one-off transactions to another day", () => {
     expect(targetDay).not.toHaveClass("is-drop-target");
 
     pointerEvent("pointerup", { pointerId: 12, clientX: 180, clientY: 180 });
+    fireEvent.click(mercado);
     expect(onMoveTransaction).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
     if (originalElementFromPoint) document.elementFromPoint = originalElementFromPoint;
     else delete document.elementFromPoint;
   });
