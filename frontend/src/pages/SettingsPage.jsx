@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { ChevronDown, ChevronUp, CircleDollarSign, Download, Edit3, EyeOff, Languages, LockKeyhole, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDollarSign, Download, Edit3, EyeOff, Languages, LockKeyhole, PanelBottom, PanelLeft, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -16,6 +16,8 @@ export default function SettingsPage({
   year,
   month,
   categories = [],
+  navigationMode = "sidebar",
+  onNavigationModeChange,
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
@@ -224,6 +226,20 @@ export default function SettingsPage({
             <div className="language-options settings-language-options" role="group" aria-label={t("settings.language")}>
               <button className={`btn ${language === "pt-BR" ? "btn-primary" : "btn-ghost"}`} type="button" onClick={() => setLanguage("pt-BR")}>{t("settings.portuguese")}</button>
               <button className={`btn ${language === "en-US" ? "btn-primary" : "btn-ghost"}`} type="button" onClick={() => setLanguage("en-US")}>{t("settings.english")}</button>
+            </div>
+          </div>
+
+          <div className="card settings-panel settings-navigation-panel">
+            <div className="settings-panel-title"><i><PanelLeft size={18} /></i><div><h3>{t("settings.navigationStyle")}</h3><p>{t("settings.navigationStyleDescription")}</p></div></div>
+            <div className="settings-navigation-options" role="radiogroup" aria-label={t("settings.navigationStyle")}>
+              <button className={navigationMode === "sidebar" ? "active" : ""} type="button" role="radio" aria-checked={navigationMode === "sidebar"} onClick={() => onNavigationModeChange?.("sidebar")}>
+                <PanelLeft size={20} />
+                <span><strong>{t("settings.sidebarNavigation")}</strong><small>{t("settings.sidebarNavigationDescription")}</small></span>
+              </button>
+              <button className={navigationMode === "dock" ? "active" : ""} type="button" role="radio" aria-checked={navigationMode === "dock"} onClick={() => onNavigationModeChange?.("dock")}>
+                <PanelBottom size={20} />
+                <span><strong>{t("settings.dockNavigation")}</strong><small>{t("settings.dockNavigationDescription")}</small></span>
+              </button>
             </div>
           </div>
 
