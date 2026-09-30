@@ -191,7 +191,7 @@ function MonthsTutorial({ content, layoutKey, open, stepIndex, onBack, onClose, 
   );
 }
 
-export default function MonthsPage({ monthData, summary, monthCards, invoices = [], expenseOptions = [], year, month, setYear, setMonth, openAddForm, onEditTransaction, removeTransaction, onOpenReceivable, onLoadCategoryDetails, onOverlayChange }) {
+export default function MonthsPage({ monthData, summary, monthCards, invoices = [], expenseOptions = [], year, month, setYear, setMonth, openAddForm, onEditTransaction, removeTransaction, onOpenReceivable, onLoadCategoryDetails, onOverlayChange, onMoveTransaction }) {
   const { user, completeTutorial } = useAuth();
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -409,7 +409,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
       {viewMode === "table" ? (
         <div ref={tableRef} data-months-tour="table">
           {monthData?.days && (
-            <MonthlyTable days={monthData.days} summary={summary} invoices={invoices} expenseOptions={expenseOptions} onAdd={openAddForm} onEdit={onEditTransaction} onDelete={removeTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} />
+            <MonthlyTable days={monthData.days} summary={summary} invoices={invoices} expenseOptions={expenseOptions} onAdd={openAddForm} onEdit={onEditTransaction} onDelete={removeTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} onMoveTransaction={onMoveTransaction} />
           )}
         </div>
       ) : (
@@ -519,5 +519,4 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
     </section>
   );
 }
-
 
