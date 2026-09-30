@@ -191,7 +191,7 @@ describe("dragging one-off transactions to another day", () => {
     });
     expect(document.body).toHaveClass("is-transaction-dragging");
     expect(document.querySelector(".transaction-drag-overlay")).toHaveTextContent("Mercado");
-    expect(document.querySelector(".transaction-drag-hand")).toBeTruthy();
+    expect(document.querySelector(".transaction-drag-overlay").children).toHaveLength(3);
     expect(setDragImage).toHaveBeenCalledTimes(1);
     fireEvent.dragOver(targetDay);
     expect(targetDay).toHaveClass("is-drop-target");
@@ -231,6 +231,33 @@ describe("dragging one-off transactions to another day", () => {
 
     expect(onMoveTransaction).toHaveBeenCalledWith(expense, target);
     expect(document.body).not.toHaveClass("is-transaction-dragging");
+    if (originalElementFromPoint) document.elementFromPoint = originalElementFromPoint;
+    else delete document.elementFromPoint;
+  });
+
+  it("cancels an active drag when Escape is pressed", () => {
+    const onMoveTransaction = vi.fn();
+    const { target } = renderDays(onMoveTransaction);
+    const targetDay = document.querySelector(`[data-day="${target}"]`);
+    const mercado = screen.getByRole("button", { name: /ver detalhes de mercado/i });
+    const originalElementFromPoint = document.elementFromPoint;
+    document.elementFromPoint = vi.fn(() => targetDay);
+    const pointerEvent = (type, properties) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, properties);
+      fireEvent(mercado, event);
+    };
+
+    pointerEvent("pointerdown", { button: 0, pointerId: 12, clientX: 120, clientY: 120 });
+    pointerEvent("pointermove", { pointerId: 12, clientX: 180, clientY: 180 });
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(document.querySelector(".transaction-drag-overlay")).toBeNull();
+    expect(document.body).not.toHaveClass("is-transaction-dragging");
+    expect(targetDay).not.toHaveClass("is-drop-target");
+
+    pointerEvent("pointerup", { pointerId: 12, clientX: 180, clientY: 180 });
+    expect(onMoveTransaction).not.toHaveBeenCalled();
     if (originalElementFromPoint) document.elementFromPoint = originalElementFromPoint;
     else delete document.elementFromPoint;
   });

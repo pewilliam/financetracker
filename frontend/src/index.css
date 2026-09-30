@@ -2081,13 +2081,13 @@ body.is-transaction-dragging * {
   position: fixed;
   z-index: 10000;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) 40px;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  width: clamp(340px, 48vw, 620px);
+  gap: 10px;
+  width: min(420px, calc(100vw - 36px));
   max-width: calc(100vw - 36px);
-  min-height: 54px;
-  padding: 10px 12px;
+  min-height: 44px;
+  padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--color-primary) 56%, var(--border));
   border-radius: 14px;
   background: color-mix(in srgb, var(--color-primary) 8%, var(--card));
@@ -2104,17 +2104,6 @@ body.is-transaction-dragging * {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.transaction-drag-hand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary) 35%, transparent);
-  color: #fff;
 }
 @keyframes transaction-drag-lift {
   from { transform: translateY(-46%) scale(.96); }
