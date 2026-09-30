@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock3, Coins, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Clock3, Coins, Edit3, Grab, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
@@ -34,6 +35,7 @@ export default function MonthlyTable({
   const [projectionOpen, setProjectionOpen] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
   const [dropDate, setDropDate] = useState(null);
+  const [dragPosition, setDragPosition] = useState(null);
   const dragRef = useRef(null);
   const suppressClickRef = useRef(false);
   const desktopQuery = "(min-width: 768px)";
@@ -56,6 +58,10 @@ export default function MonthlyTable({
     update();
     media.addEventListener?.("change", update);
     return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => () => {
+    document.body.classList.remove("is-transaction-dragging");
   }, []);
 
   const transactionInsight = (transaction) => {
@@ -108,6 +114,12 @@ export default function MonthlyTable({
   };
 
   const invoiceFor = (transaction) => invoices.find((invoice) => invoice.id === transaction.invoice_id) || null;
+  const draggingTransaction = useMemo(
+    () => draggingId === null
+      ? null
+      : days.flatMap((day) => day.transactions).find((transaction) => transaction.id === draggingId) || null,
+    [days, draggingId],
+  );
   const dayKey = (value) => String(value || "").slice(0, 10);
   const canDragTransaction = (transaction) => (
     desktopDrag
@@ -119,18 +131,39 @@ export default function MonthlyTable({
     dragRef.current = null;
     setDraggingId(null);
     setDropDate(null);
+    setDragPosition(null);
+    document.body.classList.remove("is-transaction-dragging");
   };
   const startDrag = (event, transaction) => {
     if (event.target.closest("button")) {
       event.preventDefault();
       return;
     }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const clientX = Number.isFinite(event.clientX) ? event.clientX : bounds.left + (bounds.width / 2);
+    const clientY = Number.isFinite(event.clientY) ? event.clientY : bounds.top + (bounds.height / 2);
     dragRef.current = transaction;
     setDraggingId(transaction.id);
+    setDragPosition({ x: clientX, y: clientY });
+    document.body.classList.add("is-transaction-dragging");
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", String(transaction.id));
+      const transparentPreview = document.createElement("canvas");
+      transparentPreview.width = 1;
+      transparentPreview.height = 1;
+      transparentPreview.style.position = "fixed";
+      transparentPreview.style.top = "-10px";
+      transparentPreview.style.pointerEvents = "none";
+      document.body.appendChild(transparentPreview);
+      event.dataTransfer.setDragImage(transparentPreview, 0, 0);
+      window.setTimeout(() => transparentPreview.remove(), 0);
     }
+  };
+  const trackDrag = (event) => {
+    if (!dragRef.current || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
+    if (event.clientX === 0 && event.clientY === 0) return;
+    setDragPosition({ x: event.clientX, y: event.clientY });
   };
   const finishDrag = () => {
     if (!dragRef.current) return;
@@ -228,6 +261,7 @@ export default function MonthlyTable({
                         onClick={() => openTransaction(tx)}
                         onKeyDown={(event) => openWithKeyboard(event, () => openTransaction(tx))}
                         onDragStart={draggable ? (event) => startDrag(event, tx) : undefined}
+                        onDrag={draggable ? trackDrag : undefined}
                         onDragEnd={draggable ? finishDrag : undefined}
                         aria-grabbed={draggable ? draggingId === tx.id : undefined}
                         aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${tx.description || tt("monthlyTable.noDescription", "Sem descrição")}${draggable ? `. ${dragHint}` : ""}`}
@@ -377,6 +411,27 @@ export default function MonthlyTable({
             onEdit(transaction);
           }}
         />
+      )}
+      {draggingTransaction && dragPosition && createPortal(
+        <div
+          className="transaction-drag-overlay"
+          style={{ left: dragPosition.x + 18, top: dragPosition.y }}
+          aria-hidden="true"
+        >
+          <span className={`type-chip ${draggingTransaction.type === "income" ? "income" : "expense"}`}>
+            {draggingTransaction.type === "income"
+              ? tt("monthlyTable.incomeChip", "GANHO")
+              : tt("monthlyTable.expenseChip", "GASTO")}
+          </span>
+          <strong className={draggingTransaction.type === "income" ? "money-income" : "money-expense"}>
+            {formatMoney(draggingTransaction.amount)}
+          </strong>
+          <span className="transaction-drag-description">
+            {draggingTransaction.description || tt("monthlyTable.noDescription", "Sem descrição")}
+          </span>
+          <span className="transaction-drag-hand"><Grab size={20} /></span>
+        </div>,
+        document.body,
       )}
     </div>
   );

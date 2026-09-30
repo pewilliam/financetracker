@@ -183,11 +183,22 @@ describe("dragging one-off transactions to another day", () => {
 
     const mercado = screen.getByRole("button", { name: /ver detalhes de mercado/i });
     expect(mercado).toHaveAttribute("draggable", "true");
-    fireEvent.dragStart(mercado);
+    const setDragImage = vi.fn();
+    fireEvent.dragStart(mercado, {
+      clientX: 320,
+      clientY: 240,
+      dataTransfer: { effectAllowed: "", setData: vi.fn(), setDragImage },
+    });
+    expect(document.body).toHaveClass("is-transaction-dragging");
+    expect(document.querySelector(".transaction-drag-overlay")).toHaveTextContent("Mercado");
+    expect(document.querySelector(".transaction-drag-hand")).toBeTruthy();
+    expect(setDragImage).toHaveBeenCalledTimes(1);
     fireEvent.dragOver(targetDay);
     expect(targetDay).toHaveClass("is-drop-target");
     fireEvent.drop(targetDay);
     expect(onMoveTransaction).toHaveBeenCalledWith(expense, target);
+    expect(document.querySelector(".transaction-drag-overlay")).toBeNull();
+    expect(document.body).not.toHaveClass("is-transaction-dragging");
 
     const salary = screen.getByRole("button", { name: /ver detalhes de salário/i });
     expect(salary).toHaveAttribute("draggable", "true");
