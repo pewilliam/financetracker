@@ -38,6 +38,7 @@ export default function MonthlyTable({
   const [dragPosition, setDragPosition] = useState(null);
   const dragRef = useRef(null);
   const pointerDragRef = useRef(null);
+  const cancelledPointerIdRef = useRef(null);
   const dropDateRef = useRef(null);
   const suppressClickRef = useRef(false);
   const desktopQuery = "(min-width: 768px)";
@@ -174,6 +175,7 @@ export default function MonthlyTable({
   const pointerDown = (event, transaction) => {
     if ((event.button !== undefined && event.button !== 0) || event.target.closest("button")) return;
     event.preventDefault();
+    cancelledPointerIdRef.current = null;
     pointerDragRef.current = {
       pointerId: event.pointerId,
       transaction,
@@ -200,6 +202,18 @@ export default function MonthlyTable({
     setDropDate(validDropDate);
   };
   const pointerUp = (event) => {
+    if (cancelledPointerIdRef.current === event.pointerId) {
+      cancelledPointerIdRef.current = null;
+      event.preventDefault();
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 80);
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
     const pending = pointerDragRef.current;
     if (!pending || pending.pointerId !== event.pointerId) return;
     pointerDragRef.current = null;
@@ -227,6 +241,7 @@ export default function MonthlyTable({
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
+      cancelledPointerIdRef.current = pointerDragRef.current?.pointerId ?? null;
       pointerDragRef.current = null;
       clearDrag();
     };
