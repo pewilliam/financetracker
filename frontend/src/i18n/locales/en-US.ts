@@ -497,6 +497,7 @@ export const enUS = {
     noDescription: "No description",
     recurring: "Recurring",
     invoice: "Invoice",
+    dragTransaction: "Drag to another day to change the date",
     viewInvoiceItems: "View invoice items",
     entry: "Entry",
     deleteEntry: "Delete entry",

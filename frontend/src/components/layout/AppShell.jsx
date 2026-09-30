@@ -8,6 +8,7 @@ import TransactionForm from "../TransactionForm.jsx";
 import Sidebar from "./Sidebar.jsx";
 import BottomNavigation from "./BottomNavigation.jsx";
 import Skeleton from "../common/Skeleton.jsx";
+import { showDateMoveToast } from "../DateMoveToast.jsx";
 import MonthsPage from "../../pages/MonthsPage.jsx";
 import InvoicesPage from "../../pages/InvoicesPage.jsx";
 import InstallmentsPage from "../../pages/InstallmentsPage.jsx";
@@ -154,6 +155,7 @@ export default function AppShell() {
   const loadViewRef = useRef(null);
   const loadFailedRef = useRef(false);
   const viewRouteRef = useRef("");
+  const dateMoveToastId = useRef(null);
   invoicesRef.current = invoices;
   const selectedPeriodRef = useRef({ year, month, language });
   selectedPeriodRef.current = { year, month, language };
@@ -1093,6 +1095,48 @@ export default function AppShell() {
     }
   };
 
+  const applyTransactionDate = async (transaction, date) => {
+    await updateTransaction(transaction.id, {
+      date,
+      is_future: date > todayIsoDate(),
+    });
+    await syncMonthCollections();
+  };
+
+  const moveMonthTransaction = async (transaction, date) => {
+    const nextDate = String(date || "").slice(0, 10);
+    const currentDate = String(transaction?.date || "").slice(0, 10);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)
+      || nextDate === currentDate
+      || isInvoiceTransaction(transaction)
+      || transaction?.recurrence_id
+    ) return;
+    const undoLabel = language === "en-US" ? "Undo" : "Desfazer";
+    const successMessage = language === "en-US" ? "Date updated" : "Data atualizada";
+    try {
+      await applyTransactionDate(transaction, nextDate);
+      if (dateMoveToastId.current) toast.dismiss(dateMoveToastId.current);
+      let undone = false;
+      dateMoveToastId.current = showDateMoveToast({
+        message: successMessage,
+        undoLabel,
+        onUndo: async () => {
+          if (undone) return;
+          undone = true;
+          try {
+            await applyTransactionDate(transaction, currentDate);
+            toast.success(language === "en-US" ? "Change undone" : "Alteração desfeita");
+          } catch {
+            toast.error(language === "en-US" ? "Could not undo the date change" : "Erro ao desfazer a alteração");
+          }
+        },
+      });
+    } catch {
+      toast.error(language === "en-US" ? "Could not change the date" : "Erro ao alterar a data");
+    }
+  };
+
   const removeInvoice = async (invoiceId) => {
     try {
       await deleteInvoice(invoiceId);
@@ -1401,7 +1445,7 @@ export default function AppShell() {
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Routes>
               <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisonView} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} historyLoading={historyLoading} categoriesLoading={categoriesLoading} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} year={year} month={month} walletRefreshKey={walletRefreshKey} />} />
-              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} />} />
+              <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveTransaction={moveMonthTransaction} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} cards={cards} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} addPurchase={addPurchase} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} onViewInstallment={showInstallmentDetails} onCancelSubscription={cancelSubscription} />} />
@@ -1449,5 +1493,4 @@ export default function AppShell() {
     </div>
   );
 }
-
 
