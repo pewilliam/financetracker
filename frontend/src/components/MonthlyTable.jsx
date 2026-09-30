@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock3, Coins, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
-import { isInvoiceTransaction, todayIsoDate } from "../app/helpers.js";
+import { invoiceAcceptsNewCharges, isInvoiceTransaction, todayIsoDate } from "../app/helpers.js";
 import DayWalletsModal from "../modals/DayWalletsModal.jsx";
 import ProjectionBreakdownModal from "../modals/ProjectionBreakdownModal.jsx";
 import EntryDetailsModal from "../modals/EntryDetailsModal.jsx";
@@ -25,18 +25,39 @@ export default function MonthlyTable({
   onOpenReceivable,
   onLoadCategoryDetails,
   onOverlayChange,
+  onMoveExpense,
+  allowOverdueInvoiceEdits = false,
 }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [viewingTransaction, setViewingTransaction] = useState(null);
   const [walletDay, setWalletDay] = useState(null);
   const [projectionOpen, setProjectionOpen] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dropDate, setDropDate] = useState(null);
+  const dragRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const desktopQuery = "(min-width: 768px)";
+  const [desktopDrag, setDesktopDrag] = useState(() => (
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(desktopQuery).matches
+      : true
+  ));
   const walletRefreshKey = `${summary?.current_balance ?? ""}|${summary?.total_income ?? ""}|${summary?.total_expenses ?? ""}|${days.map((day) => `${day.date}:${day.balance}`).join(",")}`;
 
   useEffect(() => {
     onOverlayChange?.(Boolean(viewingTransaction || walletDay));
     return () => onOverlayChange?.(false);
   }, [viewingTransaction, walletDay, onOverlayChange]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia(desktopQuery);
+    const update = () => setDesktopDrag(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
 
   const transactionInsight = (transaction) => {
     if (isInvoiceTransaction(transaction)) return null;
@@ -88,6 +109,64 @@ export default function MonthlyTable({
   };
 
   const invoiceFor = (transaction) => invoices.find((invoice) => invoice.id === transaction.invoice_id) || null;
+  const dayKey = (value) => String(value || "").slice(0, 10);
+  const canDragExpense = (transaction) => {
+    if (!desktopDrag || !onMoveExpense || transaction?.type !== "expense") return false;
+    if (!isInvoiceTransaction(transaction)) return true;
+    const invoice = invoiceFor(transaction);
+    if (!invoice) return true;
+    return !invoice.is_projected && invoiceAcceptsNewCharges(invoice, allowOverdueInvoiceEdits);
+  };
+  const clearDrag = () => {
+    dragRef.current = null;
+    setDraggingId(null);
+    setDropDate(null);
+  };
+  const startDrag = (event, transaction) => {
+    if (event.target.closest("button")) {
+      event.preventDefault();
+      return;
+    }
+    dragRef.current = transaction;
+    setDraggingId(transaction.id);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(transaction.id));
+    }
+  };
+  const finishDrag = () => {
+    if (!dragRef.current) return;
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 80);
+    clearDrag();
+  };
+  const openTransaction = (transaction) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    setViewingTransaction(transaction);
+  };
+  const allowDrop = (event, date) => {
+    const transaction = dragRef.current;
+    if (!transaction || dayKey(transaction.date) === date) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    setDropDate(date);
+  };
+  const dropOnDay = (event, date) => {
+    event.preventDefault();
+    const transaction = dragRef.current;
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 80);
+    clearDrag();
+    if (!transaction || dayKey(transaction.date) === date) return;
+    onMoveExpense?.(transaction, date);
+  };
   const plannedTotal = Number(summary?.planned_receivables_total || 0);
   const invoiceProjection = Number(summary?.open_invoices_projected_total || 0);
   const hasPlannedGap = plannedTotal > 0 || invoiceProjection > 0;
@@ -122,10 +201,12 @@ export default function MonthlyTable({
           <div key={day.date} className={weekSeparator ? "week-block" : ""}>
             {weekSeparator && <div className="week-separator" />}
             <div
-              className={`day-row${isToday ? " is-today" : ""}${future ? " future" : ""}`}
-              data-day={String(day.date).slice(0, 10)}
+              className={`day-row${isToday ? " is-today" : ""}${future ? " future" : ""}${dropDate === dayKey(day.date) ? " is-drop-target" : ""}`}
+              data-day={dayKey(day.date)}
               data-months-tour={index === 0 ? "entries" : undefined}
               aria-current={isToday ? "date" : undefined}
+              onDragOver={(event) => allowDrop(event, dayKey(day.date))}
+              onDrop={(event) => dropOnDay(event, dayKey(day.date))}
             >
               <div className="day-date">
                 {isToday && <span className="today-badge">{tt("monthlyTable.today", "Hoje")}</span>}
@@ -136,15 +217,25 @@ export default function MonthlyTable({
               <div className="day-transactions">
                 {hasEntries ? (
                   <>
-                    {day.transactions.map((tx) => (
+                    {day.transactions.map((tx) => {
+                      const draggable = canDragExpense(tx);
+                      const dragHint = isInvoiceTransaction(tx)
+                        ? tt("monthlyTable.dragInvoice", "Arraste para outro dia para mudar a previsão de pagamento")
+                        : tt("monthlyTable.dragExpense", "Arraste para outro dia para mudar a data");
+                      return (
                       <div
-                        className="transaction-line is-clickable"
+                        className={`transaction-line is-clickable${draggable ? " is-draggable" : ""}${draggingId === tx.id ? " is-dragging" : ""}`}
                         key={tx.id}
                         role="button"
                         tabIndex="0"
-                        onClick={() => setViewingTransaction(tx)}
-                        onKeyDown={(event) => openWithKeyboard(event, () => setViewingTransaction(tx))}
-                        aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${tx.description || tt("monthlyTable.noDescription", "Sem descrição")}`}
+                        draggable={draggable || undefined}
+                        onClick={() => openTransaction(tx)}
+                        onKeyDown={(event) => openWithKeyboard(event, () => openTransaction(tx))}
+                        onDragStart={draggable ? (event) => startDrag(event, tx) : undefined}
+                        onDragEnd={draggable ? finishDrag : undefined}
+                        aria-grabbed={draggable ? draggingId === tx.id : undefined}
+                        aria-label={`${language === "en-US" ? "View details for" : "Ver detalhes de"} ${tx.description || tt("monthlyTable.noDescription", "Sem descrição")}${draggable ? `. ${dragHint}` : ""}`}
+                        title={draggable ? dragHint : undefined}
                       >
                         <span className={`type-chip ${tx.type === "income" ? "income" : "expense"}`}>
                           {tx.type === "income" ? tt("monthlyTable.incomeChip", "GANHO") : tt("monthlyTable.expenseChip", "GASTO")}
@@ -173,7 +264,8 @@ export default function MonthlyTable({
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     {plannedReceivables.map((receivable) => {
                       const installment = receivable.series_installment_count > 1
                         ? ` · ${receivable.series_installment_number}/${receivable.series_installment_count}`
