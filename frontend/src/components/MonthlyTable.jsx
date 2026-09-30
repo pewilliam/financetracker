@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Clock3, Coins, Edit3, Grab, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
+import { Clock3, Coins, Edit3, Link2, Plus, Receipt, Repeat2, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateWithWeekday, formatMoney } from "../utils/format.js";
 import { buildUnifiedExpenseInsight } from "../utils/categoryInsights.js";
@@ -221,6 +221,18 @@ export default function MonthlyTable({
     pointerDragRef.current = null;
     if (dragRef.current) clearDrag();
   };
+  useEffect(() => {
+    if (draggingId === null) return undefined;
+    const cancelWithEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      pointerDragRef.current = null;
+      clearDrag();
+    };
+    window.addEventListener("keydown", cancelWithEscape);
+    return () => window.removeEventListener("keydown", cancelWithEscape);
+  }, [draggingId]);
   const finishDrag = () => {
     if (!dragRef.current) return;
     suppressClickRef.current = true;
@@ -490,7 +502,6 @@ export default function MonthlyTable({
           <span className="transaction-drag-description">
             {draggingTransaction.description || tt("monthlyTable.noDescription", "Sem descrição")}
           </span>
-          <span className="transaction-drag-hand"><Grab size={20} /></span>
         </div>,
         document.body,
       )}
