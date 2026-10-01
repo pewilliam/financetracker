@@ -9199,7 +9199,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .page-header .toolbar .month-current-btn { grid-column: 1 / -1; }
   .page-header:not(.months-page-header) .month-current-btn { display: none; }
   .page-header:not(.budget-page-header) > div:first-child h1 { display: none; }
-  .months-page-header > div:first-child .eyebrow { margin-bottom: 0; }
+  .page-header:not(.budget-page-header) > div:first-child .eyebrow { margin-bottom: 0; }
   .page-header.budget-page-header { gap: 12px; margin-bottom: 14px; }
   .budget-page-header > div:first-child .eyebrow,
   .budget-page-header .page-title-default { display: none; }
