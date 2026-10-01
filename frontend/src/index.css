@@ -13068,8 +13068,9 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .plastic-card-figures strong { font-size: 13px; }
 }
 
-/* Keep modal actions clear of rounded mobile screens and gesture areas. */
-@media (max-width: 767px) {
+/* Installed PWAs need extra clearance from rounded screens and gesture areas. */
+@media (max-width: 767px) and (display-mode: standalone),
+       (max-width: 767px) and (display-mode: fullscreen) {
   .modal-actions,
   .transaction-modal-actions,
   .wallet-modal-actions,
