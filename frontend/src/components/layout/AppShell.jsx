@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
-import { CalendarClock, ChevronLeft, ChevronRight, Menu, Plus } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Dashboard from "../Dashboard.jsx";
 import { MonthField } from "../DateField.jsx";
 import TransactionForm from "../TransactionForm.jsx";
 import Sidebar from "./Sidebar.jsx";
 import BottomNavigation from "./BottomNavigation.jsx";
+import MobileDock from "./MobileDock.jsx";
 import Skeleton from "../common/Skeleton.jsx";
 import { showDateMoveToast } from "../DateMoveToast.jsx";
 import MonthsPage from "../../pages/MonthsPage.jsx";
@@ -32,8 +33,8 @@ import BatchTransactionModal from "../../modals/BatchTransactionModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
-import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE, MOBILE_MEDIA_QUERY } from "../../app/constants.js";
-import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, isMobileViewport, mergeCreatedTransaction, moveTransactionInMonth, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
+import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE } from "../../app/constants.js";
+import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, mergeCreatedTransaction, moveTransactionInMonth, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
 import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
@@ -82,7 +83,6 @@ export default function AppShell() {
     }
   });
   const [menuOpen, setMenuOpen] = useState(() => {
-    if (isMobileViewport()) return false;
     try {
       const v = localStorage.getItem("menuOpen");
       if (v === null) return true;
@@ -97,7 +97,6 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (isMobileViewport()) return;
     try {
       localStorage.setItem("menuOpen", menuOpen ? "1" : "0");
     } catch (e) {
@@ -111,20 +110,8 @@ export default function AppShell() {
     } catch {
       // ignore
     }
-    if (navigationMode === "dock" && !isMobileViewport()) setMenuOpen(false);
+    if (navigationMode === "dock") setMenuOpen(false);
   }, [navigationMode]);
-
-  const [isMobile, setIsMobile] = useState(() => isMobileViewport());
-  useEffect(() => {
-    const media = window.matchMedia(MOBILE_MEDIA_QUERY);
-    const handleViewportChange = () => {
-      setIsMobile(media.matches);
-      if (media.matches) setMenuOpen(false);
-    };
-    handleViewportChange();
-    media.addEventListener("change", handleViewportChange);
-    return () => media.removeEventListener("change", handleViewportChange);
-  }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -181,9 +168,8 @@ export default function AppShell() {
     [receivableDetailsId, receivables]
   );
   const overlayOpen = drawerOpen || batchModalOpen || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
-  // Lock the body (preserving scroll position) for overlays and, on mobile, for
-  // the sidebar drawer so the content behind it does not jump back to the top.
-  const bodyLocked = overlayOpen || (menuOpen && isMobile);
+  // Lock the body while modal overlays are active so background content does not jump.
+  const bodyLocked = overlayOpen;
 
   useLayoutEffect(() => {
     if (document.body.style.position === "fixed") document.body.style.top = "0px";
@@ -1418,20 +1404,17 @@ export default function AppShell() {
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
       <header className="mobile-topbar">
-        <button className="mobile-menu-btn" type="button" onClick={() => setMenuOpen(true)} aria-label={t("sidebar.expand")}>
-          <Menu size={22} />
-        </button>
         <Link className="mobile-topbar-brand" to="/" aria-label="Kashy365">
           <img src={BRAND_MARK_SRC} alt="" aria-hidden="true" />
           <span><strong>Kashy</strong>365</span>
         </Link>
       </header>
       <main className="content">
-        <div className="content-inner">
+        <div className="content-inner pb-24 md:pb-0">
           {showMonthHeader && (
             <>
             {stickyMonthHeader && <div className="sticky-header-sentinel" aria-hidden="true" />}
-            <header className={`page-header ${viewingBudget ? "budget-page-header" : ""} ${stickyMonthHeader ? "page-header-sticky" : ""}`}>
+            <header className={`page-header ${location.pathname === "/meses" ? "months-page-header" : ""} ${viewingBudget ? "budget-page-header" : ""} ${stickyMonthHeader ? "page-header-sticky" : ""}`}>
               <div>
                 <p className="eyebrow">{formatMonthLabel(year, month, language)}</p>
                 <h1><span className="page-title-default">{t("app.title")}</span>{viewingBudget && <span className="budget-mobile-title">{t("categories.mobileTitle")}</span>}</h1>
@@ -1443,7 +1426,7 @@ export default function AppShell() {
                   </button>
                 )}
                 <button className="btn month-nav-button" type="button" aria-label={t("actions.previous")} onClick={() => { const target = shiftMonth(year, month, -1); goToMonth(target.year, target.month); }}><ChevronLeft className="month-nav-icon" size={22} /><span>{t("actions.previous")}</span></button>
-                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : ""} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) goToMonth(y, m); }} />
+                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : language === "en-US" ? "Choose month" : "Escolher mês"} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) goToMonth(y, m); }} />
                 <button className="btn month-nav-button" type="button" aria-label={t("actions.next")} onClick={() => { const target = shiftMonth(year, month, 1); goToMonth(target.year, target.month); }}><ChevronRight className="month-nav-icon" size={22} /><span>{t("actions.next")}</span></button>
                 <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
@@ -1475,6 +1458,7 @@ export default function AppShell() {
       <BottomNavigation
         hidden={overlayOpen}
       />
+      <MobileDock hidden={overlayOpen} onNew={() => openAddForm()} />
 
       <TransactionForm open={drawerOpen && !isInvoiceTransaction(editing)} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />

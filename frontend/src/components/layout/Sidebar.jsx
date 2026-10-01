@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { LayoutDashboard, CalendarDays, Receipt, Wallet, CreditCard, ChartPie, Layers, Repeat2, Calculator, Coins, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth.jsx";
@@ -6,8 +6,7 @@ import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
 import { BRAND_MARK_SRC } from "../../app/constants.js";
 
-// Conteúdo interno da sidebar — compartilhado entre desktop e mobile
-function SidebarContent({ open, setOpen, onClose }) {
+function SidebarContent({ open, setOpen }) {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { t } = useI18n();
@@ -47,7 +46,6 @@ function SidebarContent({ open, setOpen, onClose }) {
           <Link
             className="sidebar-logo sidebar-action"
             to="/"
-            onClick={onClose}
             aria-label="Kashy365"
             data-tooltip="Kashy365"
             onMouseEnter={(event) => showHelper("Kashy365", event)}
@@ -81,7 +79,6 @@ function SidebarContent({ open, setOpen, onClose }) {
               key={path}
               to={path}
               end={path === "/"}
-              onClick={onClose}
               data-tooltip={label}
               className={({ isActive }) => `sidebar-action ${isActive ? "active" : ""}`}
               onMouseEnter={(event) => showHelper(label, event)}
@@ -99,7 +96,6 @@ function SidebarContent({ open, setOpen, onClose }) {
         <NavLink
           className={({ isActive }) => `sidebar-settings sidebar-action ${isActive ? "active" : ""}`}
           to="/configuracoes"
-          onClick={onClose}
           data-tooltip={t("sidebar.settings")}
           onMouseEnter={(event) => showHelper(t("sidebar.settings"), event)}
           onMouseLeave={clearHelper}
@@ -161,74 +157,11 @@ function SidebarContent({ open, setOpen, onClose }) {
   );
 }
 
-// Sidebar desktop — sempre visível, expande/colapsa
-function SidebarDesktop({ open, setOpen }) {
-  return (
-    <aside className={`sidebar ${open ? "open" : ""}`}>
-      <SidebarContent open={open} setOpen={setOpen} onClose={() => {}} />
-    </aside>
-  );
-}
-
-// Sidebar mobile — drawer com overlay, zero manipulação de body/overflow
-function SidebarMobile({ open, setOpen }) {
-  const { t } = useI18n();
-  const { theme } = useTheme();
-  const overlayRef = useRef(null);
-  const stopBackgroundScroll = (event) => event.preventDefault();
-
-  // Fecha ao pressionar Escape
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, setOpen]);
-
-  // Sincroniza theme-color com a cor da sidebar quando aberta
-  useEffect(() => {
-    const sidebarColor = "#07120E";
-    const appColor = theme === "dark" ? "#0A1410" : "#F4FAF7";
-    let meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.name = "theme-color";
-      document.head.appendChild(meta);
-    }
-    meta.content = open ? sidebarColor : appColor;
-    return () => { meta.content = appColor; };
-  }, [open, theme]);
-
-  return (
-    <div
-      ref={overlayRef}
-      className={`mob-sidebar-overlay${open ? " mob-sidebar-overlay--open" : ""}`}
-      aria-modal={open}
-      role="dialog"
-      aria-hidden={!open}
-    >
-      {/* Backdrop clicável — fecha o drawer */}
-      <div
-        className="mob-sidebar-backdrop"
-        onClick={() => setOpen(false)}
-        onTouchMove={stopBackgroundScroll}
-        onWheel={stopBackgroundScroll}
-        aria-label={t("sidebar.closeMenu")}
-      />
-      {/* Painel */}
-      <aside className={`mob-sidebar-panel${open ? " mob-sidebar-panel--open" : ""}`}>
-        <SidebarContent open={true} setOpen={setOpen} onClose={() => setOpen(false)} />
-      </aside>
-    </div>
-  );
-}
-
 function Sidebar({ open, setOpen }) {
   return (
-    <>
-      <SidebarDesktop open={open} setOpen={setOpen} />
-      <SidebarMobile open={open} setOpen={setOpen} />
-    </>
+    <aside className={`sidebar hidden md:flex ${open ? "open" : ""}`}>
+      <SidebarContent open={open} setOpen={setOpen} />
+    </aside>
   );
 }
 

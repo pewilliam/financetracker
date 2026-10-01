@@ -397,6 +397,9 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
           {viewMode === "cards" && <p className="months-overview-description">{language === "en-US" ? "Compare cash flow and see how each month changed your balance." : "Compare o fluxo de caixa e veja como cada mês transformou seu saldo."}</p>}
         </div>
         <div className="view-actions">
+          <button className="icon-btn month-today-header-btn" type="button" onClick={goToToday} aria-label={tt("monthlyTable.goToToday", "Ir para o dia de hoje")} title={tt("monthlyTable.today", "Hoje")}>
+            <CalendarDays size={19} aria-hidden="true" />
+          </button>
           <button className="icon-btn simulation-help-button" type="button" onClick={openTutorial} aria-label={language === "en-US" ? "Open monthly control tutorial" : "Abrir tutorial do controle mensal"} title={language === "en-US" ? "How to use monthly control" : "Como usar o controle mensal"}>
             <CircleHelp size={19} />
           </button>
