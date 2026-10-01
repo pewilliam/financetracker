@@ -1329,9 +1329,6 @@ select {
   background: var(--card);
   color: var(--text);
 }
-.month-native-trigger { display: none; }
-.month-native-input { display: none; }
-
 .btn, .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -9202,36 +9199,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .page-header:not(.months-page-header) .month-current-btn { display: none; }
   .months-page-header > div:first-child h1 { display: none; }
   .months-page-header > div:first-child .eyebrow { margin-bottom: 0; }
-  .page-header .month-field-native-mobile .month-custom-trigger { display: none; }
-  .page-header .month-field-native-mobile .month-native-trigger {
-    position: relative;
-    width: 100%;
-    min-width: 0;
-    height: 38px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 0 8px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .page-header .month-field-native-mobile .month-native-input {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    display: block;
-    border: 0;
-    padding: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-  .page-header .month-field-native-mobile .month-native-trigger:focus-within {
-    border-color: var(--focus-border);
-    box-shadow: var(--focus-ring);
-  }
   .page-header.budget-page-header { gap: 12px; margin-bottom: 14px; }
   .budget-page-header > div:first-child .eyebrow,
   .budget-page-header .page-title-default { display: none; }

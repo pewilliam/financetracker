@@ -253,34 +253,17 @@ function formatMonthDisplay(value, locale) {
   return date.toLocaleDateString(locale, { month: "2-digit", year: "numeric" });
 }
 
-function supportsNativeMonthPicker() {
-  if (typeof window === "undefined") return false;
-  const userAgent = window.navigator.userAgent || "";
-  const platform = window.navigator.platform || "";
-  const isIOS = /iPhone|iPad|iPod/i.test(platform)
-    || (platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
-  const isDesktopPlatform = /Win/i.test(platform)
-    || platform === "MacIntel"
-    || /Linux x86_64/i.test(platform);
-  const isAndroid = /Android/i.test(userAgent) && !isDesktopPlatform;
-  return isIOS || isAndroid;
-}
-
-export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "", nativeOnMobile = false }) {
+export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "" }) {
   const { language } = useI18n();
   const rootRef = useRef(null);
   const popoverRef = useRef(null);
-  const nativeMonthInputRef = useRef(null);
   const parsed = parseMonthValue(value);
-  const [nativePickerAvailable] = useState(supportsNativeMonthPicker);
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState(parsed.getFullYear());
-  const [nativeValue, setNativeValue] = useState(value || "");
   const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
     setYear(parseMonthValue(value).getFullYear());
-    setNativeValue(value || "");
   }, [value]);
 
   useEffect(() => {
@@ -352,39 +335,13 @@ export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "",
     setOpen(false);
   };
 
-  const openNativeMonthPicker = () => {
-    try {
-      nativeMonthInputRef.current?.showPicker?.();
-    } catch {
-      // Browsers without programmatic picker support still open it from the input itself.
-    }
-  };
-
   return (
-    <div className={`date-field month-field${nativeOnMobile && nativePickerAvailable ? " month-field-native-mobile" : ""} ${open ? "open" : ""}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
-      <button type="button" className="date-input-shell month-trigger month-custom-trigger" onClick={() => setOpen((current) => !current)} aria-label={ariaLabel || undefined}>
+    <div className={`date-field month-field ${open ? "open" : ""}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
+      <button type="button" className="date-input-shell month-trigger" onClick={() => setOpen((current) => !current)} aria-label={ariaLabel || undefined}>
         <span className={displayLabel ? "month-display-default" : undefined}>{formatMonthDisplay(value, language)}</span>
         {displayLabel && <span className="month-display-alternate">{displayLabel}</span>}
         <CalendarDays size={16} />
       </button>
-      {nativeOnMobile && nativePickerAvailable && (
-        <label className="date-input-shell month-trigger month-native-trigger" onClick={openNativeMonthPicker}>
-          <span aria-hidden="true">{formatMonthDisplay(value, language)}</span>
-          <CalendarDays size={16} aria-hidden="true" />
-          <input
-            ref={nativeMonthInputRef}
-            className="month-native-input"
-            type="month"
-            value={nativeValue}
-            aria-label={ariaLabel || undefined}
-            onFocus={() => setNativeValue(value || "")}
-            onChange={(event) => setNativeValue(event.currentTarget.value)}
-            onBlur={() => {
-              if (nativeValue && nativeValue !== value) onChange(nativeValue);
-            }}
-          />
-        </label>
-      )}
 
       {open && createPortal(
         <div className="date-popover date-popover-floating month-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>

@@ -1426,7 +1426,7 @@ export default function AppShell() {
                   </button>
                 )}
                 <button className="btn month-nav-button" type="button" aria-label={t("actions.previous")} onClick={() => { const target = shiftMonth(year, month, -1); goToMonth(target.year, target.month); }}><ChevronLeft className="month-nav-icon" size={22} /><span>{t("actions.previous")}</span></button>
-                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : language === "en-US" ? "Choose month" : "Escolher mês"} nativeOnMobile onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) goToMonth(y, m); }} />
+                <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : language === "en-US" ? "Choose month" : "Escolher mês"} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) goToMonth(y, m); }} />
                 <button className="btn month-nav-button" type="button" aria-label={t("actions.next")} onClick={() => { const target = shiftMonth(year, month, 1); goToMonth(target.year, target.month); }}><ChevronRight className="month-nav-icon" size={22} /><span>{t("actions.next")}</span></button>
                 <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
               </div>
