@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Calculator, ChartPie, Coins, CreditCard, Layers, LogOut, Moon, Repeat2, Settings, Sun, Wallet } from "lucide-react";
+import { Calculator, ChartPie, Coins, CreditCard, Layers, LogOut, Moon, Repeat2, Settings, Sun, UserRound, Wallet } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
@@ -17,14 +17,6 @@ export const MORE_SHEET_PATHS = [
 ];
 
 const EXIT_DURATION = 300;
-
-function getUserInitials(user) {
-  const nameParts = String(user?.name || "").trim().split(/\s+/).filter(Boolean);
-  if (nameParts.length > 1) return `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase();
-  if (nameParts.length === 1) return nameParts[0][0].toUpperCase();
-  const emailInitial = String(user?.email || "").trim()[0];
-  return emailInitial ? emailInitial.toUpperCase() : "U";
-}
 
 export default function MoreSheet({ open, onClose }) {
   const { t } = useI18n();
@@ -138,36 +130,39 @@ export default function MoreSheet({ open, onClose }) {
         aria-labelledby="mobile-more-sheet-title"
         tabIndex={-1}
       >
-        <div className="more-sheet-handle" aria-hidden="true" />
-        <div className="more-sheet-user">
-          <div className="more-sheet-avatar" aria-hidden="true">{getUserInitials(user)}</div>
-          <div className="more-sheet-user-copy">
-            <strong>{userName}</strong>
-            <span>{userEmail}</span>
+        <div className="more-sheet-avatar" aria-hidden="true">
+          <UserRound />
+        </div>
+        <div className="more-sheet-scroll">
+          <div className="more-sheet-user">
+            <div className="more-sheet-user-copy">
+              <strong>{userName}</strong>
+              <span>{userEmail}</span>
+            </div>
           </div>
-        </div>
-        <h2 id="mobile-more-sheet-title">{t("bottomNavigation.moreMenu")}</h2>
-        <div className="more-sheet-grid">
-          {links.map(([label, path, Icon]) => (
-            <NavLink key={path} to={path} onClick={onClose} className={({ isActive }) => isActive ? "active" : ""}>
-              <span aria-hidden="true"><Icon /></span>
-              <small>{label}</small>
+          <h2 id="mobile-more-sheet-title">{t("bottomNavigation.moreMenu")}</h2>
+          <div className="more-sheet-grid">
+            {links.map(([label, path, Icon]) => (
+              <NavLink key={path} to={path} onClick={onClose} className={({ isActive }) => isActive ? "active" : ""}>
+                <span aria-hidden="true"><Icon /></span>
+                <small>{label}</small>
+              </NavLink>
+            ))}
+            <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+              <span aria-hidden="true">{theme === "dark" ? <Sun /> : <Moon />}</span>
+              <small>{t("bottomNavigation.theme")}</small>
+            </button>
+            <NavLink to="/configuracoes" onClick={onClose} className={({ isActive }) => isActive ? "active" : ""}>
+              <span aria-hidden="true"><Settings /></span>
+              <small>{t("bottomNavigation.settings")}</small>
             </NavLink>
-          ))}
-          <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            <span aria-hidden="true">{theme === "dark" ? <Sun /> : <Moon />}</span>
-            <small>{t("bottomNavigation.theme")}</small>
-          </button>
-          <NavLink to="/configuracoes" onClick={onClose} className={({ isActive }) => isActive ? "active" : ""}>
-            <span aria-hidden="true"><Settings /></span>
-            <small>{t("bottomNavigation.settings")}</small>
-          </NavLink>
-        </div>
-        <div className="more-sheet-logout-wrap">
-          <button className="more-sheet-logout" type="button" onClick={handleLogout} disabled={loggingOut}>
-            <LogOut aria-hidden="true" />
-            <span>{t("sidebar.logout")}</span>
-          </button>
+          </div>
+          <div className="more-sheet-logout-wrap">
+            <button className="more-sheet-logout" type="button" onClick={handleLogout} disabled={loggingOut}>
+              <LogOut aria-hidden="true" />
+              <span>{t("sidebar.logout")}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

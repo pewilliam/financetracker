@@ -253,17 +253,19 @@ function formatMonthDisplay(value, locale) {
   return date.toLocaleDateString(locale, { month: "2-digit", year: "numeric" });
 }
 
-export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "" }) {
+export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "", nativeOnMobile = false }) {
   const { language } = useI18n();
   const rootRef = useRef(null);
   const popoverRef = useRef(null);
   const parsed = parseMonthValue(value);
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState(parsed.getFullYear());
+  const [nativeValue, setNativeValue] = useState(value || "");
   const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
     setYear(parseMonthValue(value).getFullYear());
+    setNativeValue(value || "");
   }, [value]);
 
   useEffect(() => {
@@ -336,12 +338,29 @@ export function MonthField({ value, onChange, displayLabel = "", ariaLabel = "" 
   };
 
   return (
-    <div className={`date-field month-field ${open ? "open" : ""}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
-      <button type="button" className="date-input-shell month-trigger" onClick={() => setOpen((current) => !current)} aria-label={ariaLabel || undefined}>
+    <div className={`date-field month-field${nativeOnMobile ? " month-field-native-mobile" : ""} ${open ? "open" : ""}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
+      <button type="button" className="date-input-shell month-trigger month-custom-trigger" onClick={() => setOpen((current) => !current)} aria-label={ariaLabel || undefined}>
         <span className={displayLabel ? "month-display-default" : undefined}>{formatMonthDisplay(value, language)}</span>
         {displayLabel && <span className="month-display-alternate">{displayLabel}</span>}
         <CalendarDays size={16} />
       </button>
+      {nativeOnMobile && (
+        <label className="date-input-shell month-trigger month-native-trigger">
+          <span aria-hidden="true">{formatMonthDisplay(value, language)}</span>
+          <CalendarDays size={16} aria-hidden="true" />
+          <input
+            className="month-native-input"
+            type="month"
+            value={nativeValue}
+            aria-label={ariaLabel || undefined}
+            onFocus={() => setNativeValue(value || "")}
+            onChange={(event) => setNativeValue(event.currentTarget.value)}
+            onBlur={() => {
+              if (nativeValue && nativeValue !== value) onChange(nativeValue);
+            }}
+          />
+        </label>
+      )}
 
       {open && createPortal(
         <div className="date-popover date-popover-floating month-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>

@@ -33,7 +33,7 @@ describe("bottom navigation", () => {
     const more = screen.getByRole("button", { name: "Mais" });
     expect(more).toHaveClass("active");
     await user.click(more);
-    expect(screen.getByRole("menu", { name: "Outras telas" })).toBeVisible();
+    expect(screen.getByRole("menu", { name: "Demais funcionalidades" })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: "Simulador" })).toHaveClass("active");
     expect(screen.getByRole("menuitem", { name: "Configurações" })).toHaveAttribute("href", "/configuracoes");
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
@@ -53,7 +53,7 @@ describe("bottom navigation", () => {
     expect(themeButton.querySelector(".lucide-moon")).toBeInTheDocument();
 
     await user.click(themeButton);
-    expect(screen.getByRole("menu", { name: "Outras telas" })).toBeVisible();
+    expect(screen.getByRole("menu", { name: "Demais funcionalidades" })).toBeVisible();
     expect(document.documentElement).toHaveClass("dark");
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(window.localStorage.getItem("finance-theme")).toBe("dark");

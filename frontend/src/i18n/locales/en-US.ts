@@ -266,7 +266,7 @@ export const enUS = {
   },
   bottomNavigation: {
     navigation: "Quick navigation",
-    moreMenu: "Other screens",
+    moreMenu: "More features",
     home: "Home",
     month: "Month",
     invoices: "Invoices",

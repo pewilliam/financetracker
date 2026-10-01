@@ -243,7 +243,7 @@ export const ptBR = {
   },
   bottomNavigation: {
     navigation: "Navegação rápida",
-    moreMenu: "Outras telas",
+    moreMenu: "Demais funcionalidades",
     home: "Início",
     month: "Mês",
     invoices: "Faturas",
