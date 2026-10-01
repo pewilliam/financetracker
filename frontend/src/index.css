@@ -13067,3 +13067,20 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 @media (max-width: 720px) {
   .plastic-card-figures strong { font-size: 13px; }
 }
+
+/* Installed PWAs need extra clearance from rounded screens and gesture areas. */
+@media (max-width: 767px) and (display-mode: standalone),
+       (max-width: 767px) and (display-mode: fullscreen) {
+  .modal-actions,
+  .transaction-modal-actions,
+  .wallet-modal-actions,
+  .category-modal-footer,
+  .entry-details-footer,
+  .batch-modal-actions,
+  .installment-details-actions {
+    padding-top: 12px;
+    padding-right: max(18px, calc(12px + env(safe-area-inset-right, 0px)));
+    padding-bottom: max(18px, calc(12px + env(safe-area-inset-bottom, 0px)));
+    padding-left: max(18px, calc(12px + env(safe-area-inset-left, 0px)));
+  }
+}
