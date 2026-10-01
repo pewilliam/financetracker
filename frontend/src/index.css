@@ -13080,7 +13080,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .installment-details-actions {
     padding-top: 12px;
     padding-right: max(18px, calc(12px + env(safe-area-inset-right, 0px)));
-    padding-bottom: max(18px, calc(12px + env(safe-area-inset-bottom, 0px)));
+    padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
     padding-left: max(18px, calc(12px + env(safe-area-inset-left, 0px)));
   }
 }
