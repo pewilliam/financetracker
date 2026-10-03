@@ -5,7 +5,7 @@ import { useHideOnScroll } from "../../hooks/useHideOnScroll.js";
 import { useI18n } from "../../i18n/index.ts";
 import MoreSheet, { MORE_SHEET_PATHS } from "./MoreSheet.jsx";
 
-export default function MobileDock({ hidden = false, onNew }) {
+export default function MobileDock({ hidden = false, onHiddenChange, onNew }) {
   const { t, language } = useI18n();
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -21,6 +21,10 @@ export default function MobileDock({ hidden = false, onNew }) {
   useEffect(() => {
     setMoreOpen(false);
   }, [hidden, location.pathname]);
+
+  useEffect(() => {
+    onHiddenChange?.(hiddenOnScroll);
+  }, [hiddenOnScroll, onHiddenChange]);
 
   return (
     <>

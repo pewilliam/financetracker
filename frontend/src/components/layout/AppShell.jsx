@@ -75,6 +75,7 @@ export default function AppShell() {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [dashboardLoadError, setDashboardLoadError] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [mobileDockHidden, setMobileDockHidden] = useState(false);
   const [navigationMode, setNavigationMode] = useState(() => {
     try {
       return localStorage.getItem(NAVIGATION_MODE_STORAGE_KEY) === "dock" ? "dock" : "sidebar";
@@ -1400,7 +1401,7 @@ export default function AppShell() {
   };
 
   return (
-    <div className={`app-layout navigation-${navigationMode} ${menuOpen ? "sidebar-open" : "sidebar-closed"}${chromeHidden ? " chrome-hidden" : ""}`}>
+    <div className={`app-layout navigation-${navigationMode} ${menuOpen ? "sidebar-open" : "sidebar-closed"}${chromeHidden ? " chrome-hidden" : ""}${mobileDockHidden ? " mobile-dock-hidden" : ""}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
       <header className="mobile-topbar">
@@ -1458,7 +1459,7 @@ export default function AppShell() {
       <BottomNavigation
         hidden={overlayOpen}
       />
-      <MobileDock hidden={overlayOpen} onNew={() => openAddForm()} />
+      <MobileDock hidden={overlayOpen} onHiddenChange={setMobileDockHidden} onNew={() => openAddForm()} />
 
       <TransactionForm open={drawerOpen && !isInvoiceTransaction(editing)} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />

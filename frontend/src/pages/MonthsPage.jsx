@@ -199,6 +199,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   const tableRef = useRef(null);
   const [pendingTableScroll, setPendingTableScroll] = useState(false);
   const [todayJump, setTodayJump] = useState(0);
+  const [todayVisible, setTodayVisible] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [projectionSummary, setProjectionSummary] = useState(null);
@@ -362,6 +363,25 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   }, [todayJump, viewMode, year, month, monthData]);
 
   useEffect(() => {
+    setTodayVisible(false);
+    if (viewMode !== "table" || typeof IntersectionObserver === "undefined") return undefined;
+
+    const today = new Date();
+    const viewingToday = Number(year) === today.getFullYear() && Number(month) === today.getMonth() + 1;
+    const dataReady = Number(monthData?.year) === today.getFullYear() && Number(monthData?.month) === today.getMonth() + 1;
+    if (!viewingToday || !dataReady) return undefined;
+
+    const row = tableRef.current?.querySelector(`[data-day="${todayIsoDate()}"]`);
+    if (!row) return undefined;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setTodayVisible(entry.isIntersecting && entry.intersectionRatio >= 0.5);
+    }, { threshold: [0, 0.5, 1] });
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [viewMode, year, month, monthData]);
+
+  useEffect(() => {
     setExpandedYears((previous) => {
       const next = {};
       sortedYears.forEach((groupYear, index) => {
@@ -510,10 +530,12 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
           }) : <div className="empty-state card"><div className="empty-illustration">+</div><h3>{language === "en-US" ? "No months with entries yet." : "Nenhum mês com lançamentos."}</h3><p>{language === "en-US" ? "Select + New to get started." : "Clique em + Novo para começar."}</p></div>}
         </div>
       )}
-      <button className="month-today-fab" type="button" onClick={goToToday} aria-label={tt("monthlyTable.goToToday", "Ir para o dia de hoje")}>
-        <CalendarDays size={18} />
-        <span>{tt("monthlyTable.today", "Hoje")}</span>
-      </button>
+      {!todayVisible && (
+        <button className="month-today-fab" type="button" onClick={goToToday} aria-label={tt("monthlyTable.goToToday", "Ir para o dia de hoje")}>
+          <CalendarDays size={18} />
+          <span>{tt("monthlyTable.today", "Hoje")}</span>
+        </button>
+      )}
       <button className="month-new-fab" data-months-tour="new" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")}>
         <Plus size={24} />
       </button>

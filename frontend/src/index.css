@@ -1052,12 +1052,21 @@ button:focus-visible {
 
   .fab,
   .month-new-fab,
-  .dashboard-new-fab,
-  .month-today-fab { display: none; }
+  .dashboard-new-fab { display: none; }
+  .month-today-fab {
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    z-index: 47;
+    display: inline-flex;
+    transition: background .18s ease, transform 300ms cubic-bezier(.4,0,.2,1);
+    will-change: transform;
+  }
+  .app-layout.mobile-dock-hidden .month-today-fab { transform: translate3d(0, 68px, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-dock,
+  .month-today-fab,
   .more-sheet-overlay,
   .more-sheet-panel { transition: none; }
 }
@@ -9513,20 +9522,9 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     grid-template-columns: 48px minmax(96px, 120px) minmax(170px, 1fr) minmax(92px, 110px) 70px;
   }
   .review-head { font-size: 11px; }
-  .month-today-header-btn {
-    width: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    display: grid;
-    place-items: center;
-    border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-    background: color-mix(in srgb, var(--primary) 8%, var(--card));
-    color: var(--primary);
-  }
   .fab,
   .month-new-fab,
-  .dashboard-new-fab,
-  .month-today-fab { display: none; }
+  .dashboard-new-fab { display: none; }
   .simulation-page {
     padding-bottom: 76px;
   }
