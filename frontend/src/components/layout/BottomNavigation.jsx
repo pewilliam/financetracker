@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Calculator, CalendarDays, ChartPie, Coins, CreditCard, Ellipsis, Layers, LayoutDashboard, Moon, Receipt, Repeat2, Settings, Sparkles, Sun, Wallet } from "lucide-react";
+import { Calculator, CalendarDays, ChartPie, Coins, CreditCard, Ellipsis, Layers, LayoutDashboard, Moon, Receipt, Repeat2, Settings, Sun, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
@@ -27,7 +27,6 @@ export default function BottomNavigation({ hidden = false }) {
     [t("bottomNavigation.installments"), "/parcelamentos", Layers],
     [t("bottomNavigation.subscriptions"), "/assinaturas", Repeat2],
     [t("bottomNavigation.simulator"), "/simulador", Calculator],
-    [t("bottomNavigation.assistant"), "/assistente", Sparkles],
     [t("bottomNavigation.settings"), "/configuracoes", Settings],
   ];
   const settingsPath = "/configuracoes";

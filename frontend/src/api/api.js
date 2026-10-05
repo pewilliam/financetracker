@@ -73,14 +73,6 @@ export function getMe() {
   return request("/auth/me");
 }
 
-export function askFinancialAssistant(question, history = [], { signal } = {}) {
-  return request("/assistant/ask", {
-    method: "POST",
-    body: JSON.stringify({ question, history }),
-    signal
-  });
-}
-
 export function updateMe(payload) {
   return request("/auth/me", {
     method: "PUT",

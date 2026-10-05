@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, Receipt, Wallet, CreditCard, ChartPie, Layers, Repeat2, Calculator, Coins, Sparkles, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Receipt, Wallet, CreditCard, ChartPie, Layers, Repeat2, Calculator, Coins, ChevronsLeft, ChevronsRight, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
@@ -21,8 +21,7 @@ function SidebarContent({ open, setOpen }) {
     [t("sidebar.installments"), "/parcelamentos", Layers],
     [t("sidebar.subscriptions"), "/assinaturas", Repeat2],
     [t("sidebar.simulator"), "/simulador", Calculator],
-    [t("sidebar.receivables"), "/recebiveis", Coins],
-    [t("sidebar.assistant"), "/assistente", Sparkles]
+    [t("sidebar.receivables"), "/recebiveis", Coins]
   ];
   const clearHelper = () => setHelper(null);
   const showHelper = (label, event) => {
