@@ -48,6 +48,11 @@ class RateLimitMiddleware:
             _positive_int_env("LOGIN_RATE_LIMIT_REQUESTS", 10),
             _positive_int_env("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300),
         )
+        self.assistant = RateLimitPolicy(
+            "assistant",
+            _positive_int_env("ASSISTANT_RATE_LIMIT_REQUESTS", 6),
+            _positive_int_env("ASSISTANT_RATE_LIMIT_WINDOW_SECONDS", 60),
+        )
         self._buckets: dict[tuple[str, str], Deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
         self._trusted_proxies = self._load_trusted_proxies()
@@ -55,6 +60,7 @@ class RateLimitMiddleware:
             self.general.name: self.general.window_seconds,
             self.register.name: self.register.window_seconds,
             self.login.name: self.login.window_seconds,
+            self.assistant.name: self.assistant.window_seconds,
         }
         self._last_cleanup = time.monotonic()
 
@@ -149,6 +155,8 @@ class RateLimitMiddleware:
             policies.append(self.register)
         elif method == "POST" and path == "/api/auth/login":
             policies.append(self.login)
+        elif method == "POST" and path == "/api/assistant/ask":
+            policies.append(self.assistant)
 
         selected_headers = None
         for policy in policies:

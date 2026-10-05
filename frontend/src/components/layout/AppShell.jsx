@@ -20,6 +20,7 @@ import CategoriesPage from "../../pages/CategoriesPage.jsx";
 import WalletsPage from "../../pages/WalletsPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
 import CardsPage from "../../pages/CardsPage.jsx";
+import AssistantPage from "../../pages/AssistantPage.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
 import ReceivableModal from "../../modals/ReceivableModal.jsx";
@@ -1449,6 +1450,7 @@ export default function AppShell() {
               <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
               <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
+              <Route path="/assistente" element={<AssistantPage />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -1,4 +1,23 @@
 export const ptBR = {
+  assistant: {
+    eyebrow: "ASSISTENTE EXPERIMENTAL",
+    title: "Converse sobre suas finanças",
+    description: "Faça perguntas sobre seus lançamentos e descubra o que mudou nos seus últimos meses.",
+    conversation: "Conversa com o assistente",
+    welcome: "Por onde quer começar? Posso analisar os lançamentos dos últimos seis meses.",
+    suggestion1: "Por que meu dinheiro não está sobrando neste mês?",
+    suggestion2: "Quais gastos mais pesaram neste mês?",
+    suggestion3: "Como meus gastos mudaram nos últimos meses?",
+    you: "Você",
+    thinking: "Analisando seus dados…",
+    questionLabel: "Sua pergunta",
+    placeholder: "Pergunte sobre seus gastos, ganhos ou saldo…",
+    send: "Enviar pergunta",
+    failed: "Não foi possível responder agora. Tente novamente.",
+    rateLimited: "Muitas perguntas em pouco tempo. Aguarde um minuto e tente novamente.",
+    disclosure: "Ao enviar, um resumo dos seus dados financeiros é compartilhado com a OpenAI. O assistente não altera lançamentos nem vê dados de outros usuários.",
+    updated: "Dados atualizados até {{date}}."
+  },
   app: {
     title: "Controle financeiro",
     loadingSession: "Carregando sessão..."
@@ -220,6 +239,7 @@ export const ptBR = {
     addToReserve: "Adicionar à reserva"
   },
   sidebar: {
+    assistant: "Assistente IA",
     dashboard: "Dashboard",
     months: "Controle mensal",
     wallets: "Carteiras",
@@ -242,6 +262,7 @@ export const ptBR = {
     closeMenu: "Fechar menu"
   },
   bottomNavigation: {
+    assistant: "Assistente IA",
     navigation: "Navegação rápida",
     moreMenu: "Demais funcionalidades",
     home: "Início",
