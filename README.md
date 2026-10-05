@@ -89,6 +89,28 @@ docker compose up --build
 - Frontend: http://localhost:5173
 - API Docs: http://localhost:8010/docs
 
+## Protótipo do assistente financeiro
+
+O menu **Assistente IA** abre uma conversa experimental sobre os lançamentos do usuário
+autenticado. A API monta uma síntese de até seis meses de transações realizadas, com
+comparação do mês atual com o mesmo intervalo do mês anterior, categorias de gastos
+diretos e maiores despesas. O modelo recebe somente essa síntese e a pergunta, sem
+acesso direto ao MySQL. Recebíveis previstos e rendimentos de investimentos não
+entram nessa análise.
+
+Para testar com respostas reais, configure `OPENAI_API_KEY` no `.env` do servidor.
+O modelo padrão é `gpt-5.4-mini` e pode ser alterado com `OPENAI_MODEL`. Reinicie a
+API após configurar a variável (`docker compose up -d --build api`). Entre na
+aplicação e abra **Assistente IA**. A chave não deve ser adicionada ao frontend nem
+com o prefixo `VITE_`. O ChatGPT desta conversa e o uso da API são acessos distintos;
+o protótipo exige uma chave de API com faturamento próprio.
+
+Cada pergunta envia uma síntese de dados financeiros à OpenAI, sem histórico
+persistido pelo Kashy365. O request usa `store: false`, e há um limite inicial
+de seis perguntas por minuto por IP. Ajuste `ASSISTANT_RATE_LIMIT_*` conforme a
+necessidade. O protótipo é somente de leitura; as respostas podem conter erros e
+devem ser conferidas pelos valores e períodos citados.
+
 ## Segurança da autenticação
 
 Antes de publicar, defina `APP_ENV=production` e gere um `JWT_SECRET_KEY` aleatório

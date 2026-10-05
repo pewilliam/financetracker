@@ -1,4 +1,23 @@
 export const enUS = {
+  assistant: {
+    eyebrow: "EXPERIMENTAL ASSISTANT",
+    title: "Ask about your finances",
+    description: "Ask about your entries and see what changed over the past few months.",
+    conversation: "Assistant conversation",
+    welcome: "Where should we start? I can analyze your last six months of entries.",
+    suggestion1: "Why am I not saving money this month?",
+    suggestion2: "Which expenses mattered most this month?",
+    suggestion3: "How have my expenses changed recently?",
+    you: "You",
+    thinking: "Analyzing your data…",
+    questionLabel: "Your question",
+    placeholder: "Ask about spending, income, or balances…",
+    send: "Send question",
+    failed: "I couldn't answer right now. Please try again.",
+    rateLimited: "Too many questions in a short time. Wait a minute and try again.",
+    disclosure: "When you send a question, a summary of your financial data is shared with OpenAI. The assistant cannot change entries or see other users' data.",
+    updated: "Data through {{date}}."
+  },
   app: {
     title: "Financial control",
     loadingSession: "Loading session..."
@@ -243,6 +262,7 @@ export const enUS = {
     addToReserve: "Add to reserve"
   },
   sidebar: {
+    assistant: "AI assistant",
     dashboard: "Dashboard",
     months: "Monthly control",
     wallets: "Wallets",
@@ -265,6 +285,7 @@ export const enUS = {
     closeMenu: "Close menu"
   },
   bottomNavigation: {
+    assistant: "AI assistant",
     navigation: "Quick navigation",
     moreMenu: "More features",
     home: "Home",

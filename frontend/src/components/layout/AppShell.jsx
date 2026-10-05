@@ -20,6 +20,7 @@ import CategoriesPage from "../../pages/CategoriesPage.jsx";
 import WalletsPage from "../../pages/WalletsPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
 import CardsPage from "../../pages/CardsPage.jsx";
+import AssistantPage from "../../pages/AssistantPage.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
 import ReceivableModal from "../../modals/ReceivableModal.jsx";
@@ -75,7 +76,6 @@ export default function AppShell() {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [dashboardLoadError, setDashboardLoadError] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
-  const [mobileDockHidden, setMobileDockHidden] = useState(false);
   const [navigationMode, setNavigationMode] = useState(() => {
     try {
       return localStorage.getItem(NAVIGATION_MODE_STORAGE_KEY) === "dock" ? "dock" : "sidebar";
@@ -1401,7 +1401,7 @@ export default function AppShell() {
   };
 
   return (
-    <div className={`app-layout navigation-${navigationMode} ${menuOpen ? "sidebar-open" : "sidebar-closed"}${chromeHidden ? " chrome-hidden" : ""}${mobileDockHidden ? " mobile-dock-hidden" : ""}`}>
+    <div className={`app-layout navigation-${navigationMode} ${menuOpen ? "sidebar-open" : "sidebar-closed"}${chromeHidden ? " chrome-hidden" : ""}`}>
       <Toaster position="top-right" />
       <Sidebar open={menuOpen} setOpen={setMenuOpen} />
       <header className="mobile-topbar">
@@ -1449,6 +1449,7 @@ export default function AppShell() {
               <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
               <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
               <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
+              <Route path="/assistente" element={<AssistantPage />} />
               <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -1459,7 +1460,7 @@ export default function AppShell() {
       <BottomNavigation
         hidden={overlayOpen}
       />
-      <MobileDock hidden={overlayOpen} onHiddenChange={setMobileDockHidden} onNew={() => openAddForm()} />
+      <MobileDock hidden={overlayOpen} onNew={() => openAddForm()} />
 
       <TransactionForm open={drawerOpen && !isInvoiceTransaction(editing)} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
