@@ -15,7 +15,9 @@ export default function AssistantPage() {
   const conversationEnd = useRef(null);
 
   useEffect(() => () => controller.current?.abort(), []);
-  useEffect(() => conversationEnd.current?.scrollIntoView?.({ behavior: "smooth", block: "end" }), [messages, busy]);
+  useEffect(() => {
+    conversationEnd.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
+  }, [messages, busy]);
 
   async function send(value = question) {
     const text = value.trim();
