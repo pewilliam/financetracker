@@ -38,7 +38,7 @@ app.include_router(subscriptions)
 app.include_router(months)
 app.include_router(simulations)
 app.include_router(wallets)
-app.include_router(assistant)
+app.include_router(assistant.router)
 
 
 @app.get("/api/health")
