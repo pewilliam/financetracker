@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.KASHY_E2E_PLAYWRIGHT_MODULE || 'playwright');
 import { fileURLToPath } from 'node:url';
+import { mkdir } from 'node:fs/promises';
 const webUrl = process.env.KASHY_E2E_WEB_URL || 'http://localhost:5173';
 const apiUrl = process.env.KASHY_E2E_API_URL || 'http://localhost:8010/api';
 const browser = await chromium.launch({
@@ -13,6 +14,8 @@ try {
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  if (process.env.KASHY_E2E_SCREENSHOT_DIR) await mkdir(process.env.KASHY_E2E_SCREENSHOT_DIR, {recursive:true});
+  const screenshot = async name => { if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path:`${process.env.KASHY_E2E_SCREENSHOT_DIR}/${name}.png`, fullPage:true}); };
   await page.addInitScript(() => localStorage.setItem('kashy365-language', 'pt-BR'));
   async function select(scope, name, value, label) {
     const custom = scope.getByRole('button', { name, exact: true });
@@ -28,7 +31,7 @@ try {
   let videoRequests = 0;
   await page.route('https://media.example/**', async route => {
     const path = route.request().url();
-    if (path.endsWith('.webm')) {
+    if (path.endsWith('.webm') || path.includes('video=1')) {
       videoRequests++;
       await route.fulfill({path:fileURLToPath(new URL('./fixtures/product-video.webm', import.meta.url)), contentType:'video/webm'});
     } else await route.fulfill({body:path.endsWith('.gif') ? gif : png, contentType:path.endsWith('.gif') ? 'image/gif' : 'image/png'});
@@ -85,12 +88,11 @@ try {
   await page.getByRole('heading', { name: 'Ofertas (0)', exact: true }).waitFor();
   const savedProduct = async () => (await context.request.get(`${apiUrl}/desired-products/${productId}`, {headers:{Authorization:`Bearer ${token}`}})).json();
   assert.ok((await savedProduct()).image_data.startsWith('data:image/jpeg;base64,'));
-  for (const [url, type] of [['https://media.example/photo.png', 'image'], ['https://media.example/photo.gif', 'image'], ['https://media.example/demo.webm', 'video']]) {
+  for (const [url, type] of [['https://media.example/photo.png', 'image'], ['https://media.example/photo.gif', 'image'], ['https://media.example/asset?video=1', 'video'], ['https://media.example/demo.webm', 'video']]) {
     await page.locator('.desired-actions').getByRole('button', {name:'Editar', exact:true}).click();
     dialog = page.getByRole('dialog');
-    await select(dialog, 'Adicionar mídia por', 'url', 'URL');
     await dialog.getByLabel('URL da mídia', {exact:true}).fill(url);
-    await select(dialog, 'Tipo de mídia', type, type === 'video' ? 'Vídeo' : 'Imagem ou GIF');
+    if (type === 'video') await page.waitForFunction(() => { const video = document.querySelector('.product-media-framing video'); return video && video.videoWidth > 0; });
     await dialog.getByRole('button', {name:'Salvar alterações', exact:true}).click();
     await dialog.waitFor({state:'hidden'});
     await page.reload();
@@ -100,23 +102,66 @@ try {
     assert.equal(saved.media_type, type);
     assert.equal(saved.image_data, null);
     const media = page.locator(type === 'video' ? '.desired-detail-image video' : '.desired-detail-image img');
-    assert.equal(await media.getAttribute(type === 'video' ? 'data-media-url' : 'src'), url);
+    assert.equal(await media.getAttribute('src'), url);
     if (type === 'image') assert.ok(await media.evaluate(image => image.complete && image.naturalWidth > 0));
     else {
-      assert.equal(await media.getAttribute('preload'), 'none');
-      assert.equal(await media.getAttribute('autoplay'), null);
-      assert.equal(videoRequests, 0, 'Video downloaded before playback');
-      await page.locator('.desired-detail-image').getByRole('button', {name:'Reproduzir vídeo'}).click();
+      assert.notEqual(await media.getAttribute('autoplay'), null);
+      assert.notEqual(await media.getAttribute('loop'), null);
+      assert.notEqual(await media.getAttribute('playsinline'), null);
       await page.waitForFunction(() => { const video = document.querySelector('.desired-detail-image video'); return video && !video.paused && video.videoWidth > 0; });
       assert.ok(await media.evaluate(video => !video.paused && video.videoWidth > 0));
       assert.ok(videoRequests > 0);
-      await media.evaluate(video => video.pause());
+      assert.ok(await media.evaluate(video => video.muted && !video.controls));
+      const box = await media.boundingBox();
+      const surface = await page.locator('.desired-detail-image').boundingBox();
+      assert.ok(Math.abs(box.width - surface.width) < 1 && Math.abs(box.height - surface.height) < 1);
+      await page.locator('.desired-detail-image').getByRole('button', {name:'Pausar vídeo'}).click();
+      assert.ok(await media.evaluate(video => video.paused));
+      await page.locator('.desired-detail-image').getByRole('button', {name:'Reproduzir vídeo'}).click();
+      await page.waitForFunction(() => !document.querySelector('.desired-detail-image video').paused);
     }
   }
   await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
-  assert.equal(await page.locator('.desired-cover video').getAttribute('data-media-url'), 'https://media.example/demo.webm');
+  assert.equal(await page.locator('.desired-cover video').getAttribute('src'), 'https://media.example/demo.webm');
   await page.getByRole('button', {name:'Ver produto', exact:true}).click();
   await page.getByRole('heading', {name:'Ofertas (0)', exact:true}).waitFor();
+  await screenshot('desktop-detail');
+  // Framing matches the preview, details and cards and survives reload.
+  await page.locator('.desired-actions').getByRole('button', {name:'Editar', exact:true}).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', {name:'Preencher área', exact:true}).click();
+  await dialog.getByLabel('Imagem do produto', {exact:true}).setInputFiles({name:'animation.gif', mimeType:'image/gif', buffer:gif});
+  await page.getByText('Selecione uma imagem PNG, JPEG ou WebP.', {exact:true}).waitFor();
+  assert.equal(await dialog.getByLabel('URL da mídia').inputValue(), 'https://media.example/demo.webm');
+  await dialog.getByRole('slider', {name:'Zoom da mídia'}).fill('1.5');
+  await dialog.getByRole('slider', {name:'Posição horizontal'}).fill('25');
+  await dialog.getByRole('slider', {name:'Posição vertical'}).fill('80');
+  await screenshot('desktop-editor');
+  const previewBox = await dialog.locator('.product-media-framing').boundingBox();
+  await page.mouse.move(previewBox.x + previewBox.width / 2, previewBox.y + previewBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(previewBox.x + previewBox.width * .6, previewBox.y + previewBox.height * .6, {steps:4});
+  await page.mouse.up();
+  assert.equal(await dialog.getByRole('slider', {name:'Posição horizontal'}).inputValue(), '15');
+  assert.equal(await dialog.getByRole('slider', {name:'Posição vertical'}).inputValue(), '70');
+  await dialog.getByRole('button', {name:'Salvar alterações', exact:true}).click();
+  await dialog.waitFor({state:'hidden'});
+  await page.reload();
+  await page.getByRole('heading', {name:'Ofertas (0)', exact:true}).waitFor();
+  assert.deepEqual((await savedProduct()).media_frame, {fit:'cover', x:15, y:70, zoom:1.5});
+  const renderedFrame = async locator => locator.evaluate(media => ({fit:media.style.objectFit, position:media.style.objectPosition, scale:media.style.transform}));
+  assert.deepEqual(await renderedFrame(page.locator('.desired-detail-image video')), {fit:'cover',position:'15% 70%',scale:'scale(1.5)'});
+  await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
+  assert.deepEqual(await renderedFrame(page.locator('.desired-cover video')), {fit:'cover',position:'15% 70%',scale:'scale(1.5)'});
+  await page.waitForFunction(() => !document.querySelector('.desired-cover video').paused);
+  await page.getByRole('button', {name:'Ver produto', exact:true}).click();
+  await page.locator('.desired-actions').getByRole('button', {name:'Editar', exact:true}).click();
+  dialog = page.getByRole('dialog');
+  assert.equal(await dialog.getByRole('slider', {name:'Zoom da mídia'}).inputValue(), '1.5');
+  await dialog.getByRole('button', {name:'Restaurar enquadramento'}).click();
+  await dialog.getByRole('button', {name:'Salvar alterações', exact:true}).click();
+  await dialog.waitFor({state:'hidden'});
+  assert.deepEqual((await savedProduct()).media_frame, {fit:'contain',x:50,y:50,zoom:1});
   async function offer(store, price, method, shipping = '') {
     await page.getByRole('button', { name: 'Adicionar oferta', exact: true }).first().click();
     const modal = page.getByRole('dialog');
@@ -176,11 +221,20 @@ try {
   await page.locator('.desired-purchase').getByText('Compra registrada', { exact: true }).waitFor();
   assert.match(await page.locator('.desired-purchase').textContent(), /Mercado Livre/);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => { const video = document.querySelector('.desired-detail-image video'); return video && !video.paused && video.videoWidth > 0; });
+  const mobileFrameBox = await page.locator('.desired-detail-image').boundingBox();
+  assert.ok(Math.abs(mobileFrameBox.width / mobileFrameBox.height - 16 / 9) < .01);
+  await screenshot('mobile-detail');
   await page.locator('.desired-actions').getByRole('button', { name: 'Editar', exact: true }).click();
   dialog = page.getByRole('dialog');
   assert.ok(await dialog.locator('.date-native-input').isVisible());
   assert.ok(await dialog.locator('select[aria-label="Prioridade"]').isVisible());
   assert.equal(await dialog.getByLabel('URL da mídia').inputValue(), 'https://media.example/demo.webm');
+  await dialog.locator('.product-media-framing').scrollIntoViewIfNeeded();
+  const mobilePreview = await dialog.locator('.product-media-framing').boundingBox();
+  assert.ok(Math.abs(mobilePreview.width / mobilePreview.height - 16 / 9) < .01);
+  await screenshot('mobile-editor');
+  await dialog.getByRole('button', {name:'Enviar imagem'}).waitFor();
   await dialog.getByRole('button', {name:'Remover mídia', exact:true}).click();
   await dialog.locator('.date-native-input').fill('2026-12-01');
   await select(dialog, 'Prioridade', 'low', 'Baixa');
@@ -206,7 +260,15 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Excluir', exact: true }).click();
   await page.getByText('Sua lista começa aqui', { exact: true }).waitFor();
   assert.deepEqual(errors, [], 'Uncaught browser errors');
-  console.log('PASS: login, category selection/creation, direct image/GIF/video URLs, labels without focus, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
+  console.log('PASS: login, category selection/creation, unified image/GIF/video URLs including extensionless video, autoplay/custom controls, framing/drag/reset/persistence, labels without focus, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
+} catch (error) {
+  const page = browser.contexts()[0]?.pages()[0];
+  if (page) {
+    console.error('Failure URL:', page.url());
+    console.error('Media state:', await page.locator('.desired-page').innerText());
+    if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path:`${process.env.KASHY_E2E_SCREENSHOT_DIR}/failure.png`, fullPage:true});
+  }
+  throw error;
 } finally {
   await browser.close();
 }

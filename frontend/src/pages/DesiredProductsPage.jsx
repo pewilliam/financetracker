@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ImagePlus, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Check, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useNavigate, useParams } from "react-router-dom";
@@ -10,6 +10,8 @@ import { useI18n } from "../i18n/index.ts";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
+import ProductMedia, { DEFAULT_MEDIA_FRAME } from "../components/ProductMedia.jsx";
+import ProductMediaField, { validMediaUrl } from "../components/ProductMediaField.jsx";
 import { isMobileViewport } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 import "./desiredProducts.css";
@@ -50,32 +52,7 @@ function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSub
   </div>, document.body);
 }
 
-function ProductVideo({ source, alt, onError }) {
-  const videoRef = useRef(null);
-  const [started, setStarted] = useState(false);
-  useEffect(() => {
-    if (started) videoRef.current?.play().catch(onError);
-  }, [started]);
-  return <div className="desired-video"><video ref={videoRef} src={started ? source : undefined} data-media-url={source} aria-label={alt} controls={started} playsInline preload="none" onError={onError} />
-    {!started && <button type="button" className="btn btn-ghost compact" onClick={() => setStarted(true)}>Reproduzir vídeo</button>}</div>;
-}
-
-function ProductMedia({ product, alt }) {
-  const source = product.media_url || product.image_data;
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [source, product.media_type]);
-  if (!source) return <ImagePlus size={36} />;
-  if (failed) return <small className="desired-hint" role="status">Não foi possível carregar a mídia. Confira a URL.</small>;
-  return product.media_url && product.media_type === "video"
-    ? <ProductVideo key={source} source={source} alt={alt} onError={() => setFailed(true)} />
-    : <img src={source} alt={alt} loading="lazy" onError={() => setFailed(true)} />;
-}
-
-const validUrl = (value) => {
-  if (!value.trim()) return true;
-  try { const url = new URL(value.trim()); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password; }
-  catch { return false; }
-};
+const validUrl = validMediaUrl;
 
 async function readImage(file) {
   if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Selecione uma imagem PNG, JPEG ou WebP.");
@@ -102,19 +79,18 @@ async function readImage(file) {
 function ProductEditor({ product, categories, onCreateCategory, onClose, onSave, language }) {
   const [form, setForm] = useState(() => ({
     name: product?.name || "", category_id: product?.category_id ? String(product.category_id) : product?.category ? "legacy" : "", ean: product?.ean || "", source_url: product?.source_url || "", image_source: product?.image_source || "manual", description: product?.description || "",
-    image_data: product?.image_data || null, media_url: product?.media_url || "", media_type: product?.media_type || "image", priority: product?.priority || "medium",
+    image_data: product?.image_data || null, media_url: product?.media_url || "", media_type: product?.media_type || "image", media_frame: { ...DEFAULT_MEDIA_FRAME, ...product?.media_frame }, priority: product?.priority || "medium",
     target_price: moneyInput(product?.target_price, language), planned_purchase_date: product?.planned_purchase_date || "",
     status: product?.status || "want"
   }));
   const [busy, setBusy] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
-  const [mediaMode, setMediaMode] = useState(product?.media_url ? "url" : "upload");
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setImageBusy(true);
-    try { const image = await readImage(file); setForm((current) => ({ ...current, image_data: image, image_source: "manual" })); } catch (error) { toast.error(error.message); } finally { setImageBusy(false); }
+    try { const image = await readImage(file); setForm((current) => ({ ...current, image_data: image, media_url: "", media_type: "image", media_frame: { ...DEFAULT_MEDIA_FRAME }, image_source: "manual" })); } catch (error) { toast.error(error.message); } finally { setImageBusy(false); }
     event.target.value = "";
   };
   const save = async (event) => {
@@ -122,11 +98,11 @@ function ProductEditor({ product, categories, onCreateCategory, onClose, onSave,
     const target = moneyValue(form.target_price, language);
     if (form.target_price && (target < 0 || target > 99999999.99)) return toast.error("Confira o preço-alvo.");
     if (form.ean && !/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(form.ean)) return toast.error("Informe um EAN/GTIN com 8, 12, 13 ou 14 dígitos.");
-    if (!validUrl(form.source_url) || (mediaMode === "url" && !validUrl(form.media_url))) return toast.error("Informe um link HTTP ou HTTPS válido.");
+    if (!validUrl(form.source_url) || !validUrl(form.media_url)) return toast.error("Informe um link HTTP ou HTTPS válido.");
     const payload = { name: form.name.trim(), ...(form.category_id === "legacy" ? { category: product.category } : { category_id: form.category_id ? Number(form.category_id) : null }),
-      ean: form.ean || null, source_url: form.source_url.trim() || null, image_source: mediaMode === "url" && form.media_url.trim() ? "url" : "manual", description: form.description.trim() || null,
-      image_data: mediaMode === "upload" ? form.image_data : null, media_url: mediaMode === "url" ? form.media_url.trim() || null : null,
-      media_type: mediaMode === "url" && form.media_url.trim() ? form.media_type : "image", priority: form.priority, target_price: target, planned_purchase_date: form.planned_purchase_date || null,
+      ean: form.ean || null, source_url: form.source_url.trim() || null, image_source: form.media_url.trim() ? "url" : "manual", description: form.description.trim() || null,
+      image_data: form.media_url.trim() ? null : form.image_data, media_url: form.media_url.trim() || null,
+      media_type: form.media_url.trim() ? form.media_type : "image", media_frame: form.media_frame, priority: form.priority, target_price: target, planned_purchase_date: form.planned_purchase_date || null,
       ...(form.status === "bought" ? {} : { status: form.status }) };
     if (!payload.name) return toast.error("Informe o nome do produto.");
     setBusy(true);
@@ -139,17 +115,7 @@ function ProductEditor({ product, categories, onCreateCategory, onClose, onSave,
       value={form.category_id} multiple={false} ariaLabel="Categoria" disabled={busy || imageBusy} onCreate={onCreateCategory}
       onChange={(value) => set("category_id", Array.isArray(value) ? value[0] || "" : value)} /></div>
     <div className="field-label"><span>EAN/GTIN</span><input aria-label="EAN/GTIN" inputMode="numeric" maxLength={14} value={form.ean} onChange={(event) => set("ean", event.target.value)} placeholder="Opcional · código de barras" /></div>
-    <div className="field-label"><span>Adicionar mídia por</span><FilterSelect ariaLabel="Adicionar mídia por" value={mediaMode} options={[{ value: "upload", label: "Upload de imagem" }, { value: "url", label: "URL" }]} disabled={busy || imageBusy} onChange={setMediaMode} /></div>
-    {mediaMode === "upload" ? <div className="field-label"><span>Imagem do produto</span><input aria-label="Imagem do produto" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImage} /><small className="desired-hint">PNG, JPEG ou WebP estático. Para GIF ou vídeo, use uma URL.</small></div>
-      : <><div className="field-label"><span>URL da mídia</span><input aria-label="URL da mídia" type="url" maxLength={2048} value={form.media_url} onChange={(event) => {
-          const value = event.target.value;
-          let type = form.media_type;
-          try { const path = new URL(value).pathname; if (/\.(mp4|webm|ogv|ogg|mov|m4v)$/i.test(path)) type = "video"; else if (/\.(png|jpe?g|webp|gif|svg|avif)$/i.test(path)) type = "image"; } catch { /* Type can be selected manually for incomplete URLs. */ }
-          setForm((current) => ({ ...current, media_url: value, media_type: type }));
-        }} placeholder="https://site.com/imagem.gif ou video.mp4" /></div>
-        <div className="field-label"><span>Tipo de mídia</span><FilterSelect ariaLabel="Tipo de mídia" value={form.media_type} options={[{ value: "image", label: "Imagem ou GIF" }, { value: "video", label: "Vídeo" }]} disabled={busy || imageBusy} onChange={(value) => set("media_type", value)} /></div>
-        <small className="desired-hint">Use o link direto do arquivo. O vídeo só carrega ao iniciar a reprodução.</small></>}
-    {(mediaMode === "url" ? validUrl(form.media_url) && form.media_url.trim() : form.image_data) && <div className="desired-image-preview"><ProductMedia product={{ image_data: mediaMode === "upload" ? form.image_data : null, media_url: mediaMode === "url" ? form.media_url.trim() : null, media_type: form.media_type }} alt="Prévia do produto" /><button type="button" className="btn btn-ghost compact" onClick={() => set(mediaMode === "url" ? "media_url" : "image_data", mediaMode === "url" ? "" : null)}>Remover mídia</button></div>}
+    <ProductMediaField value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} onUpload={handleImage} busy={imageBusy} disabled={busy || imageBusy} />
     <div className="field-label"><span>Observações</span><textarea aria-label="Observações" maxLength={2000} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} /></div>
     <div className="desired-form-row"><div className="field-label"><span>Prioridade</span><FilterSelect ariaLabel="Prioridade" value={form.priority} options={optionsFor(PRIORITIES)} disabled={busy || imageBusy} onChange={(value) => set("priority", value)} /></div>
       <div className="field-label"><span>Status</span><FilterSelect ariaLabel="Status" value={form.status} options={optionsFor(STATUSES).filter((option) => option.value !== "bought" || product?.status === "bought")} disabled={busy || imageBusy} onChange={(value) => set("status", value)} /></div></div>

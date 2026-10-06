@@ -42,17 +42,23 @@ continuam disponíveis no seletor até o usuário escolher uma categoria cadastr
 
 ## Mídia e formulários
 
-O seletor “Adicionar mídia por” permite upload de imagem ou URL direta.
+O campo de mídia aceita uma URL e tem um botão de upload ao lado, sem seleção de fonte ou tipo.
 Upload aceita PNG, JPEG e WebP estático de até 10 MB; a interface redimensiona
 para até 1000 px e converte para JPEG. O backend verifica base64, assinatura,
 formato e limite de 1 MB. GIF, vídeo e imagens animadas embutidas são rejeitados.
 
 `media_url` armazena somente o endereço HTTP(S), sem credenciais; `media_type`
-seleciona `image` (inclui GIF) ou `video`. O navegador exibe a mídia diretamente,
-sem download pelo backend. Vídeos usam controles, `playsInline`, `preload="none"`
-e não iniciam automaticamente. Use URL direta do arquivo, não link de página ou embed.
+guarda `image` (inclui GIF) ou `video`, detectado pela extensão (incluindo nomes em query strings) ou pelo carregamento no navegador. O navegador exibe a mídia diretamente,
+sem download pelo backend. Vídeos usam um player personalizado, `autoPlay`, `muted`,
+`loop` e `playsInline`, com botões para pausar/reproduzir e ativar o som. GIFs
+são exibidos diretamente e animam ao carregar. Autoplay bloqueado mantém o botão de reprodução manual. Use URL direta do arquivo, não link de página ou embed.
 Falhas no carregamento exibem feedback na prévia, no card e nos detalhes.
 Upload e URL são fontes exclusivas; trocar a fonte limpa a anterior ao salvar.
+O editor permite mostrar a mídia inteira (`contain`) ou preencher a área (`cover`),
+zoom de 1 a 3, posição horizontal/vertical de 0 a 100, arraste com mouse/toque,
+controles acessíveis por teclado e restauração. `media_frame` guarda `{fit,x,y,zoom}`.
+A prévia, os cards e os detalhes usam uma área 16:9 com as mesmas regras,
+sem distorcer a proporção original. Produtos antigos usam contain, centro e zoom 1.
 Imagens já gravadas continuam disponíveis; `image_source` identifica upload ou URL.
 
 Links do produto (`source_url`) e das ofertas continuam editáveis e clicáveis.
@@ -91,6 +97,7 @@ análise financeira automática, scraping complexo, alertas, APIs de comparaçã
 A migration `0039_desired_products` sucede `0038_invoice_planned_payment`;
 `0040_product_import` acrescenta categoria vinculada, EAN/GTIN e URL de origem.
 `0041_product_media` acrescenta URL e tipo da mídia, preservando imagens existentes.
+`0042_product_media_frame` acrescenta o enquadramento em JSON, sem alterar URLs ou imagens anteriores.
 A migração associa rótulos antigos a categorias de mesmo nome apenas do mesmo usuário.
 O entrypoint existente executa `python -m alembic upgrade head` antes de iniciar
 a API. Para instalar dependências de testes:
@@ -137,8 +144,9 @@ As variáveis `KASHY_E2E_WEB_URL` e `KASHY_E2E_API_URL` permitem escolher os
 servidores locais. `KASHY_E2E_CHROMIUM_PATH` permite usar um Chromium já instalado.
 O roteiro intercepta apenas o transporte de arquivos remotos com fixtures locais;
 frontend, autenticação, banco e API seguem reais. A fixture de vídeo WebM foi gerada
-com FFmpeg a partir de uma cor sólida, sem ativos externos.
+com FFmpeg a partir de um padrão vertical de teste, sem ativos externos.
 
-Validação desta alteração: 9 testes de API/migrations, 6 testes de categorias,
-17 testes de interface/navegação, build Vite, SQL MySQL e roteiro Chromium desktop/mobile.
-Upgrade/downgrade executado em SQLite e compilado para MySQL, sem servidor MySQL nesta validação.
+Validação: testes de API/migration, interface/componentes/navegação, build Vite e
+roteiro Chromium desktop/mobile com autoplay, controles, enquadramento, persistência e
+fontes de mídia. Upgrade/downgrade executado em SQLite e SQL gerado para MySQL,
+sem servidor MySQL nesta validação.

@@ -68,6 +68,7 @@ def _serialize(product: DesiredProduct) -> dict:
         "image_source": product.image_source,
         "media_url": product.media_url,
         "media_type": product.media_type,
+        "media_frame": product.media_frame or {},
         "priority": product.priority,
         "target_price": product.target_price,
         "planned_purchase_date": product.planned_purchase_date,
