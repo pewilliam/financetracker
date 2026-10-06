@@ -110,6 +110,25 @@
 .desired-saving svg { flex: 0 0 auto; margin-top: 1px; }
 .desired-hint { display: flex; align-items: flex-start; gap: 7px; color: var(--muted); font-size: 13px; margin: 0; }
 .desired-hint svg { flex: 0 0 auto; margin-top: 2px; }
+.desired-price-chart { min-height: 270px; margin-top: auto; padding: 16px; display: grid; grid-template-rows: auto minmax(180px, 1fr) auto; gap: 13px; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 30%, var(--card)); }
+.desired-price-chart > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.desired-price-chart > header > div { display: grid; gap: 3px; }
+.desired-price-chart > header p { color: var(--primary); font-size: 12px; font-weight: 800; letter-spacing: .07em; }
+.desired-price-chart > header h3 { font-size: 16px; }
+.desired-price-chart > header > span { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: var(--primary); background: color-mix(in srgb, var(--primary) 11%, var(--card)); }
+.desired-price-chart-canvas { min-width: 0; min-height: 180px; }
+.desired-price-chart .recharts-cartesian-axis-tick-value { fill: var(--muted); font-size: 12px; }
+.desired-price-chart-tooltip { min-width: 168px; display: grid; gap: 5px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); box-shadow: var(--shadow); }
+.desired-price-chart-tooltip strong { font-size: 13px; }
+.desired-price-chart-tooltip span { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; }
+.desired-price-chart-tooltip b { color: var(--primary); white-space: nowrap; }
+.desired-price-chart-tooltip small { color: var(--muted); font-size: 12px; }
+.desired-price-chart > footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 11px; border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent); color: var(--muted); font-size: 12px; }
+.desired-price-chart > footer strong { color: var(--text); }
+.desired-price-chart-empty { min-height: 190px; display: grid; align-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; }
+.desired-price-chart-empty svg { color: var(--primary); }
+.desired-price-chart-empty strong { color: var(--text); font-size: 15px; }
+.desired-price-chart-empty span { font-size: 13px; }
 .desired-purchase { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 11px; padding: 15px; border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border)); border-radius: 12px; background: color-mix(in srgb, var(--primary) 8%, var(--card)); }
 .desired-purchase > div { display: grid; gap: 4px; min-width: 0; }
 .desired-purchase > div span, .desired-purchase > div small { color: var(--muted); font-size: 13px; }
@@ -147,6 +166,14 @@
 .desired-expired-panel { padding: 14px; border-top: 1px solid color-mix(in srgb, var(--planned) 24%, var(--border)); }
 .desired-expired-panel[hidden] { display: none; }
 .desired-offers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; gap: 14px; }
+.desired-offers-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent); color: var(--muted); font-size: 13px; }
+.desired-offers-pagination > span strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.desired-offers-pagination > div { display: flex; align-items: center; gap: 4px; }
+.desired-offers-pagination > div > span { display: inline-flex; align-items: center; gap: 4px; }
+.desired-offers-pagination i { padding: 0 3px; color: var(--muted); font-style: normal; }
+.desired-offers-pagination > div button:not(.icon-btn) { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 800; cursor: pointer; }
+.desired-offers-pagination > div button:not(.icon-btn):hover { background: color-mix(in srgb, var(--border) 32%, transparent); color: var(--text); }
+.desired-offers-pagination > div button.active { background: color-mix(in srgb, var(--primary) 14%, var(--card)); color: var(--primary); }
 .desired-page .card.desired-offer { position: relative; overflow: hidden; display: grid; align-content: start; gap: 16px; min-width: 0; padding: 20px; border-radius: 15px; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .desired-offer.best { border-color: color-mix(in srgb, var(--primary) 64%, var(--border)); box-shadow: inset 3px 0 0 var(--primary), 0 8px 24px rgb(13 33 24 / .06); }
 .desired-offer.expired { border-style: dashed; box-shadow: none; }
@@ -210,6 +237,8 @@
   .desired-offers-panel { padding: 15px 16px 16px; }
   .desired-expired-toggle { align-items: flex-start; }
   .desired-expired-toggle small { line-height: 1.35; }
+  .desired-offers-pagination { justify-content: center; text-align: center; }
+  .desired-offers-pagination > span { width: 100%; }
   .desired-detail-image { aspect-ratio: 4 / 3; }
 }
 

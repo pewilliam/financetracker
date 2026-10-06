@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleDollarSign, Info, Loader2, Pencil, Plus, ShoppingBag, Store, Target, Trash2, Trophy, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, Info, Loader2, Pencil, Plus, ShoppingBag, Store, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
+import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -19,6 +20,7 @@ import "./desiredProducts.css";
 const STATUSES = { want: "Quero comprar", planning: "Planejando", ready: "Pronto para comprar", bought: "Comprado", abandoned: "Desisti" };
 const PRIORITIES = { low: "Baixa", medium: "Média", high: "Alta" };
 const PAYMENTS = { cash: "À vista", pix: "PIX", credit: "Cartão de crédito", boleto: "Boleto", other: "Outro" };
+const OFFERS_PER_PAGE = 10;
 const optionsFor = (labels) => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const today = () => {
   const date = new Date();
@@ -28,6 +30,69 @@ const moneyInput = (value, locale) => value == null ? "" : formatMoney(value, lo
 const moneyValue = (value, locale) => value ? parseTypedMoneyInput(value, locale).toFixed(2) : null;
 const cents = (value) => Math.round(Number(value || 0) * 100);
 const dateLabel = (date, locale) => date ? new Date(`${date}T00:00:00`).toLocaleDateString(locale) : "—";
+const compactMoney = (value, locale) => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(value);
+
+function buildPriceTrend(offers = []) {
+  const seen = new Set();
+  const byDate = new Map();
+  offers.forEach((offer) => {
+    const history = offer.store_price_history?.length ? offer.store_price_history : offer.price_history || [];
+    history.forEach((row) => {
+      const key = row.id ?? `${offer.store}|${row.recorded_at}|${row.price}|${row.total_cost}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const value = Number(row.total_cost ?? row.price);
+      if (!row.recorded_at || !Number.isFinite(value)) return;
+      const existing = byDate.get(row.recorded_at);
+      if (!existing || value < existing.value) byDate.set(row.recorded_at, { date: row.recorded_at, value, store: offer.store });
+    });
+  });
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function priceChartDomain(points, targetPrice) {
+  const values = points.map((point) => point.value);
+  const target = Number(targetPrice);
+  if (Number.isFinite(target)) values.push(target);
+  if (!values.length) return [0, 100];
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const span = maximum - minimum;
+  const padding = span > 0 ? span * .14 : Math.max(maximum * .08, 10);
+  return [Math.max(0, minimum - padding), maximum + padding];
+}
+
+function PriceTrendTooltip({ active, payload, language }) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+  return <div className="desired-price-chart-tooltip"><strong>{dateLabel(point.date, language)}</strong><span>Menor preço <b>{formatMoney(point.value, language)}</b></span><small>{point.store}</small></div>;
+}
+
+function PriceTrendChart({ offers, targetPrice, language }) {
+  const data = useMemo(() => buildPriceTrend(offers), [offers]);
+  const domain = useMemo(() => priceChartDomain(data, targetPrice), [data, targetPrice]);
+  const lowest = data.length ? Math.min(...data.map((point) => point.value)) : null;
+  const numericTarget = Number(targetPrice);
+  return <section className="desired-price-chart" aria-labelledby="desired-price-chart-title">
+    <header><div><p>HISTÓRICO DE PREÇOS</p><h3 id="desired-price-chart-title">Evolução do menor preço</h3></div><span aria-hidden="true"><Activity size={18} /></span></header>
+    {data.length ? <>
+      <div className="desired-price-chart-canvas" aria-label="Gráfico da evolução do menor preço registrado">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 18, right: 12, left: 0, bottom: 0 }}>
+            <defs><linearGradient id="desiredPriceFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={.24} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={.02} /></linearGradient></defs>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+            <XAxis dataKey="date" tickFormatter={(value) => dateLabel(value, language).slice(0, 5)} tickLine={false} axisLine={false} minTickGap={28} />
+            <YAxis domain={domain} tickFormatter={(value) => compactMoney(value, language)} tickLine={false} axisLine={false} tickMargin={7} width={75} />
+            <Tooltip content={<PriceTrendTooltip language={language} />} />
+            {Number.isFinite(numericTarget) && <ReferenceLine y={numericTarget} stroke="#d18a00" strokeDasharray="5 4" label={{ value: "Preço-alvo", position: "insideBottomRight", fill: "#d18a00", fontSize: 12 }} />}
+            <Area type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={3} fill="url(#desiredPriceFill)" dot={data.length <= 4 ? { r: 4, fill: "var(--card)", strokeWidth: 3 } : false} activeDot={{ r: 5 }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <footer><span>{data.length} {data.length === 1 ? "data registrada" : "datas registradas"}</span><strong>Menor histórico {formatMoney(lowest, language)}</strong></footer>
+    </> : <div className="desired-price-chart-empty"><Activity size={24} /><strong>Histórico ainda indisponível</strong><span>Novos preços aparecerão aqui.</span></div>}
+  </section>;
+}
 
 function MoneyField({ label, value, onChange, language, required = false }) {
   return <div className="field-label"><span>{label}</span><input aria-label={label} inputMode="decimal" value={value} required={required} placeholder="R$ 0,00"
@@ -260,6 +325,20 @@ function OfferCard({ offer, bestOfferId, language, onEdit, onDelete }) {
   </article>;
 }
 
+function OfferPagination({ page, total, label, onPageChange }) {
+  const totalPages = Math.ceil(total / OFFERS_PER_PAGE);
+  if (totalPages <= 1) return null;
+  const first = (page - 1) * OFFERS_PER_PAGE + 1;
+  const last = Math.min(page * OFFERS_PER_PAGE, total);
+  const pages = Array.from(new Set([1, page - 1, page, page + 1, totalPages])).filter((value) => value > 0 && value <= totalPages).sort((a, b) => a - b);
+  return <nav className="desired-offers-pagination" aria-label={`Paginação das ${label}`}>
+    <span>Mostrando <strong>{first}–{last}</strong> de <strong>{total}</strong></span>
+    <div><button className="icon-btn small" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></button>
+      {pages.map((value, index) => <span key={value}>{index > 0 && value - pages[index - 1] > 1 && <i>…</i>}<button className={value === page ? "active" : ""} type="button" aria-current={value === page ? "page" : undefined} onClick={() => onPageChange(value)}>{value}</button></span>)}
+      <button className="icon-btn small" type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Próxima página"><ChevronRight size={16} /></button></div>
+  </nav>;
+}
+
 export default function DesiredProductsPage({ categories: availableCategories = [], onCreateCategory, onOverlayChange }) {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -274,6 +353,8 @@ export default function DesiredProductsPage({ categories: availableCategories = 
   const [busy, setBusy] = useState(false);
   const [offersExpanded, setOffersExpanded] = useState(false);
   const [expiredOffersExpanded, setExpiredOffersExpanded] = useState(false);
+  const [currentOffersPage, setCurrentOffersPage] = useState(1);
+  const [expiredOffersPage, setExpiredOffersPage] = useState(1);
   useEffect(() => { onOverlayChange?.(Boolean(modal)); return () => onOverlayChange?.(false); }, [modal, onOverlayChange]);
   const loadToken = useRef(0);
   const load = useCallback(async () => {
@@ -288,10 +369,16 @@ export default function DesiredProductsPage({ categories: availableCategories = 
   }, [productId]);
   useEffect(() => { load(); return () => { loadToken.current++; }; }, [load]);
   const selected = products.find((item) => String(item.id) === productId);
-  useEffect(() => { setOffersExpanded(false); setExpiredOffersExpanded(false); }, [selected?.id]);
+  useEffect(() => { setOffersExpanded(false); setExpiredOffersExpanded(false); setCurrentOffersPage(1); setExpiredOffersPage(1); }, [selected?.id]);
   useEffect(() => { if (!offersExpanded) setExpiredOffersExpanded(false); }, [offersExpanded]);
   const currentOffers = selected?.offers.filter((offer) => !offer.is_expired).sort((a, b) => a.total_cost - b.total_cost) || [];
   const expiredOffers = selected?.offers.filter((offer) => offer.is_expired).sort((a, b) => String(b.recorded_at).localeCompare(String(a.recorded_at))) || [];
+  const currentOffersPages = Math.max(1, Math.ceil(currentOffers.length / OFFERS_PER_PAGE));
+  const expiredOffersPages = Math.max(1, Math.ceil(expiredOffers.length / OFFERS_PER_PAGE));
+  useEffect(() => { setCurrentOffersPage((page) => Math.min(page, currentOffersPages)); }, [currentOffersPages]);
+  useEffect(() => { setExpiredOffersPage((page) => Math.min(page, expiredOffersPages)); }, [expiredOffersPages]);
+  const pagedCurrentOffers = currentOffers.slice((currentOffersPage - 1) * OFFERS_PER_PAGE, currentOffersPage * OFFERS_PER_PAGE);
+  const pagedExpiredOffers = expiredOffers.slice((expiredOffersPage - 1) * OFFERS_PER_PAGE, expiredOffersPage * OFFERS_PER_PAGE);
   const categories = useMemo(() => [...new Set(products.map((item) => item.category).filter(Boolean))].sort(), [products]);
   const filtered = products.filter((product) => (statusFilter === "all" || product.status === statusFilter)
     && (categoryFilter === "all" || product.category === categoryFilter)
@@ -364,6 +451,7 @@ export default function DesiredProductsPage({ categories: availableCategories = 
               <div className="desired-metrics"><div><small>Maior custo</small><strong>{formatMoney(selected.highest_price, language)}</strong></div><div><small>Economia possível</small><strong>{formatMoney(selected.savings || 0, language)}</strong></div></div>
               {selected.savings > 0 && <p className="desired-saving"><Trophy size={16} /> Você economiza {formatMoney(selected.savings, language)} escolhendo a melhor oferta.</p>}</>}
           <p className="desired-hint"><Info size={14} /> O custo total considera o preço do produto e o frete. Compare condições de pagamento separadamente.</p>
+          {selected.offers.length > 0 && <PriceTrendChart offers={selected.offers} targetPrice={selected.target_price} language={language} />}
           {selected.status === "bought" && <div className="desired-purchase"><span className="desired-purchase-icon"><Check size={17} /></span><div><strong>Compra registrada</strong><span>{selected.purchase_store || "Oferta removida"} · {formatMoney(selected.paid_price, language)} · {dateLabel(selected.purchase_date, language)}</span>
             <small>{PAYMENTS[selected.purchase_payment_method]}{selected.purchase_installment_count ? ` · ${selected.purchase_installment_count}x de ${formatMoney(selected.purchase_installment_amount, language)}` : ""}</small></div>
             {selected.offers.length > 0 && <button className="btn btn-ghost compact" onClick={() => setModal({ type: "purchase" })}>Editar compra</button>}</div>}
@@ -378,11 +466,11 @@ export default function DesiredProductsPage({ categories: availableCategories = 
         <div id="desired-offers-panel" className="desired-offers-panel" hidden={!offersExpanded}>
           {selected.offers.length === 0 ? <div className="desired-empty desired-offers-empty"><span><ShoppingBag size={26} /></span><h3>Nenhuma oferta cadastrada</h3><p>Adicione a primeira loja e comece a acompanhar os preços.</p><button className="btn btn-primary compact" onClick={() => setModal({ type: "offer" })}><Plus size={15} /> Adicionar oferta</button></div>
             : <div className="desired-offer-groups">
-              {currentOffers.length > 0 ? <section className="desired-current-offers" aria-label="Ofertas atuais"><header><strong>Ofertas atuais</strong><small>{currentOffers.length} {currentOffers.length === 1 ? "preço válido" : "preços válidos"}</small></header><div className="desired-offers">{currentOffers.map((offer) => <OfferCard key={offer.id} offer={offer} bestOfferId={selected.best_offer_id} language={language} onEdit={(item) => setModal({ type: "offer", offer: item })} onDelete={(item) => setModal({ type: "delete-offer", offer: item })} />)}</div></section>
+              {currentOffers.length > 0 ? <section className="desired-current-offers" aria-label="Ofertas atuais"><header><strong>Ofertas atuais</strong><small>{currentOffers.length} {currentOffers.length === 1 ? "preço válido" : "preços válidos"}</small></header><div className="desired-offers">{pagedCurrentOffers.map((offer) => <OfferCard key={offer.id} offer={offer} bestOfferId={selected.best_offer_id} language={language} onEdit={(item) => setModal({ type: "offer", offer: item })} onDelete={(item) => setModal({ type: "delete-offer", offer: item })} />)}</div><OfferPagination page={currentOffersPage} total={currentOffers.length} label="ofertas atuais" onPageChange={setCurrentOffersPage} /></section>
                 : <div className="desired-current-offers-empty"><Info size={16} /><span>Nenhuma oferta atual para comparar.</span></div>}
               {expiredOffers.length > 0 && <section className={`desired-expired-offers ${expiredOffersExpanded ? "expanded" : ""}`}>
                 <button type="button" className="desired-expired-toggle" aria-expanded={expiredOffersExpanded} aria-controls="desired-expired-offers-panel" onClick={() => setExpiredOffersExpanded((current) => !current)}><span><CalendarDays size={17} /><span><strong>Ofertas vencidas ({expiredOffers.length})</strong><small>Preços com mais de 30 dias não entram na comparação.</small></span></span><ChevronDown size={18} /></button>
-                <div id="desired-expired-offers-panel" className="desired-expired-panel" hidden={!expiredOffersExpanded}><div className="desired-offers">{expiredOffers.map((offer) => <OfferCard key={offer.id} offer={offer} bestOfferId={selected.best_offer_id} language={language} onEdit={(item) => setModal({ type: "offer", offer: item })} onDelete={(item) => setModal({ type: "delete-offer", offer: item })} />)}</div></div>
+                <div id="desired-expired-offers-panel" className="desired-expired-panel" hidden={!expiredOffersExpanded}><div className="desired-offers">{pagedExpiredOffers.map((offer) => <OfferCard key={offer.id} offer={offer} bestOfferId={selected.best_offer_id} language={language} onEdit={(item) => setModal({ type: "offer", offer: item })} onDelete={(item) => setModal({ type: "delete-offer", offer: item })} />)}</div><OfferPagination page={expiredOffersPage} total={expiredOffers.length} label="ofertas vencidas" onPageChange={setExpiredOffersPage} /></div>
               </section>}
             </div>}
         </div>

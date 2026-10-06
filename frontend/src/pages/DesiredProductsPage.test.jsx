@@ -30,6 +30,11 @@ async function select(user, scope, name, option) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   window.scrollTo = vi.fn();
   window.matchMedia = vi.fn(() => ({ matches: false }));
@@ -197,6 +202,33 @@ it("shows the consolidated store price history on the current offer", async () =
   await user.click(summary);
   expect(screen.getByText("20/11/2025")).toBeInTheDocument();
   expect(screen.getByText("06/10/2026")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Evolução do menor preço" })).toBeInTheDocument();
+  expect(screen.getByText("2 datas registradas")).toBeInTheDocument();
+  expect(screen.getByText(/Menor histórico/)).toHaveTextContent("R$ 339,00");
+});
+
+it("paginates current and expired offers independently with ten cards per page", async () => {
+  const user = userEvent.setup();
+  const current = Array.from({ length: 12 }, (_, index) => ({ id: index + 1, store: `Atual ${index + 1}`, price: `${100 + index}.00`, total_cost: `${100 + index}.00`, payment_method: "pix", recorded_at: "2026-10-06", price_history: [], is_expired: false }));
+  const expired = Array.from({ length: 11 }, (_, index) => ({ id: index + 20, store: `Vencida ${index + 1}`, price: `${200 + index}.00`, total_cost: `${200 + index}.00`, payment_method: "pix", recorded_at: `2025-11-${String(index + 1).padStart(2, "0")}`, price_history: [], is_expired: true }));
+  api.getDesiredProduct.mockResolvedValue({ ...product, best_offer_id: 1, best_price: "100.00", highest_price: "111.00", offer_count: 23, offers: [...current, ...expired] });
+  show("/produtos-desejados/1");
+
+  await user.click(await screen.findByRole("button", { name: "Ver ofertas (23)" }));
+  const currentSection = screen.getByRole("region", { name: "Ofertas atuais" });
+  expect(currentSection.querySelectorAll(".desired-offer")).toHaveLength(10);
+  const currentPagination = within(currentSection).getByRole("navigation", { name: "Paginação das ofertas atuais" });
+  expect(within(currentPagination).getByText("1–10")).toBeInTheDocument();
+  await user.click(within(currentPagination).getByRole("button", { name: "Próxima página" }));
+  expect(currentSection.querySelectorAll(".desired-offer")).toHaveLength(2);
+  expect(within(currentPagination).getByText("11–12")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /Ofertas vencidas \(11\)/ }));
+  const expiredPanel = document.querySelector("#desired-expired-offers-panel");
+  expect(expiredPanel.querySelectorAll(".desired-offer")).toHaveLength(10);
+  const expiredPagination = within(expiredPanel).getByRole("navigation", { name: "Paginação das ofertas vencidas" });
+  await user.click(within(expiredPagination).getByRole("button", { name: "Próxima página" }));
+  expect(expiredPanel.querySelectorAll(".desired-offer")).toHaveLength(1);
 });
 
 it("preserves offer links and validates the custom date when editing", async () => {
