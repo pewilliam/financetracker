@@ -229,6 +229,7 @@ export const ptBR = {
     subscriptions: "Assinaturas",
     simulator: "Simulador",
     receivables: "Recebíveis",
+    desiredProducts: "Produtos desejados",
     categories: "Orçamento e gastos",
     settings: "Configurações",
     collapse: "Recolher sidebar",
@@ -255,6 +256,7 @@ export const ptBR = {
     subscriptions: "Assinaturas",
     simulator: "Simulador",
     theme: "Tema",
+    desiredProducts: "Produtos desejados",
     settings: "Configurações",
     more: "Mais"
   },

@@ -252,6 +252,7 @@ export const enUS = {
     subscriptions: "Subscriptions",
     simulator: "Simulator",
     receivables: "Receivables",
+    desiredProducts: "Wishlist",
     categories: "Budget and spending",
     settings: "Settings",
     collapse: "Collapse sidebar",
@@ -278,6 +279,7 @@ export const enUS = {
     subscriptions: "Subscriptions",
     simulator: "Simulator",
     theme: "Theme",
+    desiredProducts: "Wishlist",
     settings: "Settings",
     more: "More"
   },

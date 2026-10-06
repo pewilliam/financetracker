@@ -19,6 +19,7 @@ import ReceivablesPage, { receivableGroupForId } from "../../pages/ReceivablesPa
 import CategoriesPage from "../../pages/CategoriesPage.jsx";
 import WalletsPage from "../../pages/WalletsPage.jsx";
 import SettingsPage from "../../pages/SettingsPage.jsx";
+import DesiredProductsPage from "../../pages/DesiredProductsPage.jsx";
 import CardsPage from "../../pages/CardsPage.jsx";
 import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
@@ -1441,6 +1442,8 @@ export default function AppShell() {
               <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveTransaction={moveMonthTransaction} />} />
               <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
               <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
+              <Route path="/produtos-desejados" element={<DesiredProductsPage onOverlayChange={setPageOverlayOpen} />} />
+              <Route path="/produtos-desejados/:productId" element={<DesiredProductsPage onOverlayChange={setPageOverlayOpen} />} />
               <Route path="/faturas" element={<InvoicesPage invoices={invoices} cards={cards} categories={categories} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onLoadCategoryDetails={loadCategoryExpenseDetails} onLoadInvoiceItems={loadInvoiceDetails} onEnsureExpenseContext={() => ensureExtras(["expenseOptions"])} onOverlayChange={setPageOverlayOpen} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} addItem={addItem} addPurchase={addPurchase} updateItem={saveItem} updateDueDate={saveInvoiceDueDate} createInstallment={createNewInstallment} deleteItem={deleteItem} deleteInstallmentItem={removeInstallmentItem} togglePaid={toggleInvoicePaid} deleteInvoice={removeInvoice} onViewInstallment={showInstallmentDetails} onCancelSubscription={cancelSubscription} />} />
               <Route path="/cartoes" element={<CardsPage onChanged={syncInvoiceAndMonthCollections} onViewCurrentInvoice={viewCurrentCardInvoice} />} />
               <Route path="/modelos-de-fatura" element={<Navigate to="/cartoes" replace />} />
