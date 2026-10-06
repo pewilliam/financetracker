@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen, within, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../i18n/index.ts";
@@ -30,6 +30,7 @@ async function select(user, scope, name, option) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   window.scrollTo = vi.fn();
   window.matchMedia = vi.fn(() => ({ matches: false }));
   api.listDesiredProducts.mockResolvedValue([product]);
@@ -196,16 +197,18 @@ it.each([["image", "Imagem ou GIF", "https://media.example/photo.png"], ["image"
   expect(name).not.toHaveFocus();
   expect(node.querySelector("label")).toBeNull();
   expect(dialog.queryByRole("button", {name:"Buscar dados do link"})).not.toBeInTheDocument();
-  await select(user, dialog, "Adicionar mídia por", "URL");
   await user.type(dialog.getByLabelText("URL da mídia"), url);
-  await select(user, dialog, "Tipo de mídia", label);
   if (type === "video") {
+    await waitFor(() => expect(node.querySelector("video")).toHaveAttribute("src", url));
     const video = node.querySelector("video");
-    expect(video).toHaveAttribute("preload", "none");
-    expect(video).not.toHaveAttribute("src");
-    expect(dialog.getByRole("button", {name:"Reproduzir vídeo"})).toBeInTheDocument();
-    expect(video).not.toHaveAttribute("autoplay");
-  } else expect(dialog.getByRole("img")).toHaveAttribute("src", url);
+    expect(video).toHaveAttribute("autoplay");
+    expect(video).toHaveAttribute("loop");
+    expect(video).toHaveAttribute("playsinline");
+    expect(video.muted).toBe(true);
+  } else await waitFor(() => expect(dialog.getByRole("img")).toHaveAttribute("src", url));
+  expect(dialog.queryByRole("button", {name:"Adicionar mídia por"})).not.toBeInTheDocument();
+  expect(dialog.queryByRole("button", {name:"Tipo de mídia"})).not.toBeInTheDocument();
+  expect(dialog.getByRole("button", {name:"Enviar imagem"})).toBeInTheDocument();
   await user.click(dialog.getByRole("button", {name:"Criar produto"}));
   await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({media_url:url, media_type:type, image_data:null})));
 });
@@ -223,4 +226,45 @@ it("keeps and removes saved URL media while editing", async () => {
   await user.click(dialog.getByRole("button", {name:"Remover mídia"}));
   await user.click(dialog.getByRole("button", {name:"Salvar alterações"}));
   await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, expect.objectContaining({media_url:null, media_type:"image", image_data:null})));
+});
+
+
+it("saves and reapplies framing across details and the editor, and resets it", async () => {
+  const user = userEvent.setup();
+  const frame = { fit: "cover", x: 25, y: 80, zoom: 1.5 };
+  const saved = { ...product, media_url: "https://media.example/demo.mp4", media_type: "video", media_frame: frame };
+  api.getDesiredProduct.mockResolvedValue(saved);
+  api.updateDesiredProduct.mockResolvedValue(saved);
+  show("/produtos-desejados/1");
+  await screen.findByRole("heading", {name: "Ofertas (0)"});
+  expect(document.querySelector("video")).toHaveStyle({ objectFit: "cover", objectPosition: "25% 80%", transform: "scale(1.5)" });
+  await user.click(screen.getByRole("button", {name:"Editar", exact:true}));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.getByRole("slider", {name:"Zoom da mídia"})).toHaveValue("1.5");
+  fireEvent.change(dialog.getByRole("slider", {name:"Posição horizontal"}), {target:{value:"70"}});
+  await user.click(dialog.getByRole("button", {name:"Salvar alterações"}));
+  await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, expect.objectContaining({media_frame:{...frame, x:70}})));
+  await user.click(screen.getByRole("button", {name:"Editar", exact:true}));
+  await user.click(screen.getByRole("button", {name:"Restaurar enquadramento"}));
+  await user.click(screen.getByRole("button", {name:"Salvar alterações"}));
+  await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenLastCalledWith(1, expect.objectContaining({media_frame:{fit:"contain", x:50, y:50, zoom:1}})));
+});
+
+it("detects an extensionless video by loading without asking for the type", async () => {
+  const user = userEvent.setup();
+  const url = "https://media.example/asset?id=123";
+  api.createDesiredProduct.mockResolvedValue(product);
+  show();
+  await user.click(await screen.findByRole("button", {name:"Novo produto"}));
+  const node = screen.getByRole("dialog");
+  const dialog = within(node);
+  await user.type(dialog.getByLabelText("Nome do produto *"), "Vídeo sem extensão");
+  await user.type(dialog.getByLabelText("URL da mídia"), url);
+  await waitFor(() => expect(dialog.getByRole("img")).toHaveAttribute("src", url));
+  fireEvent.error(dialog.getByRole("img"));
+  const video = node.querySelector("video");
+  expect(video).toHaveAttribute("src", url);
+  fireEvent.loadedData(video);
+  await user.click(dialog.getByRole("button", {name:"Criar produto"}));
+  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({media_url:url, media_type:"video"})));
 });

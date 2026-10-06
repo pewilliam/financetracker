@@ -66,6 +66,13 @@ class PlanningModel(APIModel):
     model_config = ConfigDict(extra="forbid", json_encoders={Decimal: str, datetime: serialize_datetime})
 
 
+class MediaFrame(PlanningModel):
+    fit: Literal["contain", "cover"] = "contain"
+    x: float = Field(default=50, ge=0, le=100, allow_inf_nan=False)
+    y: float = Field(default=50, ge=0, le=100, allow_inf_nan=False)
+    zoom: float = Field(default=1, ge=1, le=3, allow_inf_nan=False)
+
+
 class ProductCreate(PlanningModel):
     name: str = Field(min_length=1, max_length=255)
     category: str | None = Field(default=None, max_length=100)
@@ -77,6 +84,7 @@ class ProductCreate(PlanningModel):
     image_data: str | None = None
     media_url: str | None = Field(default=None, max_length=2048)
     media_type: Literal["image", "video"] = "image"
+    media_frame: MediaFrame = Field(default_factory=MediaFrame)
     priority: Priority = "medium"
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
@@ -130,6 +138,7 @@ class ProductUpdate(PlanningModel):
     image_data: str | None = None
     media_url: str | None = Field(default=None, max_length=2048)
     media_type: Literal["image", "video"] = "image"
+    media_frame: MediaFrame | None = None
     priority: Priority | None = None
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
@@ -286,6 +295,7 @@ class ProductOut(PlanningModel):
     image_data: str | None
     media_url: str | None
     media_type: Literal["image", "video"]
+    media_frame: MediaFrame
     image_source: str
     priority: str
     target_price: Decimal | None

@@ -194,6 +194,20 @@ class DesiredProductAPITests(unittest.TestCase):
             self.assertIsNone(cleared["media_url"])
             self.assertEqual(cleared["media_type"], "image")
 
+    def test_media_framing_persistence_validation_and_ownership(self):
+        frame = {"fit": "cover", "x": 25, "y": 80, "zoom": 1.5}
+        product = self.product(media_url="https://media.example/demo.mp4", media_type="video", media_frame=frame)
+        path = f"/{product['id']}"
+        self.assertEqual(self.request("GET", path)["media_frame"], frame)
+        self.assertEqual(self.request("GET")[0]["media_frame"], frame)
+        self.request("PATCH", path, {"media_frame": {"x": 70}}, expected=404, headers=self.other_headers)
+        self.assertEqual(self.request("PATCH", path, {"name": "Novo"})["media_frame"], frame)
+        for invalid in [{"fit": "fill"}, {"zoom": 0}, {"zoom": 4}, {"x": -1}, {"y": 101}, {"zoom": "NaN"}, {"x": "Infinity"}, {"unknown": 1}]:
+            self.request("PATCH", path, {"media_frame": invalid}, expected=422)
+        default = {"fit": "contain", "x": 50.0, "y": 50.0, "zoom": 1.0}
+        self.assertEqual(self.request("PATCH", path, {"media_frame": None})["media_frame"], default)
+        self.assertEqual(self.product(image_data=IMAGE)["media_frame"], default)
+
     def test_media_validation_and_removed_metadata_endpoint(self):
         for data in [
             {"media_url": "javascript:alert(1)"}, {"media_url": "file:///etc/passwd"},
@@ -226,6 +240,10 @@ class DesiredProductMigrationTests(unittest.TestCase):
         media_spec = importlib.util.spec_from_file_location("media_migration", media_path)
         media_migration = importlib.util.module_from_spec(media_spec)
         media_spec.loader.exec_module(media_migration)
+        frame_path = Path(__file__).parents[1] / "alembic/versions/0042_product_media_frame.py"
+        frame_spec = importlib.util.spec_from_file_location("frame_migration", frame_path)
+        frame_migration = importlib.util.module_from_spec(frame_spec)
+        frame_spec.loader.exec_module(frame_migration)
         engine = create_engine("sqlite://")
         with engine.begin() as connection:
             connection.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)")
@@ -240,8 +258,13 @@ class DesiredProductMigrationTests(unittest.TestCase):
                 connection.exec_driver_sql("UPDATE desired_products SET image_data=? WHERE id=1", (IMAGE,))
                 media_migration.upgrade()
                 self.assertEqual(connection.exec_driver_sql("SELECT image_data, media_url, media_type FROM desired_products WHERE id=1").one(), (IMAGE, None, "image"))
+                frame_migration.upgrade()
+                self.assertIsNone(connection.exec_driver_sql("SELECT media_frame FROM desired_products WHERE id=1").scalar())
+                connection.exec_driver_sql("UPDATE desired_products SET media_frame=? WHERE id=1", ('{"fit":"cover","x":25,"y":80,"zoom":1.5}',))
                 for model in (DesiredProduct, ProductOffer, OfferPriceHistory):
                     self.assertEqual({column.name for column in model.__table__.columns}, {column["name"] for column in inspect(connection).get_columns(model.__tablename__)})
+                frame_migration.downgrade()
+                self.assertEqual(connection.exec_driver_sql("SELECT image_data, media_url, media_type FROM desired_products WHERE id=1").one(), (IMAGE, None, "image"))
                 media_migration.downgrade()
                 self.assertEqual(connection.exec_driver_sql("SELECT image_data FROM desired_products WHERE id=1").scalar(), IMAGE)
                 import_migration.downgrade()
