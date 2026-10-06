@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowUpRight, CalendarDays, Check, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, updateDesiredProduct, updateProductOffer } from "../api/api.js";
@@ -218,6 +218,35 @@ function TargetNote({ product, language }) {
     {gap <= 0 ? "Seu preço-alvo foi atingido" : `${formatMoney(gap, language)} acima do seu preço desejado`}</span>;
 }
 
+function ProductCard({ product, language }) {
+  return <article className="card desired-product-card">
+    <div className="desired-cover">
+      <ProductMedia product={product} alt={product.name} />
+      <span className={`desired-card-status status-${product.status}`}>{STATUSES[product.status]}</span>
+    </div>
+    <div className="desired-card-body">
+      <div className="desired-card-title">
+        <h2>{product.name}</h2>
+        {product.category && <p>{product.category}</p>}
+      </div>
+      <div className="desired-card-pricing">
+        <div className="desired-card-price"><small>Melhor oferta</small>
+          {product.best_price != null ? <strong>{formatMoney(product.best_price, language)}</strong> : <span>Ainda sem ofertas</span>}
+        </div>
+        <span className="desired-card-offers"><ShoppingBag size={14} />{product.offer_count} {product.offer_count === 1 ? "oferta" : "ofertas"}</span>
+      </div>
+      {product.target_price != null && <div className="desired-card-target">
+        <div><span>Preço-alvo</span><strong>{formatMoney(product.target_price, language)}</strong></div>
+        <TargetNote product={product} language={language} />
+      </div>}
+    </div>
+    <footer className="desired-card-footer">
+      <span className={`desired-card-priority priority-${product.priority}`}><i aria-hidden="true" />Prioridade {PRIORITIES[product.priority]}</span>
+      <Link className="desired-card-open desired-card-link" to={`/produtos-desejados/${product.id}`} aria-label={`Ver produto ${product.name}`}>Ver detalhes <ArrowUpRight size={16} /></Link>
+    </footer>
+  </article>;
+}
+
 export default function DesiredProductsPage({ categories: availableCategories = [], onCreateCategory, onOverlayChange }) {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -269,7 +298,7 @@ export default function DesiredProductsPage({ categories: availableCategories = 
   };
   return <section className="desired-page">
     {productId && <button className="btn btn-ghost compact desired-back" onClick={() => navigate("/produtos-desejados")}><ArrowLeft size={16} /> Todos os produtos</button>}
-    <header className="card desired-hero"><div><span className="desired-eyebrow">PLANEJAMENTO DE COMPRAS</span><h1>{selected?.name || "Produtos desejados"}</h1>
+    <header className="page-header desired-header"><div><p className="eyebrow">PLANEJAMENTO DE COMPRAS</p><h1>{selected?.name || "Produtos desejados"}</h1>
       <p>{selected ? "Compare as ofertas e escolha quando vale a pena comprar." : "Guarde ideias, compare ofertas e acompanhe seu preço-alvo."}</p></div>
       <button className="btn btn-primary" disabled={loading || Boolean(error) || Boolean(productId && !selected)} onClick={() => setModal(selected ? { type: "offer" } : { type: "product" })}><Plus size={17} /> {selected ? "Adicionar oferta" : "Novo produto"}</button></header>
     {loading && <div className="card desired-empty">Carregando produtos...</div>}
@@ -280,14 +309,7 @@ export default function DesiredProductsPage({ categories: availableCategories = 
         <div className="field-label"><span>Categoria</span><FilterSelect ariaLabel="Categoria" value={categoryFilter} onChange={setCategoryFilter} searchable options={[{ value: "all", label: "Todas" }, ...categories.map((category) => ({ value: category, label: category }))]} /></div>
         <div className="field-label"><span>Prioridade</span><FilterSelect ariaLabel="Prioridade" value={priorityFilter} onChange={setPriorityFilter} options={[{ value: "all", label: "Todas" }, ...optionsFor(PRIORITIES)]} /></div></div>
       {filtered.length === 0 ? <div className="card desired-empty"><ShoppingBag size={34} /><h2>{products.length ? "Nenhum produto encontrado" : "Sua lista começa aqui"}</h2><p>{products.length ? "Altere os filtros para encontrar outro produto." : "Cadastre um produto e adicione quantas ofertas quiser."}</p></div>
-        : <div className="desired-grid">{filtered.map((product) => <article key={product.id} className="card desired-product-card">
-          <div className="desired-cover"><ProductMedia product={product} alt={product.name} /></div>
-          <div className="desired-product-body"><div className="desired-tags"><span>{STATUSES[product.status]}</span><span>Prioridade {PRIORITIES[product.priority]}</span></div><h2>{product.name}</h2>
-            {product.category && <p>{product.category}</p>}<strong>Melhor oferta: {product.best_price != null ? formatMoney(product.best_price, language) : "Ainda sem ofertas"}</strong>
-            {product.target_price != null && <small>Preço-alvo: {formatMoney(product.target_price, language)}</small>}
-            <small>{product.offer_count} {product.offer_count === 1 ? "oferta" : "ofertas"}</small><TargetNote product={product} language={language} />
-            <button className="btn btn-ghost" onClick={() => navigate(`/produtos-desejados/${product.id}`)}>Ver produto <ArrowUpRight size={16} /></button></div>
-        </article>)}</div>}
+        : <div className="desired-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} language={language} />)}</div>}
     </>}
     {!loading && !error && selected && <>
       <div className="desired-detail-grid"><div className="card desired-product-summary"><div className="desired-detail-image"><ProductMedia product={selected} alt={selected.name} /></div>

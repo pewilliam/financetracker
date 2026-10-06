@@ -123,7 +123,26 @@ try {
   }
   await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
   assert.equal(await page.locator('.desired-cover video').getAttribute('src'), 'https://media.example/demo.webm');
-  await page.getByRole('button', {name:'Ver produto', exact:true}).click();
+  await page.waitForFunction(() => !document.querySelector('.desired-cover video').paused);
+  const productCard = page.locator('.desired-product-card');
+  await productCard.getByRole('button', {name:'Pausar vídeo'}).click();
+  assert.ok(page.url().endsWith('/produtos-desejados'));
+  assert.ok(await productCard.locator('video').evaluate(video => video.paused));
+  await productCard.getByRole('button', {name:'Ativar som'}).click();
+  assert.ok(page.url().endsWith('/produtos-desejados'));
+  await productCard.getByRole('button', {name:'Reproduzir vídeo'}).click();
+  await productCard.getByRole('button', {name:'Silenciar vídeo'}).click();
+  // The blank area of the card is covered by its native navigation link.
+  const cardBox = await productCard.boundingBox();
+  await page.mouse.click(cardBox.x + cardBox.width - 10, cardBox.y + cardBox.height / 2);
+  await page.waitForURL(/produtos-desejados\/\d+/);
+  await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
+  await page.getByRole('heading', {name:'Produtos desejados', exact:true}).waitFor();
+  await screenshot('desktop-product-list');
+  await page.evaluate(() => { document.documentElement.dataset.theme='dark'; document.documentElement.classList.add('dark'); });
+  await screenshot('desktop-product-list-dark');
+  await page.evaluate(() => { document.documentElement.dataset.theme='light'; document.documentElement.classList.remove('dark'); });
+  await page.getByRole('link', {name:/^Ver produto /}).click();
   await page.getByRole('heading', {name:'Ofertas (0)', exact:true}).waitFor();
   await screenshot('desktop-detail');
   // Framing matches the preview, details and cards and survives reload.
@@ -154,7 +173,7 @@ try {
   await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
   assert.deepEqual(await renderedFrame(page.locator('.desired-cover video')), {fit:'cover',position:'15% 70%',scale:'scale(1.5)'});
   await page.waitForFunction(() => !document.querySelector('.desired-cover video').paused);
-  await page.getByRole('button', {name:'Ver produto', exact:true}).click();
+  await page.getByRole('link', {name:/^Ver produto /}).click();
   await page.locator('.desired-actions').getByRole('button', {name:'Editar', exact:true}).click();
   dialog = page.getByRole('dialog');
   assert.equal(await dialog.getByRole('slider', {name:'Zoom da mídia'}).inputValue(), '1.5');
@@ -244,12 +263,19 @@ try {
   await dialog.waitFor({ state: 'hidden' });
   assert.equal((await savedProduct()).media_url, null);
   await page.getByRole('button', { name: 'Todos os produtos', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver produto', exact: true }).waitFor();
+  await page.getByRole('link', { name: /^Ver produto / }).waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile page has horizontal overflow');
+  await page.getByRole('heading', {name:'Produtos desejados', exact:true}).waitFor();
+  await screenshot('mobile-product-list');
+  const mobileCard = page.locator('.desired-product-card');
+  const mobileCardBox = await mobileCard.boundingBox();
+  await page.mouse.click(mobileCardBox.x + mobileCardBox.width - 8, mobileCardBox.y + mobileCardBox.height / 2);
+  await page.waitForURL(/produtos-desejados\/\d+/);
+  await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
   await select(page, 'Status', 'abandoned', 'Desisti');
   await page.getByText('Nenhum produto encontrado', { exact: true }).waitFor();
   await select(page, 'Status', 'bought', 'Comprado');
-  await page.getByRole('button', { name: 'Ver produto', exact: true }).click();
+  await page.getByRole('link', { name: /^Ver produto / }).click();
   await page.locator('.desired-purchase').getByText('Compra registrada', { exact: true }).waitFor();
   const foreign = await context.request.post(`${apiUrl}/auth/register`, { data: { name: 'Outra pessoa', email: `other${Date.now()}@example.com`, password } });
   assert.equal(foreign.status(), 201);
