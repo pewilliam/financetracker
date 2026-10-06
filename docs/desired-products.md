@@ -13,7 +13,13 @@ oferta independente. Todos os endpoints exigem o JWT já utilizado pelo sistema.
 - `OfferPriceHistory`: registro acrescentado no cadastro e quando preço, frete
   ou condições de pagamento mudam. Guarda os valores anteriores, data informada,
   momento do registro, origem e custo total; edições de observações não duplicam
-  o histórico. A API não oferece operações de edição de registros históricos.
+  o histórico. Uma correção apenas da data atualiza a data do último snapshot, sem
+  criar um preço fictício. A API não oferece operações diretas de edição de registros históricos.
+
+Na interface, o histórico exibido em cada oferta consolida os snapshots da mesma
+loja no produto, com comparação de nome sem diferenciar maiúsculas, minúsculas ou
+espaços excedentes. Isso inclui ofertas vencidas ou arquivadas, preservando a linha
+do tempo da loja sem misturar preços de estabelecimentos diferentes.
 
 Valores são `Decimal`/`Numeric(10, 2)` e strings decimais no JSON deste módulo.
 Entradas com mais de duas casas decimais, valores negativos ou acima do limite
@@ -23,8 +29,11 @@ arredondadas não alteram o ranking. Informe o preço total da condição escolh
 inclusive juros, para compará-la com outras condições. Frete não informado entra
 como zero e aparece explicitamente como não informado na interface.
 
-Menor/maior custo e economia consideram ofertas ativas do mesmo produto. Em
-empates, a oferta mais antiga é destacada. O preço-alvo é comparado ao menor custo.
+Menor/maior custo e economia consideram ofertas não excluídas registradas nos
+últimos 30 dias. Ofertas mais antigas continuam visíveis e com histórico acessível,
+mas são marcadas como preço vencido e não entram no ranking nem na verificação do
+preço-alvo. Em empates, a oferta mais antiga é destacada. O preço-alvo é comparado
+ao menor custo atual.
 
 Remover uma oferta a arquiva (`deleted_at`) e retira da comparação, preservando
 o histórico. Excluir o produto remove suas ofertas e históricos. A compra guarda

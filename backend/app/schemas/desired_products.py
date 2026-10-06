@@ -280,8 +280,10 @@ class OfferOut(PlanningModel):
     notes: str | None
     recorded_at: date
     source: str
+    is_expired: bool
     total_cost: Decimal
     price_history: list[PriceHistoryOut]
+    store_price_history: list[PriceHistoryOut]
 
 
 class ProductOut(PlanningModel):

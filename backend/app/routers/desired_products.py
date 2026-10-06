@@ -9,7 +9,7 @@ from app.models import DesiredProduct, ProductOffer, User
 from app.schemas.desired_products import OfferPayload, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
 from app.security import get_current_user
 from app.services.categories import get_user_category
-from app.services.desired_products import _fill_offer, _snapshot, _total_cost
+from app.services.desired_products import _fill_offer, _snapshot, _total_cost, offer_is_expired
 
 
 router = APIRouter(prefix="/api/desired-products", tags=["desired-products"])
@@ -35,7 +35,17 @@ def _load_offer(product: DesiredProduct, offer_id: int) -> ProductOffer:
     return offer
 
 
+def _store_key(store: str) -> str:
+    return " ".join(store.split()).casefold()
+
+
 def _serialize(product: DesiredProduct) -> dict:
+    store_price_history: dict[str, list] = {}
+    for product_offer in product.offers:
+        store_price_history.setdefault(_store_key(product_offer.store), []).extend(product_offer.price_history)
+    for history in store_price_history.values():
+        history.sort(key=lambda row: (row.recorded_at, row.created_at, row.id))
+
     offers = [
         {
             "id": offer.id,
@@ -50,12 +60,15 @@ def _serialize(product: DesiredProduct) -> dict:
             "notes": offer.notes,
             "recorded_at": offer.recorded_at,
             "source": offer.source,
+            "is_expired": offer_is_expired(offer),
             "total_cost": _total_cost(offer),
             "price_history": offer.price_history,
+            "store_price_history": store_price_history.get(_store_key(offer.store), []),
         }
         for offer in product.offers if offer.deleted_at is None
     ]
-    ordered = sorted(offers, key=lambda offer: (offer["total_cost"], offer["id"]))
+    comparable_offers = [offer for offer in offers if not offer["is_expired"]]
+    ordered = sorted(comparable_offers, key=lambda offer: (offer["total_cost"], offer["id"]))
     return {
         "id": product.id,
         "name": product.name,
@@ -178,9 +191,15 @@ def update_offer(product_id: int, offer_id: int, payload: OfferPayload, db: Sess
     product = _load_product(db, user.id, product_id)
     offer = _load_offer(product, offer_id)
     previous = (offer.price, offer.shipping, offer.payment_method, offer.installment_count, offer.installment_amount)
+    previous_recorded_at = offer.recorded_at
     _fill_offer(offer, payload)
     if previous != (offer.price, offer.shipping, offer.payment_method, offer.installment_count, offer.installment_amount):
         _snapshot(offer)
+    elif previous_recorded_at != offer.recorded_at:
+        if offer.price_history:
+            offer.price_history[-1].recorded_at = offer.recorded_at
+        else:
+            _snapshot(offer)
     db.commit()
     return _serialize(_load_product(db, user.id, product_id))
 

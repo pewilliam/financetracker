@@ -1,6 +1,7 @@
 import base64
 import importlib.util
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 from alembic.migration import MigrationContext
@@ -93,6 +94,29 @@ class DesiredProductAPITests(unittest.TestCase):
             self.assertEqual(db.query(ProductOffer).count(), 0)
             self.assertEqual(db.query(OfferPriceHistory).count(), 0)
 
+    def test_store_history_combines_offers_and_date_corrections(self):
+        product = self.product()
+        product = self.offer(product, store="Adidas", price="339.00", recorded_at="2026-10-06")
+        old_offer = product["offers"][0]
+        product = self.request("PUT", f"/{product['id']}/offers/{old_offer['id']}", {
+            "store": "Adidas", "price": "339.00", "recorded_at": "2025-11-20",
+        })
+        corrected = product["offers"][0]
+        self.assertEqual(len(corrected["price_history"]), 1)
+        self.assertEqual(corrected["price_history"][0]["recorded_at"], "2025-11-20")
+
+        product = self.offer(product, store="  ADIDAS  ", price="599.90", recorded_at="2026-10-06")
+        current = product["offers"][1]
+        self.assertEqual(
+            [row["recorded_at"] for row in current["store_price_history"]],
+            ["2025-11-20", "2026-10-06"],
+        )
+        self.assertEqual([row["price"] for row in current["store_price_history"]], ["339.00", "599.90"])
+
+        self.request("DELETE", f"/{product['id']}/offers/{old_offer['id']}", expected=204)
+        current = self.request("GET", f"/{product['id']}")["offers"][0]
+        self.assertEqual([row["price"] for row in current["store_price_history"]], ["339.00", "599.90"])
+
     def test_all_nested_routes_enforce_user_and_product_ownership(self):
         product = self.offer(self.product())
         path = f"/{product['id']}"
@@ -126,6 +150,25 @@ class DesiredProductAPITests(unittest.TestCase):
             with self.subTest(changes=changes):
                 self.request("POST", f"/{product['id']}/offers", {"store": "X", "price": "10.00", **changes}, expected=422)
         self.assertEqual(self.request("GET", f"/{product['id']}")["offer_count"], 2)
+
+    def test_expired_offers_remain_visible_but_do_not_affect_comparison(self):
+        product = self.product(target_price="400.00")
+        expired_date = (date.today() - timedelta(days=31)).isoformat()
+        current_date = date.today().isoformat()
+        product = self.offer(product, store="Oferta antiga", price="339.00", recorded_at=expired_date)
+        self.assertTrue(product["offers"][0]["is_expired"])
+        self.assertEqual(product["offer_count"], 1)
+        self.assertIsNone(product["best_offer_id"])
+        self.assertIsNone(product["best_price"])
+        self.assertIsNone(product["highest_price"])
+        self.assertIsNone(product["savings"])
+
+        product = self.offer(product, store="Oferta atual", price="599.99", recorded_at=current_date)
+        self.assertFalse(product["offers"][1]["is_expired"])
+        self.assertEqual(product["best_offer_id"], product["offers"][1]["id"])
+        self.assertEqual(product["best_price"], "599.99")
+        self.assertEqual(product["highest_price"], "599.99")
+        self.assertIsNone(product["savings"])
 
     def test_product_validation_optional_fields_and_status_transitions(self):
         for payload in [{"name": "  "}, {"name": "X", "user_id": 2}, {"name": "X", "image_data": "data:image/svg+xml;base64,AAAA"}, {"name": "X", "image_data": "data:image/png;base64,YWJj"}, {"name": "X", "target_price": "1.001"}, {"name": "X", "status": "bought"}]:

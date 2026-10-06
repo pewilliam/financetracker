@@ -146,6 +146,59 @@ it("retries a failed request and preserves purchase details without active offer
   expect(screen.queryByRole("button", { name: "Editar compra" })).not.toBeInTheDocument();
 });
 
+it("shows expired offers without using them to reach the target price", async () => {
+  const user = userEvent.setup();
+  const expiredOffer = { id: 7, store: "Adidas", price: "339.00", total_cost: "339.00", payment_method: "credit", installment_count: 3, installment_amount: "113.00", recorded_at: "2025-11-20", price_history: [], is_expired: true };
+  api.getDesiredProduct.mockResolvedValue({ ...product, target_price: "400.00", best_offer_id: null, best_price: null, highest_price: null, savings: null, offer_count: 1, offers: [expiredOffer] });
+  show("/produtos-desejados/1");
+  await screen.findByRole("heading", { name: "Ofertas (1)" });
+  expect(screen.getByText("Nenhuma oferta atual")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Ver ofertas (1)" }));
+  const expiredToggle = screen.getByRole("button", { name: /Ofertas vencidas \(1\)/ });
+  expect(expiredToggle).toHaveAttribute("aria-expanded", "false");
+  expect(document.querySelector("#desired-expired-offers-panel")).toHaveAttribute("hidden");
+  await user.click(expiredToggle);
+  expect(expiredToggle).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText("PREÇO VENCIDO")).toBeInTheDocument();
+  expect(screen.queryByText("Seu preço-alvo foi atingido")).not.toBeInTheDocument();
+});
+
+it("expands and collapses the offers section as an accordion", async () => {
+  const user = userEvent.setup();
+  const offers = [
+    { id: 7, store: "Amazon", price: "3499.00", total_cost: "3499.00", payment_method: "pix", recorded_at: "2026-10-06", price_history: [], is_expired: false },
+    { id: 8, store: "Kabum", price: "3599.00", total_cost: "3599.00", payment_method: "pix", recorded_at: "2026-10-06", price_history: [], is_expired: false },
+  ];
+  api.getDesiredProduct.mockResolvedValue({ ...product, best_offer_id: 7, best_price: "3499.00", highest_price: "3599.00", savings: "100.00", offer_count: 2, offers });
+  show("/produtos-desejados/1");
+
+  const toggle = await screen.findByRole("button", { name: "Ver ofertas (2)" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(document.querySelector("#desired-offers-panel")).toHaveAttribute("hidden");
+  await user.click(toggle);
+  expect(screen.getByRole("button", { name: "Ocultar ofertas (2)" })).toHaveAttribute("aria-expanded", "true");
+  expect(document.querySelector("#desired-offers-panel")).not.toHaveAttribute("hidden");
+  expect(screen.getByRole("heading", { name: "Amazon" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Kabum" })).toBeInTheDocument();
+});
+
+it("shows the consolidated store price history on the current offer", async () => {
+  const user = userEvent.setup();
+  const history = [
+    { id: 11, price: "339.00", total_cost: "339.00", recorded_at: "2025-11-20" },
+    { id: 12, price: "599.90", total_cost: "599.90", recorded_at: "2026-10-06" },
+  ];
+  const offer = { id: 8, store: "Adidas", price: "599.90", total_cost: "599.90", payment_method: "pix", recorded_at: "2026-10-06", price_history: [history[1]], store_price_history: history, is_expired: false };
+  api.getDesiredProduct.mockResolvedValue({ ...product, best_offer_id: 8, best_price: "599.90", highest_price: "599.90", offer_count: 1, offers: [offer] });
+  show("/produtos-desejados/1");
+
+  await user.click(await screen.findByRole("button", { name: "Ver ofertas (1)" }));
+  const summary = screen.getByText("Histórico de preços da loja (2)");
+  await user.click(summary);
+  expect(screen.getByText("20/11/2025")).toBeInTheDocument();
+  expect(screen.getByText("06/10/2026")).toBeInTheDocument();
+});
+
 it("preserves offer links and validates the custom date when editing", async () => {
   const user = userEvent.setup();
   const offer = { id: 7, store: "Amazon", url: "https://example.com/notebook", price: "3499.00", total_cost: "3499.00", payment_method: "pix", recorded_at: "2026-10-06", price_history: [] };
@@ -153,6 +206,7 @@ it("preserves offer links and validates the custom date when editing", async () 
   api.getDesiredProduct.mockResolvedValue(withOffer);
   api.updateProductOffer.mockResolvedValue(withOffer);
   show("/produtos-desejados/1");
+  await user.click(await screen.findByRole("button", { name: "Ver ofertas (1)" }));
   const link = await screen.findByRole("link", { name: "Ver na loja" });
   expect(link).toHaveAttribute("href", offer.url);
   expect(link).toHaveAttribute("target", "_blank");
@@ -188,6 +242,19 @@ it("allows clearing an optional planned date", async () => {
   await user.tab();
   await user.click(dialog.getByRole("button", { name: "Salvar alterações" }));
   await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, expect.objectContaining({ planned_purchase_date: null })));
+});
+
+it("uses the compact confirmation layout for product deletion", async () => {
+  const user = userEvent.setup();
+  show("/produtos-desejados/1");
+  await screen.findByRole("heading", { name: "Ofertas (0)" });
+  await user.click(screen.getByRole("button", { name: "Excluir", exact: true }));
+
+  const dialog = screen.getByRole("alertdialog", { name: "Excluir produto?" });
+  expect(dialog).toHaveClass("confirm-modal");
+  expect(dialog.querySelector(".confirm-modal-body")).toBeInTheDocument();
+  expect(dialog.querySelector("fieldset")).not.toHaveClass("form-stack");
+  expect(within(dialog).getByRole("button", { name: "Excluir" })).toHaveClass("danger-action");
 });
 
 it("creates a category inside the product editor without submitting the product", async () => {

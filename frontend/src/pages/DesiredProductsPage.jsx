@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Check, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleDollarSign, Info, Loader2, Pencil, Plus, ShoppingBag, Store, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -44,10 +44,10 @@ function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSub
   }, []);
   return createPortal(<div className="modal-layer invoice-template-modal-layer" role="presentation">
     <button type="button" className="modal-backdrop" onClick={close} disabled={busy} aria-label="Fechar" />
-    <form ref={formRef} className={`modal-card wallet-modal wallet-editor-modal invoice-template-editor-modal desired-modal ${danger ? "invoice-template-action-modal danger" : ""}`} onSubmit={(event) => { if (busy) event.preventDefault(); else onSubmit(event); }} role="dialog" aria-modal="true" aria-label={title}>
+    <form ref={formRef} className={`modal-card wallet-modal wallet-editor-modal invoice-template-editor-modal desired-modal ${danger ? "invoice-template-action-modal confirm-modal danger" : ""}`} onSubmit={(event) => { if (busy) event.preventDefault(); else onSubmit(event); }} role={danger ? "alertdialog" : "dialog"} aria-modal="true" aria-label={title}>
       <header className="wallet-transfer-header"><i><Icon size={20} /></i><div><small>PLANEJAMENTO DE COMPRAS</small><h2>{title}</h2>{hint && <p>{hint}</p>}</div><button type="button" className="icon-btn" onClick={close} disabled={busy} aria-label="Fechar"><X size={18} /></button></header>
-      <div className="wallet-modal-body"><fieldset disabled={busy} className="desired-modal-fields form-stack">{children}</fieldset></div>
-      <footer className="wallet-modal-actions"><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button type="submit" className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> Salvando...</> : submitLabel}</button></footer>
+      <div className={danger ? "confirm-modal-body desired-confirm-body" : "wallet-modal-body"}><fieldset disabled={busy} className={`desired-modal-fields ${danger ? "desired-confirm-fields" : "form-stack"}`}>{children}</fieldset></div>
+      <footer className={danger ? "modal-actions" : "wallet-modal-actions"}><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button type="submit" className={`btn ${danger ? "btn-primary danger-action" : "btn-primary"}`} disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> {danger ? "Excluindo..." : "Salvando..."}</> : <>{danger && <Trash2 size={16} />}{submitLabel}</>}</button></footer>
     </form>
   </div>, document.body);
 }
@@ -247,6 +247,19 @@ function ProductCard({ product, language }) {
   </article>;
 }
 
+function OfferCard({ offer, bestOfferId, language, onEdit, onDelete }) {
+  const priceHistory = offer.store_price_history || offer.price_history || [];
+  return <article className={`card desired-offer ${offer.id === bestOfferId ? "best" : ""} ${offer.is_expired ? "expired" : ""}`}>
+    <div className="desired-offer-top"><div className="desired-offer-store"><span className="desired-store-icon"><Store size={18} /></span><div>{offer.id === bestOfferId && <span className="desired-best"><Trophy size={13} /> MELHOR OFERTA</span>}{offer.is_expired && <span className="desired-expired"><CalendarDays size={13} /> PREÇO VENCIDO</span>}<h3>{offer.store}</h3><small>Preço registrado em {dateLabel(offer.recorded_at, language)}</small></div></div>
+      <div className="desired-offer-price"><small>Custo total</small><strong>{formatMoney(offer.total_cost, language)}</strong></div></div>
+    <div className="desired-offer-details"><span><small>Produto</small><strong>{formatMoney(offer.price, language)}</strong></span><span><small>Frete</small><strong>{offer.shipping != null ? formatMoney(offer.shipping, language) : "Não informado"}</strong></span><span><small>Pagamento</small><strong>{PAYMENTS[offer.payment_method]}{offer.payment_method === "credit" ? ` · ${offer.installment_count}x de ${formatMoney(offer.installment_amount, language)}` : ""}</strong></span></div>
+    {offer.notes && <p className="desired-offer-notes">{offer.notes}</p>}
+    <div className="desired-offer-actions">{offer.url && <a className="btn btn-ghost compact" href={offer.url} target="_blank" rel="noopener noreferrer">Ver na loja <ArrowUpRight size={15} /></a>}
+      <button className="btn btn-ghost compact" onClick={() => onEdit(offer)}><Pencil size={15} /> Editar</button><button className="btn btn-ghost compact desired-delete-action" onClick={() => onDelete(offer)}><Trash2 size={15} /> Excluir</button></div>
+    <details className="desired-history"><summary>Histórico de preços da loja ({priceHistory.length})</summary><ul>{priceHistory.map((row) => <li key={row.id}><span>{dateLabel(row.recorded_at, language)}</span><strong>{formatMoney(row.price, language)}</strong><small>Custo total {formatMoney(row.total_cost, language)}</small></li>)}</ul></details>
+  </article>;
+}
+
 export default function DesiredProductsPage({ categories: availableCategories = [], onCreateCategory, onOverlayChange }) {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -259,6 +272,8 @@ export default function DesiredProductsPage({ categories: availableCategories = 
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [busy, setBusy] = useState(false);
+  const [offersExpanded, setOffersExpanded] = useState(false);
+  const [expiredOffersExpanded, setExpiredOffersExpanded] = useState(false);
   useEffect(() => { onOverlayChange?.(Boolean(modal)); return () => onOverlayChange?.(false); }, [modal, onOverlayChange]);
   const loadToken = useRef(0);
   const load = useCallback(async () => {
@@ -273,6 +288,10 @@ export default function DesiredProductsPage({ categories: availableCategories = 
   }, [productId]);
   useEffect(() => { load(); return () => { loadToken.current++; }; }, [load]);
   const selected = products.find((item) => String(item.id) === productId);
+  useEffect(() => { setOffersExpanded(false); setExpiredOffersExpanded(false); }, [selected?.id]);
+  useEffect(() => { if (!offersExpanded) setExpiredOffersExpanded(false); }, [offersExpanded]);
+  const currentOffers = selected?.offers.filter((offer) => !offer.is_expired).sort((a, b) => a.total_cost - b.total_cost) || [];
+  const expiredOffers = selected?.offers.filter((offer) => offer.is_expired).sort((a, b) => String(b.recorded_at).localeCompare(String(a.recorded_at))) || [];
   const categories = useMemo(() => [...new Set(products.map((item) => item.category).filter(Boolean))].sort(), [products]);
   const filtered = products.filter((product) => (statusFilter === "all" || product.status === statusFilter)
     && (categoryFilter === "all" || product.category === categoryFilter)
@@ -311,37 +330,64 @@ export default function DesiredProductsPage({ categories: availableCategories = 
       {filtered.length === 0 ? <div className="card desired-empty"><ShoppingBag size={34} /><h2>{products.length ? "Nenhum produto encontrado" : "Sua lista começa aqui"}</h2><p>{products.length ? "Altere os filtros para encontrar outro produto." : "Cadastre um produto e adicione quantas ofertas quiser."}</p></div>
         : <div className="desired-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} language={language} />)}</div>}
     </>}
-    {!loading && !error && selected && <>
-      <div className="desired-detail-grid"><div className="card desired-product-summary"><div className="desired-detail-image"><ProductMedia product={selected} alt={selected.name} /></div>
-        <div className="desired-product-body"><div className="desired-tags"><span>{STATUSES[selected.status]}</span><span>Prioridade {PRIORITIES[selected.priority]}</span></div>
-          {selected.category && <p>{selected.category}</p>}{selected.ean && <p>EAN/GTIN: {selected.ean}</p>}{selected.source_url && <a className="btn btn-ghost compact" href={selected.source_url} target="_blank" rel="noopener noreferrer">Ver produto na loja <ArrowUpRight size={15} /></a>}{selected.description && <p>{selected.description}</p>}
-          {selected.planned_purchase_date && <p><CalendarDays size={15} /> Compra prevista: {dateLabel(selected.planned_purchase_date, language)}</p>}
-          {selected.target_price != null && <p>Preço-alvo: <strong>{formatMoney(selected.target_price, language)}</strong></p>}
-          <TargetNote product={selected} language={language} />
-          <div className="desired-actions"><button className="btn btn-ghost compact" onClick={() => setModal({ type: "product", product: selected })}><Pencil size={15} /> Editar</button>
-            {selected.status !== "bought" && selected.offers.length > 0 && <button className="btn btn-primary compact" onClick={() => setModal({ type: "purchase" })}><Check size={15} /> Marcar como comprado</button>}
-            <button className="btn btn-ghost compact" onClick={() => setModal({ type: "delete-product" })}><Trash2 size={15} /> Excluir</button></div>
-        </div></div><div className="card desired-comparison"><h2>Comparação de preços</h2>
-          {selected.best_price == null ? <p>Adicione ofertas para ver a comparação.</p> : <><div className="desired-metrics"><div><small>Menor custo</small><strong>{formatMoney(selected.best_price, language)}</strong></div><div><small>Maior custo</small><strong>{formatMoney(selected.highest_price, language)}</strong></div><div><small>Diferença / economia</small><strong>{formatMoney(selected.savings || 0, language)}</strong></div></div>
-            {selected.savings > 0 && <p className="desired-saving">Você economiza {formatMoney(selected.savings, language)} escolhendo a melhor oferta.</p>}</>}
-          <p className="desired-hint">Custo total = preço + frete. Cadastre uma oferta para cada condição de pagamento que quiser comparar.</p>
-          {selected.status === "bought" && <div className="desired-purchase"><strong>Compra registrada</strong><span>{selected.purchase_store || "Oferta removida"} · {formatMoney(selected.paid_price, language)} · {dateLabel(selected.purchase_date, language)}</span>
-            <small>{PAYMENTS[selected.purchase_payment_method]}{selected.purchase_installment_count ? ` · ${selected.purchase_installment_count}x de ${formatMoney(selected.purchase_installment_amount, language)}` : ""}</small>
+    {!loading && !error && selected && <div className="desired-detail-view">
+      <div className="desired-detail-grid">
+        <article className="card desired-product-summary">
+          <div className="desired-detail-image">
+            <ProductMedia product={selected} alt={selected.name} />
+            <div className="desired-image-tags"><span className={`status-${selected.status}`}>{STATUSES[selected.status]}</span><span>Prioridade {PRIORITIES[selected.priority]}</span></div>
+          </div>
+          <div className="desired-product-body">
+            {(selected.category || selected.description) && <div className="desired-product-copy">
+              {selected.category && <span className="desired-category">{selected.category}</span>}
+              {selected.description && <p className="desired-description">{selected.description}</p>}
+            </div>}
+            {(selected.target_price != null || selected.planned_purchase_date) && <div className="desired-product-facts">
+              {selected.target_price != null && <div><span className="desired-fact-icon"><Target size={17} /></span><span><small>Preço-alvo</small><strong>{formatMoney(selected.target_price, language)}</strong></span></div>}
+              {selected.planned_purchase_date && <div><span className="desired-fact-icon"><CalendarDays size={17} /></span><span><small>Compra prevista</small><strong>{dateLabel(selected.planned_purchase_date, language)}</strong></span></div>}
+            </div>}
+            <TargetNote product={selected} language={language} />
+            {(selected.source_url || selected.ean) && <div className="desired-product-links">
+              {selected.source_url && <a className="btn btn-ghost compact" href={selected.source_url} target="_blank" rel="noopener noreferrer">Ver produto na loja <ArrowUpRight size={15} /></a>}
+              {selected.ean && <small>EAN/GTIN {selected.ean}</small>}
+            </div>}
+            <div className="desired-actions"><button className="btn btn-ghost compact" onClick={() => setModal({ type: "product", product: selected })}><Pencil size={15} /> Editar</button>
+              {selected.status !== "bought" && selected.offers.length > 0 && <button className="btn btn-primary compact" onClick={() => setModal({ type: "purchase" })}><Check size={15} /> Marcar como comprado</button>}
+              <button className="btn btn-ghost compact desired-delete-action" onClick={() => setModal({ type: "delete-product" })}><Trash2 size={15} /> Excluir</button></div>
+          </div>
+        </article>
+
+        <aside className="card desired-comparison">
+          <header className="desired-panel-heading"><span><CircleDollarSign size={20} /></span><div><p>RESUMO DE PREÇOS</p><h2>Comparação de ofertas</h2></div></header>
+          {selected.best_price == null ? <div className="desired-comparison-empty"><span><Store size={24} /></span><div><strong>{selected.offers.length ? "Nenhuma oferta atual" : "Você ainda não adicionou ofertas"}</strong><p>{selected.offers.length ? "As ofertas cadastradas têm mais de 30 dias. Atualize os preços para comparar novamente." : "Cadastre preços de lojas diferentes para descobrir a melhor opção."}</p></div><button className="btn btn-primary compact" onClick={() => setModal({ type: "offer" })}><Plus size={15} /> {selected.offers.length ? "Adicionar preço atual" : "Adicionar primeira oferta"}</button></div>
+            : <><div className="desired-best-price"><small>Melhor custo encontrado</small><strong>{formatMoney(selected.best_price, language)}</strong><span>preço + frete</span></div>
+              <div className="desired-metrics"><div><small>Maior custo</small><strong>{formatMoney(selected.highest_price, language)}</strong></div><div><small>Economia possível</small><strong>{formatMoney(selected.savings || 0, language)}</strong></div></div>
+              {selected.savings > 0 && <p className="desired-saving"><Trophy size={16} /> Você economiza {formatMoney(selected.savings, language)} escolhendo a melhor oferta.</p>}</>}
+          <p className="desired-hint"><Info size={14} /> O custo total considera o preço do produto e o frete. Compare condições de pagamento separadamente.</p>
+          {selected.status === "bought" && <div className="desired-purchase"><span className="desired-purchase-icon"><Check size={17} /></span><div><strong>Compra registrada</strong><span>{selected.purchase_store || "Oferta removida"} · {formatMoney(selected.paid_price, language)} · {dateLabel(selected.purchase_date, language)}</span>
+            <small>{PAYMENTS[selected.purchase_payment_method]}{selected.purchase_installment_count ? ` · ${selected.purchase_installment_count}x de ${formatMoney(selected.purchase_installment_amount, language)}` : ""}</small></div>
             {selected.offers.length > 0 && <button className="btn btn-ghost compact" onClick={() => setModal({ type: "purchase" })}>Editar compra</button>}</div>}
-        </div></div>
-      <header className="desired-offer-head"><div><h2>Ofertas ({selected.offer_count})</h2><p>Cadastre preços de lojas diferentes para comparar.</p></div><button className="btn btn-ghost" onClick={() => setModal({ type: "offer" })}><Plus size={16} /> Adicionar oferta</button></header>
-      {selected.offers.length === 0 ? <div className="card desired-empty">Nenhuma oferta cadastrada. Adicione a primeira loja e seu preço.</div>
-        : <div className="desired-offers">{[...selected.offers].sort((a, b) => a.total_cost - b.total_cost).map((offer) => <article className={`card desired-offer ${offer.id === selected.best_offer_id ? "best" : ""}`} key={offer.id}>
-          <div className="desired-offer-top"><div>{offer.id === selected.best_offer_id && <span className="desired-best"><Trophy size={14} /> MELHOR OFERTA</span>}<h3>{offer.store}</h3><small>Registrado em {dateLabel(offer.recorded_at, language)}</small></div>
-            <strong>{formatMoney(offer.total_cost, language)}</strong></div>
-          <p>Preço: {formatMoney(offer.price, language)}{offer.shipping != null ? ` · Frete: ${formatMoney(offer.shipping, language)}` : " · Frete não informado"}</p>
-          <p>{PAYMENTS[offer.payment_method]}{offer.payment_method === "credit" ? ` · ${offer.installment_count}x de ${formatMoney(offer.installment_amount, language)}` : ""}</p>
-          {offer.notes && <p>{offer.notes}</p>}
-          <div className="desired-offer-actions">{offer.url && <a className="btn btn-ghost compact" href={offer.url} target="_blank" rel="noopener noreferrer">Ver na loja <ArrowUpRight size={15} /></a>}
-            <button className="btn btn-ghost compact" onClick={() => setModal({ type: "offer", offer })}><Pencil size={15} /> Editar</button><button className="btn btn-ghost compact" onClick={() => setModal({ type: "delete-offer", offer })}><Trash2 size={15} /> Excluir</button></div>
-          <details className="desired-history"><summary>Histórico de preços ({offer.price_history.length})</summary><ul>{offer.price_history.map((row) => <li key={row.id}><span>{dateLabel(row.recorded_at, language)}</span><strong>{formatMoney(row.price, language)}</strong><small>Custo total {formatMoney(row.total_cost, language)}</small></li>)}</ul></details>
-        </article>)}</div>}
-    </>}
+        </aside>
+      </div>
+
+      <section className={`card desired-offers-section ${offersExpanded ? "expanded" : ""}`}>
+        <header className="desired-offer-head">
+          <button type="button" className="desired-offers-toggle" aria-expanded={offersExpanded} aria-controls="desired-offers-panel" aria-label={`${offersExpanded ? "Ocultar" : "Ver"} ofertas (${selected.offer_count})`} onClick={() => setOffersExpanded((current) => !current)}><div><p className="eyebrow">PESQUISA DE PREÇOS</p><h2>Ofertas ({selected.offer_count})</h2><p>Compare valores, frete e formas de pagamento em um só lugar.</p></div><ChevronDown className="desired-offers-chevron" size={20} /></button>
+          <button className="btn btn-ghost" onClick={() => setModal({ type: "offer" })}><Plus size={16} /> Adicionar oferta</button>
+        </header>
+        <div id="desired-offers-panel" className="desired-offers-panel" hidden={!offersExpanded}>
+          {selected.offers.length === 0 ? <div className="desired-empty desired-offers-empty"><span><ShoppingBag size={26} /></span><h3>Nenhuma oferta cadastrada</h3><p>Adicione a primeira loja e comece a acompanhar os preços.</p><button className="btn btn-primary compact" onClick={() => setModal({ type: "offer" })}><Plus size={15} /> Adicionar oferta</button></div>
+            : <div className="desired-offer-groups">
+              {currentOffers.length > 0 ? <section className="desired-current-offers" aria-label="Ofertas atuais"><header><strong>Ofertas atuais</strong><small>{currentOffers.length} {currentOffers.length === 1 ? "preço válido" : "preços válidos"}</small></header><div className="desired-offers">{currentOffers.map((offer) => <OfferCard key={offer.id} offer={offer} bestOfferId={selected.best_offer_id} language={language} onEdit={(item) => setModal({ type: "offer", offer: item })} onDelete={(item) => setModal({ type: "delete-offer", offer: item })} />)}</div></section>
+                : <div className="desired-current-offers-empty"><Info size={16} /><span>Nenhuma oferta atual para comparar.</span></div>}
+              {expiredOffers.length > 0 && <section className={`desired-expired-offers ${expiredOffersExpanded ? "expanded" : ""}`}>
+                <button type="button" className="desired-expired-toggle" aria-expanded={expiredOffersExpanded} aria-controls="desired-expired-offers-panel" onClick={() => setExpiredOffersExpanded((current) => !current)}><span><CalendarDays size={17} /><span><strong>Ofertas vencidas ({expiredOffers.length})</strong><small>Preços com mais de 30 dias não entram na comparação.</small></span></span><ChevronDown size={18} /></button>
+                <div id="desired-expired-offers-panel" className="desired-expired-panel" hidden={!expiredOffersExpanded}><div className="desired-offers">{expiredOffers.map((offer) => <OfferCard key={offer.id} offer={offer} bestOfferId={selected.best_offer_id} language={language} onEdit={(item) => setModal({ type: "offer", offer: item })} onDelete={(item) => setModal({ type: "delete-offer", offer: item })} />)}</div></div>
+              </section>}
+            </div>}
+        </div>
+      </section>
+    </div>}
     {modal?.type === "product" && <ProductEditor key={modal.product?.id || "new"} product={modal.product} categories={availableCategories} onCreateCategory={onCreateCategory} onClose={() => setModal(null)} onSave={saveProduct} language={language} />}
     {modal?.type === "offer" && selected && <OfferEditor key={modal.offer?.id || "new"} offer={modal.offer} product={selected} onClose={() => setModal(null)} onSave={saveOffer} language={language} />}
     {modal?.type === "purchase" && selected && <PurchaseEditor product={selected} onClose={() => setModal(null)} onSave={async (payload) => { upsert(await recordProductPurchase(selected.id, payload)); toast.success("Compra registrada"); }} language={language} />}

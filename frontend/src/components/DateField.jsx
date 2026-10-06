@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
 
 function isValidDateParts(year, month, day) {
@@ -42,11 +42,6 @@ function formatTypedDate(value) {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
-function monthLabel(date, locale) {
-  const label = date.toLocaleDateString(locale, { month: "long", year: "numeric" });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
 function buildMonthDays(cursor) {
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -69,11 +64,13 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
   const { language } = useI18n();
   const parsedValue = parseIsoDate(value);
   const [open, setOpen] = useState(false);
+  const [periodPicker, setPeriodPicker] = useState(null);
   const [text, setText] = useState(formatDisplayDate(value, language));
-  const [cursor, setCursor] = useState(parsedValue || new Date());
+  const [cursor, setCursor] = useState(parsedValue || parseIsoDate(max) || new Date());
   const rootRef = useRef(null);
   const inputRef = useRef(null);
   const popoverRef = useRef(null);
+  const selectedYearRef = useRef(null);
   const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
@@ -81,7 +78,19 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
     if (parsedValue) setCursor(parsedValue);
   }, [value, language]);
 
-  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  useEffect(() => {
+    const maxValue = parseIsoDate(max);
+    if (maxValue && cursor > maxValue) setCursor(maxValue);
+  }, [max]);
+
+  useEffect(() => {
+    if (periodPicker !== "year") return undefined;
+    const raf = requestAnimationFrame(() => selectedYearRef.current?.scrollIntoView?.({ block: "center" }));
+    return () => cancelAnimationFrame(raf);
+  }, [periodPicker, cursor]);
+
+  useEffect(() => { if (disabled) { setOpen(false); setPeriodPicker(null); } }, [disabled]);
+  useEffect(() => { if (!open) setPeriodPicker(null); }, [open]);
 
   useEffect(() => {
     const closeOnOutside = (event) => {
@@ -131,13 +140,40 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       window.removeEventListener("resize", updatePopoverPosition);
       window.removeEventListener("scroll", updatePopoverPosition, true);
     };
-  }, [open, cursor]);
+  }, [open, cursor, periodPicker]);
 
   const days = useMemo(() => buildMonthDays(cursor), [cursor]);
   const todayIso = toIsoDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+  const maxDate = parseIsoDate(max);
+  const years = Array.from({ length: 101 }, (_, index) => 2000 + index);
+  const selectedYearOffset = cursor.getFullYear() - 2000;
+  const leadingYearSlots = selectedYearOffset >= 0 && selectedYearOffset <= 100
+    ? ((1 - (selectedYearOffset % 3) + 3) % 3)
+    : 0;
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const label = new Date(2024, index, 1).toLocaleDateString(language, { month: "long" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  });
+  const nextMonthStart = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  const nextMonthBlocked = Boolean(maxDate && nextMonthStart > maxDate);
 
   const moveMonth = (delta) => {
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1));
+    setPeriodPicker(null);
+  };
+
+  const selectMonth = (month) => {
+    setCursor(new Date(cursor.getFullYear(), Number(month), 1));
+    setPeriodPicker(null);
+  };
+
+  const selectYear = (year) => {
+    const nextYear = Number(year);
+    const nextMonth = maxDate && nextYear === maxDate.getFullYear()
+      ? Math.min(cursor.getMonth(), maxDate.getMonth())
+      : cursor.getMonth();
+    setCursor(new Date(nextYear, nextMonth, 1));
+    setPeriodPicker(null);
   };
 
   const blocked = (iso) => Boolean(max) && iso > max;
@@ -226,28 +262,38 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
         <div className="date-popover date-popover-floating date-day-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
             <button type="button" onClick={() => moveMonth(-1)} aria-label={language === "en-US" ? "Previous month" : "Mes anterior"}><ChevronLeft size={16} /></button>
-            <strong>{monthLabel(cursor, language)}</strong>
-            <button type="button" onClick={() => moveMonth(1)} aria-label={language === "en-US" ? "Next month" : "Proximo mes"}><ChevronRight size={16} /></button>
+            <div className="date-calendar-period">
+              <button type="button" className={periodPicker === "month" ? "active" : ""} aria-haspopup="listbox" aria-expanded={periodPicker === "month"} aria-label={language === "en-US" ? `Select month, ${months[cursor.getMonth()]}` : `Selecionar mês, ${months[cursor.getMonth()]}`} onClick={() => setPeriodPicker((current) => current === "month" ? null : "month")}>{months[cursor.getMonth()]} <ChevronDown size={13} /></button>
+              <button type="button" className={periodPicker === "year" ? "active" : ""} aria-haspopup="listbox" aria-expanded={periodPicker === "year"} aria-label={language === "en-US" ? `Select year, ${cursor.getFullYear()}` : `Selecionar ano, ${cursor.getFullYear()}`} onClick={() => setPeriodPicker((current) => current === "year" ? null : "year")}>{cursor.getFullYear()} <ChevronDown size={13} /></button>
+            </div>
+            <button type="button" disabled={nextMonthBlocked} onClick={() => moveMonth(1)} aria-label={language === "en-US" ? "Next month" : "Proximo mes"}><ChevronRight size={16} /></button>
           </div>
-          <div className="date-weekdays">
-            {Array.from({ length: 7 }, (_, index) => {
-              const day = new Date(2024, 0, 7 + index);
-              return <span key={day.toISOString()}>{day.toLocaleDateString(language, { weekday: "narrow" })}</span>;
-            })}
-          </div>
-          <div className="date-days">
-            {days.map((day) => (
-              <button
-                type="button"
-                key={day.iso}
-                className={`${day.currentMonth ? "" : "muted"} ${day.iso === value ? "selected" : ""} ${day.iso === todayIso ? "today" : ""}`}
-                disabled={blocked(day.iso)}
-                onClick={() => selectDate(day.iso)}
-              >
-                {day.date.getDate()}
-              </button>
-            ))}
-          </div>
+          {periodPicker === "month" ? <div className="date-period-options date-month-options" role="listbox" aria-label={language === "en-US" ? "Month" : "Mês"}>
+            {months.map((month, index) => <button type="button" role="option" aria-selected={index === cursor.getMonth()} className={index === cursor.getMonth() ? "selected" : ""} key={month} disabled={Boolean(maxDate && cursor.getFullYear() === maxDate.getFullYear() && index > maxDate.getMonth())} onClick={() => selectMonth(index)}>{month.slice(0, 3)}</button>)}
+          </div> : periodPicker === "year" ? <div className="date-period-options date-year-options" role="listbox" aria-label={language === "en-US" ? "Year" : "Ano"}>
+            {Array.from({ length: leadingYearSlots }, (_, index) => <i className="date-year-spacer" aria-hidden="true" key={`spacer-${index}`} />)}
+            {years.map((year) => <button ref={year === cursor.getFullYear() ? selectedYearRef : null} type="button" role="option" aria-selected={year === cursor.getFullYear()} className={year === cursor.getFullYear() ? "selected" : ""} disabled={Boolean(maxDate && year > maxDate.getFullYear())} key={year} onClick={() => selectYear(year)}>{year}</button>)}
+          </div> : <>
+            <div className="date-weekdays">
+              {Array.from({ length: 7 }, (_, index) => {
+                const day = new Date(2024, 0, 7 + index);
+                return <span key={day.toISOString()}>{day.toLocaleDateString(language, { weekday: "narrow" })}</span>;
+              })}
+            </div>
+            <div className="date-days">
+              {days.map((day) => (
+                <button
+                  type="button"
+                  key={day.iso}
+                  className={`${day.currentMonth ? "" : "muted"} ${day.iso === value ? "selected" : ""} ${day.iso === todayIso ? "today" : ""}`}
+                  disabled={blocked(day.iso)}
+                  onClick={() => selectDate(day.iso)}
+                >
+                  {day.date.getDate()}
+                </button>
+              ))}
+            </div>
+          </>}
         </div>,
         document.body
       )}

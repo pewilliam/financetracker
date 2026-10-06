@@ -1,4 +1,5 @@
 """Manual offer pricing and append-only snapshots, reusable by future importers."""
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import HTTPException
@@ -8,6 +9,13 @@ from app.schemas.base import MAX_MONEY_AMOUNT
 from app.schemas.desired_products import OfferPayload
 
 CENT = Decimal("0.01")
+OFFER_VALIDITY_DAYS = 30
+
+
+def offer_is_expired(offer: ProductOffer, reference_date: date | None = None) -> bool:
+    """Prices older than the comparison window remain visible but are not ranked."""
+    cutoff = (reference_date or date.today()) - timedelta(days=OFFER_VALIDITY_DAYS)
+    return offer.recorded_at < cutoff
 
 
 def _total_cost(offer) -> Decimal:

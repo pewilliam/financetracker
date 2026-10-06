@@ -41,6 +41,18 @@ describe("bottom navigation", () => {
     expect(items.at(-1)).toBe("Configurações");
   });
 
+  it("keeps More selected on a desired product details route", async () => {
+    const user = userEvent.setup();
+    renderNavigation({ route: "/produtos-desejados/42" });
+
+    const more = screen.getByRole("button", { name: "Mais" });
+    expect(more).toHaveClass("active");
+    expect(screen.getByRole("link", { name: "Início" })).not.toHaveClass("active");
+
+    await user.click(more);
+    expect(screen.getByRole("menuitem", { name: "Produtos desejados" })).toHaveClass("active");
+  });
+
   it("toggles light and dark theme from the More menu", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem("finance-theme", "light");

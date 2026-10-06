@@ -4,6 +4,11 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme.js";
 import { useI18n } from "../../i18n/index.ts";
 
+function isPathActive(pathname, path) {
+  if (path === "/") return pathname === path;
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
 export default function BottomNavigation({ hidden = false }) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
@@ -33,14 +38,14 @@ export default function BottomNavigation({ hidden = false }) {
   const settingsPath = "/configuracoes";
   const menuLinks = secondaryLinks.filter(([, path]) => path !== settingsPath);
   const settingsLink = secondaryLinks.find(([, path]) => path === settingsPath);
-  const moreIsActive = secondaryLinks.some(([, path]) => path === location.pathname);
+  const moreIsActive = secondaryLinks.some(([, path]) => isPathActive(location.pathname, path));
   const renderMenuLink = ([label, path, Icon]) => (
     <NavLink key={path} to={path} role="menuitem" className={({ isActive }) => isActive ? "active" : ""}>
       <Icon aria-hidden="true" />
       <span>{label}</span>
     </NavLink>
   );
-  const directActiveIndex = links.findIndex(([, path]) => path === location.pathname);
+  const directActiveIndex = links.findIndex(([, path]) => isPathActive(location.pathname, path));
   const activeIndex = directActiveIndex >= 0 ? directActiveIndex : moreIsActive ? links.length : 0;
 
   useLayoutEffect(() => {
