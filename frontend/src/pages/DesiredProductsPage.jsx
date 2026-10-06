@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ImagePlus, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ImagePlus, Link as LinkIcon, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
-import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, updateDesiredProduct, updateProductOffer } from "../api/api.js";
+import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, importProductUrl, listDesiredProducts, recordProductPurchase, updateDesiredProduct, updateProductOffer } from "../api/api.js";
 import { useI18n } from "../i18n/index.ts";
 import FilterSelect from "../components/common/FilterSelect.jsx";
+import CategorySelect from "../components/CategorySelect.jsx";
 import DateField from "../components/DateField.jsx";
 import { isMobileViewport } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
@@ -34,8 +35,8 @@ function MoneyField({ label, value, onChange, language, required = false }) {
 
 function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSubmit, busy, submitLabel = "Salvar", danger = false }) {
   const formRef = useRef(null);
-  const close = () => { if (!busy) onClose(); };
-  useModalLifecycle({ onClose, busy });
+  const close = () => { if (!busy && !document.querySelector(".category-select-create-layer")) onClose(); };
+  useModalLifecycle({ onClose: close, busy });
   useEffect(() => {
     if (!isMobileViewport()) formRef.current?.querySelector("fieldset input, fieldset textarea, footer button")?.focus({ preventScroll: true });
   }, []);
@@ -47,6 +48,36 @@ function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSub
       <footer className="wallet-modal-actions"><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button type="submit" className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> Salvando...</> : submitLabel}</button></footer>
     </form>
   </div>, document.body);
+}
+
+function UrlImportField({ value, onChange, onApply, onBusyChange, disabled, offer = false, language }) {
+  const [preview, setPreview] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const lookup = async () => {
+    try {
+      const url = new URL(value.trim());
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error();
+    } catch { setError("Informe um link HTTP ou HTTPS válido."); return; }
+    setLoading(true); onBusyChange(true); setError(""); setPreview(null);
+    try { setPreview(await importProductUrl(value.trim())); }
+    catch (caught) { setError(caught.message || "Não foi possível ler a loja. Preencha os dados manualmente."); }
+    finally { setLoading(false); onBusyChange(false); }
+  };
+  const hasData = preview && (offer ? preview.store || (preview.price && preview.currency === "BRL") : preview.name || preview.ean || preview.image_data || preview.description);
+  return <div className="desired-url-import">
+    <label className="field-label"><span>{offer ? "Link da oferta" : "Link do produto"}</span><input type="url" maxLength={2048} value={value} disabled={disabled} onChange={(event) => { onChange(event.target.value); setPreview(null); setError(""); }} placeholder="https://loja.com/produto" /></label>
+    <button type="button" className="btn btn-ghost compact" disabled={disabled || !value.trim()} onClick={lookup}>{loading ? <Loader2 className="spin" size={16} /> : <LinkIcon size={16} />}{loading ? "Buscando dados..." : "Buscar dados do link"}</button>
+    <small className="desired-hint">Cole o link de uma loja. Confira os dados encontrados antes de usá-los.</small>
+    {error && <p className="desired-import-error" role="alert">{error}</p>}
+    {preview && <div className="desired-import-preview" role="region" aria-label="Dados encontrados">
+      <strong>Dados encontrados</strong>
+      {offer ? <><span>Loja: {preview.store || "Não informada"}</span><span>Preço: {preview.price ? (preview.currency === "BRL" ? formatMoney(preview.price, language) : `${preview.currency || "Moeda não informada"} ${preview.price}`) : "Não informado"}</span>{preview.price && preview.currency !== "BRL" && <small>Confira a moeda e informe manualmente o preço em reais.</small>}</>
+        : <>{preview.image_data && <img src={preview.image_data} alt="Imagem encontrada na loja" />}<span>{preview.name || "Nome não informado"}</span><small>EAN/GTIN: {preview.ean || "Não informado"}</small>{preview.description && <p>{preview.description}</p>}</>}
+      {preview.warnings?.map((warning) => <small key={warning}>{warning}</small>)}
+      <button type="button" className="btn btn-primary compact" disabled={disabled || !hasData} onClick={() => { onApply(preview); setPreview(null); }}>Usar dados encontrados</button>
+    </div>}
+  </div>;
 }
 
 async function readImage(file) {
@@ -71,54 +102,64 @@ async function readImage(file) {
   }
 }
 
-function ProductEditor({ product, onClose, onSave, language }) {
+function ProductEditor({ product, categories, onCreateCategory, onClose, onSave, language }) {
   const [form, setForm] = useState(() => ({
-    name: product?.name || "", category: product?.category || "", description: product?.description || "",
+    name: product?.name || "", category_id: product?.category_id ? String(product.category_id) : product?.category ? "legacy" : "", ean: product?.ean || "", source_url: product?.source_url || "", image_source: product?.image_source || "manual", description: product?.description || "",
     image_data: product?.image_data || null, priority: product?.priority || "medium",
     target_price: moneyInput(product?.target_price, language), planned_purchase_date: product?.planned_purchase_date || "",
     status: product?.status || "want"
   }));
   const [busy, setBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setImageBusy(true);
-    try { set("image_data", await readImage(file)); } catch (error) { toast.error(error.message); } finally { setImageBusy(false); }
+    try { const image = await readImage(file); setForm((current) => ({ ...current, image_data: image, image_source: "manual" })); } catch (error) { toast.error(error.message); } finally { setImageBusy(false); }
     event.target.value = "";
   };
   const save = async (event) => {
     event.preventDefault();
     const target = moneyValue(form.target_price, language);
     if (form.target_price && (target < 0 || target > 99999999.99)) return toast.error("Confira o preço-alvo.");
-    const payload = { name: form.name.trim(), category: form.category.trim() || null, description: form.description.trim() || null,
+    if (form.ean && !/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(form.ean)) return toast.error("Informe um EAN/GTIN com 8, 12, 13 ou 14 dígitos.");
+    const payload = { name: form.name.trim(), ...(form.category_id === "legacy" ? { category: product.category } : { category_id: form.category_id ? Number(form.category_id) : null }),
+      ean: form.ean || null, source_url: form.source_url.trim() || null, image_source: form.image_data ? form.image_source : "manual", description: form.description.trim() || null,
       image_data: form.image_data, priority: form.priority, target_price: target, planned_purchase_date: form.planned_purchase_date || null,
       ...(form.status === "bought" ? {} : { status: form.status }) };
     if (!payload.name) return toast.error("Informe o nome do produto.");
     setBusy(true);
     try { await onSave(payload); onClose(); } catch (error) { toast.error(error.message || "Não foi possível salvar o produto."); } finally { setBusy(false); }
   };
-  return <Modal title={product ? "Editar produto" : "Novo produto desejado"} hint="Defina seu objetivo e organize a próxima compra." onClose={onClose} onSubmit={save} busy={busy || imageBusy} submitLabel={product ? "Salvar alterações" : "Criar produto"}>
+  return <Modal title={product ? "Editar produto" : "Novo produto desejado"} hint="Defina seu objetivo e organize a próxima compra." onClose={onClose} onSubmit={save} busy={busy || imageBusy || importBusy} submitLabel={product ? "Salvar alterações" : "Criar produto"}>
+    <UrlImportField value={form.source_url} onChange={(value) => set("source_url", value)} onBusyChange={setImportBusy} disabled={busy || imageBusy || importBusy} language={language}
+      onApply={(data) => setForm((current) => ({ ...current, source_url: data.url, name: data.name || current.name, ean: data.ean || current.ean,
+        description: data.description || current.description, image_data: data.image_data || current.image_data, image_source: data.image_data ? "url" : current.image_source }))} />
     <label className="field-label"><span>Nome do produto *</span><input required maxLength={255} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ex.: Notebook Dell Inspiron 15" /></label>
-    <label className="field-label"><span>Categoria</span><input maxLength={100} value={form.category} onChange={(e) => set("category", e.target.value)} placeholder="Ex.: Tecnologia" /></label>
+    <div className="field-label"><span>Categoria</span><CategorySelect categories={product?.category && !product.category_id ? [...categories, { id: "legacy", name: product.category, color: "#64748B" }] : categories}
+      value={form.category_id} multiple={false} ariaLabel="Categoria" disabled={busy || imageBusy || importBusy} onCreate={onCreateCategory}
+      onChange={(value) => set("category_id", Array.isArray(value) ? value[0] || "" : value)} /></div>
+    <label className="field-label"><span>EAN/GTIN</span><input inputMode="numeric" maxLength={14} value={form.ean} onChange={(event) => set("ean", event.target.value)} placeholder="Opcional · código de barras" /></label>
     <label className="field-label"><span>Imagem do produto</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImage} /></label>
     {form.image_data && <div className="desired-image-preview"><img src={form.image_data} alt="Prévia do produto" /><button type="button" className="btn btn-ghost compact" onClick={() => set("image_data", null)}>Remover imagem</button></div>}
-    <label className="field-label"><span>Observações</span><textarea maxLength={2000} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} /></label>
-    <div className="desired-form-row"><div className="field-label"><span>Prioridade</span><FilterSelect ariaLabel="Prioridade" value={form.priority} options={optionsFor(PRIORITIES)} disabled={busy || imageBusy} onChange={(value) => set("priority", value)} /></div>
-      <div className="field-label"><span>Status</span><FilterSelect ariaLabel="Status" value={form.status} options={optionsFor(STATUSES).filter((option) => option.value !== "bought" || product?.status === "bought")} disabled={busy || imageBusy} onChange={(value) => set("status", value)} /></div></div>
+    <label className="field-label"><span>Observações</span><textarea aria-label="Observações" maxLength={2000} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} /></label>
+    <div className="desired-form-row"><div className="field-label"><span>Prioridade</span><FilterSelect ariaLabel="Prioridade" value={form.priority} options={optionsFor(PRIORITIES)} disabled={busy || imageBusy || importBusy} onChange={(value) => set("priority", value)} /></div>
+      <div className="field-label"><span>Status</span><FilterSelect ariaLabel="Status" value={form.status} options={optionsFor(STATUSES).filter((option) => option.value !== "bought" || product?.status === "bought")} disabled={busy || imageBusy || importBusy} onChange={(value) => set("status", value)} /></div></div>
     <div className="desired-form-row"><MoneyField label="Preço-alvo" value={form.target_price} onChange={(v) => set("target_price", v)} language={language} />
-      <div className="field-label"><span>Previsão de compra</span><DateField clearable ariaLabel="Previsão de compra" value={form.planned_purchase_date} disabled={busy || imageBusy} onChange={(value) => set("planned_purchase_date", value)} /></div></div>
+      <div className="field-label"><span>Previsão de compra</span><DateField clearable ariaLabel="Previsão de compra" value={form.planned_purchase_date} disabled={busy || imageBusy || importBusy} onChange={(value) => set("planned_purchase_date", value)} /></div></div>
     {form.status === "bought" && <small>Para alterar os dados da compra, use “Editar compra” nos detalhes.</small>}
   </Modal>;
 }
 
-function OfferEditor({ offer, onClose, onSave, language }) {
-  const [form, setForm] = useState(() => ({ store: offer?.store || "", url: offer?.url || "", price: moneyInput(offer?.price, language),
+function OfferEditor({ offer, product, onClose, onSave, language }) {
+  const [form, setForm] = useState(() => ({ store: offer?.store || "", url: offer?.url || product?.source_url || "", price: moneyInput(offer?.price, language),
     shipping: moneyInput(offer?.shipping, language), payment_method: offer?.payment_method || "cash",
     installment_count: offer?.installment_count || 1, installment_amount: moneyInput(offer?.installment_amount, language),
     notes: offer?.notes || "", recorded_at: offer?.recorded_at || today() }));
   const [manualInstallment, setManualInstallment] = useState(offer?.installment_amount != null);
+  const [importBusy, setImportBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (field, value) => {
     if (field === "price" || field === "installment_count") setManualInstallment(false);
@@ -149,9 +190,10 @@ function OfferEditor({ offer, onClose, onSave, language }) {
     setBusy(true);
     try { await onSave(payload); onClose(); } catch (error) { toast.error(error.message || "Não foi possível salvar a oferta."); } finally { setBusy(false); }
   };
-  return <Modal title={offer ? "Editar oferta" : "Adicionar oferta"} icon={Target} hint="Salve o link, o preço e as condições desta loja." onClose={onClose} onSubmit={save} busy={busy} submitLabel={offer ? "Salvar oferta" : "Adicionar oferta"}>
+  return <Modal title={offer ? "Editar oferta" : "Adicionar oferta"} icon={Target} hint="Salve o link, o preço e as condições desta loja." onClose={onClose} onSubmit={save} busy={busy || importBusy} submitLabel={offer ? "Salvar oferta" : "Adicionar oferta"}>
     <label className="field-label"><span>Loja *</span><input required maxLength={150} value={form.store} onChange={(e) => set("store", e.target.value)} placeholder="Ex.: Amazon" /></label>
-    <label className="field-label"><span>Link da oferta</span><input type="url" maxLength={2048} value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://..." /></label>
+    <UrlImportField offer value={form.url} language={language} onChange={(value) => set("url", value)} onBusyChange={setImportBusy} disabled={busy || importBusy}
+      onApply={(data) => { setForm((current) => ({ ...current, url: data.url, store: data.store || current.store, price: data.price && data.currency === "BRL" ? moneyInput(data.price, language) : current.price })); setManualInstallment(false); }} />
     <div className="desired-form-row"><MoneyField label="Preço *" value={form.price} onChange={(v) => set("price", v)} language={language} required />
       <MoneyField label="Frete" value={form.shipping} onChange={(v) => set("shipping", v)} language={language} /></div>
     <div className="desired-form-row"><div className="field-label"><span>Pagamento</span><FilterSelect ariaLabel="Pagamento" value={form.payment_method} options={optionsFor(PAYMENTS)} disabled={busy} onChange={(value) => set("payment_method", value)} /></div>
@@ -159,7 +201,7 @@ function OfferEditor({ offer, onClose, onSave, language }) {
     {form.payment_method === "credit" && <><div className="desired-form-row"><label className="field-label"><span>Quantidade de parcelas</span><input type="number" min="1" max="60" required value={form.installment_count} onChange={(e) => set("installment_count", e.target.value)} /></label>
       <MoneyField label="Valor da parcela" value={manualInstallment ? form.installment_amount : moneyInput(calculated, language)} onChange={(v) => { setManualInstallment(true); set("installment_amount", v); }} language={language} /></div>
       <p className="desired-hint">Calculado: {calculated != null ? formatMoney(calculated, language) : "—"}/mês. Ajuste a parcela se houver juros. Para comparar, informe no preço o valor total da oferta nessa forma de pagamento.</p></>}
-    <label className="field-label"><span>Observações</span><textarea rows={3} maxLength={2000} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></label>
+    <label className="field-label"><span>Observações</span><textarea aria-label="Observações" rows={3} maxLength={2000} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></label>
   </Modal>;
 }
 
@@ -206,7 +248,7 @@ function TargetNote({ product, language }) {
     {gap <= 0 ? "Seu preço-alvo foi atingido" : `${formatMoney(gap, language)} acima do seu preço desejado`}</span>;
 }
 
-export default function DesiredProductsPage({ onOverlayChange }) {
+export default function DesiredProductsPage({ categories: availableCategories = [], onCreateCategory, onOverlayChange }) {
   const { productId } = useParams();
   const navigate = useNavigate();
   const { language } = useI18n();
@@ -280,7 +322,7 @@ export default function DesiredProductsPage({ onOverlayChange }) {
     {!loading && !error && selected && <>
       <div className="desired-detail-grid"><div className="card desired-product-summary"><div className="desired-detail-image">{selected.image_data ? <img src={selected.image_data} alt={selected.name} /> : <ImagePlus size={42} />}</div>
         <div className="desired-product-body"><div className="desired-tags"><span>{STATUSES[selected.status]}</span><span>Prioridade {PRIORITIES[selected.priority]}</span></div>
-          {selected.category && <p>{selected.category}</p>}{selected.description && <p>{selected.description}</p>}
+          {selected.category && <p>{selected.category}</p>}{selected.ean && <p>EAN/GTIN: {selected.ean}</p>}{selected.source_url && <a className="btn btn-ghost compact" href={selected.source_url} target="_blank" rel="noopener noreferrer">Ver produto na loja <ArrowUpRight size={15} /></a>}{selected.description && <p>{selected.description}</p>}
           {selected.planned_purchase_date && <p><CalendarDays size={15} /> Compra prevista: {dateLabel(selected.planned_purchase_date, language)}</p>}
           {selected.target_price != null && <p>Preço-alvo: <strong>{formatMoney(selected.target_price, language)}</strong></p>}
           <TargetNote product={selected} language={language} />
@@ -308,8 +350,8 @@ export default function DesiredProductsPage({ onOverlayChange }) {
           <details className="desired-history"><summary>Histórico de preços ({offer.price_history.length})</summary><ul>{offer.price_history.map((row) => <li key={row.id}><span>{dateLabel(row.recorded_at, language)}</span><strong>{formatMoney(row.price, language)}</strong><small>Custo total {formatMoney(row.total_cost, language)}</small></li>)}</ul></details>
         </article>)}</div>}
     </>}
-    {modal?.type === "product" && <ProductEditor key={modal.product?.id || "new"} product={modal.product} onClose={() => setModal(null)} onSave={saveProduct} language={language} />}
-    {modal?.type === "offer" && selected && <OfferEditor key={modal.offer?.id || "new"} offer={modal.offer} onClose={() => setModal(null)} onSave={saveOffer} language={language} />}
+    {modal?.type === "product" && <ProductEditor key={modal.product?.id || "new"} product={modal.product} categories={availableCategories} onCreateCategory={onCreateCategory} onClose={() => setModal(null)} onSave={saveProduct} language={language} />}
+    {modal?.type === "offer" && selected && <OfferEditor key={modal.offer?.id || "new"} offer={modal.offer} product={selected} onClose={() => setModal(null)} onSave={saveOffer} language={language} />}
     {modal?.type === "purchase" && selected && <PurchaseEditor product={selected} onClose={() => setModal(null)} onSave={async (payload) => { upsert(await recordProductPurchase(selected.id, payload)); toast.success("Compra registrada"); }} language={language} />}
     {modal?.type?.startsWith("delete-") && <Modal title={modal.offer ? "Excluir oferta?" : "Excluir produto?"} icon={Trash2} onClose={() => setModal(null)} onSubmit={remove} busy={busy} submitLabel="Excluir" danger><p>{modal.offer ? "A oferta será removida da comparação. O histórico e os dados de compras registradas serão preservados." : "O produto, suas ofertas e seus históricos serão excluídos."}</p></Modal>}
   </section>;

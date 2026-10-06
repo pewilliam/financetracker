@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Category, InstallmentPurchase, InvoiceItem, Receivable, Recurrence, Transaction, User
+from app.models import Category, DesiredProduct, InstallmentPurchase, InvoiceItem, Receivable, Recurrence, Transaction, User
 from app.schemas.categories import CategoryCreate, CategoryOut, CategoryUpdate
 from app.security import get_current_user
 from app.services.categories import get_user_category, normalize_category_color
@@ -113,6 +113,9 @@ def delete_category(
             {model.category_id: None},
             synchronize_session=False,
         )
+    db.query(DesiredProduct).filter(DesiredProduct.user_id == current_user.id, DesiredProduct.category_id == category.id).update(
+        {DesiredProduct.category_id: None, DesiredProduct.category: None}, synchronize_session=False,
+    )
     db.delete(category)
     db.commit()
     return None

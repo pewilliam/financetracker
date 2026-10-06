@@ -9,7 +9,7 @@ import DesiredProductsPage from "./DesiredProductsPage.jsx";
 vi.mock("../api/api.js", () => ({
   listDesiredProducts: vi.fn(), getDesiredProduct: vi.fn(), createDesiredProduct: vi.fn(),
   updateDesiredProduct: vi.fn(), deleteDesiredProduct: vi.fn(), createProductOffer: vi.fn(),
-  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(),
+  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), createCategory: vi.fn(), importProductUrl: vi.fn(),
 }));
 vi.mock("react-hot-toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -18,8 +18,8 @@ const product = { id: 1, name: "Notebook Dell", category: "Tecnologia", priority
 function show(route = "/produtos-desejados") {
   localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
   return render(<MemoryRouter initialEntries={[route]}><I18nProvider><Routes>
-    <Route path="/produtos-desejados" element={<DesiredProductsPage />} />
-    <Route path="/produtos-desejados/:productId" element={<DesiredProductsPage />} />
+    <Route path="/produtos-desejados" element={<DesiredProductsPage categories={[{ id: 3, name: "Tecnologia", color: "#64748B" }]} onCreateCategory={api.createCategory} />} />
+    <Route path="/produtos-desejados/:productId" element={<DesiredProductsPage categories={[{ id: 3, name: "Tecnologia", color: "#64748B" }]} onCreateCategory={api.createCategory} />} />
   </Routes></I18nProvider></MemoryRouter>);
 }
 
@@ -43,6 +43,8 @@ it("creates a product with target and navigates to its details", async () => {
   await user.click(await screen.findByRole("button", { name: "Novo produto" }));
   const dialog = within(screen.getByRole("dialog", { name: "Novo produto desejado" }));
   await user.type(dialog.getByLabelText("Nome do produto *"), "Notebook Dell");
+  await user.click(dialog.getByRole("combobox", { name: "Categoria" }));
+  await user.click(within(screen.getByRole("listbox", { name: "Categoria" })).getByRole("option", { name: "Tecnologia" }));
   await user.type(dialog.getByLabelText("Preço-alvo"), "3200,00");
   await select(user, dialog, "Prioridade", "Alta");
   await select(user, dialog, "Status", "Planejando");
@@ -53,7 +55,7 @@ it("creates a product with target and navigates to its details", async () => {
   await user.click(document.querySelector(".date-days .selected"));
   expect(plannedDate).toHaveValue("01/11/2026");
   await user.click(dialog.getByRole("button", { name: "Criar produto" }));
-  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({ name: "Notebook Dell", target_price: "3200.00", status: "planning", priority: "high", planned_purchase_date: "2026-11-01" })));
+  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({ name: "Notebook Dell", category_id: 3, target_price: "3200.00", status: "planning", priority: "high", planned_purchase_date: "2026-11-01" })));
   await screen.findByRole("button", { name: "Todos os produtos" });
   expect(api.getDesiredProduct).toHaveBeenCalledWith("1");
 });
@@ -155,4 +157,85 @@ it("allows clearing an optional planned date", async () => {
   await user.tab();
   await user.click(dialog.getByRole("button", { name: "Salvar alterações" }));
   await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, expect.objectContaining({ planned_purchase_date: null })));
+});
+
+it("previews imported product fields before applying and allows correction", async () => {
+  const user = userEvent.setup();
+  const image = "data:image/png;base64,aW1hZ2U=";
+  api.importProductUrl.mockResolvedValue({ url: "https://example.com/notebook", name: "Notebook da loja", ean: "7891234567895", description: "Descrição encontrada", image_data: image, warnings: [] });
+  api.createDesiredProduct.mockResolvedValue(product);
+  show();
+  await user.click(await screen.findByRole("button", { name: "Novo produto" }));
+  const dialog = within(screen.getByRole("dialog", { name: "Novo produto desejado" }));
+  await user.type(dialog.getByLabelText("Nome do produto *"), "Meu rascunho");
+  await user.type(dialog.getByLabelText("Link do produto"), "https://example.com/notebook");
+  await user.click(dialog.getByRole("button", { name: "Buscar dados do link" }));
+  await dialog.findByRole("region", { name: "Dados encontrados" });
+  expect(dialog.getByLabelText("Nome do produto *")).toHaveValue("Meu rascunho");
+  expect(api.createDesiredProduct).not.toHaveBeenCalled();
+  await user.click(dialog.getByRole("button", { name: "Usar dados encontrados" }));
+  expect(dialog.getByLabelText("Nome do produto *")).toHaveValue("Notebook da loja");
+  expect(dialog.getByLabelText("EAN/GTIN")).toHaveValue("7891234567895");
+  expect(dialog.getByLabelText("Observações")).toHaveValue("Descrição encontrada");
+  expect(dialog.getByRole("img", { name: "Prévia do produto" })).toHaveAttribute("src", image);
+  await user.clear(dialog.getByLabelText("Nome do produto *"));
+  await user.type(dialog.getByLabelText("Nome do produto *"), "Nome corrigido");
+  await user.click(dialog.getByRole("button", { name: "Criar produto" }));
+  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({ name: "Nome corrigido", ean: "7891234567895", source_url: "https://example.com/notebook", image_source: "url" })));
+});
+
+it("keeps manual values when URL import fails", async () => {
+  const user = userEvent.setup();
+  api.importProductUrl.mockRejectedValue(new Error("Loja bloqueou a leitura"));
+  show();
+  await user.click(await screen.findByRole("button", { name: "Novo produto" }));
+  const dialog = within(screen.getByRole("dialog"));
+  await user.type(dialog.getByLabelText("Nome do produto *"), "Meu notebook");
+  await user.type(dialog.getByLabelText("Link do produto"), "https://example.com/notebook");
+  await user.click(dialog.getByRole("button", { name: "Buscar dados do link" }));
+  await dialog.findByRole("alert");
+  expect(dialog.getByLabelText("Nome do produto *")).toHaveValue("Meu notebook");
+  expect(dialog.getByRole("button", { name: "Criar produto" })).toBeEnabled();
+});
+
+it("creates a category inside the product editor without submitting the product", async () => {
+  const user = userEvent.setup();
+  api.createDesiredProduct.mockResolvedValue(product);
+  api.createCategory.mockResolvedValue({ id: 8, name: "Nova categoria", color: "#64748B" });
+  show();
+  await user.click(await screen.findByRole("button", { name: "Novo produto" }));
+  const parent = screen.getByRole("dialog", { name: "Novo produto desejado" });
+  await user.click(within(parent).getByRole("combobox", { name: "Categoria" }));
+  await user.click(within(screen.getByRole("listbox", { name: "Categoria" })).getByRole("option", { name: "Tecnologia" }));
+  await user.click(within(parent).getByRole("combobox", { name: "Categoria" }));
+  await user.click(screen.getByRole("button", { name: "Nova categoria" }));
+  const category = within(screen.getByRole("dialog", { name: "Nova categoria" }));
+  await user.type(category.getByRole("textbox"), "Nova categoria");
+  await user.click(category.getByRole("button", { name: "Criar categoria" }));
+  await waitFor(() => expect(api.createCategory).toHaveBeenCalled());
+  expect(parent).toBeInTheDocument();
+  expect(api.createDesiredProduct).not.toHaveBeenCalled();
+  await user.type(within(parent).getByLabelText("Nome do produto *"), "Produto com categoria nova");
+  await user.click(within(parent).getByRole("button", { name: "Criar produto" }));
+  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({ category_id: 8 })));
+
+});
+
+it("preserves a manually entered BRL price when the imported offer uses another currency", async () => {
+  const user = userEvent.setup();
+  api.createProductOffer.mockResolvedValue(product);
+  api.importProductUrl.mockResolvedValue({url: "https://example.com/offer", store: "Loja estrangeira", price: "200.00", currency: "USD", warnings: []});
+  show("/produtos-desejados/1");
+  await screen.findByRole("heading", {name: "Ofertas (0)"});
+  await user.click(screen.getAllByRole("button", {name: "Adicionar oferta"})[0]);
+  const dialog = within(screen.getByRole("dialog"));
+  await user.type(dialog.getByLabelText("Loja *"), "Loja manual");
+  await user.type(dialog.getByLabelText("Preço *"), "1000,00");
+  await user.type(dialog.getByLabelText("Link da oferta"), "https://example.com/offer");
+  await user.click(dialog.getByRole("button", {name: "Buscar dados do link"}));
+  await dialog.findByText("Confira a moeda e informe manualmente o preço em reais.");
+  await user.click(dialog.getByRole("button", {name: "Usar dados encontrados"}));
+  expect(dialog.getByLabelText("Loja *")).toHaveValue("Loja estrangeira");
+  await user.click(dialog.getByRole("button", {name: "Adicionar oferta", exact:true}));
+  await waitFor(() => expect(api.createProductOffer).toHaveBeenCalledWith(1, expect.objectContaining({price: "1000.00"})));
 });

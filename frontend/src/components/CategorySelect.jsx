@@ -18,6 +18,7 @@ function normalizeSearch(value) {
 
 export default function CategorySelect({
   categories = [],
+  disabled = false,
   value = "",
   values,
   onChange,
@@ -103,7 +104,7 @@ export default function CategorySelect({
 
   const create = async (payload) => {
     const category = await onCreate(payload);
-    onChange?.([...selectedIds, String(category.id)]);
+    onChange?.(multiple ? [...selectedIds, String(category.id)] : String(category.id));
     setCreating(false);
     setOpen(false);
   };
@@ -208,7 +209,7 @@ export default function CategorySelect({
     onChange?.(selectedIds.filter((current) => current !== String(categoryId)));
   };
 
-  const allSelected = categories.length > 0 && selected.length === categories.length
+  const allSelected = multiple && categories.length > 0 && selected.length === categories.length
     && categories.every((category) => selectedIds.includes(String(category.id)));
   const visibleSelected = allSelected || selected.length <= 2 ? selected : selected.slice(0, 1);
   const hiddenSelectedCount = allSelected ? 0 : Math.max(0, selected.length - visibleSelected.length);
@@ -245,7 +246,9 @@ export default function CategorySelect({
     );
   })();
 
-  const toggleOpen = () => { setSearch(""); setOpen((current) => !current); };
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+
+  const toggleOpen = () => { if (disabled) return; setSearch(""); setOpen((current) => !current); };
 
   const handleTriggerKeyDown = (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -256,11 +259,11 @@ export default function CategorySelect({
   return (
     <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef} onBlurCapture={handleFocusLeave}>
       <div className="category-multi-desktop-control">
-        <div className="category-multi-trigger" role="combobox" tabIndex={0} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={toggleOpen} onKeyDown={handleTriggerKeyDown}>
+        <div className="category-multi-trigger" role="combobox" aria-disabled={disabled} tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={toggleOpen} onKeyDown={handleTriggerKeyDown}>
           <span className="category-multi-values">{selectedValues}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
         </div>
-        {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
+        {clearable && !!selected.length && <button className="category-multi-clear" type="button" disabled={disabled} onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
       </div>
 
       <div className="category-multi-native-control">
@@ -270,8 +273,8 @@ export default function CategorySelect({
               <span className="category-multi-values">{selectedValues}</span>
               <ChevronDown className="category-multi-chevron" size={15} />
             </div>
-            <select value={multiple ? "" : String(value || "")} onChange={handleNativeSelect} aria-label={`Selecionar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}>
-              {multiple && <option value="">Selecionar categoria...</option>}
+            <select disabled={disabled} value={multiple ? "" : String(value || "")} onChange={handleNativeSelect} aria-label={`Selecionar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}>
+              <option value="">{multiple ? "Selecionar categoria..." : placeholder}</option>
               {categories.map((category) => (
                 <option value={category.id} key={category.id}>
                   {selectedIds.includes(String(category.id)) ? "✓ " : ""}{category.name}
@@ -280,7 +283,7 @@ export default function CategorySelect({
               {onCreate && <option value="__create__">+ Nova categoria</option>}
             </select>
           </div>
-          {clearable && !!selected.length && <button className="category-multi-clear" type="button" onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
+          {clearable && !!selected.length && <button className="category-multi-clear" type="button" disabled={disabled} onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
         </div>
         {renderBulkActions()}
       </div>
@@ -320,6 +323,7 @@ export default function CategorySelect({
       )}
       {creating && (
         <CategoryModal
+          layerClassName="category-select-create-layer"
           onSave={create}
           onClose={() => setCreating(false)}
         />

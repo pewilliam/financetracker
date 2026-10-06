@@ -27,6 +27,9 @@ try {
   const password = 'Compra segura! 2026 long';
   const registered = await context.request.post(`${apiUrl}/auth/register`, { data: { name: 'Planejador', email, password } });
   assert.equal(registered.status(), 201, await registered.text());
+  const token = (await registered.json()).access_token;
+  const categoryResponse = await context.request.post(`${apiUrl}/categories`, {headers: {Authorization: `Bearer ${token}`}, data: {name: 'Tecnologia', color: '#64748B'}});
+  assert.equal(categoryResponse.status(), 201);
   await page.goto(`${webUrl}/login`);
   await page.getByLabel('E-mail', { exact: true }).fill(email);
   await page.getByLabel('Senha', { exact: true }).fill(password);
@@ -35,12 +38,30 @@ try {
   await page.getByRole('link', { name: 'Produtos desejados', exact: true }).click();
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
   let dialog = page.getByRole('dialog');
+  if (process.env.KASHY_E2E_IMPORT_URL) {
+    await dialog.getByLabel('Link do produto', {exact:true}).fill(process.env.KASHY_E2E_IMPORT_URL);
+    await dialog.getByRole('button', {name:'Buscar dados do link', exact:true}).click();
+    await dialog.getByRole('region', {name:'Dados encontrados'}).waitFor();
+    assert.equal(await dialog.getByLabel('Nome do produto *', {exact:true}).inputValue(), '');
+    await dialog.getByRole('button', {name:'Usar dados encontrados', exact:true}).click();
+    assert.equal(await dialog.getByLabel('EAN/GTIN', {exact:true}).inputValue(), '7891234567895');
+    assert.equal(await dialog.getByLabel('Observações', {exact:true}).inputValue(), 'Descrição da loja');
+    await dialog.getByRole('img', {name:'Prévia do produto'}).waitFor();
+  }
   await dialog.getByLabel('Nome do produto *', { exact: true }).fill('Notebook Dell Inspiron 15');
-  await dialog.getByLabel('Categoria', { exact: true }).fill('Tecnologia');
+  await dialog.getByRole('combobox', {name:'Categoria', exact:true}).click();
+  await page.getByRole('listbox', {name:'Categoria', exact:true}).getByRole('option', {name:'Tecnologia', exact:true}).click();
   await dialog.getByLabel('Imagem do produto', { exact: true }).setInputFiles(fileURLToPath(new URL('../public/logo.png', import.meta.url)));
   await dialog.getByRole('img', { name: 'Prévia do produto' }).waitFor();
   await select(dialog, 'Prioridade', 'high', 'Alta');
   await dialog.getByLabel('Preço-alvo', { exact: true }).fill('3200,00');
+  await dialog.getByRole('combobox', {name:'Categoria', exact:true}).click();
+  await page.getByRole('button', {name:'Nova categoria', exact:true}).click();
+  const nested = page.getByRole('dialog', {name:'Nova categoria', exact:true});
+  await nested.getByPlaceholder('Ex: Alimentação, Transporte, Lazer...').fill('Eletrônicos');
+  await nested.getByRole('button', {name:'Criar categoria', exact:true}).click();
+  await nested.waitFor({state:'hidden'});
+  assert.match(await dialog.getByRole('combobox', {name:'Categoria', exact:true}).textContent(), /Eletrônicos/);
   await dialog.getByRole('textbox', { name: 'Previsão de compra', exact: true }).fill('01112026');
   await dialog.getByRole('textbox', { name: 'Previsão de compra', exact: true }).press('Tab');
   await dialog.getByRole('textbox', { name: 'Previsão de compra', exact: true }).click();
@@ -50,6 +71,13 @@ try {
   await page.waitForURL(/produtos-desejados\/\d+/);
   const productId = Number(page.url().split('/').at(-1));
   await page.getByRole('heading', { name: 'Ofertas (0)', exact: true }).waitFor();
+  if (process.env.KASHY_E2E_IMPORT_URL) {
+    const saved = await context.request.get(`${apiUrl}/desired-products/${productId}`, {headers:{Authorization:`Bearer ${token}`}});
+    const data = await saved.json();
+    assert.equal(data.ean, '7891234567895');
+    assert.equal(data.source_url, process.env.KASHY_E2E_IMPORT_URL);
+    assert.equal(data.category, 'Eletrônicos');
+  }
   async function offer(store, price, method, shipping = '') {
     await page.getByRole('button', { name: 'Adicionar oferta', exact: true }).first().click();
     const modal = page.getByRole('dialog');
@@ -57,6 +85,14 @@ try {
     await modal.getByLabel('Link da oferta', { exact: true }).fill(`https://example.com/${store.toLowerCase().replaceAll(' ', '-')}`);
     await modal.getByLabel('Preço *', { exact: true }).fill(price);
     if (shipping) await modal.getByLabel('Frete', { exact: true }).fill(shipping);
+    if (process.env.KASHY_E2E_IMPORT_URL && store === 'Amazon') {
+      await modal.getByLabel('Link da oferta', {exact:true}).fill(process.env.KASHY_E2E_IMPORT_URL);
+      await modal.getByRole('button', {name:'Buscar dados do link', exact:true}).click();
+      await modal.getByRole('button', {name:'Usar dados encontrados', exact:true}).click();
+      assert.equal(await modal.getByLabel('Loja *', {exact:true}).inputValue(), 'Loja fixture');
+      await modal.getByLabel('Loja *', {exact:true}).fill(store);
+      await modal.getByLabel('Preço *', {exact:true}).fill(price);
+    }
     await select(modal, 'Pagamento', method, {credit: 'Cartão de crédito', pix: 'PIX', boleto: 'Boleto'}[method]);
     if (method === 'credit') {
       await modal.getByLabel('Quantidade de parcelas').fill('10');
@@ -113,6 +149,7 @@ try {
   assert.ok(await dialog.locator('select[aria-label="Prioridade"]').isVisible());
   await dialog.locator('.date-native-input').fill('2026-12-01');
   await select(dialog, 'Prioridade', 'low', 'Baixa');
+  await dialog.locator('select[aria-label="Selecionar categoria"]').selectOption({label:'Tecnologia'});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile modal has horizontal overflow');
   await dialog.getByRole('button', { name: 'Salvar alterações' }).click();
   await dialog.waitFor({ state: 'hidden' });
@@ -133,7 +170,7 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Excluir', exact: true }).click();
   await page.getByText('Sua lista começa aqui', { exact: true }).waitFor();
   assert.deepEqual(errors, [], 'Uncaught browser errors');
-  console.log('PASS: login, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
+  console.log('PASS: login, category selection/creation, optional URL import/confirmation, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
 } finally {
   await browser.close();
 }

@@ -67,12 +67,29 @@ class PlanningModel(APIModel):
 class ProductCreate(PlanningModel):
     name: str = Field(min_length=1, max_length=255)
     category: str | None = Field(default=None, max_length=100)
+    category_id: int | None = Field(default=None, gt=0)
+    ean: str | None = Field(default=None, max_length=14)
+    source_url: str | None = Field(default=None, max_length=2048)
+    image_source: Literal["manual", "url"] = "manual"
     description: str | None = Field(default=None, max_length=2000)
     image_data: str | None = None
     priority: Priority = "medium"
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
     status: Literal["want", "planning", "ready", "abandoned"] = "want"
+
+    @field_validator("ean")
+    @classmethod
+    def valid_ean(cls, value):
+        cleaned = _clean_text(value)
+        if cleaned and not re.fullmatch(r"(?:\d{8}|\d{12}|\d{13}|\d{14})", cleaned):
+            raise ValueError("Informe um EAN/GTIN com 8, 12, 13 ou 14 dígitos")
+        return cleaned
+
+    @field_validator("source_url")
+    @classmethod
+    def valid_source_url(cls, value):
+        return _validate_url(value)
 
     @field_validator("name")
     @classmethod
@@ -101,12 +118,29 @@ class ProductCreate(PlanningModel):
 class ProductUpdate(PlanningModel):
     name: str | None = Field(default=None, max_length=255)
     category: str | None = Field(default=None, max_length=100)
+    category_id: int | None = Field(default=None, gt=0)
+    ean: str | None = Field(default=None, max_length=14)
+    source_url: str | None = Field(default=None, max_length=2048)
+    image_source: Literal["manual", "url"] = "manual"
     description: str | None = Field(default=None, max_length=2000)
     image_data: str | None = None
     priority: Priority | None = None
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
     status: Literal["want", "planning", "ready", "abandoned"] | None = None
+
+    @field_validator("ean")
+    @classmethod
+    def valid_ean(cls, value):
+        cleaned = _clean_text(value)
+        if cleaned and not re.fullmatch(r"(?:\d{8}|\d{12}|\d{13}|\d{14})", cleaned):
+            raise ValueError("Informe um EAN/GTIN com 8, 12, 13 ou 14 dígitos")
+        return cleaned
+
+    @field_validator("source_url")
+    @classmethod
+    def valid_source_url(cls, value):
+        return _validate_url(value)
 
     @field_validator("name")
     @classmethod
@@ -239,6 +273,9 @@ class ProductOut(PlanningModel):
     id: int
     name: str
     category: str | None
+    category_id: int | None
+    ean: str | None
+    source_url: str | None
     description: str | None
     image_data: str | None
     image_source: str
@@ -260,3 +297,28 @@ class ProductOut(PlanningModel):
     savings: Decimal | None
     offer_count: int
     offers: list[OfferOut]
+
+
+class MetadataRequest(PlanningModel):
+    url: str = Field(min_length=1, max_length=2048)
+
+    @field_validator("url")
+    @classmethod
+    def valid_url(cls, value):
+        result = _validate_url(value)
+        if not result:
+            raise ValueError("Informe o link do produto")
+        return result
+
+
+class MetadataOut(PlanningModel):
+    url: str
+    name: str | None
+    ean: str | None
+    description: str | None
+    image_url: str | None
+    image_data: str | None
+    store: str | None
+    price: str | None
+    currency: str | None
+    warnings: list[str]

@@ -5,7 +5,7 @@ import { isMobileViewport } from "../app/helpers.js";
 import ColorPickerField, { normalizeColorValue } from "../components/ColorPickerField.jsx";
 import { useI18n } from "../i18n/index.ts";
 
-export default function CategoryModal({ category = null, onSave, onClose }) {
+export default function CategoryModal({ category = null, onSave, onClose, layerClassName = "" }) {
   const { t, language } = useI18n();
   const tt = (key, pt) => language === "en-US" ? t(key) : pt;
   const [name, setName] = useState(category?.name || "");
@@ -48,7 +48,7 @@ export default function CategoryModal({ category = null, onSave, onClose }) {
   };
 
   return createPortal(
-    <div className="modal-layer category-modal-layer">
+    <div className={`modal-layer category-modal-layer ${layerClassName}`}>
       <button className="modal-backdrop" type="button" onClick={saving ? undefined : onClose} aria-label="Fechar" />
       <form className="modal-card wallet-modal wallet-editor-modal category-create-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="category-modal-title">
         <div className="wallet-transfer-header">
