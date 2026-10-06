@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Calculator, ChartPie, Coins, CreditCard, Layers, LogOut, Moon, Repeat2, Settings, Sun, UserRound, Wallet } from "lucide-react";
+import { Calculator, ChartPie, Coins, CreditCard, Layers, LogOut, Moon, Repeat2, Settings, ShoppingBag, Sun, UserRound, Wallet } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
@@ -13,6 +13,7 @@ export const MORE_SHEET_PATHS = [
   "/parcelamentos",
   "/assinaturas",
   "/simulador",
+  "/produtos-desejados",
   "/configuracoes",
 ];
 
@@ -39,6 +40,7 @@ export default function MoreSheet({ open, onClose }) {
     [t("bottomNavigation.installments"), "/parcelamentos", Layers],
     [t("bottomNavigation.subscriptions"), "/assinaturas", Repeat2],
     [t("bottomNavigation.simulator"), "/simulador", Calculator],
+    [t("bottomNavigation.desiredProducts"), "/produtos-desejados", ShoppingBag],
   ];
 
   const handleLogout = async () => {

@@ -11,7 +11,7 @@ export default function MobileDock({ hidden = false, onHiddenChange, onNew }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const closeMore = useCallback(() => setMoreOpen(false), []);
   const hiddenOnScroll = useHideOnScroll({ disabled: moreOpen || hidden });
-  const moreIsActive = moreOpen || MORE_SHEET_PATHS.includes(location.pathname);
+  const moreIsActive = moreOpen || MORE_SHEET_PATHS.some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const links = [
     [t("bottomNavigation.home"), "/", LayoutDashboard],
     [t("bottomNavigation.month"), "/meses", CalendarDays],

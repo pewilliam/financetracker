@@ -11,5 +11,6 @@ from app.routers.simulations import router as simulations
 from app.routers.categories import router as categories
 from app.routers.budgets import router as budgets
 from app.routers.wallets import router as wallets
+from app.routers.desired_products import router as desired_products
 
-__all__ = ["auth", "transactions", "categories", "budgets", "cards", "invoices", "installments", "receivables", "recurrences", "subscriptions", "months", "simulations", "wallets"]
+__all__ = ["auth", "transactions", "categories", "budgets", "cards", "invoices", "installments", "receivables", "recurrences", "subscriptions", "months", "simulations", "wallets", "desired_products"]
