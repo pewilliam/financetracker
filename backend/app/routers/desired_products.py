@@ -6,10 +6,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import DesiredProduct, ProductOffer, User
-from app.schemas.desired_products import MetadataRequest, MetadataOut, OfferPayload, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
+from app.schemas.desired_products import OfferPayload, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
 from app.security import get_current_user
 from app.services.categories import get_user_category
-from app.services.product_metadata import MetadataError, import_product_metadata
 from app.services.desired_products import _fill_offer, _snapshot, _total_cost
 
 
@@ -67,6 +66,8 @@ def _serialize(product: DesiredProduct) -> dict:
         "description": product.description,
         "image_data": product.image_data,
         "image_source": product.image_source,
+        "media_url": product.media_url,
+        "media_type": product.media_type,
         "priority": product.priority,
         "target_price": product.target_price,
         "planned_purchase_date": product.planned_purchase_date,
@@ -88,6 +89,27 @@ def _serialize(product: DesiredProduct) -> dict:
     }
 
 
+def _media_data(data: dict, product: DesiredProduct | None = None) -> dict:
+    if data.get("media_url") and data.get("image_data"):
+        raise HTTPException(status_code=422, detail="Escolha upload ou URL para a mídia")
+    if data.get("image_data") and data.get("media_type") == "video":
+        raise HTTPException(status_code=422, detail="Vídeos devem ser adicionados por URL")
+    if data.get("media_url"):
+        data["image_data"] = None
+    elif data.get("image_data"):
+        data["media_url"] = None
+        data["media_type"] = "image"
+    media_url = data.get("media_url", product.media_url if product else None)
+    media_type = data.get("media_type", product.media_type if product else "image")
+    if media_type == "video" and not media_url:
+        if product and data.get("media_url", "unchanged") is None and "media_type" not in data:
+            data["media_type"] = "image"
+        else:
+            raise HTTPException(status_code=422, detail="Vídeos devem ser adicionados por URL")
+    data["image_source"] = "url" if media_url else "manual"
+    return data
+
+
 @router.get("", response_model=list[ProductOut])
 def list_products(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     products = (
@@ -102,7 +124,7 @@ def list_products(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 def create_product(payload: ProductCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    data = payload.model_dump()
+    data = _media_data(payload.model_dump())
     if payload.category_id is not None:
         get_user_category(db, user.id, payload.category_id)
         data["category"] = None
@@ -110,14 +132,6 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db), user: 
     db.add(product)
     db.commit()
     return _serialize(_load_product(db, user.id, product.id))
-
-
-@router.post("/import-url", response_model=MetadataOut)
-def preview_product_url(payload: MetadataRequest, user: User = Depends(get_current_user)):
-    try:
-        return import_product_metadata(payload.url)
-    except MetadataError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{product_id}", response_model=ProductOut)
@@ -128,7 +142,7 @@ def get_product(product_id: int, db: Session = Depends(get_db), user: User = Dep
 @router.patch("/{product_id}", response_model=ProductOut)
 def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     product = _load_product(db, user.id, product_id)
-    data = payload.model_dump(exclude_unset=True)
+    data = _media_data(payload.model_dump(exclude_unset=True), product)
     if "category_id" in data:
         get_user_category(db, user.id, data["category_id"])
         data["category"] = None

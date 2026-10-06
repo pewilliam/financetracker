@@ -84,10 +84,10 @@
 .desired-cover img { max-height: 165px; min-height: 0; }
 .desired-detail-image img { max-height: 230px; min-height: 0; }
 
-.desired-url-import { display: grid; gap: 9px; min-width: 0; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
-.desired-url-import > .btn { justify-self: start; }
-.desired-import-preview { display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--surface); }
-.desired-import-preview img { max-width: 100%; width: 110px; height: 90px; object-fit: contain; }
-.desired-import-preview p { margin: 0; font-size: 13px; color: var(--muted); }
-.desired-import-preview small { color: var(--muted); }
-.desired-import-error { margin: 0; font-size: 13px; color: var(--expense); }
+.desired-cover video, .desired-detail-image video, .desired-image-preview video { width: 100%; height: 100%; object-fit: contain; }
+.desired-image-preview video { max-width: 180px; height: 100px; }
+.desired-cover > .desired-hint, .desired-detail-image > .desired-hint { padding: 16px; text-align: center; }
+
+.desired-video { position: relative; width: 100%; height: 100%; display: grid; place-items: center; }
+.desired-video > .btn { position: absolute; }
+.desired-image-preview .desired-video { width: 180px; height: 100px; }

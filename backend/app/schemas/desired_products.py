@@ -47,6 +47,8 @@ def _validate_image(value: str | None) -> str | None:
     }
     if not signatures[match[1]]:
         raise ValueError("O conteúdo não corresponde ao formato da imagem")
+    if (match[1] == "png" and b"acTL" in data) or (match[1] == "webp" and b"ANIM" in data):
+        raise ValueError("Envie uma imagem estática; use URL para mídia animada")
     return value
 
 
@@ -73,6 +75,8 @@ class ProductCreate(PlanningModel):
     image_source: Literal["manual", "url"] = "manual"
     description: str | None = Field(default=None, max_length=2000)
     image_data: str | None = None
+    media_url: str | None = Field(default=None, max_length=2048)
+    media_type: Literal["image", "video"] = "image"
     priority: Priority = "medium"
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
@@ -86,7 +90,7 @@ class ProductCreate(PlanningModel):
             raise ValueError("Informe um EAN/GTIN com 8, 12, 13 ou 14 dígitos")
         return cleaned
 
-    @field_validator("source_url")
+    @field_validator("source_url", "media_url")
     @classmethod
     def valid_source_url(cls, value):
         return _validate_url(value)
@@ -124,6 +128,8 @@ class ProductUpdate(PlanningModel):
     image_source: Literal["manual", "url"] = "manual"
     description: str | None = Field(default=None, max_length=2000)
     image_data: str | None = None
+    media_url: str | None = Field(default=None, max_length=2048)
+    media_type: Literal["image", "video"] = "image"
     priority: Priority | None = None
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
@@ -137,7 +143,7 @@ class ProductUpdate(PlanningModel):
             raise ValueError("Informe um EAN/GTIN com 8, 12, 13 ou 14 dígitos")
         return cleaned
 
-    @field_validator("source_url")
+    @field_validator("source_url", "media_url")
     @classmethod
     def valid_source_url(cls, value):
         return _validate_url(value)
@@ -278,6 +284,8 @@ class ProductOut(PlanningModel):
     source_url: str | None
     description: str | None
     image_data: str | None
+    media_url: str | None
+    media_type: Literal["image", "video"]
     image_source: str
     priority: str
     target_price: Decimal | None
@@ -297,28 +305,3 @@ class ProductOut(PlanningModel):
     savings: Decimal | None
     offer_count: int
     offers: list[OfferOut]
-
-
-class MetadataRequest(PlanningModel):
-    url: str = Field(min_length=1, max_length=2048)
-
-    @field_validator("url")
-    @classmethod
-    def valid_url(cls, value):
-        result = _validate_url(value)
-        if not result:
-            raise ValueError("Informe o link do produto")
-        return result
-
-
-class MetadataOut(PlanningModel):
-    url: str
-    name: str | None
-    ean: str | None
-    description: str | None
-    image_url: str | None
-    image_data: str | None
-    store: str | None
-    price: str | None
-    currency: str | None
-    warnings: list[str]

@@ -23,6 +23,25 @@ try {
       await scope.locator(`select[aria-label="${name}"]`).selectOption(value);
     }
   }
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  let videoRequests = 0;
+  await page.route('https://media.example/**', async route => {
+    const path = route.request().url();
+    if (path.endsWith('.webm')) {
+      videoRequests++;
+      await route.fulfill({path:fileURLToPath(new URL('./fixtures/product-video.webm', import.meta.url)), contentType:'video/webm'});
+    } else await route.fulfill({body:path.endsWith('.gif') ? gif : png, contentType:path.endsWith('.gif') ? 'image/gif' : 'image/png'});
+  });
+  async function labelsDoNotFocus(modal) {
+    assert.equal(await modal.locator('label').count(), 0);
+    for (const caption of await modal.locator('.field-label > span').all()) {
+      await modal.getByRole('button', {name:'Cancelar', exact:true}).focus();
+      await caption.click();
+      const tag = await page.evaluate(() => document.activeElement.tagName);
+      assert.ok(!['INPUT','TEXTAREA','SELECT'].includes(tag), `Label unexpectedly focused ${tag}`);
+    }
+  }
   const email = `planning${Date.now()}@example.com`;
   const password = 'Compra segura! 2026 long';
   const registered = await context.request.post(`${apiUrl}/auth/register`, { data: { name: 'Planejador', email, password } });
@@ -38,16 +57,9 @@ try {
   await page.getByRole('link', { name: 'Produtos desejados', exact: true }).click();
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
   let dialog = page.getByRole('dialog');
-  if (process.env.KASHY_E2E_IMPORT_URL) {
-    await dialog.getByLabel('Link do produto', {exact:true}).fill(process.env.KASHY_E2E_IMPORT_URL);
-    await dialog.getByRole('button', {name:'Buscar dados do link', exact:true}).click();
-    await dialog.getByRole('region', {name:'Dados encontrados'}).waitFor();
-    assert.equal(await dialog.getByLabel('Nome do produto *', {exact:true}).inputValue(), '');
-    await dialog.getByRole('button', {name:'Usar dados encontrados', exact:true}).click();
-    assert.equal(await dialog.getByLabel('EAN/GTIN', {exact:true}).inputValue(), '7891234567895');
-    assert.equal(await dialog.getByLabel('Observações', {exact:true}).inputValue(), 'Descrição da loja');
-    await dialog.getByRole('img', {name:'Prévia do produto'}).waitFor();
-  }
+  await labelsDoNotFocus(dialog);
+  assert.equal(await dialog.getByRole('button', {name:'Buscar dados do link'}).count(), 0);
+  await dialog.getByLabel('Link do produto', {exact:true}).fill('https://example.com/notebook');
   await dialog.getByLabel('Nome do produto *', { exact: true }).fill('Notebook Dell Inspiron 15');
   await dialog.getByRole('combobox', {name:'Categoria', exact:true}).click();
   await page.getByRole('listbox', {name:'Categoria', exact:true}).getByRole('option', {name:'Tecnologia', exact:true}).click();
@@ -71,28 +83,48 @@ try {
   await page.waitForURL(/produtos-desejados\/\d+/);
   const productId = Number(page.url().split('/').at(-1));
   await page.getByRole('heading', { name: 'Ofertas (0)', exact: true }).waitFor();
-  if (process.env.KASHY_E2E_IMPORT_URL) {
-    const saved = await context.request.get(`${apiUrl}/desired-products/${productId}`, {headers:{Authorization:`Bearer ${token}`}});
-    const data = await saved.json();
-    assert.equal(data.ean, '7891234567895');
-    assert.equal(data.source_url, process.env.KASHY_E2E_IMPORT_URL);
-    assert.equal(data.category, 'Eletrônicos');
+  const savedProduct = async () => (await context.request.get(`${apiUrl}/desired-products/${productId}`, {headers:{Authorization:`Bearer ${token}`}})).json();
+  assert.ok((await savedProduct()).image_data.startsWith('data:image/jpeg;base64,'));
+  for (const [url, type] of [['https://media.example/photo.png', 'image'], ['https://media.example/photo.gif', 'image'], ['https://media.example/demo.webm', 'video']]) {
+    await page.locator('.desired-actions').getByRole('button', {name:'Editar', exact:true}).click();
+    dialog = page.getByRole('dialog');
+    await select(dialog, 'Adicionar mídia por', 'url', 'URL');
+    await dialog.getByLabel('URL da mídia', {exact:true}).fill(url);
+    await select(dialog, 'Tipo de mídia', type, type === 'video' ? 'Vídeo' : 'Imagem ou GIF');
+    await dialog.getByRole('button', {name:'Salvar alterações', exact:true}).click();
+    await dialog.waitFor({state:'hidden'});
+    await page.reload();
+    await page.getByRole('heading', {name:'Ofertas (0)', exact:true}).waitFor();
+    const saved = await savedProduct();
+    assert.equal(saved.media_url, url);
+    assert.equal(saved.media_type, type);
+    assert.equal(saved.image_data, null);
+    const media = page.locator(type === 'video' ? '.desired-detail-image video' : '.desired-detail-image img');
+    assert.equal(await media.getAttribute(type === 'video' ? 'data-media-url' : 'src'), url);
+    if (type === 'image') assert.ok(await media.evaluate(image => image.complete && image.naturalWidth > 0));
+    else {
+      assert.equal(await media.getAttribute('preload'), 'none');
+      assert.equal(await media.getAttribute('autoplay'), null);
+      assert.equal(videoRequests, 0, 'Video downloaded before playback');
+      await page.locator('.desired-detail-image').getByRole('button', {name:'Reproduzir vídeo'}).click();
+      await page.waitForFunction(() => { const video = document.querySelector('.desired-detail-image video'); return video && !video.paused && video.videoWidth > 0; });
+      assert.ok(await media.evaluate(video => !video.paused && video.videoWidth > 0));
+      assert.ok(videoRequests > 0);
+      await media.evaluate(video => video.pause());
+    }
   }
+  await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
+  assert.equal(await page.locator('.desired-cover video').getAttribute('data-media-url'), 'https://media.example/demo.webm');
+  await page.getByRole('button', {name:'Ver produto', exact:true}).click();
+  await page.getByRole('heading', {name:'Ofertas (0)', exact:true}).waitFor();
   async function offer(store, price, method, shipping = '') {
     await page.getByRole('button', { name: 'Adicionar oferta', exact: true }).first().click();
     const modal = page.getByRole('dialog');
+    await labelsDoNotFocus(modal);
     await modal.getByLabel('Loja *', { exact: true }).fill(store);
     await modal.getByLabel('Link da oferta', { exact: true }).fill(`https://example.com/${store.toLowerCase().replaceAll(' ', '-')}`);
     await modal.getByLabel('Preço *', { exact: true }).fill(price);
     if (shipping) await modal.getByLabel('Frete', { exact: true }).fill(shipping);
-    if (process.env.KASHY_E2E_IMPORT_URL && store === 'Amazon') {
-      await modal.getByLabel('Link da oferta', {exact:true}).fill(process.env.KASHY_E2E_IMPORT_URL);
-      await modal.getByRole('button', {name:'Buscar dados do link', exact:true}).click();
-      await modal.getByRole('button', {name:'Usar dados encontrados', exact:true}).click();
-      assert.equal(await modal.getByLabel('Loja *', {exact:true}).inputValue(), 'Loja fixture');
-      await modal.getByLabel('Loja *', {exact:true}).fill(store);
-      await modal.getByLabel('Preço *', {exact:true}).fill(price);
-    }
     await select(modal, 'Pagamento', method, {credit: 'Cartão de crédito', pix: 'PIX', boleto: 'Boleto'}[method]);
     if (method === 'credit') {
       await modal.getByLabel('Quantidade de parcelas').fill('10');
@@ -124,6 +156,7 @@ try {
   assert.equal(await best.locator('.desired-history li').count(), 2);
   await page.getByRole('button', { name: 'Marcar como comprado', exact: true }).click();
   dialog = page.getByRole('dialog');
+  await labelsDoNotFocus(dialog);
   await dialog.getByRole('button', { name: 'Oferta escolhida', exact: true }).click();
   await page.getByRole('option', { name: /Mercado Livre/ }).click();
   await dialog.getByRole('textbox', { name: 'Data da compra' }).click();
@@ -147,12 +180,15 @@ try {
   dialog = page.getByRole('dialog');
   assert.ok(await dialog.locator('.date-native-input').isVisible());
   assert.ok(await dialog.locator('select[aria-label="Prioridade"]').isVisible());
+  assert.equal(await dialog.getByLabel('URL da mídia').inputValue(), 'https://media.example/demo.webm');
+  await dialog.getByRole('button', {name:'Remover mídia', exact:true}).click();
   await dialog.locator('.date-native-input').fill('2026-12-01');
   await select(dialog, 'Prioridade', 'low', 'Baixa');
   await dialog.locator('select[aria-label="Selecionar categoria"]').selectOption({label:'Tecnologia'});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile modal has horizontal overflow');
   await dialog.getByRole('button', { name: 'Salvar alterações' }).click();
   await dialog.waitFor({ state: 'hidden' });
+  assert.equal((await savedProduct()).media_url, null);
   await page.getByRole('button', { name: 'Todos os produtos', exact: true }).click();
   await page.getByRole('button', { name: 'Ver produto', exact: true }).waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile page has horizontal overflow');
@@ -170,7 +206,7 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Excluir', exact: true }).click();
   await page.getByText('Sua lista começa aqui', { exact: true }).waitFor();
   assert.deepEqual(errors, [], 'Uncaught browser errors');
-  console.log('PASS: login, category selection/creation, optional URL import/confirmation, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
+  console.log('PASS: login, category selection/creation, direct image/GIF/video URLs, labels without focus, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
 } finally {
   await browser.close();
 }

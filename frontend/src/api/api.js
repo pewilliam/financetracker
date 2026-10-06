@@ -73,7 +73,6 @@ export function getMe() {
   return request("/auth/me");
 }
 
-export const importProductUrl = (url) => request("/desired-products/import-url", { method: "POST", body: JSON.stringify({ url }) });
 export const listDesiredProducts = () => request("/desired-products");
 export const getDesiredProduct = (id) => request(`/desired-products/${id}`);
 export const createDesiredProduct = (payload) => request("/desired-products", { method: "POST", body: JSON.stringify(payload) });

@@ -2,7 +2,6 @@ import base64
 import importlib.util
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -175,20 +174,42 @@ class DesiredProductAPITests(unittest.TestCase):
         for changes in [{"ean": "ABC"}, {"source_url": "javascript:alert(1)"}, {"image_source": "invalid"}]:
             self.request("PATCH", f"/{product['id']}", changes, expected=422)
 
-    def test_url_preview_authentication_confirmation_and_failure(self):
-        from app.services.product_metadata import MetadataError
-        metadata = {"url": "https://example.com/product", "name": "Notebook importado", "ean": "7891234567895", "description": "Descrição da loja", "image_data": IMAGE, "image_url": "https://example.com/photo.png", "store": "Loja", "price": "3499.00", "currency": "BRL", "warnings": []}
-        with patch("app.routers.desired_products.import_product_metadata", return_value=metadata) as fetch:
-            self.assertEqual(self.client.post(PREFIX + "/import-url", json={"url": metadata["url"]}).status_code, 401)
-            fetch.assert_not_called()
-            self.assertEqual(self.request("POST", "/import-url", {"url": metadata["url"]}), metadata)
-            self.assertEqual(self.request("GET"), [])  # Preview never saves or creates an offer.
-            product = self.product(name=metadata["name"], ean=metadata["ean"], description=metadata["description"], image_data=IMAGE, image_source="url", source_url=metadata["url"])
+    def test_direct_media_urls_and_source_switching(self):
+        for url, media_type in [("https://media.example/a.png", "image"), ("https://media.example/a.gif", "image"), ("https://media.example/a.mp4", "video")]:
+            product = self.product(media_url=url, media_type=media_type)
+            self.assertEqual(product["media_url"], url)
+            self.assertEqual(product["media_type"], media_type)
+            self.assertIsNone(product["image_data"])
             self.assertEqual(product["image_source"], "url")
-            self.assertEqual(self.request("GET", f"/{product['id']}")["ean"], metadata["ean"])
-        with patch("app.routers.desired_products.import_product_metadata", side_effect=MetadataError("Loja indisponível")):
-            self.request("POST", "/import-url", {"url": metadata["url"]}, expected=422)
-        self.request("POST", "/import-url", {"url": "file:///etc/passwd"}, expected=422)
+            path = f"/{product['id']}"
+            self.request("GET", path, expected=404, headers=self.other_headers)
+            self.request("PATCH", path, {"media_url": url}, expected=404, headers=self.other_headers)
+            self.assertEqual(self.request("PATCH", path, {"name": "Novo nome"})["media_url"], url)
+            uploaded = self.request("PATCH", path, {"image_data": IMAGE})
+            self.assertIsNone(uploaded["media_url"])
+            self.assertEqual(uploaded["media_type"], "image")
+            remote = self.request("PATCH", path, {"media_url": url, "media_type": media_type})
+            self.assertIsNone(remote["image_data"])
+            cleared = self.request("PATCH", path, {"media_url": None})
+            self.assertIsNone(cleared["media_url"])
+            self.assertEqual(cleared["media_type"], "image")
+
+    def test_media_validation_and_removed_metadata_endpoint(self):
+        for data in [
+            {"media_url": "javascript:alert(1)"}, {"media_url": "file:///etc/passwd"},
+            {"media_url": "https://user:pass@example.com/a.gif"},
+            {"media_url": "https://example.com/a.png", "image_data": IMAGE},
+            {"media_type": "video"}, {"media_url": None, "media_type": "video"},
+            {"media_type": "video", "image_data": IMAGE},
+            {"media_type": "other"}, {"media_url": "https://example.com/" + "a" * 2048},
+            {"image_data": "data:image/gif;base64,R0lGODlh"},
+            {"image_data": "data:video/mp4;base64,AAAA"},
+            {"image_data": "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nacTL").decode()},
+            {"image_data": "data:image/webp;base64," + base64.b64encode(b"RIFFxxxxWEBPANIM").decode()},
+        ]:
+            self.request("POST", payload={"name":"Notebook", **data}, expected=422)
+        response = self.client.post(PREFIX + "/import-url", json={"url":"https://example.com"}, headers=self.headers)
+        self.assertEqual(response.status_code, 405)
 
 
 class DesiredProductMigrationTests(unittest.TestCase):
@@ -201,6 +222,10 @@ class DesiredProductMigrationTests(unittest.TestCase):
         import_spec = importlib.util.spec_from_file_location("import_migration", import_path)
         import_migration = importlib.util.module_from_spec(import_spec)
         import_spec.loader.exec_module(import_migration)
+        media_path = Path(__file__).parents[1] / "alembic/versions/0041_product_media.py"
+        media_spec = importlib.util.spec_from_file_location("media_migration", media_path)
+        media_migration = importlib.util.module_from_spec(media_spec)
+        media_spec.loader.exec_module(media_migration)
         engine = create_engine("sqlite://")
         with engine.begin() as connection:
             connection.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)")
@@ -212,8 +237,13 @@ class DesiredProductMigrationTests(unittest.TestCase):
                 connection.exec_driver_sql("INSERT INTO desired_products (id, user_id, name, category) VALUES (1, 1, 'Notebook', 'Tecnologia'), (2, 2, 'Tablet', 'Tecnologia'), (3, 1, 'Tênis', 'Roupas')")
                 import_migration.upgrade()
                 self.assertEqual(connection.exec_driver_sql("SELECT category_id FROM desired_products ORDER BY id").scalars().all(), [7, 8, None])
+                connection.exec_driver_sql("UPDATE desired_products SET image_data=? WHERE id=1", (IMAGE,))
+                media_migration.upgrade()
+                self.assertEqual(connection.exec_driver_sql("SELECT image_data, media_url, media_type FROM desired_products WHERE id=1").one(), (IMAGE, None, "image"))
                 for model in (DesiredProduct, ProductOffer, OfferPriceHistory):
                     self.assertEqual({column.name for column in model.__table__.columns}, {column["name"] for column in inspect(connection).get_columns(model.__tablename__)})
+                media_migration.downgrade()
+                self.assertEqual(connection.exec_driver_sql("SELECT image_data FROM desired_products WHERE id=1").scalar(), IMAGE)
                 import_migration.downgrade()
                 self.assertEqual(connection.exec_driver_sql("SELECT category FROM desired_products WHERE id=3").scalar(), "Roupas")
                 migration.downgrade()
