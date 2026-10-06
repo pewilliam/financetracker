@@ -63,7 +63,7 @@ it("creates a product with target and navigates to its details", async () => {
   await user.click(dialog.getByRole("button", { name: "Criar produto" }));
   await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({ name: "Notebook Dell", category_id: 3, target_price: "3200.00", status: "planning", priority: "high", planned_purchase_date: "2026-11-01" })));
   await screen.findByRole("button", { name: "Todos os produtos" });
-  expect(api.getDesiredProduct).toHaveBeenCalledWith("1");
+  expect(api.getDesiredProduct).toHaveBeenCalledWith("1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
 });
 
 it("adds credit offers with automatic installments and manual interest adjustments", async () => {
@@ -119,7 +119,7 @@ it("opens product details from the card's native link using the keyboard", async
   link.focus();
   await user.keyboard("{Enter}");
   await screen.findByRole("heading", {name:"Ofertas (0)"});
-  expect(api.getDesiredProduct).toHaveBeenCalledWith("1");
+  expect(api.getDesiredProduct).toHaveBeenCalledWith("1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
 });
 
 it("keeps video controls separate from the card navigation", async () => {
@@ -140,13 +140,16 @@ it("keeps video controls separate from the card navigation", async () => {
   expect(screen.getByRole("heading", {name:"Produtos desejados"})).toBeInTheDocument();
 });
 
-it("retries a failed request and preserves purchase details without active offers", async () => {
-  const user = userEvent.setup();
-  api.getDesiredProduct.mockRejectedValueOnce(new Error("Sem conexão"));
+it("waits for a cold server and retries before showing an error", async () => {
+  api.getDesiredProduct.mockRejectedValueOnce(Object.assign(new Error("Servidor iniciando"), { status: 503 }));
   api.getDesiredProduct.mockResolvedValue({ ...product, status: "bought", purchase_store: "Amazon", paid_price: "3600.00", purchase_date: "2026-10-06", purchase_payment_method: "credit", purchase_installment_count: 10, purchase_installment_amount: "360.00" });
   show("/produtos-desejados/1");
-  await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
-  await screen.findByText("Compra registrada");
+  expect(await screen.findByRole("heading", { name: "Carregando produtos..." })).toBeInTheDocument();
+  expect(screen.queryByText(/servidor está iniciando/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/tentativa \d/i)).not.toBeInTheDocument();
+  await screen.findByText("Compra registrada", {}, { timeout: 3000 });
+  expect(api.getDesiredProduct).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("button", { name: "Tentar novamente" })).not.toBeInTheDocument();
   expect(screen.getByText(/10x de/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Editar compra" })).not.toBeInTheDocument();
 });

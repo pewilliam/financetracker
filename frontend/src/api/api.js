@@ -73,8 +73,8 @@ export function getMe() {
   return request("/auth/me");
 }
 
-export const listDesiredProducts = () => request("/desired-products");
-export const getDesiredProduct = (id) => request(`/desired-products/${id}`);
+export const listDesiredProducts = ({ signal } = {}) => request("/desired-products", { signal });
+export const getDesiredProduct = (id, { signal } = {}) => request(`/desired-products/${id}`, { signal });
 export const createDesiredProduct = (payload) => request("/desired-products", { method: "POST", body: JSON.stringify(payload) });
 export const updateDesiredProduct = (id, payload) => request(`/desired-products/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
 export const deleteDesiredProduct = (id) => request(`/desired-products/${id}`, { method: "DELETE" });

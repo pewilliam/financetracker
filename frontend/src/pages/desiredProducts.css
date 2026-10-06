@@ -60,6 +60,9 @@
 .desired-target-note.reached { color: var(--primary); }
 .desired-empty { display: grid; justify-items: center; gap: 7px; text-align: center; padding: 42px 20px; color: var(--muted); }
 .desired-empty p { margin: 0; }
+.desired-loading-state { min-height: 220px; align-content: center; }
+.desired-loading-state svg { color: var(--primary); }
+.desired-loading-state h2 { color: var(--text); font-size: 18px; }
 .desired-detail-view { display: grid; gap: 32px; min-width: 0; }
 .desired-detail-grid { display: grid; grid-template-columns: minmax(0, 1.14fr) minmax(340px, .86fr); gap: 20px; align-items: stretch; }
 .desired-page .card.desired-product-summary { padding: 0; overflow: hidden; border-radius: 18px; box-shadow: 0 12px 34px rgb(13 33 24 / .06); }

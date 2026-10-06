@@ -21,6 +21,7 @@ const STATUSES = { want: "Quero comprar", planning: "Planejando", ready: "Pronto
 const PRIORITIES = { low: "Baixa", medium: "Média", high: "Alta" };
 const PAYMENTS = { cash: "À vista", pix: "PIX", credit: "Cartão de crédito", boleto: "Boleto", other: "Outro" };
 const OFFERS_PER_PAGE = 10;
+const LOAD_RETRY_DELAYS = [1200, 2500, 4500, 7000, 9000];
 const optionsFor = (labels) => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const today = () => {
   const date = new Date();
@@ -31,6 +32,28 @@ const moneyValue = (value, locale) => value ? parseTypedMoneyInput(value, locale
 const cents = (value) => Math.round(Number(value || 0) * 100);
 const dateLabel = (date, locale) => date ? new Date(`${date}T00:00:00`).toLocaleDateString(locale) : "—";
 const compactMoney = (value, locale) => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(value);
+
+function isTransientLoadError(error) {
+  if (error?.name === "AbortError") return false;
+  if (error?.status == null) return true;
+  return error.status === 408 || error.status === 425 || error.status === 429 || error.status >= 500;
+}
+
+function waitForRetry(delay, signal) {
+  return new Promise((resolve, reject) => {
+    const handleAbort = () => {
+      window.clearTimeout(timer);
+      const error = new Error("Request aborted");
+      error.name = "AbortError";
+      reject(error);
+    };
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, delay);
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
 
 function buildPriceTrend(offers = []) {
   const seen = new Set();
@@ -357,17 +380,34 @@ export default function DesiredProductsPage({ categories: availableCategories = 
   const [expiredOffersPage, setExpiredOffersPage] = useState(1);
   useEffect(() => { onOverlayChange?.(Boolean(modal)); return () => onOverlayChange?.(false); }, [modal, onOverlayChange]);
   const loadToken = useRef(0);
+  const loadController = useRef(null);
   const load = useCallback(async () => {
     const token = ++loadToken.current;
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     setLoading(true); setError(null);
     try {
-      const data = productId ? [await getDesiredProduct(productId)] : await listDesiredProducts();
+      let data;
+      for (let attempt = 0; attempt <= LOAD_RETRY_DELAYS.length; attempt += 1) {
+        try {
+          data = productId ? [await getDesiredProduct(productId, { signal: controller.signal })] : await listDesiredProducts({ signal: controller.signal });
+          break;
+        } catch (caught) {
+          if (controller.signal.aborted || caught?.name === "AbortError") throw caught;
+          if (!isTransientLoadError(caught) || attempt === LOAD_RETRY_DELAYS.length) throw caught;
+          await waitForRetry(LOAD_RETRY_DELAYS[attempt], controller.signal);
+        }
+      }
       if (token === loadToken.current) setProducts(data);
     } catch (caught) {
-      if (token === loadToken.current) setError(caught.message || "Não foi possível carregar os produtos.");
-    } finally { if (token === loadToken.current) setLoading(false); }
+      if (!controller.signal.aborted && caught?.name !== "AbortError" && token === loadToken.current) setError(caught.message || "Não foi possível carregar os produtos.");
+    } finally {
+      if (loadController.current === controller) loadController.current = null;
+      if (token === loadToken.current) setLoading(false);
+    }
   }, [productId]);
-  useEffect(() => { load(); return () => { loadToken.current++; }; }, [load]);
+  useEffect(() => { load(); return () => { loadToken.current++; loadController.current?.abort(); }; }, [load]);
   const selected = products.find((item) => String(item.id) === productId);
   useEffect(() => { setOffersExpanded(false); setExpiredOffersExpanded(false); setCurrentOffersPage(1); setExpiredOffersPage(1); }, [selected?.id]);
   useEffect(() => { if (!offersExpanded) setExpiredOffersExpanded(false); }, [offersExpanded]);
@@ -407,7 +447,7 @@ export default function DesiredProductsPage({ categories: availableCategories = 
     <header className="page-header desired-header"><div><p className="eyebrow">PLANEJAMENTO DE COMPRAS</p><h1>{selected?.name || "Produtos desejados"}</h1>
       <p>{selected ? "Compare as ofertas e escolha quando vale a pena comprar." : "Guarde ideias, compare ofertas e acompanhe seu preço-alvo."}</p></div>
       <button className="btn btn-primary" disabled={loading || Boolean(error) || Boolean(productId && !selected)} onClick={() => setModal(selected ? { type: "offer" } : { type: "product" })}><Plus size={17} /> {selected ? "Adicionar oferta" : "Novo produto"}</button></header>
-    {loading && <div className="card desired-empty">Carregando produtos...</div>}
+    {loading && <div className="card desired-empty desired-loading-state"><Loader2 className="spin" size={28} /><h2>Carregando produtos...</h2></div>}
     {error && <div className="card desired-empty"><p>{error}</p><button className="btn btn-ghost" onClick={load}>Tentar novamente</button></div>}
     {!loading && !error && productId && !selected && <div className="card desired-empty">Produto não encontrado.</div>}
     {!loading && !error && !productId && <>
