@@ -17,6 +17,8 @@ class DesiredProduct(Base):
     source_url = Column(String(2048), nullable=True)
     description = Column(Text, nullable=True)
     image_data = Column(Text().with_variant(LONGTEXT(), "mysql"), nullable=True)
+    media_url = Column(String(2048), nullable=True)
+    media_type = Column(String(10), nullable=False, default="image")
     image_source = Column(String(20), nullable=False, default="manual")
     priority = Column(String(10), nullable=False, default="medium")
     target_price = Column(Numeric(10, 2), nullable=True)

@@ -9,7 +9,7 @@ import DesiredProductsPage from "./DesiredProductsPage.jsx";
 vi.mock("../api/api.js", () => ({
   listDesiredProducts: vi.fn(), getDesiredProduct: vi.fn(), createDesiredProduct: vi.fn(),
   updateDesiredProduct: vi.fn(), deleteDesiredProduct: vi.fn(), createProductOffer: vi.fn(),
-  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), createCategory: vi.fn(), importProductUrl: vi.fn(),
+  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), createCategory: vi.fn(),
 }));
 vi.mock("react-hot-toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -159,45 +159,6 @@ it("allows clearing an optional planned date", async () => {
   await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, expect.objectContaining({ planned_purchase_date: null })));
 });
 
-it("previews imported product fields before applying and allows correction", async () => {
-  const user = userEvent.setup();
-  const image = "data:image/png;base64,aW1hZ2U=";
-  api.importProductUrl.mockResolvedValue({ url: "https://example.com/notebook", name: "Notebook da loja", ean: "7891234567895", description: "Descrição encontrada", image_data: image, warnings: [] });
-  api.createDesiredProduct.mockResolvedValue(product);
-  show();
-  await user.click(await screen.findByRole("button", { name: "Novo produto" }));
-  const dialog = within(screen.getByRole("dialog", { name: "Novo produto desejado" }));
-  await user.type(dialog.getByLabelText("Nome do produto *"), "Meu rascunho");
-  await user.type(dialog.getByLabelText("Link do produto"), "https://example.com/notebook");
-  await user.click(dialog.getByRole("button", { name: "Buscar dados do link" }));
-  await dialog.findByRole("region", { name: "Dados encontrados" });
-  expect(dialog.getByLabelText("Nome do produto *")).toHaveValue("Meu rascunho");
-  expect(api.createDesiredProduct).not.toHaveBeenCalled();
-  await user.click(dialog.getByRole("button", { name: "Usar dados encontrados" }));
-  expect(dialog.getByLabelText("Nome do produto *")).toHaveValue("Notebook da loja");
-  expect(dialog.getByLabelText("EAN/GTIN")).toHaveValue("7891234567895");
-  expect(dialog.getByLabelText("Observações")).toHaveValue("Descrição encontrada");
-  expect(dialog.getByRole("img", { name: "Prévia do produto" })).toHaveAttribute("src", image);
-  await user.clear(dialog.getByLabelText("Nome do produto *"));
-  await user.type(dialog.getByLabelText("Nome do produto *"), "Nome corrigido");
-  await user.click(dialog.getByRole("button", { name: "Criar produto" }));
-  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({ name: "Nome corrigido", ean: "7891234567895", source_url: "https://example.com/notebook", image_source: "url" })));
-});
-
-it("keeps manual values when URL import fails", async () => {
-  const user = userEvent.setup();
-  api.importProductUrl.mockRejectedValue(new Error("Loja bloqueou a leitura"));
-  show();
-  await user.click(await screen.findByRole("button", { name: "Novo produto" }));
-  const dialog = within(screen.getByRole("dialog"));
-  await user.type(dialog.getByLabelText("Nome do produto *"), "Meu notebook");
-  await user.type(dialog.getByLabelText("Link do produto"), "https://example.com/notebook");
-  await user.click(dialog.getByRole("button", { name: "Buscar dados do link" }));
-  await dialog.findByRole("alert");
-  expect(dialog.getByLabelText("Nome do produto *")).toHaveValue("Meu notebook");
-  expect(dialog.getByRole("button", { name: "Criar produto" })).toBeEnabled();
-});
-
 it("creates a category inside the product editor without submitting the product", async () => {
   const user = userEvent.setup();
   api.createDesiredProduct.mockResolvedValue(product);
@@ -221,21 +182,45 @@ it("creates a category inside the product editor without submitting the product"
 
 });
 
-it("preserves a manually entered BRL price when the imported offer uses another currency", async () => {
+
+it.each([["image", "Imagem ou GIF", "https://media.example/photo.png"], ["image", "Imagem ou GIF", "https://media.example/photo.gif"], ["video", "Vídeo", "https://media.example/demo.mp4"]])("saves direct %s media URLs without metadata import", async (type, label, url) => {
   const user = userEvent.setup();
-  api.createProductOffer.mockResolvedValue(product);
-  api.importProductUrl.mockResolvedValue({url: "https://example.com/offer", store: "Loja estrangeira", price: "200.00", currency: "USD", warnings: []});
+  api.createDesiredProduct.mockResolvedValue(product);
+  show();
+  await user.click(await screen.findByRole("button", { name: "Novo produto" }));
+  const node = screen.getByRole("dialog");
+  const dialog = within(node);
+  const name = dialog.getByLabelText("Nome do produto *");
+  await user.type(name, "Notebook Dell");
+  await user.click(dialog.getByText("Nome do produto *", {selector:"span"}));
+  expect(name).not.toHaveFocus();
+  expect(node.querySelector("label")).toBeNull();
+  expect(dialog.queryByRole("button", {name:"Buscar dados do link"})).not.toBeInTheDocument();
+  await select(user, dialog, "Adicionar mídia por", "URL");
+  await user.type(dialog.getByLabelText("URL da mídia"), url);
+  await select(user, dialog, "Tipo de mídia", label);
+  if (type === "video") {
+    const video = node.querySelector("video");
+    expect(video).toHaveAttribute("preload", "none");
+    expect(video).not.toHaveAttribute("src");
+    expect(dialog.getByRole("button", {name:"Reproduzir vídeo"})).toBeInTheDocument();
+    expect(video).not.toHaveAttribute("autoplay");
+  } else expect(dialog.getByRole("img")).toHaveAttribute("src", url);
+  await user.click(dialog.getByRole("button", {name:"Criar produto"}));
+  await waitFor(() => expect(api.createDesiredProduct).toHaveBeenCalledWith(expect.objectContaining({media_url:url, media_type:type, image_data:null})));
+});
+
+it("keeps and removes saved URL media while editing", async () => {
+  const user = userEvent.setup();
+  const saved = {...product, media_url:"https://media.example/photo.gif", media_type:"image"};
+  api.getDesiredProduct.mockResolvedValue(saved);
+  api.updateDesiredProduct.mockResolvedValue(product);
   show("/produtos-desejados/1");
-  await screen.findByRole("heading", {name: "Ofertas (0)"});
-  await user.click(screen.getAllByRole("button", {name: "Adicionar oferta"})[0]);
+  expect(await screen.findByRole("img", {name:product.name})).toHaveAttribute("src", saved.media_url);
+  await user.click(screen.getByRole("button", {name:"Editar", exact:true}));
   const dialog = within(screen.getByRole("dialog"));
-  await user.type(dialog.getByLabelText("Loja *"), "Loja manual");
-  await user.type(dialog.getByLabelText("Preço *"), "1000,00");
-  await user.type(dialog.getByLabelText("Link da oferta"), "https://example.com/offer");
-  await user.click(dialog.getByRole("button", {name: "Buscar dados do link"}));
-  await dialog.findByText("Confira a moeda e informe manualmente o preço em reais.");
-  await user.click(dialog.getByRole("button", {name: "Usar dados encontrados"}));
-  expect(dialog.getByLabelText("Loja *")).toHaveValue("Loja estrangeira");
-  await user.click(dialog.getByRole("button", {name: "Adicionar oferta", exact:true}));
-  await waitFor(() => expect(api.createProductOffer).toHaveBeenCalledWith(1, expect.objectContaining({price: "1000.00"})));
+  expect(dialog.getByLabelText("URL da mídia")).toHaveValue(saved.media_url);
+  await user.click(dialog.getByRole("button", {name:"Remover mídia"}));
+  await user.click(dialog.getByRole("button", {name:"Salvar alterações"}));
+  await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, expect.objectContaining({media_url:null, media_type:"image", image_data:null})));
 });
