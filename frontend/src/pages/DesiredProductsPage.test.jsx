@@ -105,6 +105,36 @@ it("filters cards by status, category and priority", async () => {
   expect(screen.getByRole("heading", { name: "Notebook Dell" })).toBeInTheDocument();
 });
 
+it("opens product details from the card's native link using the keyboard", async () => {
+  const user = userEvent.setup();
+  show();
+  const link = await screen.findByRole("link", { name: "Ver produto Notebook Dell" });
+  expect(link).toHaveAttribute("href", "/produtos-desejados/1");
+  expect(screen.queryByRole("button", {name:"Ver produto"})).not.toBeInTheDocument();
+  link.focus();
+  await user.keyboard("{Enter}");
+  await screen.findByRole("heading", {name:"Ofertas (0)"});
+  expect(api.getDesiredProduct).toHaveBeenCalledWith("1");
+});
+
+it("keeps video controls separate from the card navigation", async () => {
+  const user = userEvent.setup();
+  const videoProduct = {...product, media_url:"https://media.example/demo.mp4", media_type:"video"};
+  api.listDesiredProducts.mockResolvedValue([videoProduct]);
+  show();
+  await screen.findByRole("link", {name:"Ver produto Notebook Dell"});
+  const video = document.querySelector("video");
+  Object.defineProperty(video, "paused", {configurable:true, value:false});
+  fireEvent.play(video);
+  const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await user.click(screen.getByRole("button", {name:"Pausar vídeo"}));
+  expect(pause).toHaveBeenCalled();
+  await user.click(screen.getByRole("button", {name:"Ativar som"}));
+  expect(video.muted).toBe(false);
+  expect(api.getDesiredProduct).not.toHaveBeenCalled();
+  expect(screen.getByRole("heading", {name:"Produtos desejados"})).toBeInTheDocument();
+});
+
 it("retries a failed request and preserves purchase details without active offers", async () => {
   const user = userEvent.setup();
   api.getDesiredProduct.mockRejectedValueOnce(new Error("Sem conexão"));
