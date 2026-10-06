@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ImagePlus, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Check, ImagePlus, Loader2, Pencil, Plus, ShoppingBag, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useNavigate, useParams } from "react-router-dom";
@@ -7,12 +7,16 @@ import { toast } from "react-hot-toast";
 
 import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, updateDesiredProduct, updateProductOffer } from "../api/api.js";
 import { useI18n } from "../i18n/index.ts";
+import FilterSelect from "../components/common/FilterSelect.jsx";
+import DateField from "../components/DateField.jsx";
+import { isMobileViewport } from "../app/helpers.js";
 import { formatMoney, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 import "./desiredProducts.css";
 
 const STATUSES = { want: "Quero comprar", planning: "Planejando", ready: "Pronto para comprar", bought: "Comprado", abandoned: "Desisti" };
 const PRIORITIES = { low: "Baixa", medium: "Média", high: "Alta" };
 const PAYMENTS = { cash: "À vista", pix: "PIX", credit: "Cartão de crédito", boleto: "Boleto", other: "Outro" };
+const optionsFor = (labels) => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const today = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -28,17 +32,19 @@ function MoneyField({ label, value, onChange, language, required = false }) {
     onBlur={() => value && onChange(moneyInput(parseTypedMoneyInput(value, language), language))} /></label>;
 }
 
-function Modal({ title, onClose, children, onSubmit, busy, submitLabel = "Salvar", danger = false }) {
+function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSubmit, busy, submitLabel = "Salvar", danger = false }) {
   const formRef = useRef(null);
   const close = () => { if (!busy) onClose(); };
   useModalLifecycle({ onClose, busy });
-  useEffect(() => { formRef.current?.querySelector("fieldset input, fieldset select, fieldset textarea, footer button")?.focus(); }, []);
-  return createPortal(<div className="modal-layer desired-modal-layer" role="presentation">
+  useEffect(() => {
+    if (!isMobileViewport()) formRef.current?.querySelector("fieldset input, fieldset textarea, footer button")?.focus({ preventScroll: true });
+  }, []);
+  return createPortal(<div className="modal-layer invoice-template-modal-layer" role="presentation">
     <button type="button" className="modal-backdrop" onClick={close} disabled={busy} aria-label="Fechar" />
-    <form ref={formRef} className="modal-card desired-modal" onSubmit={(event) => { if (busy) event.preventDefault(); else onSubmit(event); }} role="dialog" aria-modal="true" aria-label={title}>
-      <header className="desired-modal-head"><h2>{title}</h2><button type="button" className="icon-btn" onClick={close} disabled={busy} aria-label="Fechar"><X size={18} /></button></header>
-      <fieldset disabled={busy} className="desired-modal-body form-stack">{children}</fieldset>
-      <footer className="desired-modal-actions"><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? "Salvando..." : submitLabel}</button></footer>
+    <form ref={formRef} className={`modal-card wallet-modal wallet-editor-modal invoice-template-editor-modal desired-modal ${danger ? "invoice-template-action-modal danger" : ""}`} onSubmit={(event) => { if (busy) event.preventDefault(); else onSubmit(event); }} role="dialog" aria-modal="true" aria-label={title}>
+      <header className="wallet-transfer-header"><i><Icon size={20} /></i><div><small>PLANEJAMENTO DE COMPRAS</small><h2>{title}</h2>{hint && <p>{hint}</p>}</div><button type="button" className="icon-btn" onClick={close} disabled={busy} aria-label="Fechar"><X size={18} /></button></header>
+      <div className="wallet-modal-body"><fieldset disabled={busy} className="desired-modal-fields form-stack">{children}</fieldset></div>
+      <footer className="wallet-modal-actions"><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button type="submit" className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> Salvando...</> : submitLabel}</button></footer>
     </form>
   </div>, document.body);
 }
@@ -93,16 +99,16 @@ function ProductEditor({ product, onClose, onSave, language }) {
     setBusy(true);
     try { await onSave(payload); onClose(); } catch (error) { toast.error(error.message || "Não foi possível salvar o produto."); } finally { setBusy(false); }
   };
-  return <Modal title={product ? "Editar produto" : "Novo produto desejado"} onClose={onClose} onSubmit={save} busy={busy || imageBusy} submitLabel={product ? "Salvar alterações" : "Criar produto"}>
+  return <Modal title={product ? "Editar produto" : "Novo produto desejado"} hint="Defina seu objetivo e organize a próxima compra." onClose={onClose} onSubmit={save} busy={busy || imageBusy} submitLabel={product ? "Salvar alterações" : "Criar produto"}>
     <label className="field-label"><span>Nome do produto *</span><input required maxLength={255} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ex.: Notebook Dell Inspiron 15" /></label>
     <label className="field-label"><span>Categoria</span><input maxLength={100} value={form.category} onChange={(e) => set("category", e.target.value)} placeholder="Ex.: Tecnologia" /></label>
     <label className="field-label"><span>Imagem do produto</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImage} /></label>
     {form.image_data && <div className="desired-image-preview"><img src={form.image_data} alt="Prévia do produto" /><button type="button" className="btn btn-ghost compact" onClick={() => set("image_data", null)}>Remover imagem</button></div>}
     <label className="field-label"><span>Observações</span><textarea maxLength={2000} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} /></label>
-    <div className="desired-form-row"><label className="field-label"><span>Prioridade</span><select value={form.priority} onChange={(e) => set("priority", e.target.value)}>{Object.entries(PRIORITIES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="field-label"><span>Status</span><select value={form.status} onChange={(e) => set("status", e.target.value)}>{Object.entries(STATUSES).map(([value, label]) => <option key={value} value={value} disabled={value === "bought"}>{label}</option>)}</select></label></div>
+    <div className="desired-form-row"><div className="field-label"><span>Prioridade</span><FilterSelect ariaLabel="Prioridade" value={form.priority} options={optionsFor(PRIORITIES)} disabled={busy || imageBusy} onChange={(value) => set("priority", value)} /></div>
+      <div className="field-label"><span>Status</span><FilterSelect ariaLabel="Status" value={form.status} options={optionsFor(STATUSES).filter((option) => option.value !== "bought" || product?.status === "bought")} disabled={busy || imageBusy} onChange={(value) => set("status", value)} /></div></div>
     <div className="desired-form-row"><MoneyField label="Preço-alvo" value={form.target_price} onChange={(v) => set("target_price", v)} language={language} />
-      <label className="field-label"><span>Previsão de compra</span><input type="date" value={form.planned_purchase_date} onChange={(e) => set("planned_purchase_date", e.target.value)} /></label></div>
+      <div className="field-label"><span>Previsão de compra</span><DateField clearable ariaLabel="Previsão de compra" value={form.planned_purchase_date} disabled={busy || imageBusy} onChange={(value) => set("planned_purchase_date", value)} /></div></div>
     {form.status === "bought" && <small>Para alterar os dados da compra, use “Editar compra” nos detalhes.</small>}
   </Modal>;
 }
@@ -130,6 +136,7 @@ function OfferEditor({ offer, onClose, onSave, language }) {
         if (!["http:", "https:"].includes(link.protocol) || link.username || link.password) throw new Error();
       } catch { return toast.error("Informe um link HTTP ou HTTPS válido."); }
     }
+    if (!form.recorded_at) return toast.error("Informe a data do preço.");
     const shipping = moneyValue(form.shipping, language);
     if (shipping != null && (shipping < 0 || shipping > 99999999.99)) return toast.error("Confira o frete.");
     if (cents(price) + cents(shipping) > 9999999999) return toast.error("O custo total excede o limite permitido.");
@@ -142,13 +149,13 @@ function OfferEditor({ offer, onClose, onSave, language }) {
     setBusy(true);
     try { await onSave(payload); onClose(); } catch (error) { toast.error(error.message || "Não foi possível salvar a oferta."); } finally { setBusy(false); }
   };
-  return <Modal title={offer ? "Editar oferta" : "Adicionar oferta"} onClose={onClose} onSubmit={save} busy={busy} submitLabel={offer ? "Salvar oferta" : "Adicionar oferta"}>
+  return <Modal title={offer ? "Editar oferta" : "Adicionar oferta"} icon={Target} hint="Salve o link, o preço e as condições desta loja." onClose={onClose} onSubmit={save} busy={busy} submitLabel={offer ? "Salvar oferta" : "Adicionar oferta"}>
     <label className="field-label"><span>Loja *</span><input required maxLength={150} value={form.store} onChange={(e) => set("store", e.target.value)} placeholder="Ex.: Amazon" /></label>
     <label className="field-label"><span>Link da oferta</span><input type="url" maxLength={2048} value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://..." /></label>
     <div className="desired-form-row"><MoneyField label="Preço *" value={form.price} onChange={(v) => set("price", v)} language={language} required />
       <MoneyField label="Frete" value={form.shipping} onChange={(v) => set("shipping", v)} language={language} /></div>
-    <div className="desired-form-row"><label className="field-label"><span>Pagamento</span><select value={form.payment_method} onChange={(e) => set("payment_method", e.target.value)}>{Object.entries(PAYMENTS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="field-label"><span>Data do preço</span><input type="date" required value={form.recorded_at} onChange={(e) => set("recorded_at", e.target.value)} /></label></div>
+    <div className="desired-form-row"><div className="field-label"><span>Pagamento</span><FilterSelect ariaLabel="Pagamento" value={form.payment_method} options={optionsFor(PAYMENTS)} disabled={busy} onChange={(value) => set("payment_method", value)} /></div>
+      <div className="field-label"><span>Data do preço *</span><DateField clearable ariaLabel="Data do preço" value={form.recorded_at} disabled={busy} onChange={(value) => set("recorded_at", value)} /></div></div>
     {form.payment_method === "credit" && <><div className="desired-form-row"><label className="field-label"><span>Quantidade de parcelas</span><input type="number" min="1" max="60" required value={form.installment_count} onChange={(e) => set("installment_count", e.target.value)} /></label>
       <MoneyField label="Valor da parcela" value={manualInstallment ? form.installment_amount : moneyInput(calculated, language)} onChange={(v) => { setManualInstallment(true); set("installment_amount", v); }} language={language} /></div>
       <p className="desired-hint">Calculado: {calculated != null ? formatMoney(calculated, language) : "—"}/mês. Ajuste a parcela se houver juros. Para comparar, informe no preço o valor total da oferta nessa forma de pagamento.</p></>}
@@ -166,6 +173,7 @@ function PurchaseEditor({ product, onClose, onSave, language }) {
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const save = async (event) => {
     event.preventDefault();
+    if (!form.purchase_date) return toast.error("Informe a data da compra.");
     const paid_price = moneyValue(form.paid_price, language);
     const installment_count = form.payment_method === "credit" ? Number(form.installment_count) : null;
     const installment_amount = form.payment_method === "credit" ? moneyValue(form.installment_amount, language) : null;
@@ -177,14 +185,15 @@ function PurchaseEditor({ product, onClose, onSave, language }) {
       payment_method: form.payment_method, installment_count, installment_amount }); onClose(); }
     catch (error) { toast.error(error.message || "Não foi possível registrar a compra."); } finally { setBusy(false); }
   };
-  return <Modal title={product.status === "bought" ? "Editar compra" : "Marcar como comprado"} onClose={onClose} onSubmit={save} busy={busy} submitLabel="Salvar compra">
-    <label className="field-label"><span>Oferta escolhida *</span><select required value={form.chosen_offer_id} onChange={(e) => { const offer = product.offers.find((item) => item.id === Number(e.target.value)); setForm((current) => ({ ...current, chosen_offer_id: offer.id,
-      paid_price: moneyInput(offer.total_cost, language), payment_method: offer.payment_method,
-      installment_count: offer.installment_count || 1, installment_amount: moneyInput(offer.installment_amount, language) })); }}>
-      {product.offers.map((offer) => <option key={offer.id} value={offer.id}>{offer.store} · {formatMoney(offer.total_cost, language)}</option>)}</select></label>
+  return <Modal title={product.status === "bought" ? "Editar compra" : "Marcar como comprado"} icon={Check} hint="Confirme a oferta escolhida e os dados da compra." onClose={onClose} onSubmit={save} busy={busy} submitLabel="Salvar compra">
+    <div className="field-label"><span>Oferta escolhida *</span><FilterSelect ariaLabel="Oferta escolhida" value={form.chosen_offer_id} disabled={busy}
+      options={product.offers.map((offer) => ({ value: String(offer.id), label: `${offer.store} · ${formatMoney(offer.total_cost, language)}` }))}
+      onChange={(value) => { const offer = product.offers.find((item) => item.id === Number(value)); setForm((current) => ({ ...current, chosen_offer_id: offer.id,
+        paid_price: moneyInput(offer.total_cost, language), payment_method: offer.payment_method,
+        installment_count: offer.installment_count || 1, installment_amount: moneyInput(offer.installment_amount, language) })); }} /></div>
     <div className="desired-form-row"><MoneyField label="Preço final pago *" value={form.paid_price} onChange={(v) => set("paid_price", v)} language={language} required />
-      <label className="field-label"><span>Data da compra *</span><input type="date" required value={form.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} /></label></div>
-    <label className="field-label"><span>Forma de pagamento</span><select value={form.payment_method} onChange={(e) => set("payment_method", e.target.value)}>{Object.entries(PAYMENTS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <div className="field-label"><span>Data da compra *</span><DateField clearable ariaLabel="Data da compra" value={form.purchase_date} disabled={busy} onChange={(value) => set("purchase_date", value)} /></div></div>
+    <div className="field-label"><span>Forma de pagamento</span><FilterSelect ariaLabel="Forma de pagamento" value={form.payment_method} options={optionsFor(PAYMENTS)} disabled={busy} onChange={(value) => set("payment_method", value)} /></div>
     {form.payment_method === "credit" && <div className="desired-form-row"><label className="field-label"><span>Parcelas *</span><input type="number" min="1" max="60" required value={form.installment_count} onChange={(e) => set("installment_count", e.target.value)} /></label>
       <MoneyField label="Valor da parcela" value={form.installment_amount} onChange={(v) => set("installment_amount", v)} language={language} /></div>}
   </Modal>;
@@ -255,9 +264,9 @@ export default function DesiredProductsPage({ onOverlayChange }) {
     {error && <div className="card desired-empty"><p>{error}</p><button className="btn btn-ghost" onClick={load}>Tentar novamente</button></div>}
     {!loading && !error && productId && !selected && <div className="card desired-empty">Produto não encontrado.</div>}
     {!loading && !error && !productId && <>
-      <div className="desired-filters"><label>Status <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Todos</option>{Object.entries(STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>Categoria <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="all">Todas</option>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
-        <label>Prioridade <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">Todas</option>{Object.entries(PRIORITIES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+      <div className="desired-filters"><div className="field-label"><span>Status</span><FilterSelect ariaLabel="Status" value={statusFilter} onChange={setStatusFilter} options={[{ value: "all", label: "Todos" }, ...optionsFor(STATUSES)]} /></div>
+        <div className="field-label"><span>Categoria</span><FilterSelect ariaLabel="Categoria" value={categoryFilter} onChange={setCategoryFilter} searchable options={[{ value: "all", label: "Todas" }, ...categories.map((category) => ({ value: category, label: category }))]} /></div>
+        <div className="field-label"><span>Prioridade</span><FilterSelect ariaLabel="Prioridade" value={priorityFilter} onChange={setPriorityFilter} options={[{ value: "all", label: "Todas" }, ...optionsFor(PRIORITIES)]} /></div></div>
       {filtered.length === 0 ? <div className="card desired-empty"><ShoppingBag size={34} /><h2>{products.length ? "Nenhum produto encontrado" : "Sua lista começa aqui"}</h2><p>{products.length ? "Altere os filtros para encontrar outro produto." : "Cadastre um produto e adicione quantas ofertas quiser."}</p></div>
         : <div className="desired-grid">{filtered.map((product) => <article key={product.id} className="card desired-product-card">
           <div className="desired-cover">{product.image_data ? <img src={product.image_data} alt={product.name} /> : <ImagePlus size={30} />}</div>
@@ -302,6 +311,6 @@ export default function DesiredProductsPage({ onOverlayChange }) {
     {modal?.type === "product" && <ProductEditor key={modal.product?.id || "new"} product={modal.product} onClose={() => setModal(null)} onSave={saveProduct} language={language} />}
     {modal?.type === "offer" && selected && <OfferEditor key={modal.offer?.id || "new"} offer={modal.offer} onClose={() => setModal(null)} onSave={saveOffer} language={language} />}
     {modal?.type === "purchase" && selected && <PurchaseEditor product={selected} onClose={() => setModal(null)} onSave={async (payload) => { upsert(await recordProductPurchase(selected.id, payload)); toast.success("Compra registrada"); }} language={language} />}
-    {modal?.type?.startsWith("delete-") && <Modal title={modal.offer ? "Excluir oferta?" : "Excluir produto?"} onClose={() => setModal(null)} onSubmit={remove} busy={busy} submitLabel="Excluir" danger><p>{modal.offer ? "A oferta será removida da comparação. O histórico e os dados de compras registradas serão preservados." : "O produto, suas ofertas e seus históricos serão excluídos."}</p></Modal>}
+    {modal?.type?.startsWith("delete-") && <Modal title={modal.offer ? "Excluir oferta?" : "Excluir produto?"} icon={Trash2} onClose={() => setModal(null)} onSubmit={remove} busy={busy} submitLabel="Excluir" danger><p>{modal.offer ? "A oferta será removida da comparação. O histórico e os dados de compras registradas serão preservados." : "O produto, suas ofertas e seus históricos serão excluídos."}</p></Modal>}
   </section>;
 }

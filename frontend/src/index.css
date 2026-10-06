@@ -6860,7 +6860,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
-.invoice-modal-body textarea {
+.invoice-modal-body textarea,
+.wallet-modal-body textarea {
   min-height: 92px;
   border: 1px solid var(--border);
   border-radius: 8px;

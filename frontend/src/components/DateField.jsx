@@ -65,7 +65,7 @@ function buildMonthDays(cursor) {
   });
 }
 
-export default function DateField({ value, onChange, onBlur, className = "", ariaInvalid = false, max = "" }) {
+export default function DateField({ value, onChange, onBlur, className = "", ariaLabel, ariaInvalid = false, disabled = false, clearable = false, max = "" }) {
   const { language } = useI18n();
   const parsedValue = parseIsoDate(value);
   const [open, setOpen] = useState(false);
@@ -80,6 +80,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
     setText(formatDisplayDate(value, language));
     if (parsedValue) setCursor(parsedValue);
   }, [value, language]);
+
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
   useEffect(() => {
     const closeOnOutside = (event) => {
@@ -157,13 +159,20 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   const handleInputBlur = () => {
     const nextValue = parseDisplayDate(text, language);
-    if (nextValue && !blocked(nextValue)) onChange(nextValue);
+    if (clearable && !text.trim()) onChange("");
+    else if (nextValue && !blocked(nextValue)) onChange(nextValue);
     else setText(formatDisplayDate(value, language));
     onBlur?.();
   };
 
   return (
-    <div className={`date-field ${open ? "open" : ""} ${className}`} ref={rootRef} onBlurCapture={handleFocusLeave}>
+    <div className={`date-field ${open ? "open" : ""} ${className}`} ref={rootRef} onBlurCapture={handleFocusLeave} onKeyDown={(event) => {
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+      }
+    }}>
       <div className="date-native-control">
         <div className="date-input-shell" aria-hidden="true">
           <div className="date-native-value">
@@ -176,6 +185,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
           type="date"
           value={value || ""}
           max={max || undefined}
+          disabled={disabled}
+          aria-label={ariaLabel}
           onBlur={onBlur}
           onChange={(event) => {
             if (blocked(event.target.value)) return;
@@ -188,6 +199,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
         <div className="date-input-shell">
           <input
             ref={inputRef}
+            disabled={disabled}
+            aria-label={ariaLabel}
             inputMode="numeric"
             placeholder={language === "en-US" ? "mm/dd/yyyy" : "dd/mm/aaaa"}
             value={text}
