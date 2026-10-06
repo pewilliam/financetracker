@@ -11,7 +11,10 @@ class DesiredProduct(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
-    category = Column(String(100), nullable=True)
+    category = Column(String(100), nullable=True)  # Legacy label for older clients/rows.
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    ean = Column(String(14), nullable=True)
+    source_url = Column(String(2048), nullable=True)
     description = Column(Text, nullable=True)
     image_data = Column(Text().with_variant(LONGTEXT(), "mysql"), nullable=True)
     image_source = Column(String(20), nullable=False, default="manual")
@@ -31,6 +34,7 @@ class DesiredProduct(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     user = relationship("User", back_populates="desired_products")
+    selected_category = relationship("Category")
     offers = relationship("ProductOffer", back_populates="product", cascade="all, delete-orphan", order_by="ProductOffer.id")
 
 

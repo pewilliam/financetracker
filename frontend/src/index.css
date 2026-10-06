@@ -10409,6 +10409,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 
 .category-modal-layer { z-index: 70; }
+.category-select-create-layer { z-index: 100; }
 .category-create-modal {
   display: flex;
   flex-direction: column;

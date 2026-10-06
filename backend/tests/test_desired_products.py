@@ -2,6 +2,7 @@ import base64
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -12,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import DesiredProduct, OfferPriceHistory, ProductOffer, User
+from app.models import Category, DesiredProduct, OfferPriceHistory, ProductOffer, User
 from app.security import create_access_token
 
 
@@ -155,6 +156,40 @@ class DesiredProductAPITests(unittest.TestCase):
         self.assertIsNone(product["chosen_offer_id"])
         self.assertIsNone(product["purchase_offer_snapshot"])
 
+    def test_category_ownership_rename_and_delete(self):
+        own = self.client.post("/api/categories", headers=self.headers, json={"name": "Tecnologia", "color": "#64748B"}).json()
+        foreign = self.client.post("/api/categories", headers=self.other_headers, json={"name": "Tecnologia"}).json()
+        product = self.product(category_id=own["id"], ean="7891234567895", source_url="https://example.com/notebook")
+        self.assertEqual(product["category"], "Tecnologia")
+        self.assertEqual(product["category_id"], own["id"])
+        self.request("POST", payload={"name": "X", "category_id": foreign["id"]}, expected=404)
+        self.request("PATCH", f"/{product['id']}", {"category_id": foreign["id"]}, expected=404)
+        self.client.put(f"/api/categories/{own['id']}", headers=self.headers, json={"name": "Eletrônicos"})
+        self.assertEqual(self.request("GET", f"/{product['id']}")["category"], "Eletrônicos")
+        response = self.client.delete(f"/api/categories/{own['id']}", headers=self.headers)
+        self.assertEqual(response.status_code, 204, response.text)
+        result = self.request("GET", f"/{product['id']}")
+        self.assertIsNone(result["category_id"])
+        self.assertIsNone(result["category"])
+        self.assertEqual(result["ean"], "7891234567895")
+        for changes in [{"ean": "ABC"}, {"source_url": "javascript:alert(1)"}, {"image_source": "invalid"}]:
+            self.request("PATCH", f"/{product['id']}", changes, expected=422)
+
+    def test_url_preview_authentication_confirmation_and_failure(self):
+        from app.services.product_metadata import MetadataError
+        metadata = {"url": "https://example.com/product", "name": "Notebook importado", "ean": "7891234567895", "description": "Descrição da loja", "image_data": IMAGE, "image_url": "https://example.com/photo.png", "store": "Loja", "price": "3499.00", "currency": "BRL", "warnings": []}
+        with patch("app.routers.desired_products.import_product_metadata", return_value=metadata) as fetch:
+            self.assertEqual(self.client.post(PREFIX + "/import-url", json={"url": metadata["url"]}).status_code, 401)
+            fetch.assert_not_called()
+            self.assertEqual(self.request("POST", "/import-url", {"url": metadata["url"]}), metadata)
+            self.assertEqual(self.request("GET"), [])  # Preview never saves or creates an offer.
+            product = self.product(name=metadata["name"], ean=metadata["ean"], description=metadata["description"], image_data=IMAGE, image_source="url", source_url=metadata["url"])
+            self.assertEqual(product["image_source"], "url")
+            self.assertEqual(self.request("GET", f"/{product['id']}")["ean"], metadata["ean"])
+        with patch("app.routers.desired_products.import_product_metadata", side_effect=MetadataError("Loja indisponível")):
+            self.request("POST", "/import-url", {"url": metadata["url"]}, expected=422)
+        self.request("POST", "/import-url", {"url": "file:///etc/passwd"}, expected=422)
+
 
 class DesiredProductMigrationTests(unittest.TestCase):
     def test_upgrade_and_downgrade_preserve_existing_tables(self):
@@ -162,16 +197,27 @@ class DesiredProductMigrationTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("desired_migration", path)
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
+        import_path = Path(__file__).parents[1] / "alembic/versions/0040_product_import.py"
+        import_spec = importlib.util.spec_from_file_location("import_migration", import_path)
+        import_migration = importlib.util.module_from_spec(import_spec)
+        import_spec.loader.exec_module(import_migration)
         engine = create_engine("sqlite://")
         with engine.begin() as connection:
             connection.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)")
+            connection.exec_driver_sql("CREATE TABLE categories (id INTEGER PRIMARY KEY, user_id INTEGER, name VARCHAR(80))")
             context = MigrationContext.configure(connection)
             with Operations.context(context):
                 migration.upgrade()
+                connection.exec_driver_sql("INSERT INTO categories (id, user_id, name) VALUES (7, 1, 'Tecnologia'), (8, 2, 'Tecnologia')")
+                connection.exec_driver_sql("INSERT INTO desired_products (id, user_id, name, category) VALUES (1, 1, 'Notebook', 'Tecnologia'), (2, 2, 'Tablet', 'Tecnologia'), (3, 1, 'Tênis', 'Roupas')")
+                import_migration.upgrade()
+                self.assertEqual(connection.exec_driver_sql("SELECT category_id FROM desired_products ORDER BY id").scalars().all(), [7, 8, None])
                 for model in (DesiredProduct, ProductOffer, OfferPriceHistory):
                     self.assertEqual({column.name for column in model.__table__.columns}, {column["name"] for column in inspect(connection).get_columns(model.__tablename__)})
+                import_migration.downgrade()
+                self.assertEqual(connection.exec_driver_sql("SELECT category FROM desired_products WHERE id=3").scalar(), "Roupas")
                 migration.downgrade()
-            self.assertEqual(inspect(connection).get_table_names(), ["users"])
+            self.assertEqual(inspect(connection).get_table_names(), ["categories", "users"])
         engine.dispose()
 
 

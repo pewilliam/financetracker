@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import DesiredProduct, ProductOffer, User
-from app.schemas.desired_products import OfferPayload, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
+from app.schemas.desired_products import MetadataRequest, MetadataOut, OfferPayload, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
 from app.security import get_current_user
+from app.services.categories import get_user_category
+from app.services.product_metadata import MetadataError, import_product_metadata
 from app.services.desired_products import _fill_offer, _snapshot, _total_cost
 
 
@@ -18,7 +20,7 @@ CENT = Decimal("0.01")
 def _load_product(db: Session, user_id: int, product_id: int) -> DesiredProduct:
     product = (
         db.query(DesiredProduct)
-        .options(selectinload(DesiredProduct.offers).selectinload(ProductOffer.price_history))
+        .options(selectinload(DesiredProduct.offers).selectinload(ProductOffer.price_history), selectinload(DesiredProduct.selected_category))
         .filter(DesiredProduct.id == product_id, DesiredProduct.user_id == user_id)
         .first()
     )
@@ -58,7 +60,10 @@ def _serialize(product: DesiredProduct) -> dict:
     return {
         "id": product.id,
         "name": product.name,
-        "category": product.category,
+        "category": product.selected_category.name if product.selected_category else product.category,
+        "category_id": product.category_id,
+        "ean": product.ean,
+        "source_url": product.source_url,
         "description": product.description,
         "image_data": product.image_data,
         "image_source": product.image_source,
@@ -87,7 +92,7 @@ def _serialize(product: DesiredProduct) -> dict:
 def list_products(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     products = (
         db.query(DesiredProduct)
-        .options(selectinload(DesiredProduct.offers).selectinload(ProductOffer.price_history))
+        .options(selectinload(DesiredProduct.offers).selectinload(ProductOffer.price_history), selectinload(DesiredProduct.selected_category))
         .filter(DesiredProduct.user_id == user.id)
         .order_by(DesiredProduct.updated_at.desc(), DesiredProduct.id.desc())
         .all()
@@ -97,10 +102,22 @@ def list_products(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 def create_product(payload: ProductCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    product = DesiredProduct(user_id=user.id, **payload.model_dump())
+    data = payload.model_dump()
+    if payload.category_id is not None:
+        get_user_category(db, user.id, payload.category_id)
+        data["category"] = None
+    product = DesiredProduct(user_id=user.id, **data)
     db.add(product)
     db.commit()
     return _serialize(_load_product(db, user.id, product.id))
+
+
+@router.post("/import-url", response_model=MetadataOut)
+def preview_product_url(payload: MetadataRequest, user: User = Depends(get_current_user)):
+    try:
+        return import_product_metadata(payload.url)
+    except MetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{product_id}", response_model=ProductOut)
@@ -112,6 +129,9 @@ def get_product(product_id: int, db: Session = Depends(get_db), user: User = Dep
 def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     product = _load_product(db, user.id, product_id)
     data = payload.model_dump(exclude_unset=True)
+    if "category_id" in data:
+        get_user_category(db, user.id, data["category_id"])
+        data["category"] = None
     if product.status == "bought" and "status" in data:
         for field in ("chosen_offer_id", "purchase_store", "purchase_offer_snapshot", "paid_price", "purchase_date", "purchase_payment_method", "purchase_installment_count", "purchase_installment_amount"):
             setattr(product, field, None)

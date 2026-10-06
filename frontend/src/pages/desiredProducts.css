@@ -83,3 +83,11 @@
 }
 .desired-cover img { max-height: 165px; min-height: 0; }
 .desired-detail-image img { max-height: 230px; min-height: 0; }
+
+.desired-url-import { display: grid; gap: 9px; min-width: 0; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+.desired-url-import > .btn { justify-self: start; }
+.desired-import-preview { display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--surface); }
+.desired-import-preview img { max-width: 100%; width: 110px; height: 90px; object-fit: contain; }
+.desired-import-preview p { margin: 0; font-size: 13px; color: var(--muted); }
+.desired-import-preview small { color: var(--muted); }
+.desired-import-error { margin: 0; font-size: 13px; color: var(--expense); }
