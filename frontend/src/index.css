@@ -4307,29 +4307,58 @@ button.month-balance-metric {
   margin: -8px 0 18px;
   padding: 20px;
   position: relative;
-  overflow: visible;
-  border: 1px solid var(--border);
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
   border-radius: 16px;
-  background: color-mix(in srgb, var(--card) 96%, var(--primary));
-  box-shadow: 0 12px 34px rgba(13,33,24,.07);
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 94% 110%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 32%),
+    linear-gradient(145deg, color-mix(in srgb, var(--primary) 4%, var(--card)), var(--card) 62%);
+  box-shadow:
+    0 18px 46px rgba(13,33,24,.10),
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
 }
 .invoice-filter::before {
   content: "";
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
+  z-index: 0;
+  inset: 0 0 auto;
+  width: auto;
+  height: 3px;
   pointer-events: none;
-  border-radius: 16px 0 0 16px;
-  background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 28%, transparent));
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 38%, transparent) 46%, transparent 82%);
+}
+.invoice-filter::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: -86px;
+  left: -46px;
+  width: 240px;
+  height: 180px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  filter: blur(34px);
+  pointer-events: none;
+}
+.invoice-filter > * {
+  position: relative;
+  z-index: 1;
 }
 .invoice-filter-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 2px;
+  margin: -20px -20px 0;
+  padding: 18px 20px 16px;
   position: relative;
   z-index: 1;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  background:
+    radial-gradient(circle at 8% 10%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 42%),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 68%);
 }
 .invoice-filter-head span {
   display: inline-flex;
@@ -4356,7 +4385,7 @@ button.month-balance-metric {
   padding: 7px 11px;
   border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
   color: var(--primary);
   font-size: 13px;
   text-align: center;
@@ -4584,7 +4613,7 @@ button.month-balance-metric {
   opacity: .82;
 }
 .dark .invoice-filter::before {
-  background: linear-gradient(180deg, rgba(20,160,120,0.14), transparent);
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 34%, transparent) 48%, transparent 82%);
 }
 .dark .invoice-filter input,
 .dark .invoice-filter select,
