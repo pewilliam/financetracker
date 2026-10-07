@@ -26,7 +26,7 @@ def _total_cost(offer) -> Decimal:
 
 
 def _fill_offer(offer: ProductOffer, payload: OfferPayload) -> None:
-    for key in ("store", "url", "price", "shipping", "payment_method", "notes", "recorded_at"):
+    for key in ("store", "url", "price", "shipping", "payment_method", "notes", "recorded_at", "source"):
         setattr(offer, key, getattr(payload, key))
     offer.installment_count = payload.installment_count if payload.payment_method == "credit" else None
     offer.installment_amount = (

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, Info, Loader2, Pencil, Plus, ShoppingBag, Store, Target, Trash2, Trophy, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, Info, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Store, Target, Trash2, Trophy, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
-import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, updateDesiredProduct, updateProductOffer } from "../api/api.js";
+import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, resolveProductOffer, searchProductOffers, updateDesiredProduct, updateProductOffer } from "../api/api.js";
 import { useI18n } from "../i18n/index.ts";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
@@ -123,7 +123,7 @@ function MoneyField({ label, value, onChange, language, required = false }) {
     onBlur={() => value && onChange(moneyInput(parseTypedMoneyInput(value, language), language))} /></div>;
 }
 
-function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSubmit, busy, submitLabel = "Salvar", danger = false }) {
+function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSubmit, busy, submitLabel = "Salvar", busyLabel = "Salvando...", danger = false, className = "" }) {
   const formRef = useRef(null);
   const close = () => { if (!busy && !document.querySelector(".category-select-create-layer")) onClose(); };
   useModalLifecycle({ onClose: close, busy });
@@ -132,10 +132,10 @@ function Modal({ title, hint, icon: Icon = ShoppingBag, onClose, children, onSub
   }, []);
   return createPortal(<div className="modal-layer invoice-template-modal-layer" role="presentation">
     <button type="button" className="modal-backdrop" onClick={close} disabled={busy} aria-label="Fechar" />
-    <form ref={formRef} className={`modal-card wallet-modal wallet-editor-modal invoice-template-editor-modal desired-modal ${danger ? "invoice-template-action-modal confirm-modal danger" : ""}`} onSubmit={(event) => { if (busy) event.preventDefault(); else onSubmit(event); }} role={danger ? "alertdialog" : "dialog"} aria-modal="true" aria-label={title}>
+    <form ref={formRef} className={`modal-card wallet-modal wallet-editor-modal invoice-template-editor-modal desired-modal ${danger ? "invoice-template-action-modal confirm-modal danger" : ""} ${className}`} onSubmit={(event) => { if (busy) event.preventDefault(); else onSubmit(event); }} role={danger ? "alertdialog" : "dialog"} aria-modal="true" aria-label={title}>
       <header className="wallet-transfer-header"><i><Icon size={20} /></i><div><small>PLANEJAMENTO DE COMPRAS</small><h2>{title}</h2>{hint && <p>{hint}</p>}</div><button type="button" className="icon-btn" onClick={close} disabled={busy} aria-label="Fechar"><X size={18} /></button></header>
       <div className={danger ? "confirm-modal-body desired-confirm-body" : "wallet-modal-body"}><fieldset disabled={busy} className={`desired-modal-fields ${danger ? "desired-confirm-fields" : "form-stack"}`}>{children}</fieldset></div>
-      <footer className={danger ? "modal-actions" : "wallet-modal-actions"}><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button type="submit" className={`btn ${danger ? "btn-primary danger-action" : "btn-primary"}`} disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> {danger ? "Excluindo..." : "Salvando..."}</> : <>{danger && <Trash2 size={16} />}{submitLabel}</>}</button></footer>
+      <footer className={danger ? "modal-actions" : "wallet-modal-actions"}><button type="button" className="btn btn-ghost" onClick={close} disabled={busy}>Cancelar</button><button type="submit" className={`btn ${danger ? "btn-primary danger-action" : "btn-primary"}`} disabled={busy}>{busy ? <><Loader2 className="spin" size={16} /> {danger ? "Excluindo..." : busyLabel}</> : <>{danger && <Trash2 size={16} />}{submitLabel}</>}</button></footer>
     </form>
   </div>, document.body);
 }
@@ -214,10 +214,11 @@ function ProductEditor({ product, categories, onCreateCategory, onClose, onSave,
 }
 
 function OfferEditor({ offer, product, onClose, onSave, language }) {
+  const editing = Boolean(offer?.id);
   const [form, setForm] = useState(() => ({ store: offer?.store || "", url: offer?.url || product?.source_url || "", price: moneyInput(offer?.price, language),
     shipping: moneyInput(offer?.shipping, language), payment_method: offer?.payment_method || "cash",
     installment_count: offer?.installment_count || 1, installment_amount: moneyInput(offer?.installment_amount, language),
-    notes: offer?.notes || "", recorded_at: offer?.recorded_at || today() }));
+    notes: offer?.notes || "", recorded_at: offer?.recorded_at || today(), source: offer?.source || "manual" }));
   const [manualInstallment, setManualInstallment] = useState(offer?.installment_amount != null);
   const [busy, setBusy] = useState(false);
   const set = (field, value) => {
@@ -245,11 +246,11 @@ function OfferEditor({ offer, product, onClose, onSave, language }) {
     if (manualInstallment && form.payment_method === "credit" && (!installment || installment <= 0 || installment > 99999999.99)) return toast.error("Informe o valor da parcela.");
     const payload = { store: form.store.trim(), url: form.url.trim() || null, price, shipping,
       payment_method: form.payment_method, installment_count: form.payment_method === "credit" ? count : null,
-      installment_amount: installment, notes: form.notes.trim() || null, recorded_at: form.recorded_at };
+      installment_amount: installment, notes: form.notes.trim() || null, recorded_at: form.recorded_at, source: form.source };
     setBusy(true);
     try { await onSave(payload); onClose(); } catch (error) { toast.error(error.message || "Não foi possível salvar a oferta."); } finally { setBusy(false); }
   };
-  return <Modal title={offer ? "Editar oferta" : "Adicionar oferta"} icon={Target} hint="Salve o link, o preço e as condições desta loja." onClose={onClose} onSubmit={save} busy={busy} submitLabel={offer ? "Salvar oferta" : "Adicionar oferta"}>
+  return <Modal title={editing ? "Editar oferta" : "Adicionar oferta"} icon={Target} hint="Salve o link, o preço e as condições desta loja." onClose={onClose} onSubmit={save} busy={busy} submitLabel={editing ? "Salvar oferta" : "Adicionar oferta"}>
     <div className="field-label"><span>Loja *</span><input aria-label="Loja *" required maxLength={150} value={form.store} onChange={(e) => set("store", e.target.value)} placeholder="Ex.: Amazon" /></div>
     <div className="field-label"><span>Link da oferta</span><input aria-label="Link da oferta" type="url" maxLength={2048} value={form.url} onChange={(event) => set("url", event.target.value)} placeholder="https://loja.com/produto" /></div>
     <div className="desired-form-row"><MoneyField label="Preço *" value={form.price} onChange={(v) => set("price", v)} language={language} required />
@@ -260,6 +261,99 @@ function OfferEditor({ offer, product, onClose, onSave, language }) {
       <MoneyField label="Valor da parcela" value={manualInstallment ? form.installment_amount : moneyInput(calculated, language)} onChange={(v) => { setManualInstallment(true); set("installment_amount", v); }} language={language} /></div>
       <p className="desired-hint">Calculado: {calculated != null ? formatMoney(calculated, language) : "—"}/mês. Ajuste a parcela se houver juros. Para comparar, informe no preço o valor total da oferta nessa forma de pagamento.</p></>}
     <div className="field-label"><span>Observações</span><textarea aria-label="Observações" rows={3} maxLength={2000} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+  </Modal>;
+}
+
+function OfferSearchModal({ product, onClose, onSelect, language }) {
+  const initialQuery = `${product.name}${product.ean ? ` ${product.ean}` : ""}`;
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState([]);
+  const [searched, setSearched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [resolvingId, setResolvingId] = useState(null);
+  const [error, setError] = useState("");
+  const controllerRef = useRef(null);
+  useEffect(() => () => controllerRef.current?.abort(), []);
+  const search = async (event) => {
+    event.preventDefault();
+    const normalized = query.trim().replace(/\s+/g, " ");
+    if (normalized.length < 2) return setError("Digite ao menos 2 caracteres para pesquisar.");
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setBusy(true);
+    setError("");
+    try {
+      setResults(await searchProductOffers(product.id, normalized, { signal: controller.signal, limit: 10 }));
+      setSearched(true);
+    } catch (caught) {
+      if (caught?.name !== "AbortError") {
+        setResults([]);
+        setSearched(true);
+        setError(caught.message || "Não foi possível pesquisar ofertas agora.");
+      }
+    } finally {
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+        setBusy(false);
+      }
+    }
+  };
+  const directUrl = async (result) => {
+    if (!result.resolution_token) return result.url;
+    setResolvingId(result.external_id);
+    try {
+      const resolved = await resolveProductOffer(product.id, { resolution_token: result.resolution_token, store: result.store, price: result.price });
+      setResults((current) => current.map((item) => item.external_id === result.external_id ? { ...item, url: resolved.url, resolution_token: null } : item));
+      return resolved.url;
+    } finally {
+      setResolvingId(null);
+    }
+  };
+  const openOffer = async (result) => {
+    const popup = window.open("about:blank", "_blank");
+    if (popup) popup.opener = null;
+    try {
+      const url = await directUrl(result);
+      if (popup) popup.location.replace(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
+    } catch (caught) {
+      popup?.close();
+      toast.error(caught.message || "Não foi possível abrir o site da loja.");
+    }
+  };
+  const selectOffer = async (result) => {
+    try {
+      const url = await directUrl(result);
+      onSelect({
+        external_id: result.external_id, store: result.store, url, price: result.price,
+        shipping: result.shipping, payment_method: result.installment_count ? "credit" : "cash",
+        installment_count: result.installment_count || 1, installment_amount: result.installment_amount,
+        recorded_at: today(), source: "serpapi"
+      });
+    } catch (caught) {
+      toast.error(caught.message || "Não foi possível confirmar o site da loja.");
+    }
+  };
+  return <Modal title="Buscar ofertas" icon={Search} hint="Pesquise no Google Shopping e escolha um resultado para revisar antes de salvar." onClose={onClose} onSubmit={search} busy={busy} submitLabel="Buscar" busyLabel="Buscando..." className="desired-search-modal">
+    <div className="field-label"><span>Produto</span><div className="desired-search-input"><Search size={17} /><input aria-label="Produto" minLength={2} maxLength={160} required value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, marca ou modelo" /></div></div>
+    {error && <div className="desired-search-message error" role="alert"><Info size={17} /><span>{error}</span></div>}
+    {!searched && !error && <div className="desired-search-intro"><Search size={25} /><strong>Encontre preços sem preencher tudo à mão</strong><span>Os resultados não são salvos automaticamente.</span></div>}
+    {searched && !error && results.length === 0 && <div className="desired-search-message"><Info size={17} /><span>Nenhuma oferta encontrada. Tente informar marca e modelo.</span></div>}
+    {results.length > 0 && <div className="desired-search-results" aria-live="polite">
+      <div className="desired-search-results-heading"><strong>{results.length} {results.length === 1 ? "resultado encontrado" : "resultados encontrados"}</strong><span>Confira os dados antes de selecionar.</span></div>
+      {results.map((result) => <article className="desired-search-result" key={result.external_id}>
+        <div className="desired-search-result-image">{result.image_url ? <img src={result.image_url} alt="" loading="lazy" /> : <ShoppingBag size={24} />}</div>
+        <div className="desired-search-result-copy"><span className="desired-search-store">{result.store}</span><h3>{result.title}</h3>
+          <div className="desired-search-meta">
+            {result.shipping_label && <span>{result.shipping_label}</span>}
+            {result.installment_count && result.installment_amount && <span>{result.installment_count}x de {formatMoney(result.installment_amount, language)}</span>}
+            {result.rating != null && <span><Star size={14} fill="currentColor" /> {result.rating.toLocaleString(language, { maximumFractionDigits: 1 })}{result.reviews != null ? ` (${result.reviews.toLocaleString(language)})` : ""}</span>}
+          </div>
+        </div>
+        <div className="desired-search-result-side"><strong>{formatMoney(result.price, language)}</strong><div><button type="button" className="btn btn-ghost compact" disabled={resolvingId === result.external_id} onClick={() => openOffer(result)}>{resolvingId === result.external_id ? <Loader2 className="spin" size={14} /> : <ArrowUpRight size={14} />} Ver oferta</button><button type="button" className="btn btn-primary compact" disabled={resolvingId === result.external_id} onClick={() => selectOffer(result)}>{resolvingId === result.external_id ? <Loader2 className="spin" size={14} /> : null} Selecionar oferta</button></div></div>
+      </article>)}
+    </div>}
   </Modal>;
 }
 
@@ -430,8 +524,9 @@ export default function DesiredProductsPage({ categories: availableCategories = 
     if (!modal?.product) navigate(`/produtos-desejados/${saved.id}`);
   };
   const saveOffer = async (payload) => {
-    upsert(modal.offer ? await updateProductOffer(selected.id, modal.offer.id, payload) : await createProductOffer(selected.id, payload));
-    toast.success(modal.offer ? "Oferta atualizada" : "Oferta adicionada");
+    const editing = Boolean(modal.offer?.id);
+    upsert(editing ? await updateProductOffer(selected.id, modal.offer.id, payload) : await createProductOffer(selected.id, payload));
+    toast.success(editing ? "Oferta atualizada" : "Oferta adicionada");
   };
   const remove = async (event) => {
     event.preventDefault(); setBusy(true);
@@ -446,7 +541,8 @@ export default function DesiredProductsPage({ categories: availableCategories = 
     {productId && <button className="btn btn-ghost compact desired-back" onClick={() => navigate("/produtos-desejados")}><ArrowLeft size={16} /> Todos os produtos</button>}
     <header className="page-header desired-header"><div><p className="eyebrow">PLANEJAMENTO DE COMPRAS</p><h1>{selected?.name || "Produtos desejados"}</h1>
       <p>{selected ? "Compare as ofertas e escolha quando vale a pena comprar." : "Guarde ideias, compare ofertas e acompanhe seu preço-alvo."}</p></div>
-      <button className="btn btn-primary" disabled={loading || Boolean(error) || Boolean(productId && !selected)} onClick={() => setModal(selected ? { type: "offer" } : { type: "product" })}><Plus size={17} /> {selected ? "Adicionar oferta" : "Novo produto"}</button></header>
+      {selected ? <div className="desired-header-actions"><button className="btn btn-ghost" disabled={loading || Boolean(error)} onClick={() => setModal({ type: "offer-search" })}><Search size={17} /> Buscar ofertas</button><button className="btn btn-primary" disabled={loading || Boolean(error)} onClick={() => setModal({ type: "offer" })}><Plus size={17} /> Adicionar oferta</button></div>
+        : <button className="btn btn-primary" disabled={loading || Boolean(error) || Boolean(productId)} onClick={() => setModal({ type: "product" })}><Plus size={17} /> Novo produto</button>}</header>
     {loading && <div className="card desired-empty desired-loading-state"><Loader2 className="spin" size={28} /><h2>Carregando produtos...</h2></div>}
     {error && <div className="card desired-empty"><p>{error}</p><button className="btn btn-ghost" onClick={load}>Tentar novamente</button></div>}
     {!loading && !error && productId && !selected && <div className="card desired-empty">Produto não encontrado.</div>}
@@ -501,7 +597,7 @@ export default function DesiredProductsPage({ categories: availableCategories = 
       <section className={`card desired-offers-section ${offersExpanded ? "expanded" : ""}`}>
         <header className="desired-offer-head">
           <button type="button" className="desired-offers-toggle" aria-expanded={offersExpanded} aria-controls="desired-offers-panel" aria-label={`${offersExpanded ? "Ocultar" : "Ver"} ofertas (${selected.offer_count})`} onClick={() => setOffersExpanded((current) => !current)}><div><p className="eyebrow">PESQUISA DE PREÇOS</p><h2>Ofertas ({selected.offer_count})</h2><p>Compare valores, frete e formas de pagamento em um só lugar.</p></div><ChevronDown className="desired-offers-chevron" size={20} /></button>
-          <button className="btn btn-ghost" onClick={() => setModal({ type: "offer" })}><Plus size={16} /> Adicionar oferta</button>
+          <div className="desired-offer-head-actions"><button className="btn btn-ghost" onClick={() => setModal({ type: "offer-search" })}><Search size={16} /> Buscar ofertas</button><button className="btn btn-ghost" onClick={() => setModal({ type: "offer" })}><Plus size={16} /> Adicionar oferta</button></div>
         </header>
         <div id="desired-offers-panel" className="desired-offers-panel" hidden={!offersExpanded}>
           {selected.offers.length === 0 ? <div className="desired-empty desired-offers-empty"><span><ShoppingBag size={26} /></span><h3>Nenhuma oferta cadastrada</h3><p>Adicione a primeira loja e comece a acompanhar os preços.</p><button className="btn btn-primary compact" onClick={() => setModal({ type: "offer" })}><Plus size={15} /> Adicionar oferta</button></div>
@@ -517,7 +613,8 @@ export default function DesiredProductsPage({ categories: availableCategories = 
       </section>
     </div>}
     {modal?.type === "product" && <ProductEditor key={modal.product?.id || "new"} product={modal.product} categories={availableCategories} onCreateCategory={onCreateCategory} onClose={() => setModal(null)} onSave={saveProduct} language={language} />}
-    {modal?.type === "offer" && selected && <OfferEditor key={modal.offer?.id || "new"} offer={modal.offer} product={selected} onClose={() => setModal(null)} onSave={saveOffer} language={language} />}
+    {modal?.type === "offer-search" && selected && <OfferSearchModal product={selected} onClose={() => setModal(null)} onSelect={(offer) => setModal({ type: "offer", offer })} language={language} />}
+    {modal?.type === "offer" && selected && <OfferEditor key={modal.offer?.id || modal.offer?.external_id || "new"} offer={modal.offer} product={selected} onClose={() => setModal(null)} onSave={saveOffer} language={language} />}
     {modal?.type === "purchase" && selected && <PurchaseEditor product={selected} onClose={() => setModal(null)} onSave={async (payload) => { upsert(await recordProductPurchase(selected.id, payload)); toast.success("Compra registrada"); }} language={language} />}
     {modal?.type?.startsWith("delete-") && <Modal title={modal.offer ? "Excluir oferta?" : "Excluir produto?"} icon={Trash2} onClose={() => setModal(null)} onSubmit={remove} busy={busy} submitLabel="Excluir" danger><p>{modal.offer ? "A oferta será removida da comparação. O histórico e os dados de compras registradas serão preservados." : "O produto, suas ofertas e seus históricos serão excluídos."}</p></Modal>}
   </section>;

@@ -9,7 +9,7 @@ oferta independente. Todos os endpoints exigem o JWT já utilizado pelo sistema.
 - `DesiredProduct`: usuário, nome, categoria do usuário (`category_id`), EAN/GTIN, URL de origem, observações, imagem enviada ou mídia por URL,
   prioridade, preço-alvo, previsão, status e dados da compra concluída.
 - `ProductOffer`: produto, loja, URL HTTP(S), preço, frete, pagamento,
-  parcelamento, observações, data do preço e origem (`manual` no MVP).
+  parcelamento, observações, data do preço e origem (`manual` ou `serpapi`).
 - `OfferPriceHistory`: registro acrescentado no cadastro e quando preço, frete
   ou condições de pagamento mudam. Guarda os valores anteriores, data informada,
   momento do registro, origem e custo total; edições de observações não duplicam
@@ -71,10 +71,35 @@ sem distorcer a proporção original. Produtos antigos usam contain, centro e zo
 Imagens já gravadas continuam disponíveis; `image_source` identifica upload ou URL.
 
 Links do produto (`source_url`) e das ofertas continuam editáveis e clicáveis.
-A busca de metadados foi removida por completo, inclusive endpoint e serviço;
-nome, EAN/GTIN, descrição, loja e preços são preenchidos manualmente.
+Nome, EAN/GTIN e descrição do produto continuam sendo preenchidos manualmente.
 As legendas dos modais não ativam os campos ao clicar; os nomes acessíveis são
 mantidos por `aria-label`. Categoria, demais seletores e datas reutilizam componentes existentes.
+
+## Pesquisa automática de ofertas
+
+Na tela de detalhes, **Buscar ofertas** consulta o Google Shopping por meio da
+SerpApi usando o nome do produto e, quando disponível, seu EAN/GTIN. A consulta
+retorna no máximo 10 resultados com loja, preço, entrega, parcelamento, avaliação,
+imagem e link quando esses dados estiverem disponíveis no provedor.
+
+A busca é localizada para o Brasil com `gl=br`, `google_domain=google.com.br` e
+`hl=pt-br`. Resultados agregados inicialmente apontam para uma página do Google;
+ao abrir ou selecionar uma oferta, o backend consulta apenas aquele produto na
+API de produto imersivo e resolve o endereço direto do lojista. Essa resolução
+sob demanda evita consumir uma consulta adicional para cada item da lista.
+
+Selecionar um resultado não grava dados automaticamente: a interface abre o
+editor normal de oferta já preenchido para o usuário revisar preço, frete,
+pagamento e data. Somente a confirmação cria a oferta, com origem `serpapi`.
+Valores de terceiros podem estar desatualizados, por isso o link da loja fica
+disponível para conferência.
+
+A credencial nunca é enviada ao navegador. Configure `SERPAPI_API_KEY` apenas no
+backend (localmente no `.env` e, em produção, nas variáveis do Railway). O backend
+usa cache curto, timeout e limite de requisições configuráveis por
+`SERPAPI_CACHE_SECONDS`, `SERPAPI_TIMEOUT_SECONDS`,
+`OFFER_SEARCH_RATE_LIMIT_REQUESTS` e `OFFER_SEARCH_RATE_LIMIT_WINDOW_SECONDS`.
+Sem a chave, a pesquisa responde como indisponível e o cadastro manual continua funcionando.
 
 ## API
 
@@ -84,6 +109,8 @@ Prefixo: `/api/desired-products`.
 | --- | --- | --- |
 | GET / POST | vazio | Listar / criar produtos |
 | GET / PATCH / DELETE | `/{product_id}` | Consultar / editar / excluir produto |
+| GET | `/{product_id}/offer-search?q=...&limit=10` | Pesquisar ofertas externas pela SerpApi |
+| POST | `/{product_id}/offer-search/resolve` | Resolver a oferta escolhida para o site direto do lojista |
 | POST | `/{product_id}/offers` | Adicionar oferta ao mesmo produto |
 | PUT / DELETE | `/{product_id}/offers/{offer_id}` | Editar / remover oferta |
 | POST | `/{product_id}/purchase` | Marcar comprado / atualizar dados da compra |
@@ -98,8 +125,9 @@ O serviço `app/services/desired_products.py` centraliza cálculo e registro de 
 Uma análise financeira futura pode consumir preço, frete, parcelas e previsão,
 consultando renda, despesas, cartões e orçamento do mesmo usuário. O registro
 de compra preservado fornece os dados para uma futura conversão em despesa,
-que deverá ser uma ação explícita e idempotente. O MVP não cria transações,
-análise financeira automática, scraping complexo, alertas, APIs de comparação ou IA.
+que deverá ser uma ação explícita e idempotente. A pesquisa opcional usa a SerpApi,
+mas o módulo não cria transações, análise financeira automática, scraping direto,
+alertas ou IA.
 
 ## Migration e validação
 
@@ -107,6 +135,7 @@ A migration `0039_desired_products` sucede `0038_invoice_planned_payment`;
 `0040_product_import` acrescenta categoria vinculada, EAN/GTIN e URL de origem.
 `0041_product_media` acrescenta URL e tipo da mídia, preservando imagens existentes.
 `0042_product_media_frame` acrescenta o enquadramento em JSON, sem alterar URLs ou imagens anteriores.
+`0043_fix_offer_history_dates` corrige as datas dos snapshots existentes a partir da data informada nas ofertas.
 A migração associa rótulos antigos a categorias de mesmo nome apenas do mesmo usuário.
 O entrypoint existente executa `python -m alembic upgrade head` antes de iniciar
 a API. Para instalar dependências de testes:

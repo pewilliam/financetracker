@@ -9,7 +9,7 @@ import DesiredProductsPage from "./DesiredProductsPage.jsx";
 vi.mock("../api/api.js", () => ({
   listDesiredProducts: vi.fn(), getDesiredProduct: vi.fn(), createDesiredProduct: vi.fn(),
   updateDesiredProduct: vi.fn(), deleteDesiredProduct: vi.fn(), createProductOffer: vi.fn(),
-  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), createCategory: vi.fn(),
+  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), searchProductOffers: vi.fn(), resolveProductOffer: vi.fn(), createCategory: vi.fn(),
 }));
 vi.mock("react-hot-toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -93,6 +93,46 @@ it("adds credit offers with automatic installments and manual interest adjustmen
   await user.click(dialog.getByRole("button", { name: "Adicionar oferta" }));
   await waitFor(() => expect(api.createProductOffer).toHaveBeenLastCalledWith(1, expect.objectContaining({ installment_amount: "400.00" })));
   expect(api.createDesiredProduct).not.toHaveBeenCalled();
+});
+
+it("searches SerpApi results and lets the user review before creating an offer", async () => {
+  const user = userEvent.setup();
+  api.searchProductOffers.mockResolvedValue([{
+    external_id: "shopping-1", title: "Notebook Dell Inspiron 15", store: "Loja Exemplo",
+    price: "3499.90", shipping: "0.00", shipping_label: "Frete grátis",
+    url: "https://shop.example/notebook", image_url: "https://shop.example/notebook.jpg",
+    rating: 4.8, reviews: 120, installment_count: 10, installment_amount: "349.99",
+    resolution_token: "immersive-product-token-123456789", source: "serpapi",
+  }]);
+  api.resolveProductOffer.mockResolvedValue({ url: "https://shop.example/notebook-direto" });
+  api.createProductOffer.mockResolvedValue(product);
+  show("/produtos-desejados/1");
+  await screen.findByRole("heading", { name: "Ofertas (0)" });
+
+  await user.click(screen.getAllByRole("button", { name: "Buscar ofertas" })[0]);
+  let dialog = within(screen.getByRole("dialog", { name: "Buscar ofertas" }));
+  expect(dialog.getByLabelText("Produto")).toHaveValue("Notebook Dell");
+  await user.click(dialog.getByRole("button", { name: "Buscar" }));
+
+  expect(await dialog.findByRole("heading", { name: "Notebook Dell Inspiron 15" })).toBeInTheDocument();
+  expect(dialog.getByText("Loja Exemplo")).toBeInTheDocument();
+  expect(api.searchProductOffers).toHaveBeenCalledWith(1, "Notebook Dell", { signal: expect.any(AbortSignal), limit: 10 });
+  await user.click(dialog.getByRole("button", { name: "Selecionar oferta" }));
+
+  dialog = within(await screen.findByRole("dialog", { name: "Adicionar oferta" }));
+  expect(dialog.getByLabelText("Loja *")).toHaveValue("Loja Exemplo");
+  expect(dialog.getByLabelText("Link da oferta")).toHaveValue("https://shop.example/notebook-direto");
+  expect(dialog.getByLabelText("Quantidade de parcelas")).toHaveValue(10);
+  await user.click(dialog.getByRole("button", { name: "Adicionar oferta" }));
+
+  await waitFor(() => expect(api.createProductOffer).toHaveBeenCalledWith(1, expect.objectContaining({
+    store: "Loja Exemplo", url: "https://shop.example/notebook-direto", price: "3499.90", shipping: "0.00",
+    payment_method: "credit", installment_count: 10, installment_amount: "349.99", source: "serpapi",
+  })));
+  expect(api.resolveProductOffer).toHaveBeenCalledWith(1, {
+    resolution_token: "immersive-product-token-123456789", store: "Loja Exemplo", price: "3499.90",
+  });
+  expect(api.updateProductOffer).not.toHaveBeenCalled();
 });
 
 it("filters cards by status, category and priority", async () => {

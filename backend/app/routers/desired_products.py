@@ -1,15 +1,16 @@
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import DesiredProduct, ProductOffer, User
-from app.schemas.desired_products import OfferPayload, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
+from app.schemas.desired_products import OfferPayload, OfferSearchResolved, OfferSearchResolvePayload, OfferSearchResult, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
 from app.security import get_current_user
 from app.services.categories import get_user_category
 from app.services.desired_products import _fill_offer, _snapshot, _total_cost, offer_is_expired
+from app.services.offer_search import OfferSearchProviderError, resolve_serpapi_offer, search_serpapi_offers
 
 
 router = APIRouter(prefix="/api/desired-products", tags=["desired-products"])
@@ -153,6 +154,38 @@ def get_product(product_id: int, db: Session = Depends(get_db), user: User = Dep
     return _serialize(_load_product(db, user.id, product_id))
 
 
+@router.get("/{product_id}/offer-search", response_model=list[OfferSearchResult])
+def search_product_offers(
+    product_id: int,
+    q: str = Query(min_length=2, max_length=160),
+    limit: int = Query(default=10, ge=1, le=20),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _load_product(db, user.id, product_id)
+    query = " ".join(q.split())
+    if len(query) < 2:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe ao menos 2 caracteres para pesquisar.")
+    try:
+        return search_serpapi_offers(query, limit)
+    except OfferSearchProviderError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+
+
+@router.post("/{product_id}/offer-search/resolve", response_model=OfferSearchResolved)
+def resolve_product_offer(
+    product_id: int,
+    payload: OfferSearchResolvePayload,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _load_product(db, user.id, product_id)
+    try:
+        return {"url": resolve_serpapi_offer(payload.resolution_token, payload.store, payload.price)}
+    except OfferSearchProviderError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+
+
 @router.patch("/{product_id}", response_model=ProductOut)
 def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     product = _load_product(db, user.id, product_id)
@@ -178,7 +211,7 @@ def delete_product(product_id: int, db: Session = Depends(get_db), user: User = 
 @router.post("/{product_id}/offers", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
 def create_offer(product_id: int, payload: OfferPayload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     product = _load_product(db, user.id, product_id)
-    offer = ProductOffer(product=product, source="manual")
+    offer = ProductOffer(product=product, source=payload.source)
     _fill_offer(offer, payload)
     _snapshot(offer)
     db.add(offer)

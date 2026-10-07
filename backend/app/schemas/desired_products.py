@@ -199,6 +199,7 @@ class OfferPayload(PlanningModel):
     installment_amount: PositiveMoney | None = None
     notes: str | None = Field(default=None, max_length=2000)
     recorded_at: date = Field(default_factory=date.today)
+    source: Literal["manual", "serpapi"] = "manual"
 
     @field_validator("store")
     @classmethod
@@ -252,6 +253,38 @@ class PurchasePayload(PlanningModel):
         if self.payment_method != "credit" and (self.installment_count is not None or self.installment_amount is not None):
             raise ValueError("Parcelas só são permitidas no cartão de crédito")
         return self
+
+
+class OfferSearchResult(PlanningModel):
+    external_id: str
+    title: str
+    store: str
+    price: Decimal
+    shipping: Decimal | None
+    shipping_label: str | None
+    url: str
+    image_url: str | None
+    rating: float | None
+    reviews: int | None
+    installment_count: int | None
+    installment_amount: Decimal | None
+    resolution_token: str | None = None
+    source: Literal["serpapi"]
+
+
+class OfferSearchResolvePayload(PlanningModel):
+    resolution_token: str = Field(min_length=20, max_length=6000)
+    store: str = Field(min_length=1, max_length=150)
+    price: PositiveMoney
+
+    @field_validator("resolution_token", "store")
+    @classmethod
+    def clean_search_fields(cls, value: str) -> str:
+        return value.strip()
+
+
+class OfferSearchResolved(PlanningModel):
+    url: str
 
 
 class PriceHistoryOut(PlanningModel):

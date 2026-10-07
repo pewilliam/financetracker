@@ -3,6 +3,7 @@ import importlib.util
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -116,6 +117,42 @@ class DesiredProductAPITests(unittest.TestCase):
         self.request("DELETE", f"/{product['id']}/offers/{old_offer['id']}", expected=204)
         current = self.request("GET", f"/{product['id']}")["offers"][0]
         self.assertEqual([row["price"] for row in current["store_price_history"]], ["339.00", "599.90"])
+
+    @patch("app.routers.desired_products.search_serpapi_offers")
+    def test_searches_external_offers_only_for_an_owned_product(self, search):
+        product = self.product()
+        search.return_value = [{
+            "external_id": "shopping-1", "title": "Notebook Dell", "store": "Loja Exemplo",
+            "price": "3499.90", "shipping": None, "shipping_label": "Entrega disponível",
+            "url": "https://shop.example/notebook", "image_url": "https://shop.example/notebook.jpg",
+            "rating": 4.8, "reviews": 120, "installment_count": 10,
+            "installment_amount": "349.99", "resolution_token": "immersive-product-token-123456789", "source": "serpapi",
+        }]
+        response = self.client.get(f"{PREFIX}/{product['id']}/offer-search?q=Notebook+Dell&limit=8", headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()[0]
+        self.assertEqual(result["store"], "Loja Exemplo")
+        self.assertEqual(result["price"], "3499.90")
+        search.assert_called_once_with("Notebook Dell", 8)
+
+        foreign = self.client.get(f"{PREFIX}/{product['id']}/offer-search?q=Notebook", headers=self.other_headers)
+        self.assertEqual(foreign.status_code, 404, foreign.text)
+        self.assertEqual(search.call_count, 1)
+
+        with patch("app.routers.desired_products.resolve_serpapi_offer", return_value="https://shop.example/notebook") as resolve:
+            resolved = self.request("POST", f"/{product['id']}/offer-search/resolve", {
+                "resolution_token": result["resolution_token"], "store": result["store"], "price": result["price"],
+            })
+        self.assertEqual(resolved["url"], "https://shop.example/notebook")
+        resolve.assert_called_once()
+
+        imported = self.request("POST", f"/{product['id']}/offers", {
+            "store": result["store"], "url": result["url"], "price": result["price"],
+            "payment_method": "credit", "installment_count": result["installment_count"],
+            "installment_amount": result["installment_amount"], "source": result["source"],
+        }, expected=201)
+        self.assertEqual(imported["offers"][0]["source"], "serpapi")
+        self.assertEqual(imported["offers"][0]["price_history"][0]["source"], "serpapi")
 
     def test_all_nested_routes_enforce_user_and_product_ownership(self):
         product = self.offer(self.product())
