@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, Info, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Store, Target, Trash2, Trophy, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowUpRight, CalendarDays, ChartNoAxesCombined, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDollarSign, CircleHelp, Info, Loader2, Pencil, Plus, Save, Search, ShieldCheck, ShoppingBag, Star, Store, Target, Trash2, Trophy, WalletCards, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
-import { createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, resolveProductOffer, searchProductOffers, updateDesiredProduct, updateProductOffer } from "../api/api.js";
+import { analyzeProductPurchase, createDesiredProduct, createProductOffer, deleteDesiredProduct, deleteProductOffer, getDesiredProduct, listDesiredProducts, recordProductPurchase, resolveProductOffer, searchProductOffers, updateDesiredProduct, updateProductOffer } from "../api/api.js";
 import { useI18n } from "../i18n/index.ts";
 import FilterSelect from "../components/common/FilterSelect.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
@@ -21,6 +21,8 @@ const STATUSES = { want: "Quero comprar", planning: "Planejando", ready: "Pronto
 const PRIORITIES = { low: "Baixa", medium: "Média", high: "Alta" };
 const PAYMENTS = { cash: "À vista", pix: "PIX", credit: "Cartão de crédito", boleto: "Boleto", other: "Outro" };
 const OFFERS_PER_PAGE = 10;
+const PROJECTION_LIMIT_OPTIONS = [{ value: "5", label: "5" }, { value: "10", label: "10" }, { value: "15", label: "15" }, { value: "all", label: "Todos" }];
+const COMFORTABLE_FREE_INCOME_PERCENT = 15;
 const LOAD_RETRY_DELAYS = [1200, 2500, 4500, 7000, 9000];
 const optionsFor = (labels) => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const today = () => {
@@ -31,6 +33,13 @@ const moneyInput = (value, locale) => value == null ? "" : formatMoney(value, lo
 const moneyValue = (value, locale) => value ? parseTypedMoneyInput(value, locale).toFixed(2) : null;
 const cents = (value) => Math.round(Number(value || 0) * 100);
 const dateLabel = (date, locale) => date ? new Date(`${date}T00:00:00`).toLocaleDateString(locale) : "—";
+const monthLabel = (month, locale, style = "long") => month ? new Date(`${month}-01T00:00:00`).toLocaleDateString(locale, { month: style, year: "numeric" }) : "—";
+const compactMonthLabel = (month, locale) => {
+  if (!month) return "—";
+  const [year] = month.split("-");
+  const label = new Date(`${month}-01T00:00:00`).toLocaleDateString(locale, { month: "short" }).replace(".", "");
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}/${year.slice(-2)}`;
+};
 const compactMoney = (value, locale) => new Intl.NumberFormat(locale, { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(value);
 
 function isTransientLoadError(error) {
@@ -222,12 +231,13 @@ function OfferEditor({ offer, product, onClose, onSave, language }) {
   const [manualInstallment, setManualInstallment] = useState(offer?.installment_amount != null);
   const [busy, setBusy] = useState(false);
   const set = (field, value) => {
-    if (field === "price" || field === "installment_count") setManualInstallment(false);
+    if (field === "price" || field === "shipping" || field === "installment_count") setManualInstallment(false);
     setForm((current) => ({ ...current, [field]: value }));
   };
   const price = moneyValue(form.price, language);
+  const shipping = moneyValue(form.shipping, language);
   const count = Number(form.installment_count);
-  const calculated = price && count > 0 ? Math.round(cents(price) / count) / 100 : null;
+  const calculated = price && count > 0 ? Math.round((cents(price) + cents(shipping)) / count) / 100 : null;
   const save = async (event) => {
     event.preventDefault();
     if (!form.store.trim() || !price || price <= 0 || price > 99999999.99) return toast.error("Informe loja e preço válidos.");
@@ -238,7 +248,6 @@ function OfferEditor({ offer, product, onClose, onSave, language }) {
       } catch { return toast.error("Informe um link HTTP ou HTTPS válido."); }
     }
     if (!form.recorded_at) return toast.error("Informe a data do preço.");
-    const shipping = moneyValue(form.shipping, language);
     if (shipping != null && (shipping < 0 || shipping > 99999999.99)) return toast.error("Confira o frete.");
     if (cents(price) + cents(shipping) > 9999999999) return toast.error("O custo total excede o limite permitido.");
     if (form.payment_method === "credit" && (!Number.isInteger(count) || count < 1 || count > 60)) return toast.error("Informe entre 1 e 60 parcelas.");
@@ -259,7 +268,7 @@ function OfferEditor({ offer, product, onClose, onSave, language }) {
       <div className="field-label"><span>Data do preço *</span><DateField clearable ariaLabel="Data do preço" value={form.recorded_at} disabled={busy} onChange={(value) => set("recorded_at", value)} /></div></div>
     {form.payment_method === "credit" && <><div className="desired-form-row"><div className="field-label"><span>Quantidade de parcelas</span><input aria-label="Quantidade de parcelas" type="number" min="1" max="60" required value={form.installment_count} onChange={(e) => set("installment_count", e.target.value)} /></div>
       <MoneyField label="Valor da parcela" value={manualInstallment ? form.installment_amount : moneyInput(calculated, language)} onChange={(v) => { setManualInstallment(true); set("installment_amount", v); }} language={language} /></div>
-      <p className="desired-hint">Calculado: {calculated != null ? formatMoney(calculated, language) : "—"}/mês. Ajuste a parcela se houver juros. Para comparar, informe no preço o valor total da oferta nessa forma de pagamento.</p></>}
+      <p className="desired-hint">Calculado com preço + frete: {calculated != null ? formatMoney(calculated, language) : "—"}/mês. Ajuste a parcela se houver juros. Para comparar, informe no preço o valor total da oferta nessa forma de pagamento.</p></>}
     <div className="field-label"><span>Observações</span><textarea aria-label="Observações" rows={3} maxLength={2000} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
   </Modal>;
 }
@@ -429,6 +438,152 @@ function ProductCard({ product, language }) {
   </article>;
 }
 
+function FinancialChartTooltip({ active, payload, language }) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) return null;
+  return <div className="desired-financial-tooltip"><strong>{monthLabel(row.month, language)}</strong><span>Sem a compra <b>{formatMoney(row.baseline_projected_closing, language)}</b></span><span>Com a compra <b>{formatMoney(row.projected_closing, language)}</b></span></div>;
+}
+
+function FinancialMonthCard({ row, language }) {
+  const [expanded, setExpanded] = useState(false);
+  const freeAfter = Number(row.free_after || 0);
+  const planningIncome = Number(row.planning_income || 0);
+  const freeIncomePercent = planningIncome > 0 ? (freeAfter / planningIncome) * 100 : 0;
+  const balanceStatus = freeAfter < 0 ? "negative" : planningIncome <= 0 || freeIncomePercent < COMFORTABLE_FREE_INCOME_PERCENT ? "tight" : "comfortable";
+  const isCurrentMonth = row.month === today().slice(0, 7);
+  const detailsId = `desired-financial-month-${row.month}`;
+  const toggle = () => setExpanded((current) => !current);
+  const onKeyDown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggle();
+    }
+  };
+
+  return <article className={`desired-financial-month-card status-${balanceStatus} ${isCurrentMonth ? "current" : ""}`} role="button" tabIndex={0} aria-expanded={expanded} aria-controls={detailsId} aria-label={`${expanded ? "Ocultar" : "Ver"} detalhes de ${monthLabel(row.month, language)}`} onClick={toggle} onKeyDown={onKeyDown}>
+    <div className="desired-financial-month-line"><span>{compactMonthLabel(row.month, language)} · {row.installment_number}/{row.installment_count}</span><ChevronDown size={16} /></div>
+    <div className="desired-financial-month-main"><small>Após a compra</small><strong>{formatMoney(row.free_after, language)}</strong></div>
+    <p className="desired-financial-month-before">Antes: {formatMoney(row.free_before, language)} · {row.income_commitment_percent != null ? `${row.income_commitment_percent}% da renda` : "renda não informada"}</p>
+    <div id={detailsId} className="desired-financial-month-details" hidden={!expanded}>
+      <div><span>Saldo livre</span><strong>{formatMoney(row.free_before, language)} <ChevronRight size={14} /> {formatMoney(row.free_after, language)}</strong></div>
+      <div><span>Saldo projetado</span><strong>{formatMoney(row.baseline_projected_closing, language)} <ChevronRight size={14} /> {formatMoney(row.projected_closing, language)}</strong></div>
+      <div><span>Impacto acumulado</span><strong>- {formatMoney(Math.abs(Number(row.cumulative_impact)), language)}</strong></div>
+      <div><span>Renda</span><strong>{formatMoney(row.planning_income, language)}</strong></div>
+      <div><span>Reserva</span><strong>{formatMoney(row.planned_reserve, language)}</strong></div>
+    </div>
+  </article>;
+}
+
+function FinancialAnalysisCard({ product, language, onAddOffer, onSavePreferences }) {
+  const preferredOffer = product.offers.find((offer) => offer.id === product.analysis_offer_id)
+    || product.offers.find((offer) => offer.id === product.best_offer_id)
+    || product.offers.find((offer) => !offer.is_expired)
+    || product.offers[0];
+  const plannedDate = product.analysis_first_payment_date || (product.planned_purchase_date && product.planned_purchase_date >= today() ? product.planned_purchase_date : today());
+  const [offerId, setOfferId] = useState(preferredOffer ? String(preferredOffer.id) : "");
+  const [firstPaymentDate, setFirstPaymentDate] = useState(plannedDate);
+  const [analysis, setAnalysis] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [projectionLimit, setProjectionLimit] = useState("5");
+  const [expanded, setExpanded] = useState(false);
+  const selectedOffer = product.offers.find((offer) => String(offer.id) === offerId);
+  const panelId = `desired-financial-panel-${product.id}`;
+
+  useEffect(() => {
+    if (!product.offers.some((offer) => String(offer.id) === offerId)) {
+      const fallback = product.offers.find((offer) => offer.id === product.analysis_offer_id) || product.offers.find((offer) => offer.id === product.best_offer_id) || product.offers.find((offer) => !offer.is_expired) || product.offers[0];
+      setOfferId(fallback ? String(fallback.id) : "");
+    }
+  }, [offerId, product.analysis_offer_id, product.best_offer_id, product.offers]);
+
+  useEffect(() => {
+    if (!expanded) {
+      setLoading(false);
+      return undefined;
+    }
+    if (!offerId || !firstPaymentDate) {
+      setAnalysis(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    analyzeProductPurchase(product.id, { offer_id: Number(offerId), first_payment_date: firstPaymentDate }, { signal: controller.signal })
+      .then((result) => { setAnalysis(result); setPage(1); })
+      .catch((caught) => { if (caught?.name !== "AbortError") { setAnalysis(null); setError(caught.message || "Não foi possível calcular o impacto financeiro."); } })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [expanded, firstPaymentDate, offerId, product.id]);
+
+  const rows = analysis?.rows || [];
+  const projectionPageSize = projectionLimit === "all" ? Math.max(rows.length, 1) : Number(projectionLimit);
+  const pagedRows = rows.slice((page - 1) * projectionPageSize, page * projectionPageSize);
+  const status = analysis?.status || "safe";
+  const statusLabel = status === "critical" ? "Saldo projetado negativo" : status === "attention" ? "Atenção ao caixa mensal" : "Compra dentro da projeção";
+  const StatusIcon = status === "safe" ? ShieldCheck : CircleAlert;
+  const offerOptions = product.offers.map((offer) => ({
+    value: String(offer.id),
+    label: `${offer.store} · ${formatMoney(offer.total_cost, language)} · ${offer.payment_method === "credit" ? `${offer.installment_count}x` : PAYMENTS[offer.payment_method]}${offer.is_expired ? " · vencida" : ""}`,
+  }));
+  const paymentCount = selectedOffer?.payment_method === "credit" ? Number(selectedOffer.installment_count || 1) : 1;
+  const paymentAmount = analysis && analysis.offer_id === selectedOffer?.id ? analysis.average_installment : Number(selectedOffer?.total_cost || 0) / paymentCount;
+  const paymentSummary = selectedOffer ? paymentCount > 1 ? `${paymentCount}× de ${formatMoney(paymentAmount, language)}` : `À vista · ${formatMoney(paymentAmount, language)}` : null;
+  const preferencesChanged = offerId !== String(product.analysis_offer_id || "") || firstPaymentDate !== (product.analysis_first_payment_date || "");
+  const savePreferences = async () => {
+    if (!offerId || !firstPaymentDate || !preferencesChanged) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onSavePreferences({ analysis_offer_id: Number(offerId), analysis_first_payment_date: firstPaymentDate });
+      toast.success("Oferta e data salvas");
+    } catch (caught) {
+      const message = caught.message || "Não foi possível salvar a oferta e a data.";
+      setSaveError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section className={`card desired-financial-analysis ${expanded ? "expanded" : ""}`} aria-labelledby="desired-financial-title">
+    <header className="desired-financial-heading"><button className="desired-financial-toggle" type="button" aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "Ocultar" : "Ver"} impacto desta compra`} onClick={() => setExpanded((current) => !current)}><span><ChartNoAxesCombined size={21} /></span><div><p>ANÁLISE FINANCEIRA</p><h2 id="desired-financial-title">Impacto desta compra</h2><small>Veja como a oferta altera o fechamento de cada mês.</small></div>{paymentSummary && <strong className="desired-financial-payment-summary">{paymentSummary}</strong>}<ChevronDown className="desired-financial-chevron" size={20} /></button></header>
+    <div id={panelId} className="desired-financial-panel" hidden={!expanded}>
+    {product.offers.length === 0 ? <div className="desired-financial-empty"><WalletCards size={27} /><strong>Adicione uma oferta para calcular o impacto</strong><p>A análise usa preço, frete e parcelamento da condição escolhida.</p><button className="btn btn-primary compact" type="button" onClick={onAddOffer}><Plus size={15} /> Adicionar oferta</button></div> : <>
+      <div className="desired-financial-controls"><div className="field-label"><span>Oferta analisada</span><FilterSelect ariaLabel="Oferta analisada" value={offerId} options={offerOptions} disabled={saving} onChange={setOfferId} /></div><div className="field-label"><span>Primeiro pagamento ou compra</span><DateField ariaLabel="Primeiro pagamento ou compra" value={firstPaymentDate} disabled={saving} onChange={setFirstPaymentDate} /></div><div className="desired-financial-save"><button className="desired-financial-save-button" type="button" aria-label={saving ? "Salvando escolhas" : preferencesChanged ? "Salvar escolhas" : "Escolhas salvas"} title={preferencesChanged ? "Salvar escolhas" : "Escolhas salvas"} disabled={saving || !preferencesChanged || !offerId || !firstPaymentDate} onClick={savePreferences}>{saving ? <Loader2 className="spin" size={18} /> : <Save size={18} />}</button><span className="desired-financial-save-help"><button type="button" aria-label="Ajuda sobre as escolhas salvas" aria-describedby="desired-financial-save-help-text"><CircleHelp size={17} /></button><span id="desired-financial-save-help-text" role="tooltip">A oferta e o mês serão lembrados neste produto.</span></span></div></div>
+      {saveError && <div className="desired-search-message error" role="alert"><CircleAlert size={17} /><span>{saveError}</span></div>}
+      {selectedOffer?.is_expired && <p className="desired-financial-warning"><CircleAlert size={16} /> Esta oferta está vencida. A projeção usa o preço antigo apenas como referência.</p>}
+      {loading && !analysis && <div className="desired-financial-loading"><Loader2 className="spin" size={22} /><span>Calculando impacto...</span></div>}
+      {error && <div className="desired-search-message error" role="alert"><CircleAlert size={17} /><span>{error}</span></div>}
+      {analysis && <div className={`desired-financial-content status-${status}`} aria-busy={loading}>
+        <div className="desired-financial-summary">
+          <div className="desired-financial-status"><span><StatusIcon size={18} /></span><div><small>Leitura da projeção</small><strong>{statusLabel}</strong></div></div>
+          <div><small>Custo total</small><strong>{formatMoney(analysis.total_cost, language)}</strong><span>{PAYMENTS[analysis.payment_method]}</span></div>
+          <div><small>Saldo após a compra</small><strong>{formatMoney(analysis.projected_final_balance, language)}</strong><span>No fim de {monthLabel(analysis.last_payment_month, language)}</span></div>
+        </div>
+        <div className="desired-financial-chart" aria-label="Gráfico do saldo projetado antes e depois da compra">
+          <ResponsiveContainer width="100%" height="100%"><AreaChart data={rows} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <defs><linearGradient id="desiredFinancialFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={.25} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={.02} /></linearGradient></defs>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+            <XAxis dataKey="month" tickFormatter={(value) => monthLabel(value, language, "short")} tickLine={false} axisLine={false} minTickGap={24} />
+            <YAxis tickFormatter={(value) => compactMoney(value, language)} tickLine={false} axisLine={false} tickMargin={7} width={75} />
+            <Tooltip content={<FinancialChartTooltip language={language} />} />
+            <Line type="monotone" dataKey="baseline_projected_closing" name="Sem a compra" stroke="var(--muted)" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+            <Area type="monotone" dataKey="projected_closing" name="Com a compra" stroke="var(--primary)" strokeWidth={3} fill="url(#desiredFinancialFill)" dot={rows.length <= 6 ? { r: 4, fill: "var(--card)", strokeWidth: 3 } : false} />
+          </AreaChart></ResponsiveContainer>
+        </div>
+        <div className="desired-financial-months" aria-label="Impacto mensal da compra">{pagedRows.map((row) => <FinancialMonthCard key={row.month} row={row} language={language} />)}</div>
+        <div className="desired-financial-pagination"><div className="desired-financial-limit"><span>Exibir</span><FilterSelect ariaLabel="Limite da projeção" value={projectionLimit} options={PROJECTION_LIMIT_OPTIONS} onChange={(value) => { setProjectionLimit(value); setPage(1); }} /></div><OfferPagination page={page} total={rows.length} perPage={projectionPageSize} label="parcelas analisadas" onPageChange={setPage} always /></div>
+        <p className="desired-financial-note"><Info size={15} /> O saldo livre usa a renda e a reserva do planejamento de Categorias, desconta os gastos registrados e então aplica a parcela. Sem planejamento no mês, usa a renda cadastrada. A projeção não registra a compra. Para cartão, escolha como primeiro pagamento o mês em que a primeira parcela entrará na fatura.</p>
+      </div>}
+    </>}
+    </div>
+  </section>;
+}
+
 function OfferCard({ offer, bestOfferId, language, onEdit, onDelete }) {
   const priceHistory = offer.store_price_history || offer.price_history || [];
   return <article className={`card desired-offer ${offer.id === bestOfferId ? "best" : ""} ${offer.is_expired ? "expired" : ""}`}>
@@ -442,17 +597,17 @@ function OfferCard({ offer, bestOfferId, language, onEdit, onDelete }) {
   </article>;
 }
 
-function OfferPagination({ page, total, label, onPageChange }) {
-  const totalPages = Math.ceil(total / OFFERS_PER_PAGE);
-  if (totalPages <= 1) return null;
-  const first = (page - 1) * OFFERS_PER_PAGE + 1;
-  const last = Math.min(page * OFFERS_PER_PAGE, total);
+function OfferPagination({ page, total, label, onPageChange, perPage = OFFERS_PER_PAGE, always = false }) {
+  const totalPages = Math.ceil(total / perPage);
+  if (total === 0 || (totalPages <= 1 && !always)) return null;
+  const first = (page - 1) * perPage + 1;
+  const last = Math.min(page * perPage, total);
   const pages = Array.from(new Set([1, page - 1, page, page + 1, totalPages])).filter((value) => value > 0 && value <= totalPages).sort((a, b) => a - b);
   return <nav className="desired-offers-pagination" aria-label={`Paginação das ${label}`}>
     <span>Mostrando <strong>{first}–{last}</strong> de <strong>{total}</strong></span>
-    <div><button className="icon-btn small" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></button>
+    {totalPages > 1 && <div><button className="icon-btn small" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></button>
       {pages.map((value, index) => <span key={value}>{index > 0 && value - pages[index - 1] > 1 && <i>…</i>}<button className={value === page ? "active" : ""} type="button" aria-current={value === page ? "page" : undefined} onClick={() => onPageChange(value)}>{value}</button></span>)}
-      <button className="icon-btn small" type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Próxima página"><ChevronRight size={16} /></button></div>
+      <button className="icon-btn small" type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Próxima página"><ChevronRight size={16} /></button></div>}
   </nav>;
 }
 
@@ -593,6 +748,8 @@ export default function DesiredProductsPage({ categories: availableCategories = 
             {selected.offers.length > 0 && <button className="btn btn-ghost compact" onClick={() => setModal({ type: "purchase" })}>Editar compra</button>}</div>}
         </aside>
       </div>
+
+      <FinancialAnalysisCard key={selected.id} product={selected} language={language} onAddOffer={() => setModal({ type: "offer" })} onSavePreferences={async (payload) => upsert(await updateDesiredProduct(selected.id, payload))} />
 
       <section className={`card desired-offers-section ${offersExpanded ? "expanded" : ""}`}>
         <header className="desired-offer-head">

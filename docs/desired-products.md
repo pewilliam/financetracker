@@ -101,6 +101,35 @@ usa cache curto, timeout e limite de requisições configuráveis por
 `OFFER_SEARCH_RATE_LIMIT_REQUESTS` e `OFFER_SEARCH_RATE_LIMIT_WINDOW_SECONDS`.
 Sem a chave, a pesquisa responde como indisponível e o cadastro manual continua funcionando.
 
+## Análise do impacto financeiro
+
+A tela de detalhes calcula uma projeção somente de leitura para qualquer oferta
+cadastrada. O usuário escolhe a oferta e a data do primeiro pagamento; pagamentos
+à vista afetam um único mês e compras no cartão são distribuídas do primeiro ao
+último mês das parcelas. A data deve representar o mês em que o valor efetivamente
+afetará o caixa — no cartão, normalmente o vencimento da fatura da primeira parcela.
+Oferta e data podem ser salvas como preferências da análise do produto e são
+restauradas nas próximas visitas, sem registrar nem alterar uma compra concluída.
+
+Para cada mês, a análise compara o fechamento já projetado com o fechamento após
+a compra. A base reutiliza o resumo mensal do sistema e, portanto, considera saldos
+das carteiras, lançamentos, recebíveis previstos e faturas abertas já cadastrados.
+O saldo livre segue o planejamento da tela de Categorias: parte da renda planejada,
+desconta a reserva do mês, os gastos categorizados (incluindo itens de fatura) e a
+parcela simulada. O percentual comprometido também usa a renda planejada. Quando
+o mês ainda não tem planejamento configurado, o cálculo usa a renda registrada e
+reserva zero como fallback. A análise sinaliza atenção quando esse saldo livre fica
+negativo ou situação crítica quando o saldo projetado fica negativo.
+
+O gráfico mostra as curvas com e sem a compra. O detalhamento exibe até seis meses
+por página e apresenta, em cada mês, o saldo livre antes e depois da parcela. A área
+inteira fica em um accordion fechado inicialmente e só calcula ao ser expandida,
+enquanto o backend aceita as até 60 parcelas já permitidas nas ofertas.
+O cálculo usa o custo total informado na oferta (`preço + frete`) e divide centavos
+sem perder o total. Ele não cria transações, não muda o produto para comprado e não
+escolhe cartão ou carteira. Esses vínculos continuam sendo decisões do registro
+real da compra; a análise apenas responde “qual seria o impacto” nas datas escolhidas.
+
 ## API
 
 Prefixo: `/api/desired-products`.
@@ -111,6 +140,7 @@ Prefixo: `/api/desired-products`.
 | GET / PATCH / DELETE | `/{product_id}` | Consultar / editar / excluir produto |
 | GET | `/{product_id}/offer-search?q=...&limit=10` | Pesquisar ofertas externas pela SerpApi |
 | POST | `/{product_id}/offer-search/resolve` | Resolver a oferta escolhida para o site direto do lojista |
+| POST | `/{product_id}/financial-analysis` | Projetar o impacto mensal de uma oferta sem gravar lançamentos |
 | POST | `/{product_id}/offers` | Adicionar oferta ao mesmo produto |
 | PUT / DELETE | `/{product_id}/offers/{offer_id}` | Editar / remover oferta |
 | POST | `/{product_id}/purchase` | Marcar comprado / atualizar dados da compra |
@@ -122,12 +152,12 @@ Cartão exige de 1 a 60 parcelas; os demais pagamentos não aceitam parcelamento
 ## Evoluções previstas
 
 O serviço `app/services/desired_products.py` centraliza cálculo e registro de histórico.
-Uma análise financeira futura pode consumir preço, frete, parcelas e previsão,
-consultando renda, despesas, cartões e orçamento do mesmo usuário. O registro
-de compra preservado fornece os dados para uma futura conversão em despesa,
-que deverá ser uma ação explícita e idempotente. A pesquisa opcional usa a SerpApi,
-mas o módulo não cria transações, análise financeira automática, scraping direto,
-alertas ou IA.
+A análise financeira já consome preço, frete, parcelas e a data do primeiro pagamento,
+consultando a projeção real do mesmo usuário. O registro de compra preservado fornece
+os dados para uma futura conversão em despesa, que deverá ser uma ação explícita e
+idempotente e permitirá selecionar a carteira ou o cartão usado. A pesquisa opcional
+usa a SerpApi, mas o módulo ainda não cria transações automaticamente, não seleciona
+contas de pagamento, não faz scraping direto, alertas ou IA.
 
 ## Migration e validação
 
@@ -154,7 +184,7 @@ npm run build
 ```
 
 Testes HTTP usam JWT real e SQLite isolado para verificar CRUD, histórico,
-compra, autorização e dinheiro. O teste da migration executa upgrade/downgrade
+compra, projeção parcelada sem mutação, autorização e dinheiro. O teste da migration executa upgrade/downgrade
 e compara suas colunas com os modelos. O SQL da migration também pode ser
 gerado no dialeto MySQL sem alterar um banco:
 

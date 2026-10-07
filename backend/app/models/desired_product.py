@@ -24,6 +24,8 @@ class DesiredProduct(Base):
     priority = Column(String(10), nullable=False, default="medium")
     target_price = Column(Numeric(10, 2), nullable=True)
     planned_purchase_date = Column(Date, nullable=True)
+    analysis_offer_id = Column(Integer, nullable=True)
+    analysis_first_payment_date = Column(Date, nullable=True)
     status = Column(String(30), nullable=False, default="want")
     chosen_offer_id = Column(Integer, nullable=True)
     purchase_offer_snapshot = Column(JSON, nullable=True)

@@ -142,6 +142,8 @@ class ProductUpdate(PlanningModel):
     priority: Priority | None = None
     target_price: NonNegativeMoney | None = None
     planned_purchase_date: date | None = None
+    analysis_offer_id: int | None = Field(default=None, gt=0)
+    analysis_first_payment_date: date | None = None
     status: Literal["want", "planning", "ready", "abandoned"] | None = None
 
     @field_validator("ean")
@@ -179,6 +181,13 @@ class ProductUpdate(PlanningModel):
     @classmethod
     def valid_money(cls, value):
         return _check_cents(value)
+
+    @field_validator("analysis_first_payment_date")
+    @classmethod
+    def valid_analysis_date(cls, value):
+        if value is not None and not 2000 <= value.year <= 2100:
+            raise ValueError("A data do primeiro pagamento deve ficar entre 2000 e 2100")
+        return value
 
 
     @model_validator(mode="after")
@@ -287,6 +296,59 @@ class OfferSearchResolved(PlanningModel):
     url: str
 
 
+class PurchaseAnalysisPayload(PlanningModel):
+    offer_id: int = Field(gt=0)
+    first_payment_date: date
+
+    @field_validator("first_payment_date")
+    @classmethod
+    def valid_analysis_date(cls, value: date) -> date:
+        if not 2000 <= value.year <= 2100:
+            raise ValueError("A data do primeiro pagamento deve ficar entre 2000 e 2100")
+        return value
+
+
+class PurchaseAnalysisMonthOut(PlanningModel):
+    month: str
+    installment_number: int
+    installment_count: int
+    amount: Decimal
+    registered_income: Decimal
+    registered_expenses: Decimal
+    budget_configured: bool
+    planning_income: Decimal
+    planned_reserve: Decimal
+    available_budget: Decimal
+    free_before: Decimal
+    free_after: Decimal
+    baseline_projected_closing: Decimal
+    projected_closing: Decimal
+    cumulative_impact: Decimal
+    income_commitment_percent: Decimal | None
+    negative_balance: bool
+    negative_free_money: bool
+
+
+class PurchaseAnalysisOut(PlanningModel):
+    offer_id: int
+    store: str
+    payment_method: PaymentMethod
+    first_payment_date: date
+    first_payment_month: str
+    last_payment_month: str
+    installment_count: int
+    total_cost: Decimal
+    average_installment: Decimal
+    status: Literal["safe", "attention", "critical"]
+    baseline_final_balance: Decimal
+    projected_final_balance: Decimal
+    minimum_projected_balance: Decimal
+    worst_month: str | None
+    negative_balance_months: list[str] = Field(default_factory=list)
+    negative_free_months: list[str] = Field(default_factory=list)
+    rows: list[PurchaseAnalysisMonthOut] = Field(default_factory=list)
+
+
 class PriceHistoryOut(PlanningModel):
     id: int
     price: Decimal
@@ -335,6 +397,8 @@ class ProductOut(PlanningModel):
     priority: str
     target_price: Decimal | None
     planned_purchase_date: date | None
+    analysis_offer_id: int | None
+    analysis_first_payment_date: date | None
     status: ProductStatus
     chosen_offer_id: int | None
     purchase_offer_snapshot: dict | None

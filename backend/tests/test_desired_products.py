@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Category, DesiredProduct, OfferPriceHistory, ProductOffer, User
+from app.models import BudgetReserveRule, Category, DesiredProduct, MonthlyBudgetPlan, OfferPriceHistory, ProductOffer, Transaction, User
 from app.security import create_access_token
 
 
@@ -154,6 +154,54 @@ class DesiredProductAPITests(unittest.TestCase):
         self.assertEqual(imported["offers"][0]["source"], "serpapi")
         self.assertEqual(imported["offers"][0]["price_history"][0]["source"], "serpapi")
 
+    def test_projects_cash_flow_for_every_offer_installment_without_creating_expenses(self):
+        product = self.offer(
+            self.product(),
+            store="Loja Parcelada",
+            price="600.00",
+            payment_method="credit",
+            installment_count=3,
+        )
+        with self.sessions() as db:
+            owner = db.query(User).filter(User.email == "one@example.com").one()
+            db.add_all([
+                Transaction(user_id=owner.id, date=date(2026, 11, 10), type="income", amount="1000.00"),
+                Transaction(user_id=owner.id, date=date(2026, 11, 12), type="expense", amount="300.00"),
+                MonthlyBudgetPlan(user_id=owner.id, year=2026, month=11, income_mode="manual", manual_income="1000.00"),
+                MonthlyBudgetPlan(user_id=owner.id, year=2026, month=12, income_mode="manual", manual_income="1000.00"),
+                MonthlyBudgetPlan(user_id=owner.id, year=2027, month=1, income_mode="manual", manual_income="1000.00"),
+                BudgetReserveRule(user_id=owner.id, effective_year=2026, effective_month=11, rule_type="fixed", value="200.00"),
+            ])
+            db.commit()
+        offer_id = product["offers"][0]["id"]
+        analysis = self.request("POST", f"/{product['id']}/financial-analysis", {
+            "offer_id": offer_id,
+            "first_payment_date": "2026-11-05",
+        })
+
+        self.assertEqual(analysis["total_cost"], "600.00")
+        self.assertEqual(analysis["average_installment"], "200.00")
+        self.assertEqual(analysis["first_payment_month"], "2026-11")
+        self.assertEqual(analysis["last_payment_month"], "2027-01")
+        self.assertEqual([row["amount"] for row in analysis["rows"]], ["200.00", "200.00", "200.00"])
+        self.assertEqual([row["baseline_projected_closing"] for row in analysis["rows"]], ["700.00", "700.00", "700.00"])
+        self.assertEqual([row["projected_closing"] for row in analysis["rows"]], ["500.00", "300.00", "100.00"])
+        self.assertEqual([row["planning_income"] for row in analysis["rows"]], ["1000.00", "1000.00", "1000.00"])
+        self.assertEqual([row["planned_reserve"] for row in analysis["rows"]], ["200.00", "200.00", "200.00"])
+        self.assertEqual([row["registered_expenses"] for row in analysis["rows"]], ["300.00", "0.00", "0.00"])
+        self.assertEqual([row["free_before"] for row in analysis["rows"]], ["500.00", "800.00", "800.00"])
+        self.assertEqual([row["free_after"] for row in analysis["rows"]], ["300.00", "600.00", "600.00"])
+        self.assertTrue(all(row["budget_configured"] for row in analysis["rows"]))
+        self.assertEqual(analysis["status"], "safe")
+        self.assertEqual(analysis["negative_free_months"], [])
+        self.assertEqual(len(self.request("GET", f"/{product['id']}")["offers"]), 1)
+        with self.sessions() as db:
+            self.assertEqual(db.query(Transaction).count(), 2)
+        self.request("POST", f"/{product['id']}/financial-analysis", {
+            "offer_id": offer_id,
+            "first_payment_date": "2026-11-05",
+        }, expected=404, headers=self.other_headers)
+
     def test_all_nested_routes_enforce_user_and_product_ownership(self):
         product = self.offer(self.product())
         path = f"/{product['id']}"
@@ -165,6 +213,7 @@ class DesiredProductAPITests(unittest.TestCase):
             ("POST", "/offers", {"store": "X", "price": "10.00"}),
             ("PUT", f"/offers/{offer_id}", {"store": "X", "price": "10.00"}),
             ("DELETE", f"/offers/{offer_id}", None),
+            ("POST", "/financial-analysis", {"offer_id": offer_id, "first_payment_date": "2026-11-05"}),
             ("POST", "/purchase", {"chosen_offer_id": offer_id, "paid_price": "10.00", "purchase_date": "2026-10-06", "payment_method": "pix"}),
         ]:
             with self.subTest(method=method, suffix=suffix):
@@ -183,10 +232,13 @@ class DesiredProductAPITests(unittest.TestCase):
         product = self.offer(product, price="100.00", shipping="0.10", payment_method="credit", installment_count=3, installment_amount="40.00")
         self.assertEqual(product["offers"][1]["total_cost"], "100.10")
         self.assertEqual(product["offers"][1]["installment_amount"], "40.00")
+        product = self.offer(product, price="693.00", shipping="17.00", payment_method="credit", installment_count=9)
+        self.assertEqual(product["offers"][2]["total_cost"], "710.00")
+        self.assertEqual(product["offers"][2]["installment_amount"], "78.89")
         for changes in [{"price": "0"}, {"price": "1.001"}, {"price": "NaN"}, {"price": "100000000.00"}, {"shipping": "-1"}, {"price": "99999999.99", "shipping": "0.01"}, {"payment_method": "credit"}, {"installment_count": 2}, {"url": "javascript:alert(1)"}, {"url": "https://user:pass@host.com"}]:
             with self.subTest(changes=changes):
                 self.request("POST", f"/{product['id']}/offers", {"store": "X", "price": "10.00", **changes}, expected=422)
-        self.assertEqual(self.request("GET", f"/{product['id']}")["offer_count"], 2)
+        self.assertEqual(self.request("GET", f"/{product['id']}")["offer_count"], 3)
 
     def test_expired_offers_remain_visible_but_do_not_affect_comparison(self):
         product = self.product(target_price="400.00")
@@ -219,6 +271,24 @@ class DesiredProductAPITests(unittest.TestCase):
             self.assertEqual(result["status"], status)
         product = self.request("PATCH", f"/{product['id']}", {"target_price": None, "image_data": None, "planned_purchase_date": None})
         self.assertIsNone(product["target_price"])
+
+    def test_purchase_analysis_preferences_are_saved_and_clear_with_the_offer(self):
+        product = self.offer(self.product(), payment_method="credit", installment_count=3)
+        offer_id = product["offers"][0]["id"]
+        product = self.request("PATCH", f"/{product['id']}", {
+            "analysis_offer_id": offer_id,
+            "analysis_first_payment_date": "2026-12-05",
+        })
+        self.assertEqual(product["analysis_offer_id"], offer_id)
+        self.assertEqual(product["analysis_first_payment_date"], "2026-12-05")
+        persisted = self.request("GET", f"/{product['id']}")
+        self.assertEqual(persisted["analysis_offer_id"], offer_id)
+        self.assertEqual(persisted["analysis_first_payment_date"], "2026-12-05")
+
+        self.request("PATCH", f"/{product['id']}", {"analysis_offer_id": 999999}, expected=404)
+        self.request("PATCH", f"/{product['id']}", {"analysis_first_payment_date": "2101-01-01"}, expected=422)
+        self.request("DELETE", f"/{product['id']}/offers/{offer_id}", expected=204)
+        self.assertIsNone(self.request("GET", f"/{product['id']}")["analysis_offer_id"])
 
     def test_purchase_snapshot_is_independent_of_future_offer_edits(self):
         product = self.offer(self.product(), payment_method="credit", installment_count=10)
@@ -324,6 +394,10 @@ class DesiredProductMigrationTests(unittest.TestCase):
         frame_spec = importlib.util.spec_from_file_location("frame_migration", frame_path)
         frame_migration = importlib.util.module_from_spec(frame_spec)
         frame_spec.loader.exec_module(frame_migration)
+        preferences_path = Path(__file__).parents[1] / "alembic/versions/0044_purchase_analysis_preferences.py"
+        preferences_spec = importlib.util.spec_from_file_location("preferences_migration", preferences_path)
+        preferences_migration = importlib.util.module_from_spec(preferences_spec)
+        preferences_spec.loader.exec_module(preferences_migration)
         engine = create_engine("sqlite://")
         with engine.begin() as connection:
             connection.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)")
@@ -341,8 +415,11 @@ class DesiredProductMigrationTests(unittest.TestCase):
                 frame_migration.upgrade()
                 self.assertIsNone(connection.exec_driver_sql("SELECT media_frame FROM desired_products WHERE id=1").scalar())
                 connection.exec_driver_sql("UPDATE desired_products SET media_frame=? WHERE id=1", ('{"fit":"cover","x":25,"y":80,"zoom":1.5}',))
+                preferences_migration.upgrade()
+                self.assertEqual(connection.exec_driver_sql("SELECT analysis_offer_id, analysis_first_payment_date FROM desired_products WHERE id=1").one(), (None, None))
                 for model in (DesiredProduct, ProductOffer, OfferPriceHistory):
                     self.assertEqual({column.name for column in model.__table__.columns}, {column["name"] for column in inspect(connection).get_columns(model.__tablename__)})
+                preferences_migration.downgrade()
                 frame_migration.downgrade()
                 self.assertEqual(connection.exec_driver_sql("SELECT image_data, media_url, media_type FROM desired_products WHERE id=1").one(), (IMAGE, None, "image"))
                 media_migration.downgrade()

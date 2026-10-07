@@ -30,7 +30,7 @@ def _fill_offer(offer: ProductOffer, payload: OfferPayload) -> None:
         setattr(offer, key, getattr(payload, key))
     offer.installment_count = payload.installment_count if payload.payment_method == "credit" else None
     offer.installment_amount = (
-        payload.installment_amount or (payload.price / payload.installment_count).quantize(CENT, rounding=ROUND_HALF_UP)
+        payload.installment_amount or ((payload.price + (payload.shipping or Decimal("0.00"))) / payload.installment_count).quantize(CENT, rounding=ROUND_HALF_UP)
         if payload.payment_method == "credit" else None
     )
     if offer.payment_method == "credit" and offer.installment_amount == 0:

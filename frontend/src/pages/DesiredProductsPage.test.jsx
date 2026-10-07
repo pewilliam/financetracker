@@ -9,7 +9,7 @@ import DesiredProductsPage from "./DesiredProductsPage.jsx";
 vi.mock("../api/api.js", () => ({
   listDesiredProducts: vi.fn(), getDesiredProduct: vi.fn(), createDesiredProduct: vi.fn(),
   updateDesiredProduct: vi.fn(), deleteDesiredProduct: vi.fn(), createProductOffer: vi.fn(),
-  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), searchProductOffers: vi.fn(), resolveProductOffer: vi.fn(), createCategory: vi.fn(),
+  updateProductOffer: vi.fn(), deleteProductOffer: vi.fn(), recordProductPurchase: vi.fn(), searchProductOffers: vi.fn(), resolveProductOffer: vi.fn(), analyzeProductPurchase: vi.fn(), createCategory: vi.fn(),
 }));
 vi.mock("react-hot-toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -40,6 +40,19 @@ beforeEach(() => {
   window.matchMedia = vi.fn(() => ({ matches: false }));
   api.listDesiredProducts.mockResolvedValue([product]);
   api.getDesiredProduct.mockResolvedValue(product);
+  api.analyzeProductPurchase.mockResolvedValue({
+    offer_id: 7, store: "Loja", payment_method: "pix", first_payment_date: "2026-10-06",
+    first_payment_month: "2026-10", last_payment_month: "2026-10", installment_count: 1,
+    total_cost: "100.00", average_installment: "100.00", status: "safe",
+    baseline_final_balance: "1000.00", projected_final_balance: "900.00",
+    minimum_projected_balance: "900.00", worst_month: "2026-10",
+    negative_balance_months: [], negative_free_months: [],
+    rows: [{ month: "2026-10", installment_number: 1, installment_count: 1, amount: "100.00",
+      registered_income: "1000.00", registered_expenses: "0.00", budget_configured: false,
+      planning_income: "1000.00", planned_reserve: "0.00", available_budget: "1000.00", free_before: "1000.00", free_after: "900.00",
+      baseline_projected_closing: "1000.00", projected_closing: "900.00", cumulative_impact: "-100.00",
+      income_commitment_percent: "10.00", negative_balance: false, negative_free_money: false }],
+  });
 });
 
 it("creates a product with target and navigates to its details", async () => {
@@ -74,13 +87,15 @@ it("adds credit offers with automatic installments and manual interest adjustmen
   await user.click(screen.getAllByRole("button", { name: "Adicionar oferta" })[0]);
   let dialog = within(screen.getByRole("dialog", { name: "Adicionar oferta" }));
   await user.type(dialog.getByLabelText("Loja *"), "Amazon");
-  await user.type(dialog.getByLabelText("Preço *"), "3600,00");
+  await user.type(dialog.getByLabelText("Preço *"), "693,00");
+  await user.type(dialog.getByLabelText("Frete"), "17,00");
   await select(user, dialog, "Pagamento", "Cartão de crédito");
   await user.clear(dialog.getByLabelText("Quantidade de parcelas"));
-  await user.type(dialog.getByLabelText("Quantidade de parcelas"), "10");
-  expect(dialog.getByLabelText("Valor da parcela").value).toContain("360,00");
+  await user.type(dialog.getByLabelText("Quantidade de parcelas"), "9");
+  expect(dialog.getByLabelText("Valor da parcela").value).toContain("78,89");
+  expect(dialog.getByText(/Calculado com preço \+ frete:/)).toHaveTextContent("R$ 78,89/mês");
   await user.click(dialog.getByRole("button", { name: "Adicionar oferta" }));
-  await waitFor(() => expect(api.createProductOffer).toHaveBeenCalledWith(1, expect.objectContaining({ price: "3600.00", installment_count: 10, installment_amount: null })));
+  await waitFor(() => expect(api.createProductOffer).toHaveBeenCalledWith(1, expect.objectContaining({ price: "693.00", shipping: "17.00", installment_count: 9, installment_amount: null })));
   await user.click(screen.getAllByRole("button", { name: "Adicionar oferta" })[0]);
   dialog = within(screen.getByRole("dialog", { name: "Adicionar oferta" }));
   await user.type(dialog.getByLabelText("Loja *"), "Kabum");
@@ -209,6 +224,124 @@ it("shows expired offers without using them to reach the target price", async ()
   expect(expiredToggle).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByText("PREÇO VENCIDO")).toBeInTheDocument();
   expect(screen.queryByText("Seu preço-alvo foi atingido")).not.toBeInTheDocument();
+});
+
+it("projects the selected offer across its installment months without recording a purchase", async () => {
+  const user = userEvent.setup();
+  const offer = { id: 7, store: "Loja Parcelada", price: "600.00", total_cost: "600.00", payment_method: "credit", installment_count: 3, installment_amount: "200.00", recorded_at: "2026-10-06", price_history: [], is_expired: false };
+  const installmentProduct = { ...product, planned_purchase_date: "2026-11-05", best_offer_id: 7, best_price: "600.00", highest_price: "600.00", offer_count: 1, offers: [offer] };
+  api.getDesiredProduct.mockResolvedValue(installmentProduct);
+  api.updateDesiredProduct.mockImplementation(async (_id, payload) => ({ ...installmentProduct, ...payload }));
+  api.analyzeProductPurchase.mockResolvedValue({
+    offer_id: 7, store: "Loja Parcelada", payment_method: "credit", first_payment_date: "2026-11-05",
+    first_payment_month: "2026-11", last_payment_month: "2027-01", installment_count: 3,
+    total_cost: "600.00", average_installment: "200.00", status: "attention",
+    baseline_final_balance: "1000.00", projected_final_balance: "400.00",
+    minimum_projected_balance: "400.00", worst_month: "2027-01",
+    negative_balance_months: [], negative_free_months: ["2026-11"],
+    rows: ["2026-11", "2026-12", "2027-01"].map((month, index) => ({
+      month, installment_number: index + 1, installment_count: 3, amount: "200.00",
+      registered_income: "1000.00", registered_expenses: "700.00", budget_configured: true,
+      planning_income: "1200.00", planned_reserve: "200.00", available_budget: "1000.00",
+      free_before: ["100.00", "300.00", "500.00"][index], free_after: ["-100.00", "100.00", "300.00"][index],
+      baseline_projected_closing: "1000.00", projected_closing: String(800 - index * 200) + ".00",
+      cumulative_impact: String(-(index + 1) * 200) + ".00", income_commitment_percent: "20.00",
+      negative_balance: false, negative_free_money: index === 0,
+    })),
+  });
+
+  show("/produtos-desejados/1");
+
+  expect(await screen.findByRole("heading", { name: "Impacto desta compra" })).toBeInTheDocument();
+  const toggle = screen.getByRole("button", { name: "Ver impacto desta compra" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(api.analyzeProductPurchase).not.toHaveBeenCalled();
+  await user.click(toggle);
+  expect(screen.getByRole("button", { name: "Ocultar impacto desta compra" })).toHaveAttribute("aria-expanded", "true");
+  await waitFor(() => expect(api.analyzeProductPurchase).toHaveBeenCalledWith(1, {
+    offer_id: 7, first_payment_date: "2026-11-05",
+  }, { signal: expect.any(AbortSignal) }));
+  expect(screen.getByRole("button", { name: "Ajuda sobre as escolhas salvas" })).toHaveAttribute("aria-describedby", "desired-financial-save-help-text");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("A oferta e o mês serão lembrados neste produto.");
+  await user.click(screen.getByRole("button", { name: "Salvar escolhas" }));
+  await waitFor(() => expect(api.updateDesiredProduct).toHaveBeenCalledWith(1, {
+    analysis_offer_id: 7, analysis_first_payment_date: "2026-11-05",
+  }));
+  expect(screen.getByRole("button", { name: "Escolhas salvas" })).toBeDisabled();
+  expect(screen.getByText("Atenção ao caixa mensal")).toBeInTheDocument();
+  expect(screen.getAllByText("3× de R$ 200,00")).toHaveLength(1);
+  expect(screen.queryByText("Parcela do mês")).not.toBeInTheDocument();
+
+  const monthCards = screen.getAllByRole("button", { name: /Ver detalhes de/ });
+  expect(monthCards).toHaveLength(3);
+  expect(monthCards[0]).toHaveAttribute("aria-expanded", "false");
+  expect(monthCards[0]).toHaveTextContent("Nov/26 · 1/3");
+  expect(monthCards[0]).toHaveTextContent("Após a compra-R$ 100,00");
+  expect(monthCards[0]).toHaveTextContent("Antes: R$ 100,00 · 20.00% da renda");
+  expect(monthCards[0]).toHaveClass("status-negative");
+  expect(monthCards[1]).toHaveClass("status-tight");
+  expect(monthCards[2]).toHaveClass("status-comfortable");
+
+  const firstDetails = document.querySelector("#desired-financial-month-2026-11");
+  expect(firstDetails).toHaveAttribute("hidden");
+  await user.click(monthCards[0]);
+  expect(monthCards[0]).toHaveAttribute("aria-expanded", "true");
+  expect(firstDetails).not.toHaveAttribute("hidden");
+  expect(firstDetails).toHaveTextContent("Saldo livreR$ 100,00 -R$ 100,00");
+  expect(firstDetails).toHaveTextContent("Saldo projetadoR$ 1.000,00 R$ 800,00");
+  expect(firstDetails).toHaveTextContent("Impacto acumulado- R$ 200,00");
+  expect(firstDetails).toHaveTextContent("RendaR$ 1.200,00");
+  expect(firstDetails).toHaveTextContent("ReservaR$ 200,00");
+
+  monthCards[1].focus();
+  await user.keyboard("{Enter}");
+  expect(monthCards[1]).toHaveAttribute("aria-expanded", "true");
+  await user.keyboard(" ");
+  expect(monthCards[1]).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByText(/O saldo livre usa a renda e a reserva do planejamento/)).toBeInTheDocument();
+  expect(api.recordProductPurchase).not.toHaveBeenCalled();
+});
+
+it("changes how many projection months are shown per page", async () => {
+  const user = userEvent.setup();
+  const offer = { id: 7, store: "Loja Parcelada", price: "900.00", total_cost: "900.00", payment_method: "credit", installment_count: 9, installment_amount: "100.00", recorded_at: "2026-10-06", price_history: [], is_expired: false };
+  const months = ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06"];
+  api.getDesiredProduct.mockResolvedValue({ ...product, best_offer_id: 7, best_price: "900.00", highest_price: "900.00", offer_count: 1, offers: [offer] });
+  api.analyzeProductPurchase.mockResolvedValue({
+    offer_id: 7, store: "Loja Parcelada", payment_method: "credit", first_payment_date: "2026-10-06",
+    first_payment_month: "2026-10", last_payment_month: "2027-06", installment_count: 9,
+    total_cost: "900.00", average_installment: "100.00", status: "safe",
+    baseline_final_balance: "1000.00", projected_final_balance: "100.00",
+    minimum_projected_balance: "100.00", worst_month: "2027-06", negative_balance_months: [], negative_free_months: [],
+    rows: months.map((month, index) => ({
+      month, installment_number: index + 1, installment_count: 9, amount: "100.00",
+      registered_income: "1000.00", registered_expenses: "100.00", budget_configured: true,
+      planning_income: "1000.00", planned_reserve: "100.00", available_budget: "900.00", free_before: "800.00", free_after: "700.00",
+      baseline_projected_closing: "1000.00", projected_closing: String(900 - index * 100) + ".00",
+      cumulative_impact: String(-(index + 1) * 100) + ".00", income_commitment_percent: "10.00",
+      negative_balance: false, negative_free_money: false,
+    })),
+  });
+
+  show("/produtos-desejados/1");
+  await user.click(await screen.findByRole("button", { name: "Ver impacto desta compra" }));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /Ver detalhes de/ })).toHaveLength(5));
+  expect(screen.getByRole("button", { name: "Limite da projeção" })).toHaveTextContent("5");
+  expect(screen.getByText("1–5")).toBeInTheDocument();
+
+  await select(user, screen, "Limite da projeção", "10");
+  expect(screen.getAllByRole("button", { name: /Ver detalhes de/ })).toHaveLength(9);
+  expect(screen.getByText("1–9")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Próxima página" })).not.toBeInTheDocument();
+
+  await select(user, screen, "Limite da projeção", "15");
+  expect(screen.getAllByRole("button", { name: /Ver detalhes de/ })).toHaveLength(9);
+  await select(user, screen, "Limite da projeção", "Todos");
+  expect(screen.getAllByRole("button", { name: /Ver detalhes de/ })).toHaveLength(9);
+  await select(user, screen, "Limite da projeção", "5");
+  await user.click(screen.getByRole("button", { name: "Próxima página" }));
+  expect(screen.getAllByRole("button", { name: /Ver detalhes de/ })).toHaveLength(4);
+  expect(screen.getByText("6–9")).toBeInTheDocument();
 });
 
 it("expands and collapses the offers section as an accordion", async () => {

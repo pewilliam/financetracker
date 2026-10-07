@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import DesiredProduct, ProductOffer, User
-from app.schemas.desired_products import OfferPayload, OfferSearchResolved, OfferSearchResolvePayload, OfferSearchResult, ProductCreate, ProductOut, ProductUpdate, PurchasePayload
+from app.schemas.desired_products import OfferPayload, OfferSearchResolved, OfferSearchResolvePayload, OfferSearchResult, ProductCreate, ProductOut, ProductUpdate, PurchaseAnalysisOut, PurchaseAnalysisPayload, PurchasePayload
 from app.security import get_current_user
 from app.services.categories import get_user_category
 from app.services.desired_products import _fill_offer, _snapshot, _total_cost, offer_is_expired
 from app.services.offer_search import OfferSearchProviderError, resolve_serpapi_offer, search_serpapi_offers
+from app.services.purchase_analysis import analyze_offer_purchase
 
 
 router = APIRouter(prefix="/api/desired-products", tags=["desired-products"])
@@ -86,6 +87,8 @@ def _serialize(product: DesiredProduct) -> dict:
         "priority": product.priority,
         "target_price": product.target_price,
         "planned_purchase_date": product.planned_purchase_date,
+        "analysis_offer_id": product.analysis_offer_id,
+        "analysis_first_payment_date": product.analysis_first_payment_date,
         "status": product.status,
         "chosen_offer_id": product.chosen_offer_id,
         "purchase_store": product.purchase_store,
@@ -186,6 +189,35 @@ def resolve_product_offer(
         raise HTTPException(status_code=error.status_code, detail=str(error)) from error
 
 
+@router.post("/{product_id}/financial-analysis", response_model=PurchaseAnalysisOut)
+def analyze_product_purchase(
+    product_id: int,
+    payload: PurchaseAnalysisPayload,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    product = _load_product(db, user.id, product_id)
+    offer = next((item for item in product.offers if item.id == payload.offer_id and item.deleted_at is None), None)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    from app.routers.budgets import _build_plan
+    from app.routers.months import _build_month_summary, get_category_breakdown
+    return analyze_offer_purchase(
+        product,
+        offer,
+        payload.first_payment_date,
+        lambda year, month: _build_month_summary(db, year, month, user.id),
+        lambda year, month: _build_plan(db, user.id, year, month),
+        lambda year, month: get_category_breakdown(
+            year,
+            month,
+            db=db,
+            current_user=user,
+            include_details=False,
+        ),
+    )
+
+
 @router.patch("/{product_id}", response_model=ProductOut)
 def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     product = _load_product(db, user.id, product_id)
@@ -193,6 +225,8 @@ def update_product(product_id: int, payload: ProductUpdate, db: Session = Depend
     if "category_id" in data:
         get_user_category(db, user.id, data["category_id"])
         data["category"] = None
+    if data.get("analysis_offer_id") is not None:
+        _load_offer(product, data["analysis_offer_id"])
     if product.status == "bought" and "status" in data:
         for field in ("chosen_offer_id", "purchase_store", "purchase_offer_snapshot", "paid_price", "purchase_date", "purchase_payment_method", "purchase_installment_count", "purchase_installment_amount"):
             setattr(product, field, None)
@@ -243,6 +277,8 @@ def delete_offer(product_id: int, offer_id: int, db: Session = Depends(get_db), 
     offer = _load_offer(product, offer_id)
     # Retain price history and the chosen-offer reference for completed purchases.
     offer.deleted_at = datetime.now(timezone.utc)
+    if product.analysis_offer_id == offer.id:
+        product.analysis_offer_id = None
     db.commit()
 
 

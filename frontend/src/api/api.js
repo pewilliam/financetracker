@@ -83,6 +83,7 @@ export const searchProductOffers = (id, query, { signal, limit = 10 } = {}) => {
   return request(`/desired-products/${id}/offer-search?${params}`, { signal });
 };
 export const resolveProductOffer = (id, payload) => request(`/desired-products/${id}/offer-search/resolve`, { method: "POST", body: JSON.stringify(payload) });
+export const analyzeProductPurchase = (id, payload, { signal } = {}) => request(`/desired-products/${id}/financial-analysis`, { method: "POST", body: JSON.stringify(payload), signal });
 export const createProductOffer = (id, payload) => request(`/desired-products/${id}/offers`, { method: "POST", body: JSON.stringify(payload) });
 export const updateProductOffer = (id, offerId, payload) => request(`/desired-products/${id}/offers/${offerId}`, { method: "PUT", body: JSON.stringify(payload) });
 export const deleteProductOffer = (id, offerId) => request(`/desired-products/${id}/offers/${offerId}`, { method: "DELETE" });
