@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
-import { CalendarClock, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ArrowUp, CalendarClock, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Dashboard from "../Dashboard.jsx";
 import { MonthField } from "../DateField.jsx";
 import TransactionForm from "../TransactionForm.jsx";
@@ -76,6 +76,7 @@ export default function AppShell() {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [dashboardLoadError, setDashboardLoadError] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [scrollToTopVisible, setScrollToTopVisible] = useState(false);
   const [mobileDockHidden, setMobileDockHidden] = useState(false);
   const [navigationMode, setNavigationMode] = useState(() => {
     try {
@@ -177,6 +178,7 @@ export default function AppShell() {
     if (document.body.style.position === "fixed") document.body.style.top = "0px";
     window.scrollTo(0, 0);
     setChromeHidden(false);
+    setScrollToTopVisible(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -191,8 +193,10 @@ export default function AppShell() {
       if (bodyLocked || pickerOpen) {
         anchor = y;
         setChromeHidden(false);
+        setScrollToTopVisible(false);
         return;
       }
+      setScrollToTopVisible(y > 320);
       if (y <= 8) {
         anchor = y;
         setChromeHidden(false);
@@ -217,6 +221,11 @@ export default function AppShell() {
       if (frame) cancelAnimationFrame(frame);
     };
   }, [bodyLocked, location.pathname]);
+
+  const scrollToTop = () => {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  };
 
   useEffect(() => {
     if (bodyLocked) {
@@ -1464,6 +1473,18 @@ export default function AppShell() {
         hidden={overlayOpen}
       />
       <MobileDock hidden={overlayOpen} onHiddenChange={setMobileDockHidden} onNew={() => openAddForm()} />
+
+      {scrollToTopVisible && !overlayOpen && (
+        <button
+          className={`scroll-to-top${location.pathname === "/meses" ? " scroll-to-top-months" : ["/", "/faturas", "/recebiveis"].includes(location.pathname) ? " scroll-to-top-above-fab" : ""}`}
+          type="button"
+          onClick={scrollToTop}
+          aria-label={t("actions.backToTop")}
+          title={t("actions.backToTop")}
+        >
+          <ArrowUp size={20} aria-hidden="true" />
+        </button>
+      )}
 
       <TransactionForm open={drawerOpen && !isInvoiceTransaction(editing)} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />

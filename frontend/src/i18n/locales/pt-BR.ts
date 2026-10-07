@@ -323,6 +323,7 @@ export const ptBR = {
     previous: "Anterior",
     next: "Próximo",
     currentMonth: "Mês atual",
+    backToTop: "Voltar ao topo",
     cancel: "Cancelar",
     save: "Salvar",
     edit: "Editar"

@@ -1055,7 +1055,7 @@ button:focus-visible {
   .dashboard-new-fab { display: none; }
   .month-today-fab {
     right: 16px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 104px);
     z-index: 47;
     display: inline-flex;
     transition: background .18s ease, transform 300ms cubic-bezier(.4,0,.2,1);
@@ -1112,9 +1112,68 @@ button:focus-visible {
   transform: translateY(calc(-100% - var(--sticky-header-lift)));
   pointer-events: none;
 }
+.scroll-to-top {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 46;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: 50%;
+  padding: 0;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--color-primary-dark);
+  box-shadow: 0 10px 26px rgba(6, 24, 16, .2);
+  -webkit-backdrop-filter: saturate(150%) blur(14px);
+  backdrop-filter: saturate(150%) blur(14px);
+  cursor: pointer;
+  animation: scroll-to-top-in 180ms ease-out both;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, bottom 220ms ease, transform .18s ease;
+}
+.scroll-to-top-above-fab { bottom: 98px; }
+.scroll-to-top-months { bottom: 98px; }
+.app-layout:has(.month-today-fab) .scroll-to-top-months { bottom: 154px; }
+.scroll-to-top:hover {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  transform: translateY(-2px);
+}
+.scroll-to-top:active { transform: translateY(0) scale(.94); }
+.scroll-to-top:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+[data-theme="dark"] .scroll-to-top,
+.dark .scroll-to-top { color: var(--color-primary-light); }
+[data-theme="dark"] .scroll-to-top:hover,
+.dark .scroll-to-top:hover { color: #fff; }
+@keyframes scroll-to-top-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (min-width: 941px) {
+  .app-layout.navigation-dock .scroll-to-top {
+    right: 28px;
+    bottom: 104px;
+  }
+  .app-layout.navigation-dock .scroll-to-top-above-fab { bottom: 98px; }
+  .app-layout.navigation-dock .scroll-to-top-months { bottom: 98px; }
+  .app-layout.navigation-dock:has(.month-today-fab) .scroll-to-top-months { bottom: 154px; }
+}
+@media (min-width: 768px) and (max-width: 940px) {
+  .app-layout.navigation-dock .scroll-to-top { bottom: 104px; }
+  .app-layout.navigation-dock .scroll-to-top-above-fab { bottom: 174px; }
+  .app-layout.navigation-dock .scroll-to-top-months { bottom: 174px; }
+  .app-layout.navigation-dock:has(.month-today-fab) .scroll-to-top-months { bottom: 230px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .page-header.page-header-sticky,
-  .mobile-topbar { transition: none; }
+  .mobile-topbar,
+  .scroll-to-top { animation: none; transition: none; }
 }
 .section-head {
   flex-wrap: wrap;
@@ -9203,6 +9262,18 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .app-layout.sidebar-open .content,
   .app-layout.sidebar-closed .content { padding-left: 0; }
   .content-inner { padding: calc(80px + env(safe-area-inset-top, 0px)) 16px 96px; }
+  .scroll-to-top,
+  .scroll-to-top-above-fab {
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    transition: border-color .18s ease, background .18s ease, color .18s ease, bottom 220ms ease, transform 300ms cubic-bezier(.4,0,.2,1);
+    will-change: transform;
+  }
+  .scroll-to-top-months { bottom: calc(env(safe-area-inset-bottom, 0px) + 104px); }
+  .app-layout:has(.month-today-fab) .scroll-to-top-months { bottom: calc(env(safe-area-inset-bottom, 0px) + 160px); }
+  .app-layout.mobile-dock-hidden .scroll-to-top { transform: translate3d(0, 68px, 0); }
+  .app-layout.mobile-dock-hidden .scroll-to-top:hover { transform: translate3d(0, 66px, 0); }
+  .app-layout.mobile-dock-hidden .scroll-to-top:active { transform: translate3d(0, 68px, 0) scale(.94); }
   .page-header, .section-head { align-items: flex-start; flex-direction: column; }
   .page-header.page-header-sticky {
     top: calc(56px + env(safe-area-inset-top, 0px));

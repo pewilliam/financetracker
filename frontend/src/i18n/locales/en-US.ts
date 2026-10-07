@@ -383,6 +383,7 @@ export const enUS = {
     previous: "Previous",
     next: "Next",
     currentMonth: "Current month",
+    backToTop: "Back to top",
     cancel: "Cancel",
     close: "Close",
     save: "Save",
