@@ -568,6 +568,8 @@ export const enUS = {
     nameOrDueDate: "NAME OR DUE DATE",
     status: "STATUS",
     color: "COLOR",
+    cards: "CARDS",
+    filterByCard: "Filter by card",
     searchPlaceholder: "Search by name, month or date",
     searchHint: "Search by name, month or invoice due date",
     all: "All",

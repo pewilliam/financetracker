@@ -29,12 +29,23 @@ export function groupInvoicesByMonth(invoices, language = "pt-BR") {
     });
 }
 
+export function invoiceMatchesFilters(invoice, filters, language = "pt-BR") {
+  const search = filters.search.trim().toLowerCase();
+  const [year, month] = yearMonthKey(invoice.due_date).split("-").map(Number);
+  const monthLabel = year && month ? formatMonthLabel(year, month, language) : "";
+  const matchesSearch = !search || `${invoice.name} ${invoice.due_date} ${monthLabel}`.toLowerCase().includes(search);
+  const invoiceStatus = invoice.paid ? "paid" : "open";
+  const matchesStatus = filters.status === "all" || filters.status === invoiceStatus;
+  const matchesCard = filters.cardIds.length === 0 || filters.cardIds.includes(String(invoice.credit_card_id));
+  return matchesSearch && matchesStatus && matchesCard;
+}
+
 export default function InvoicesPage({ invoices, cards = [], categories = [], expenseOptions = [], onManageReceivable, onCreateCategory, onLoadCategoryDetails, onLoadInvoiceItems, onEnsureExpenseContext, onOverlayChange, allowOverdueInvoiceEdits = false, addItem, addPurchase, updateItem, updateDueDate, createInstallment, deleteItem, deleteInstallmentItem, togglePaid, deleteInvoice, onViewInstallment, onCancelSubscription }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const location = useLocation();
   const navigate = useNavigate();
-  const [filters, setFilters] = useState({ search: "", status: "all", color: "all" });
+  const [filters, setFilters] = useState({ search: "", status: "all", cardIds: [] });
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedMonthGroups, setExpandedMonthGroups] = useState({});
@@ -61,7 +72,14 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
     onViewInstallment,
     onCancelSubscription,
   });
-  const invoiceColors = [...new Set(invoices.map((invoice) => normalizeInvoiceColor(invoice.color)))];
+  const invoiceCardOptions = [...new Map(invoices.map((invoice) => {
+    const card = cards.find((candidate) => Number(candidate.id) === Number(invoice.credit_card_id));
+    return [String(invoice.credit_card_id), {
+      id: String(invoice.credit_card_id),
+      name: card?.name || invoice.name,
+      color: normalizeInvoiceColor(card?.color || invoice.color),
+    }];
+  })).values()].sort((left, right) => left.name.localeCompare(right.name, language));
   const statusOptions = [
     { value: "all", label: tt("invoices.all", "Todas") },
     { value: "open", label: tt("invoices.pending", "Pendentes") },
@@ -92,16 +110,7 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
     navigate("/faturas", { replace: true, state: {} });
   }, [location.state?.addPurchaseCardId]);
 
-  const filteredInvoices = invoices.filter((invoice) => {
-    const search = filters.search.trim().toLowerCase();
-    const [year, month] = yearMonthKey(invoice.due_date).split("-").map(Number);
-    const monthLabel = year && month ? formatMonthLabel(year, month, language) : "";
-    const matchesSearch = !search || `${invoice.name} ${invoice.due_date} ${monthLabel}`.toLowerCase().includes(search);
-    const invoiceStatus = invoice.paid ? "paid" : "open";
-    const matchesStatus = filters.status === "all" || filters.status === invoiceStatus;
-    const matchesColor = filters.color === "all" || normalizeInvoiceColor(invoice.color) === filters.color;
-    return matchesSearch && matchesStatus && matchesColor;
-  });
+  const filteredInvoices = invoices.filter((invoice) => invoiceMatchesFilters(invoice, filters, language));
 
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -120,7 +129,7 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
   });
   const otherInvoiceMonthGroups = groupInvoicesByMonth(otherInvoices, language);
   const firstOtherInvoiceMonthId = otherInvoiceMonthGroups[0]?.id;
-  const activeFilterCount = Number(Boolean(filters.search.trim())) + Number(filters.status !== "all") + Number(filters.color !== "all");
+  const activeFilterCount = Number(Boolean(filters.search.trim())) + Number(filters.status !== "all") + Number(filters.cardIds.length > 0);
   const hasActiveFilters = activeFilterCount > 0;
   const invoiceGroups = [
     { id: "current", label: tt("invoices.currentMonth", "Vencem este mês"), items: currentMonthInvoices, empty: tt("invoices.currentMonthEmpty", "Sem faturas que vencem este mês.") },
@@ -155,7 +164,16 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
     setExpandedMonthGroups((current) => ({ ...current, [monthId]: !current[monthId] }));
   };
 
-  const resetFilters = () => setFilters({ search: "", status: "all", color: "all" });
+  const toggleCardFilter = (cardId) => {
+    setFilters((current) => ({
+      ...current,
+      cardIds: current.cardIds.includes(cardId)
+        ? current.cardIds.filter((id) => id !== cardId)
+        : [...current.cardIds, cardId],
+    }));
+  };
+
+  const resetFilters = () => setFilters({ search: "", status: "all", cardIds: [] });
 
   const renderInvoiceCards = (items) => (
     <div className="invoice-grid">{items.map((invoice) => (
@@ -211,20 +229,19 @@ export default function InvoicesPage({ invoices, cards = [], categories = [], ex
                   {statusOptions.map((option) => <button className={filters.status === option.value ? "active" : ""} type="button" key={option.value} onClick={() => setFilters({ ...filters, status: option.value })}>{filters.status === option.value && <Check size={13} />}{option.label}</button>)}
                 </div>
               </div>
-              <div className="invoice-filter-color">
-                <span>{tt("invoices.color", "Cor")}</span>
-                <div className="color-filter" aria-label="Filtrar por cor">
-                  <button className={filters.color === "all" ? "active" : ""} type="button" onClick={() => setFilters({ ...filters, color: "all" })}>{filters.color === "all" && <Check size={13} />}{tt("invoices.all", "Todas")}</button>
-                  {invoiceColors.map((color) => (
+              <div className="invoice-filter-card">
+                <span>{tt("invoices.cards", "Cartões")}</span>
+                <div className="invoice-card-filter" role="group" aria-label={tt("invoices.filterByCard", "Filtrar por cartão")}>
+                  <button className={filters.cardIds.length === 0 ? "active all" : "all"} type="button" onClick={() => setFilters({ ...filters, cardIds: [] })} aria-pressed={filters.cardIds.length === 0}>{filters.cardIds.length === 0 && <Check size={13} />}{tt("invoices.all", "Todos")}</button>
+                  {invoiceCardOptions.map((card) => (
                     <button
-                      className={filters.color === color ? "active" : ""}
-                      key={color}
+                      className={filters.cardIds.includes(card.id) ? "active" : ""}
+                      key={card.id}
                       type="button"
-                      style={{ "--invoice-color": color }}
-                      onClick={() => setFilters({ ...filters, color })}
-                      aria-label={`Filtrar cor ${color}`}
-                      title={`Filtrar cor ${color}`}
-                    />
+                      style={{ "--invoice-color": card.color }}
+                      onClick={() => toggleCardFilter(card.id)}
+                      aria-pressed={filters.cardIds.includes(card.id)}
+                    ><i />{card.name}{filters.cardIds.includes(card.id) && <Check size={13} />}</button>
                   ))}
                 </div>
               </div>

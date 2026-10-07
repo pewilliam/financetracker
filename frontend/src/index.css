@@ -4369,7 +4369,7 @@ button.month-balance-metric {
 }
 .invoice-filter-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 1.25fr) minmax(260px, 1fr) minmax(230px, .85fr);
+  grid-template-columns: minmax(300px, 1.25fr) minmax(280px, 1fr);
   gap: 16px;
   align-items: start;
   width: 100%;
@@ -4378,7 +4378,7 @@ button.month-balance-metric {
 }
 .invoice-filter label,
 .invoice-filter-status,
-.invoice-filter-color {
+.invoice-filter-card {
   display: grid;
   gap: 8px;
   color: var(--muted);
@@ -4390,13 +4390,14 @@ button.month-balance-metric {
   position: relative;
   width: 100%;
 }
-.invoice-filter-color {
+.invoice-filter-card {
+  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
 }
 .invoice-filter label span,
 .invoice-filter-status > span,
-.invoice-filter-color > span {
+.invoice-filter-card > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 900;
@@ -4489,7 +4490,7 @@ button.month-balance-metric {
   color: var(--muted);
   opacity: .78;
 }
-.color-filter {
+.invoice-card-filter {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -4497,53 +4498,50 @@ button.month-balance-metric {
   min-height: 46px;
   align-items: center;
   justify-content: flex-start;
-  padding: 5px 10px;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--card);
   box-shadow: inset 0 1px 0 rgba(0,0,0,0.02);
 }
-.color-filter button {
-  min-width: 34px;
+.invoice-card-filter button {
+  min-width: 0;
   height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--invoice-color, var(--card));
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 900;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-}
-.color-filter button:first-child {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 0 12px;
-  background: var(--card);
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 11px;
+  background: color-mix(in srgb, var(--muted) 5%, var(--card));
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: color .18s ease, background .18s ease, border-color .18s ease, transform .18s ease;
 }
-.color-filter button.active {
-  border-color: var(--primary);
-  box-shadow:
-    0 0 0 3px rgba(20,160,120,0.12),
-    0 6px 14px rgba(20,160,120,0.16);
+.invoice-card-filter button:hover {
+  border-color: color-mix(in srgb, var(--invoice-color, var(--primary)) 45%, var(--border));
+  color: var(--text);
+}
+.invoice-card-filter button.active {
+  border-color: color-mix(in srgb, var(--invoice-color, var(--primary)) 58%, var(--border));
+  background: color-mix(in srgb, var(--invoice-color, var(--primary)) 11%, var(--card));
+  color: var(--text);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--invoice-color, var(--primary)) 13%, transparent);
   transform: translateY(-1px);
 }
-.color-filter button:not(:first-child) {
-  width: 34px;
-  min-width: 34px;
-  padding: 0;
-  text-indent: -9999px;
-  overflow: hidden;
-  position: relative;
-}
-.color-filter button:not(:first-child)::after {
-  content: "";
-  position: absolute;
-  inset: 6px;
+.invoice-card-filter button i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--invoice-color, #14A078);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.2);
+  background: var(--invoice-color, var(--primary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--invoice-color, var(--primary)) 15%, transparent);
+}
+.invoice-card-filter button.all {
+  --invoice-color: var(--primary);
 }
 .invoice-filter-reset {
   display: inline-flex;
@@ -4590,8 +4588,8 @@ button.month-balance-metric {
 }
 .dark .invoice-filter input,
 .dark .invoice-filter select,
-.dark .color-filter,
-.dark .color-filter button:first-child {
+.dark .invoice-card-filter,
+.dark .invoice-card-filter button {
   background: rgba(17,24,39,0.32);
 }
 .dark .invoice-search-field,
@@ -9485,7 +9483,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .invoice-filter-head > strong { align-self: flex-start; }
   .invoice-filter-footer { align-items: stretch; }
   .invoice-filter-reset { justify-content: flex-end; }
-  .color-filter {
+  .invoice-card-filter {
     gap: 6px;
   }
   .template-row {
