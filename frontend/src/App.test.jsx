@@ -1,5 +1,4 @@
 import "@testing-library/jest-dom/vitest";
-import { ROUTER_FUTURE_FLAGS } from "./app/router.js";
 import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -35,7 +34,7 @@ vi.mock("./components/layout/AppShell.jsx", () => ({
 describe("application routing", () => {
   it.each(["/faturas", "/produtos-desejados/42"])("keeps the authenticated shell mounted when entering and leaving the dashboard from %s", async (route) => {
     const user = userEvent.setup();
-    render(<MemoryRouter future={ROUTER_FUTURE_FLAGS} initialEntries={[route]}><App /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={[route]}><App /></MemoryRouter>);
 
     await user.click(screen.getByRole("button", { name: "Marcar shell" }));
     await user.click(screen.getByRole("link", { name: "Início" }));

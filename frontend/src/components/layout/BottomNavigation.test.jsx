@@ -1,5 +1,4 @@
 import "@testing-library/jest-dom/vitest";
-import { ROUTER_FUTURE_FLAGS } from "../../app/router.js";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -9,7 +8,7 @@ import BottomNavigation from "./BottomNavigation.jsx";
 function renderNavigation({ route = "/", ...props } = {}) {
   window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
   return render(
-    <MemoryRouter future={ROUTER_FUTURE_FLAGS} initialEntries={[route]}>
+    <MemoryRouter initialEntries={[route]}>
       <I18nProvider>
         <BottomNavigation {...props} />
       </I18nProvider>

@@ -101,7 +101,7 @@ export default function FilterSelect({
   };
 
   const renderOptionContent = (option, compact = false) => (
-    <span className={`filter-select-option-text ${option.description ? "has-description" : ""} ${compact ? "compact" : ""}`}>
+    <span className={`filter-select-option-text ${option?.description ? "has-description" : ""} ${compact ? "compact" : ""}`}>
       <strong className="filter-select-value">{option?.label || "—"}</strong>
       {option?.description ? <small>{option.description}</small> : null}
     </span>

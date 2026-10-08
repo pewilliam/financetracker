@@ -1,5 +1,4 @@
 import "@testing-library/jest-dom/vitest";
-import { ROUTER_FUTURE_FLAGS } from "../app/router.js";
 import { render, screen, within, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -18,7 +17,7 @@ const product = { id: 1, name: "Notebook Dell", category: "Tecnologia", priority
 
 function show(route = "/produtos-desejados") {
   localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
-  return render(<MemoryRouter future={ROUTER_FUTURE_FLAGS} initialEntries={[route]}><I18nProvider><Routes>
+  return render(<MemoryRouter initialEntries={[route]}><I18nProvider><Routes>
     <Route path="/produtos-desejados" element={<DesiredProductsPage categories={[{ id: 3, name: "Tecnologia", color: "#64748B" }]} onCreateCategory={api.createCategory} />} />
     <Route path="/produtos-desejados/:productId" element={<DesiredProductsPage categories={[{ id: 3, name: "Tecnologia", color: "#64748B" }]} onCreateCategory={api.createCategory} />} />
   </Routes></I18nProvider></MemoryRouter>);

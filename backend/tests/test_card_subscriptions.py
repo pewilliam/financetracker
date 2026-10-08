@@ -2,6 +2,7 @@ import unittest
 from datetime import date
 from decimal import Decimal
 
+from freezegun import freeze_time
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -51,6 +52,7 @@ class ChargeCycleTests(unittest.TestCase):
                 self.assertEqual(invoice_period(closing_day, due_day, charge)[1], due)
 
 
+@freeze_time(TODAY.isoformat())
 class CardSubscriptionTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")

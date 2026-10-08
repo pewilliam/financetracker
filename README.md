@@ -42,7 +42,7 @@ backend e banco de dados rodando em servicos separados pelo Docker Compose.
   evolucao do schema em `backend/alembic/versions`.
 - **Pydantic/FastAPI Schemas**: define os contratos de entrada e saida da API,
   validando os dados recebidos e padronizando as respostas.
-- **python-jose, passlib e bcrypt**: compoem a base de seguranca do sistema,
+- **PyJWT e bcrypt**: compoem a base de seguranca do sistema,
   com geracao/validacao de tokens JWT e hash de senhas.
 - **python-dotenv**: carrega configuracoes de ambiente a partir do arquivo
   `.env`, como credenciais do banco e variaveis da aplicacao.
@@ -113,3 +113,20 @@ docker compose exec api python seed.py
 
 O frontend é publicado automaticamente pelo Cloudflare a cada atualização da
 branch `main`.
+
+## Testes e verificação
+
+Para rodar fora do Docker, use Node.js 24 e Python 3.12. Instale o frontend com
+`npm ci` dentro de `frontend` e o backend com
+`python -m pip install -r backend/requirements-dev.txt` em um ambiente virtual.
+
+- Em `frontend`: `npm test`, `npm run build` e `npm audit`.
+- Em `backend`, com `DATABASE_URL=sqlite://` e um `JWT_SECRET_KEY` de teste:
+  `python -W error -m unittest discover -s tests`.
+- Para testar no navegador, execute `npx playwright install --with-deps chromium`
+  em `frontend` e depois `python scripts/test-e2e.py` na raiz, após o build.
+  O comando inicia os servidores locais e cria um banco SQLite temporário.
+
+O GitHub Actions executa esses checks em pushes e pull requests, incluindo
+`pip-audit` das dependências do backend. Os testes de assinaturas fixam o relógio
+de acordo com os dados de teste, sem alterar a data usada pelo sistema.

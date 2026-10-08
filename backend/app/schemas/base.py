@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 from pydantic import Field
 
 
@@ -21,7 +21,16 @@ def serialize_datetime(value: datetime) -> str:
 
 
 class APIModel(BaseModel):
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_encoders={Decimal: float, datetime: serialize_datetime},
-    )
+    model_config = ConfigDict(from_attributes=True)
+
+    @staticmethod
+    def serialize_decimal(value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("*", mode="wrap", when_used="json", check_fields=False)
+    def serialize_api_field(self, value, handler):
+        if isinstance(value, Decimal):
+            return self.serialize_decimal(value)
+        if isinstance(value, datetime):
+            return serialize_datetime(value)
+        return handler(value)

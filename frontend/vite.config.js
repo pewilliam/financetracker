@@ -18,7 +18,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://api:8010",
+        target: process.env.KASHY_API_PROXY_TARGET || "http://api:8010",
         xfwd: true
       }
     }

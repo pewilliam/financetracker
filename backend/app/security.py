@@ -1,8 +1,9 @@
 import os
 import warnings
 from datetime import datetime, timedelta, timezone
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -19,18 +20,18 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "7"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8")[:72], bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     try:
-        return pwd_context.verify(password, password_hash)
-    except (TypeError, ValueError):
+        # Existing passlib bcrypt hashes use the first 72 UTF-8 bytes.
+        return bcrypt.checkpw(password.encode("utf-8")[:72], password_hash.encode("ascii"))
+    except (TypeError, ValueError, UnicodeError, AttributeError):
         return False
 
 
@@ -61,7 +62,7 @@ def get_current_user(
         token_version = int(payload.get("ver", 0))
         if user_id <= 0 or token_version < 0:
             raise credentials_exception
-    except (JWTError, TypeError, ValueError) as exc:
+    except (InvalidTokenError, TypeError, ValueError) as exc:
         raise credentials_exception from exc
 
     user = db.get(User, user_id)

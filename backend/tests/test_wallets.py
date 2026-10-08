@@ -82,7 +82,7 @@ class WalletTests(unittest.TestCase):
         self.assertEqual(summary["total_balance"], Decimal("1175.00"))
 
     def test_wallet_router_is_registered_in_the_application(self):
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/api/wallets", paths)
         self.assertIn("/api/wallets/transfers", paths)
         self.assertIn("/api/wallets/{wallet_id}/movements", paths)

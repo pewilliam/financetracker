@@ -1,5 +1,4 @@
 import "@testing-library/jest-dom/vitest";
-import { ROUTER_FUTURE_FLAGS } from "../app/router.js";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../i18n/index.ts";
@@ -12,7 +11,7 @@ vi.mock("../api/api.js", () => ({
 
 function renderSection(props = {}) {
   return render(
-    <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
+    <MemoryRouter>
       <I18nProvider>
         <DashboardWallets year={2026} month={9} {...props} />
       </I18nProvider>
@@ -102,7 +101,7 @@ describe("dashboard wallets", () => {
     expect(screen.getAllByText(/R\$\s*1\.260,00/).length).toBeGreaterThan(0);
 
     view.rerender(
-      <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
+      <MemoryRouter>
         <I18nProvider>
           <DashboardWallets year={2026} month={9} refreshKey={1} />
         </I18nProvider>
