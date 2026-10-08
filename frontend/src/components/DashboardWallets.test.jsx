@@ -1,7 +1,8 @@
 import "@testing-library/jest-dom/vitest";
+import { ROUTER_FUTURE_FLAGS } from "../app/router.js";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { I18nProvider } from "../i18n/index.ts";
+import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../i18n/index.ts";
 import DashboardWallets from "./DashboardWallets.jsx";
 import { getDashboardWallets } from "../api/api.js";
 
@@ -11,7 +12,7 @@ vi.mock("../api/api.js", () => ({
 
 function renderSection(props = {}) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
       <I18nProvider>
         <DashboardWallets year={2026} month={9} {...props} />
       </I18nProvider>
@@ -36,6 +37,7 @@ const checking = {
 
 describe("dashboard wallets", () => {
   beforeEach(() => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
     getDashboardWallets.mockReset();
   });
 
@@ -100,14 +102,15 @@ describe("dashboard wallets", () => {
     expect(screen.getAllByText(/R\$\s*1\.260,00/).length).toBeGreaterThan(0);
 
     view.rerender(
-      <MemoryRouter>
+      <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
         <I18nProvider>
           <DashboardWallets year={2026} month={9} refreshKey={1} />
         </I18nProvider>
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(screen.getByText(/R\$\s*900,00/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(/R\$\s*900,00/)).toHaveLength(2));
+    expect(screen.queryAllByText(/R\$\s*1\.260,00/)).toHaveLength(0);
     expect(getDashboardWallets).toHaveBeenCalledTimes(2);
   });
 });

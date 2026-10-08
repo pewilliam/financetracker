@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { ROUTER_FUTURE_FLAGS } from "../app/router.js";
 import { render, screen, within, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -17,7 +18,7 @@ const product = { id: 1, name: "Notebook Dell", category: "Tecnologia", priority
 
 function show(route = "/produtos-desejados") {
   localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
-  return render(<MemoryRouter initialEntries={[route]}><I18nProvider><Routes>
+  return render(<MemoryRouter future={ROUTER_FUTURE_FLAGS} initialEntries={[route]}><I18nProvider><Routes>
     <Route path="/produtos-desejados" element={<DesiredProductsPage categories={[{ id: 3, name: "Tecnologia", color: "#64748B" }]} onCreateCategory={api.createCategory} />} />
     <Route path="/produtos-desejados/:productId" element={<DesiredProductsPage categories={[{ id: 3, name: "Tecnologia", color: "#64748B" }]} onCreateCategory={api.createCategory} />} />
   </Routes></I18nProvider></MemoryRouter>);
@@ -35,6 +36,14 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   };
+  // JSDOM does not calculate layout; chart containers need explicit dimensions.
+  const getBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+    if (this.classList.contains("recharts-responsive-container")) {
+      return new DOMRect(0, 0, 800, 300);
+    }
+    return getBoundingClientRect.call(this);
+  });
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   window.scrollTo = vi.fn();
   window.matchMedia = vi.fn(() => ({ matches: false }));
@@ -53,6 +62,10 @@ beforeEach(() => {
       baseline_projected_closing: "1000.00", projected_closing: "900.00", cumulative_impact: "-100.00",
       income_commitment_percent: "10.00", negative_balance: false, negative_free_money: false }],
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 it("creates a product with target and navigates to its details", async () => {
