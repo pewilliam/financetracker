@@ -91,7 +91,14 @@ button:focus-visible {
   border-color: var(--focus-border);
   box-shadow: var(--focus-ring);
 }
-::-webkit-scrollbar { width: 4px; }
+/* Scroll padrão do Kashy365 (Início e Controle mensal).
+   Use .kashy-scrollbar em contêineres roláveis para explicitar o estilo. */
+:root,
+.kashy-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) transparent;
+}
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--color-primary);
