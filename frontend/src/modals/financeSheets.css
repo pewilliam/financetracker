@@ -146,6 +146,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scrollbar-color: var(--primary) transparent;
   scrollbar-gutter: stable;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
@@ -160,7 +161,7 @@
 .finance-sheet-scroll::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  background: var(--primary);
   background-clip: padding-box;
 }
 
