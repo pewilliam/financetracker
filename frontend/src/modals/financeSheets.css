@@ -145,8 +145,6 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--primary) transparent;
   scrollbar-gutter: stable;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
@@ -154,15 +152,6 @@
 
 .finance-sheet--wallet .finance-sheet-scroll {
   max-height: calc(100dvh - 158px);
-}
-
-.finance-sheet-scroll::-webkit-scrollbar { width: 7px; }
-.finance-sheet-scroll::-webkit-scrollbar-track { background: transparent; }
-.finance-sheet-scroll::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background: var(--primary);
-  background-clip: padding-box;
 }
 
 .finance-sheet-summary--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
