@@ -92,11 +92,21 @@ button:focus-visible {
   box-shadow: var(--focus-ring);
 }
 /* Scroll padrão do Kashy365 (Início e Controle mensal).
-   Use .kashy-scrollbar em contêineres roláveis para explicitar o estilo. */
-:root,
+   Aplicado automaticamente a páginas, modais, campos e rolagens horizontais.
+   A classe continua disponível para explicitar o padrão nos componentes. */
+*,
 .kashy-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--color-primary) transparent;
+}
+/* Chromium e Safari usam as regras WebKit para manter a espessura de 4px.
+   As propriedades padrão, quando diferentes de auto, sobrepõem essas regras. */
+@supports selector(::-webkit-scrollbar) {
+  *,
+  .kashy-scrollbar {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
 }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -104,6 +114,7 @@ button:focus-visible {
   background: var(--color-primary);
   border-radius: 4px;
 }
+::-webkit-scrollbar-corner { background: transparent; }
 
 .center-screen, .auth-page {
   min-height: 100vh;
@@ -314,8 +325,6 @@ button:focus-visible {
   overflow-x: hidden;
   padding: 2px 0 12px;
 }
-.sidebar-nav::-webkit-scrollbar { width: 3px; }
-.sidebar-nav::-webkit-scrollbar-thumb { background: rgba(100,220,140,0.34); }
 .sidebar-action {
   position: relative;
   display: flex;
@@ -1389,7 +1398,7 @@ button:focus-visible {
 .date-period-options button.selected { border-color: var(--primary); background: var(--primary); color: #fff; }
 .date-period-options button:disabled { opacity: .3; cursor: not-allowed; }
 .date-month-options { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 4px 0 3px; }
-.date-year-options { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 38px; max-height: 132px; overflow-y: auto; padding: 3px 4px 3px 0; overscroll-behavior: contain; scrollbar-width: thin; }
+.date-year-options { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 38px; max-height: 132px; overflow-y: auto; padding: 3px 4px 3px 0; overscroll-behavior: contain; }
 @keyframes date-period-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .date-period-options { animation: none; } }
 .date-field.compact .date-input-shell {
@@ -1919,10 +1928,7 @@ select {
   padding: 16px 22px 22px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-primary) transparent;
 }
-.categories-detail-list::-webkit-scrollbar { width: 8px; }
 .categories-detail-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; background: color-mix(in srgb, var(--card) 96%, var(--border)); transition: border-color .16s ease, background .16s ease; }
 .categories-detail-item:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); background: color-mix(in srgb, var(--primary) 4%, var(--card)); }
 .categories-detail-item > i { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); font-style: normal; }
@@ -2010,8 +2016,6 @@ select {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scrollbar-color: var(--flow-accent) transparent;
-  scrollbar-width: thin;
 }
 .monthly-flow-day {
   display: grid;
@@ -2348,8 +2352,6 @@ select {
     overflow-y: hidden;
     overscroll-behavior: contain;
     border-radius: 16px 16px 0 0;
-    scrollbar-color: var(--flow-accent) transparent;
-    scrollbar-width: thin;
   }
   .monthly-flow-header { grid-template-columns: 40px minmax(0, 1fr) 34px; padding: 15px 16px 12px; }
   .monthly-flow-header > i { width: 40px; height: 40px; }
@@ -2364,8 +2366,6 @@ select {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-color: var(--flow-accent) transparent;
-    scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
   }
@@ -6476,9 +6476,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   overflow-y: hidden;
   scroll-behavior: smooth;
   padding: 8px 0 12px;
-  scrollbar-color: rgba(20,160,120,0.72) rgba(148,163,184,0.18);
-  scrollbar-width: thin;
-  -ms-overflow-style: auto;
 }
 .month-chip {
   min-width: 88px;
@@ -6577,20 +6574,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-modal .duplicate-summary {
   font-size: 14px;
   font-weight: 800;
-}
-.invoice-selector .month-chip-row::-webkit-scrollbar {
-  height: 7px;
-}
-.invoice-selector .month-chip-row::-webkit-scrollbar-track {
-  border-radius: 999px;
-  background: rgba(148,163,184,0.18);
-}
-.invoice-selector .month-chip-row::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(20,160,120,0.85), rgba(60,200,140,0.85));
-}
-.invoice-selector .month-chip-row::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(90deg, rgba(20,160,120,1), rgba(60,200,140,1));
 }
 @keyframes selector-slide-down {
   from {
@@ -7330,21 +7313,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scrollbar-color: color-mix(in srgb, var(--primary) 55%, transparent) transparent;
-  scrollbar-width: thin;
-}
-.simulation-panel::-webkit-scrollbar {
-  width: 7px;
-}
-.simulation-panel::-webkit-scrollbar-track {
-  background: transparent;
-}
-.simulation-panel::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 55%, transparent);
-}
-.simulation-panel::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--primary) 75%, transparent);
 }
 .simulation-panel-head {
   display: flex;
@@ -10229,8 +10197,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 
 @media (max-width: 767px) {
   .settings-page { gap: 26px; }
-  .settings-section-nav { display: flex; overflow-x: auto; scrollbar-width: none; }
-  .settings-section-nav::-webkit-scrollbar { display: none; }
+  .settings-section-nav { display: flex; overflow-x: auto; }
   .settings-section-nav button { flex: 0 0 auto; min-width: 132px; }
   .settings-hero { grid-template-columns: auto minmax(0, 1fr); padding: 18px; }
   .settings-hero-balance { grid-column: 1 / -1; justify-items: start; width: 100%; border-top: 1px solid var(--border); padding-top: 14px; }
@@ -11729,7 +11696,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .wallet-card-flow span:first-child svg { color: var(--income); }
 .wallet-card-flow span:last-child svg { color: var(--expense); }
 .wallet-card-flow span strong { overflow: hidden; margin-left: auto; color: var(--text); font-size: .72rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.wallet-detail { position: sticky; top: 18px; max-height: calc(100dvh - 36px); overflow-y: auto; border-color: color-mix(in srgb, var(--wallet-color) 58%, var(--border)); padding: 22px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--wallet-color) 10%, transparent), 0 10px 28px color-mix(in srgb, var(--wallet-color) 7%, transparent); scrollbar-width: thin; animation: wallet-detail-enter .46s cubic-bezier(.22, 1, .36, 1) both; }
+.wallet-detail { position: sticky; top: 18px; max-height: calc(100dvh - 36px); overflow-y: auto; border-color: color-mix(in srgb, var(--wallet-color) 58%, var(--border)); padding: 22px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--wallet-color) 10%, transparent), 0 10px 28px color-mix(in srgb, var(--wallet-color) 7%, transparent); animation: wallet-detail-enter .46s cubic-bezier(.22, 1, .36, 1) both; }
 .wallet-detail-backdrop { display: none; }
 .wallet-detail.closing { pointer-events: none; animation: wallet-detail-exit .4s cubic-bezier(.4, 0, 1, 1) both; }
 @keyframes wallet-detail-enter { from { opacity: 0; transform: translateX(22px) scale(.985); } to { opacity: 1; transform: translateX(0) scale(1); } }
@@ -11765,7 +11732,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 @keyframes wallet-history-progress { from { transform: translateX(0); opacity: .45; } to { transform: translateX(194%); opacity: 1; } }
 .wallet-history-results > .wallet-history-state { min-height: 300px; }
 .wallet-history-state { display: flex; justify-content: center; gap: 7px; align-items: center; min-height: 104px; padding: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: .8rem; text-align: center; }
-.wallet-movement-list { display: grid; gap: 5px; max-height: 350px; overflow: auto; padding-right: 4px; scrollbar-width: thin; }
+.wallet-movement-list { display: grid; gap: 5px; max-height: 350px; overflow: auto; padding-right: 4px; }
 .wallet-movement-day { display: grid; }
 .wallet-movement-day h4 { position: sticky; z-index: 1; top: 0; margin: 0; padding: 8px 2px 6px; border-bottom: 1px solid var(--border); color: var(--muted); background: var(--card); font-size: .66rem; font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .wallet-movement { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: center; min-height: 49px; padding: 8px 2px; border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
