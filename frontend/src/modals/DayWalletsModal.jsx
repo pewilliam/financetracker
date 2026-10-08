@@ -97,7 +97,7 @@ export default function DayWalletsModal({ date, refreshKey = "", onClose }) {
           </div>
         )}
 
-        <div className="finance-sheet-scroll">
+        <div className="finance-sheet-scroll kashy-scrollbar">
           <div className="finance-sheet-body">
             {loading ? (
               <div className="finance-sheet-status"><Loader2 className="spin" size={22} /><span>{tt("monthlyTable.dayWalletsLoading", "Carregando saldos…")}</span></div>
