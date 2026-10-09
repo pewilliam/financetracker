@@ -211,7 +211,41 @@ export default function InstallmentDetailsModal({
           <span className="transaction-entry-icon"><Layers3 size={21} /></span>
           <div className="transaction-entry-heading">
             <p>{copy("DETALHES DA COMPRA", "PURCHASE DETAILS")}</p>
-            <h2 id="installment-details-title">{editingPurchase ? purchaseName || purchase.description : purchase.description}</h2>
+            {editingPurchase ? (
+              <>
+                <span
+                  className="installment-title-edit"
+                  style={{ "--title-character-count": Math.min(Math.max(purchaseName.length + 1, 12), 42) }}
+                >
+                  <input
+                    id="installment-details-title"
+                    className="installment-title-input"
+                    aria-label={copy("Nome da compra", "Purchase name")}
+                    value={purchaseName}
+                    onChange={(event) => { setPurchaseName(event.target.value); setPurchaseNameError(""); }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void togglePurchaseEditor();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setPurchaseName(purchase.description || "");
+                        setPurchaseNameError("");
+                        setEditingPurchase(false);
+                      }
+                    }}
+                    disabled={savingPurchase}
+                    maxLength={230}
+                    aria-invalid={Boolean(purchaseNameError)}
+                  />
+                  <Pencil size={13} aria-hidden="true" />
+                </span>
+                {purchaseNameError && <small className="installment-title-error" role="alert">{purchaseNameError}</small>}
+              </>
+            ) : (
+              <h2 id="installment-details-title">{purchase.description}</h2>
+            )}
             <div className="installment-details-heading-meta">
               <span>{purchase.paid_installments} {copy("de", "of")} {purchase.installment_count} {copy("parcelas pagas", "installments paid")}</span>
               <div className="installment-details-categories">
@@ -252,24 +286,6 @@ export default function InstallmentDetailsModal({
 
           {editingPurchase && (
             <section className="installment-purchase-editor">
-              <label>
-                <span>{copy("Nome da compra", "Purchase name")}</span>
-                <input
-                  value={purchaseName}
-                  onChange={(event) => { setPurchaseName(event.target.value); setPurchaseNameError(""); }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void togglePurchaseEditor();
-                    }
-                  }}
-                  disabled={savingPurchase}
-                  maxLength={230}
-                  aria-invalid={Boolean(purchaseNameError)}
-                  autoFocus
-                />
-                {purchaseNameError && <small className="field-error" role="alert">{purchaseNameError}</small>}
-              </label>
               <div className="installment-purchase-field">
                 <span>{copy("Categorias da compra", "Purchase categories")}</span>
                 <div>

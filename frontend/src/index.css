@@ -12685,6 +12685,57 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-details-titlebar { align-items: start; }
 .installment-details-titlebar .transaction-entry-icon { margin-top: 1px; }
 .installment-details-titlebar .transaction-entry-heading h2 { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; font-size: 19px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.installment-title-edit {
+  width: min(calc(var(--title-character-count, 20) * 1ch + 38px), 100%);
+  max-width: 560px;
+  height: 31px;
+  margin: -3px 0 -2px -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-left: 3px solid color-mix(in srgb, var(--primary) 78%, var(--border));
+  border-radius: 7px;
+  padding: 2px 7px 3px 5px;
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  color: var(--text);
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.installment-title-edit > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+  opacity: .8;
+}
+.installment-title-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  padding: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+}
+.installment-title-input:focus {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.installment-title-edit:hover {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  border-left-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.installment-title-edit:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  border-left-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.installment-title-error { display: block; margin-top: 4px; color: var(--expense); font-size: 10px; font-weight: 700; }
 .installment-details-heading-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; margin-top: 6px; }
 .installment-details-heading-meta > span { color: var(--muted); font-size: 10px; font-weight: 750; }
 .installment-details-actions .btn { flex: 0 0 auto; width: auto; }
@@ -12708,6 +12759,8 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   .installment-details-titlebar { grid-template-columns: 36px minmax(0, 1fr) 34px; gap: 9px; padding: 12px 14px; }
   .installment-details-titlebar .transaction-entry-icon { width: 36px; height: 36px; }
   .installment-details-titlebar .transaction-entry-heading h2 { font-size: 16px; }
+  .installment-title-edit { height: 30px; }
+  .installment-title-input { font-size: 16px; }
   .installment-details-heading-meta { align-items: flex-start; flex-direction: column; }
   .installment-delete-layer { align-items: end; padding: 0; }
   .installment-delete-modal { position: fixed; inset: auto 0 0; width: 100%; max-width: none; max-height: 92dvh; border-radius: 16px 16px 0 0; animation: modal-sheet-up .24s ease both; }
@@ -12932,8 +12985,6 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .installment-purchase-editor .installment-purchase-field > span { color: var(--muted); font-size: 10px; font-weight: 800; }
 .installment-purchase-editor label > div,
 .installment-purchase-editor .installment-purchase-field > div { display: grid; grid-template-columns: minmax(0, 320px) 18px; align-items: center; gap: 7px; }
-.installment-purchase-editor label > input { width: min(100%, 420px); }
-.installment-purchase-editor .field-error { color: var(--expense); font-size: 10px; font-weight: 700; }
 .installment-purchase-editor p { margin: 0; color: var(--muted); font-size: 10px; }
 .installment-items-section { min-height: 0; display: grid; gap: 9px; }
 .installment-items-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
