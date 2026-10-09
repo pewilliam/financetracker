@@ -472,6 +472,13 @@ export function updateInstallmentCategory(id, categoryIds) {
   });
 }
 
+export function updateInstallmentPurchase(id, payload) {
+  return request(`/installments/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function deleteInstallment(id) {
   return request(`/installments/${id}`, { method: "DELETE" });
 }

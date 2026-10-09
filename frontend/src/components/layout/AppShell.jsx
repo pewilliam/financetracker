@@ -14,6 +14,7 @@ import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
 import ReceivableModal from "../../modals/ReceivableModal.jsx";
 import ReceivableDetailsModal from "../../modals/ReceivableDetailsModal.jsx";
+import useBodyScrollLock from "../../hooks/useBodyScrollLock.js";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
@@ -25,7 +26,7 @@ import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
 import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, mergeCreatedTransaction, moveTransactionInMonth, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInstallmentPurchase, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 const Dashboard = lazy(() => import("../Dashboard.jsx"));
@@ -228,30 +229,7 @@ export default function AppShell() {
     window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "auto" : "smooth" });
   };
 
-  useEffect(() => {
-    if (bodyLocked) {
-      const scrollY = window.scrollY;
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = "100%";
-      document.body.style.overflow = "";
-    } else {
-      const scrollY = Math.abs(parseInt(document.body.style.top || "0", 10));
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      document.body.style.overflow = "";
-      if (scrollY) window.scrollTo(0, scrollY);
-    }
-    return () => {
-      const scrollY = Math.abs(parseInt(document.body.style.top || "0", 10));
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-      document.body.style.overflow = "";
-      if (scrollY) window.scrollTo(0, scrollY);
-    };
-  }, [bodyLocked]);
+  useBodyScrollLock(bodyLocked);
 
   useEffect(() => {
     if (receivableDetailsId && !receivableDetailsGroup) setReceivableDetailsId(null);
@@ -973,6 +951,20 @@ export default function AppShell() {
     }
   };
 
+  const saveInstallmentPurchase = async (id, payload) => {
+    try {
+      const updated = await updateInstallmentPurchase(id, payload);
+      setInstallmentDetails(updated);
+      setInstallmentsRevision((current) => current + 1);
+      toast.success("Nome da compra atualizado");
+      await syncInvoiceAndMonthCollections();
+      return updated;
+    } catch (error) {
+      toast.error("Erro ao atualizar o nome da compra");
+      throw error;
+    }
+  };
+
   const showInstallmentDetails = async (id, startEditing = false) => {
     try {
       const purchase = await getInstallment(id);
@@ -1492,7 +1484,7 @@ export default function AppShell() {
       <TransactionForm open={drawerOpen && !isInvoiceTransaction(editing)} initial={editing} date={selectedDate} categories={categories} wallets={walletSummary.wallets} expenseOption={editing ? receivableExpenseOptions.find((option) => option.source_type === "transaction" && option.source_id === editing.id) : null} expenseOptions={receivableExpenseOptions} onManageReceivable={manageExpenseReceivable} onCreateCategory={saveCategory} onOpenBatch={() => { setDrawerOpen(false); setBatchModalOpen(true); }} onClose={() => setDrawerOpen(false)} onSave={saveTransaction} />
       <BatchTransactionModal open={batchModalOpen} year={year} month={month} categories={categories} wallets={walletSummary.wallets} onCreateCategory={saveCategory} onOpenSingle={() => { setBatchModalOpen(false); openAddForm(selectedDate || todayIsoDate()); }} onClose={() => setBatchModalOpen(false)} onSave={saveTransactionBatch} />
       {installmentModal && <InstallmentModal form={installmentForm} setForm={setInstallmentForm} cards={cards} categories={categories} onCreateCategory={saveCategory} onSubmit={createNewInstallment} onClose={() => setInstallmentModal(false)} />}
-      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onRequestDelete={requestInstallmentDelete} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} />}
+      {installmentDetails && <InstallmentDetailsModal purchase={installmentDetails} invoices={invoices} categories={categories} onCreateCategory={saveCategory} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} onClose={() => setInstallmentDetails(null)} onRequestDelete={requestInstallmentDelete} onSaveItem={saveInstallmentItem} onSaveCategory={saveInstallmentCategory} onSavePurchase={saveInstallmentPurchase} />}
       {installmentToDelete && <DeleteInstallmentModal purchase={installmentToDelete} deleting={deletingInstallment} onClose={() => setInstallmentToDelete(null)} onConfirm={() => removeInstallment(installmentToDelete.id)} />}
       {receivableDetailsGroup && (
         <ReceivableDetailsModal

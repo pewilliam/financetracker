@@ -35,6 +35,10 @@ class InstallmentCategoryUpdate(APIModel):
     category_ids: Optional[List[int]] = None
 
 
+class InstallmentPurchaseUpdate(APIModel):
+    description: str = Field(min_length=1, max_length=230)
+
+
 class InstallmentItemOut(APIModel):
     id: int
     invoice_id: Optional[int] = None

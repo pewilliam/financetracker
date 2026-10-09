@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import Category, CreditCard, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, User
-from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPageOut, InstallmentPurchaseOut
+from app.schemas.installments import InstallmentCategoryUpdate, InstallmentCreate, InstallmentItemUpdate, InstallmentPageOut, InstallmentPurchaseOut, InstallmentPurchaseUpdate
 from app.security import get_current_user
 from app.services.credit_cards import add_months, first_installment_due_allowed, get_or_create_invoice, invoice_period
 from app.services.invoices import invoice_accepts_new_charges, recalculate_invoice_total
@@ -517,6 +517,42 @@ def update_installment_category(
         .filter(InstallmentPurchase.id == purchase_id, InstallmentPurchase.user_id == current_user.id)
         .first()
     )
+    return _purchase_summary(purchase)
+
+
+@router.patch("/{purchase_id}", response_model=InstallmentPurchaseOut)
+def update_installment_purchase(
+    purchase_id: int,
+    payload: InstallmentPurchaseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    purchase = (
+        db.query(InstallmentPurchase)
+        .options(
+            selectinload(InstallmentPurchase.items)
+            .selectinload(InstallmentItem.invoice)
+            .selectinload(Invoice.card),
+        )
+        .filter(InstallmentPurchase.id == purchase_id, InstallmentPurchase.user_id == current_user.id)
+        .first()
+    )
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Installment purchase not found")
+
+    description = payload.description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="Description is required")
+
+    purchase.description = description
+    for item in purchase.items:
+        item.description = f"{description} ({item.installment_number}/{purchase.installment_count})"
+        if item.refund_invoice_item_id:
+            refund_item = db.get(InvoiceItem, item.refund_invoice_item_id)
+            if refund_item:
+                refund_item.description = f"Reembolso: {item.description}"
+
+    db.commit()
     return _purchase_summary(purchase)
 
 

@@ -36,6 +36,7 @@ export default function InstallmentDetailsModal({
   onRequestDelete,
   onSaveItem,
   onSaveCategory,
+  onSavePurchase,
 }) {
   const { language } = useI18n();
   const copy = (pt, en) => (language === "en-US" ? en : pt);
@@ -46,10 +47,14 @@ export default function InstallmentDetailsModal({
   );
   const [savingCategory, setSavingCategory] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState(Boolean(purchase.__startEditing));
+  const [purchaseName, setPurchaseName] = useState(purchase.description || "");
+  const [purchaseNameError, setPurchaseNameError] = useState("");
+  const [savingPurchase, setSavingPurchase] = useState(false);
   const nextId = purchase.next_installment?.id;
   const categoryList = purchaseCategories(purchase);
   const firstInvoice = purchase.items?.find((entry) => entry.invoice)?.invoice;
   const purchaseDate = purchase.created_at ? formatDateShort(purchase.created_at.slice(0, 10), language) : null;
+  const modalBusy = Boolean(editingItem) || savingCategory || savingPurchase;
 
   const itemGroups = useMemo(() => {
     const open = [];
@@ -82,7 +87,7 @@ export default function InstallmentDetailsModal({
 
   useModalLifecycle({
     onClose,
-    busy: Boolean(editingItem) || savingCategory,
+    busy: modalBusy,
     initialFocusRef: closeButtonRef,
     autoFocus: !editingItem,
   });
@@ -90,6 +95,10 @@ export default function InstallmentDetailsModal({
   useEffect(() => {
     setCategoryIds((purchase.category_ids?.length ? purchase.category_ids : purchase.category_id ? [purchase.category_id] : []).map(String));
   }, [purchase.category_id, purchase.category_ids]);
+
+  useEffect(() => {
+    setPurchaseName(purchase.description || "");
+  }, [purchase.id, purchase.description]);
 
   useEffect(() => {
     if (!editingItem) return;
@@ -107,6 +116,34 @@ export default function InstallmentDetailsModal({
       setCategoryIds(previous);
     } finally {
       setSavingCategory(false);
+    }
+  };
+
+  const togglePurchaseEditor = async () => {
+    if (!editingPurchase) {
+      setPurchaseName(purchase.description || "");
+      setPurchaseNameError("");
+      setEditingPurchase(true);
+      return;
+    }
+
+    const description = purchaseName.trim();
+    if (!description) {
+      setPurchaseNameError(copy("Informe o nome da compra.", "Enter the purchase name."));
+      return;
+    }
+    if (description === purchase.description) {
+      setEditingPurchase(false);
+      return;
+    }
+
+    setSavingPurchase(true);
+    setPurchaseNameError("");
+    try {
+      await onSavePurchase(purchase.id, { description });
+      setEditingPurchase(false);
+    } finally {
+      setSavingPurchase(false);
     }
   };
 
@@ -168,13 +205,13 @@ export default function InstallmentDetailsModal({
 
   return createPortal(
     <div className="modal-layer installment-details-layer">
-      <button className="modal-backdrop" type="button" onClick={editingItem ? undefined : onClose} aria-label={copy("Fechar detalhes", "Close details")} />
+      <button className="modal-backdrop" type="button" onClick={modalBusy ? undefined : onClose} aria-label={copy("Fechar detalhes", "Close details")} />
       <div className="modal-card invoice-modal installment-details-modal" role="dialog" aria-modal="true" aria-labelledby="installment-details-title">
         <header className="transaction-entry-titlebar installment-entry-titlebar compact installment-details-titlebar">
           <span className="transaction-entry-icon"><Layers3 size={21} /></span>
           <div className="transaction-entry-heading">
             <p>{copy("DETALHES DA COMPRA", "PURCHASE DETAILS")}</p>
-            <h2 id="installment-details-title">{purchase.description}</h2>
+            <h2 id="installment-details-title">{editingPurchase ? purchaseName || purchase.description : purchase.description}</h2>
             <div className="installment-details-heading-meta">
               <span>{purchase.paid_installments} {copy("de", "of")} {purchase.installment_count} {copy("parcelas pagas", "installments paid")}</span>
               <div className="installment-details-categories">
@@ -191,7 +228,7 @@ export default function InstallmentDetailsModal({
             className="icon-btn"
             type="button"
             onClick={onClose}
-            disabled={Boolean(editingItem)}
+            disabled={modalBusy}
             aria-label={copy("Fechar modal", "Close modal")}
             title={copy("Fechar", "Close")}
           >
@@ -215,6 +252,24 @@ export default function InstallmentDetailsModal({
 
           {editingPurchase && (
             <section className="installment-purchase-editor">
+              <label>
+                <span>{copy("Nome da compra", "Purchase name")}</span>
+                <input
+                  value={purchaseName}
+                  onChange={(event) => { setPurchaseName(event.target.value); setPurchaseNameError(""); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void togglePurchaseEditor();
+                    }
+                  }}
+                  disabled={savingPurchase}
+                  maxLength={230}
+                  aria-invalid={Boolean(purchaseNameError)}
+                  autoFocus
+                />
+                {purchaseNameError && <small className="field-error" role="alert">{purchaseNameError}</small>}
+              </label>
               <div className="installment-purchase-field">
                 <span>{copy("Categorias da compra", "Purchase categories")}</span>
                 <div>
@@ -263,16 +318,16 @@ export default function InstallmentDetailsModal({
         </div>
 
         <footer className="modal-actions installment-details-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={Boolean(editingItem)}>{copy("Fechar", "Close")}</button>
+          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={modalBusy}>{copy("Fechar", "Close")}</button>
           <button
             className={`btn btn-ghost ${editingPurchase ? "active" : ""}`}
             type="button"
-            disabled={Boolean(editingItem)}
-            onClick={() => setEditingPurchase((current) => !current)}
+            disabled={modalBusy}
+            onClick={() => void togglePurchaseEditor()}
           >
-            <Pencil size={15} /> {editingPurchase ? copy("Concluir edição", "Done editing") : copy("Editar compra", "Edit purchase")}
+            {savingPurchase ? <Loader2 className="spin" size={15} /> : <Pencil size={15} />} {editingPurchase ? copy("Salvar edição", "Save changes") : copy("Editar compra", "Edit purchase")}
           </button>
-          <button className="btn btn-ghost danger-text" type="button" disabled={Boolean(editingItem)} onClick={() => onRequestDelete(purchase)}>
+          <button className="btn btn-ghost danger-text installment-delete-action" type="button" disabled={modalBusy} onClick={() => onRequestDelete(purchase)}>
             <Trash2 size={15} /> {copy("Remover", "Remove")}
           </button>
         </footer>
