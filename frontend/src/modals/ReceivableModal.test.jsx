@@ -67,7 +67,9 @@ describe("ReceivableModal expense defaults", () => {
     const amountInput = container.querySelector('.receivable-form-row input[inputmode="decimal"]');
     expect(countInput).toHaveValue("4");
     expect(amountInput).toHaveValue("R$ 250,00");
-    expect(screen.getAllByText("R$ 62,50")).toHaveLength(4);
+    const installmentInputs = screen.getAllByRole("textbox", { name: /valor da parcela \d\/4/i });
+    expect(installmentInputs).toHaveLength(4);
+    installmentInputs.forEach((input) => expect(input).toHaveValue("R$ 62,50"));
   });
 
   it("prefills a one-time purchase as one receivable with the full amount", async () => {

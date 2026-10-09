@@ -24,7 +24,7 @@ export function formatMoney(value, locale = activeLocale) {
     )).join("");
   }
 
-  return formatter.format(amount);
+  return formatter.format(amount).replace(/[\u00a0\u202f]/g, " ");
 }
 
 export function formatMonthLabel(year, month, locale = activeLocale) {
