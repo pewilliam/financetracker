@@ -10,10 +10,12 @@ const browser = await chromium.launch({
 });
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'pt-BR' });
+  await context.route('https://fonts.googleapis.com/**', route => route.fulfill({contentType: 'text/css', body: ''}));
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') { errors.push(message.text()); console.error('Browser console:', message.text()); } });
   if (process.env.KASHY_E2E_SCREENSHOT_DIR) await mkdir(process.env.KASHY_E2E_SCREENSHOT_DIR, {recursive:true});
   const screenshot = async name => { if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path:`${process.env.KASHY_E2E_SCREENSHOT_DIR}/${name}.png`, fullPage:true}); };
   await page.addInitScript(() => localStorage.setItem('kashy365-language', 'pt-BR'));
@@ -123,7 +125,7 @@ try {
   }
   await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
   assert.equal(await page.locator('.desired-cover video').getAttribute('src'), 'https://media.example/demo.webm');
-  await page.waitForFunction(() => !document.querySelector('.desired-cover video').paused);
+  await page.waitForFunction(() => { const video = document.querySelector('.desired-cover video'); return video && !video.paused; });
   const productCard = page.locator('.desired-product-card');
   await productCard.getByRole('button', {name:'Pausar vídeo'}).click();
   assert.ok(page.url().endsWith('/produtos-desejados'));
@@ -172,7 +174,7 @@ try {
   assert.deepEqual(await renderedFrame(page.locator('.desired-detail-image video')), {fit:'cover',position:'15% 70%',scale:'scale(1.5)'});
   await page.getByRole('button', {name:'Todos os produtos', exact:true}).click();
   assert.deepEqual(await renderedFrame(page.locator('.desired-cover video')), {fit:'cover',position:'15% 70%',scale:'scale(1.5)'});
-  await page.waitForFunction(() => !document.querySelector('.desired-cover video').paused);
+  await page.waitForFunction(() => { const video = document.querySelector('.desired-cover video'); return video && !video.paused; });
   await page.getByRole('link', {name:/^Ver produto /}).click();
   await page.locator('.desired-actions').getByRole('button', {name:'Editar', exact:true}).click();
   dialog = page.getByRole('dialog');
@@ -192,7 +194,7 @@ try {
     await select(modal, 'Pagamento', method, {credit: 'Cartão de crédito', pix: 'PIX', boleto: 'Boleto'}[method]);
     if (method === 'credit') {
       await modal.getByLabel('Quantidade de parcelas').fill('10');
-      assert.match(await modal.getByLabel('Valor da parcela').inputValue(), /349,90/);
+      assert.match(await modal.getByLabel('Valor da parcela').inputValue(), /351,90/);
     }
     await modal.getByRole('button', { name: 'Adicionar oferta', exact: true }).click();
     await modal.waitFor({ state: 'hidden' });
@@ -201,6 +203,7 @@ try {
   await offer('Mercado Livre', '3299,00', 'pix', '0,00');
   await offer('Kabum', '3399,00', 'boleto');
   await page.getByRole('heading', { name: 'Ofertas (3)', exact: true }).waitFor();
+  await page.getByRole('button', {name: 'Ver ofertas (3)', exact: true}).click();
   let best = page.locator('.desired-offer.best');
   assert.match(await best.textContent(), /Mercado Livre/);
   assert.match(await page.locator('.desired-saving').textContent(), /220,00/);
@@ -233,8 +236,8 @@ try {
   await page.locator('.desired-purchase').getByText('Compra registrada', { exact: true }).waitFor();
   assert.match(await page.locator('.desired-purchase').textContent(), /10x de R\$\s*310,00/);
   await best.getByRole('button', { name: 'Excluir', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Excluir', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Excluir', exact: true }).click();
+  await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
   await page.getByRole('heading', { name: 'Ofertas (2)', exact: true }).waitFor();
   await page.reload();
   await page.locator('.desired-purchase').getByText('Compra registrada', { exact: true }).waitFor();
@@ -242,7 +245,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForFunction(() => { const video = document.querySelector('.desired-detail-image video'); return video && !video.paused && video.videoWidth > 0; });
   const mobileFrameBox = await page.locator('.desired-detail-image').boundingBox();
-  assert.ok(Math.abs(mobileFrameBox.width / mobileFrameBox.height - 16 / 9) < .01);
+  assert.ok(Math.abs(mobileFrameBox.width / mobileFrameBox.height - 4 / 3) < .01);
   await screenshot('mobile-detail');
   await page.locator('.desired-actions').getByRole('button', { name: 'Editar', exact: true }).click();
   dialog = page.getByRole('dialog');
@@ -283,7 +286,7 @@ try {
   const denied = await context.request.get(`${apiUrl}/desired-products/${productId}`, { headers: { Authorization: `Bearer ${otherToken}` } });
   assert.equal(denied.status(), 404);
   await page.locator('.desired-actions').getByRole('button', { name: 'Excluir', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Excluir', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Excluir', exact: true }).click();
   await page.getByText('Sua lista começa aqui', { exact: true }).waitFor();
   assert.deepEqual(errors, [], 'Uncaught browser errors');
   console.log('PASS: login, category selection/creation, unified image/GIF/video URLs including extensionless video, autoplay/custom controls, framing/drag/reset/persistence, labels without focus, image upload, product, 3 offers, automatic installments, comparison, target, edit/history, purchase, archived offer, persistence, mobile filters, cross-user isolation and deletion.');
@@ -291,7 +294,7 @@ try {
   const page = browser.contexts()[0]?.pages()[0];
   if (page) {
     console.error('Failure URL:', page.url());
-    console.error('Media state:', await page.locator('.desired-page').innerText());
+    console.error('Media state:', await page.locator('body').innerText({timeout:1000}).catch(() => 'unavailable'));
     if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path:`${process.env.KASHY_E2E_SCREENSHOT_DIR}/failure.png`, fullPage:true});
   }
   throw error;

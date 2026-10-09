@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import importlib.util
 import unittest
 from datetime import date, timedelta
@@ -7,7 +8,7 @@ from unittest.mock import patch
 
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from fastapi.testclient import TestClient
+import httpx
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -22,6 +23,28 @@ PREFIX = "/api/desired-products"
 IMAGE = "data:image/png;base64," + base64.b64encode(
     base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=")
 ).decode()
+
+
+class APIClient:
+    """Exercise the ASGI application without Starlette's deprecated HTTPX adapter."""
+
+    def request(self, method, url, **kwargs):
+        async def send():
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+                return await client.request(method, url, **kwargs)
+        return asyncio.run(send())
+
+    def get(self, url, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url, **kwargs):
+        return self.request("POST", url, **kwargs)
+
+    def put(self, url, **kwargs):
+        return self.request("PUT", url, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self.request("DELETE", url, **kwargs)
 
 
 class DesiredProductAPITests(unittest.TestCase):
@@ -39,10 +62,9 @@ class DesiredProductAPITests(unittest.TestCase):
             with self.sessions() as db:
                 yield db
         app.dependency_overrides[get_db] = database
-        self.client = TestClient(app)
+        self.client = APIClient()
 
     def tearDown(self):
-        self.client.close()
         app.dependency_overrides.clear()
         self.engine.dispose()
 

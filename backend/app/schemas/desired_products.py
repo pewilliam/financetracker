@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from app.schemas.base import APIModel, NonNegativeMoney, PositiveMoney, serialize_datetime
+from app.schemas.base import APIModel, NonNegativeMoney, PositiveMoney
 
 
 Priority = Literal["low", "medium", "high"]
@@ -63,7 +63,11 @@ def _validate_url(value: str | None) -> str | None:
 
 class PlanningModel(APIModel):
     # Preserve decimal amounts on the wire as well as in database calculations.
-    model_config = ConfigDict(extra="forbid", json_encoders={Decimal: str, datetime: serialize_datetime})
+    model_config = ConfigDict(extra="forbid")
+
+    @staticmethod
+    def serialize_decimal(value: Decimal) -> str:
+        return str(value)
 
 
 class MediaFrame(PlanningModel):

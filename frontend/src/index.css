@@ -1,8 +1,9 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./styles/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../tailwind.config.js";
 
 :root {
   --color-primary: #14A078;
@@ -1096,7 +1097,8 @@ button:focus-visible {
 .content-inner {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 24px;
+  /* Preserve the previous md:pb-0 spacing across Tailwind's cascade layers. */
+  padding: 24px 24px 0;
 }
 .page-header, .section-head, .drawer-head, .invoice-footer, .invoice-header {
   display: flex;
