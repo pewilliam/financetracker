@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../../i18n/index.ts";
@@ -87,5 +87,40 @@ describe("bottom navigation", () => {
 
     await user.click(screen.getByRole("link", { name: "Mês" }));
     expect(container.querySelector(".bottom-navigation-liquid-body")).toHaveClass("is-moving");
+  });
+
+  it("drags the liquid selector to a destination without changing normal clicks", () => {
+    const { container } = renderNavigation({ route: "/faturas" });
+    const surface = container.querySelector(".bottom-navigation-surface");
+    const handle = container.querySelector(".bottom-navigation-drag-handle");
+    const items = [...container.querySelectorAll(".bottom-navigation-item")];
+    surface.getBoundingClientRect = () => ({ left: 0, right: 800, top: 0, bottom: 68, width: 800, height: 68, x: 0, y: 0, toJSON() {} });
+    handle.getBoundingClientRect = () => ({ left: 200, right: 300, top: 6, bottom: 62, width: 100, height: 56, x: 200, y: 6, toJSON() {} });
+    items.forEach((item, index) => {
+      item.getBoundingClientRect = () => ({ left: index * 100, right: (index + 1) * 100, top: 6, bottom: 62, width: 100, height: 56, x: index * 100, y: 6, toJSON() {} });
+    });
+    fireEvent(handle, new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 250, clientY: 34 }));
+    fireEvent(handle, new MouseEvent("pointermove", { bubbles: true, clientX: 365, clientY: 34 }));
+
+    expect(container.querySelector(".bottom-navigation")).toHaveClass("is-dragging");
+    expect(screen.getByRole("link", { name: "Cartões" })).toHaveClass("is-drag-target");
+
+    fireEvent(handle, new MouseEvent("pointerup", { bubbles: true, button: 0, clientX: 365, clientY: 34 }));
+    expect(screen.getByRole("link", { name: "Cartões" })).toHaveClass("active");
+    expect(container.querySelector(".bottom-navigation")).not.toHaveClass("is-dragging");
+
+    fireEvent.click(screen.getByRole("link", { name: "Mês" }));
+    expect(screen.getByRole("link", { name: "Mês" })).toHaveClass("active");
+  });
+
+  it("keeps the active More control clickable through the selector handle", () => {
+    const { container } = renderNavigation({ route: "/simulador" });
+    const handle = container.querySelector(".bottom-navigation-drag-handle");
+    handle.getBoundingClientRect = () => ({ left: 700, right: 800, top: 6, bottom: 62, width: 100, height: 56, x: 700, y: 6, toJSON() {} });
+
+    fireEvent(handle, new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 750, clientY: 34 }));
+    fireEvent(handle, new MouseEvent("pointerup", { bubbles: true, button: 0, clientX: 750, clientY: 34 }));
+
+    expect(screen.getByRole("menu", { name: "Demais funcionalidades" })).toBeVisible();
   });
 });
