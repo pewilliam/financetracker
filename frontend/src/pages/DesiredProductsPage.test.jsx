@@ -35,6 +35,14 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   };
+  // JSDOM does not calculate layout; chart containers need explicit dimensions.
+  const getBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+    if (this.classList.contains("recharts-responsive-container")) {
+      return new DOMRect(0, 0, 800, 300);
+    }
+    return getBoundingClientRect.call(this);
+  });
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   window.scrollTo = vi.fn();
   window.matchMedia = vi.fn(() => ({ matches: false }));
@@ -53,6 +61,10 @@ beforeEach(() => {
       baseline_projected_closing: "1000.00", projected_closing: "900.00", cumulative_impact: "-100.00",
       income_commitment_percent: "10.00", negative_balance: false, negative_free_money: false }],
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 it("creates a product with target and navigates to its details", async () => {

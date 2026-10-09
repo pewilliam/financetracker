@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { I18nProvider } from "../i18n/index.ts";
+import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../i18n/index.ts";
 import DashboardWallets from "./DashboardWallets.jsx";
 import { getDashboardWallets } from "../api/api.js";
 
@@ -36,6 +36,7 @@ const checking = {
 
 describe("dashboard wallets", () => {
   beforeEach(() => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
     getDashboardWallets.mockReset();
   });
 
@@ -107,7 +108,8 @@ describe("dashboard wallets", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(screen.getByText(/R\$\s*900,00/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(/R\$\s*900,00/)).toHaveLength(2));
+    expect(screen.queryAllByText(/R\$\s*1\.260,00/)).toHaveLength(0);
     expect(getDashboardWallets).toHaveBeenCalledTimes(2);
   });
 });

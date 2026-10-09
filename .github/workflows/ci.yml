@@ -1,0 +1,68 @@
+name: Tests, build and dependency audits
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm audit
+
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_ENV: test
+      JWT_SECRET_KEY: ci-test-signing-key-never-used-in-production-2026
+      DATABASE_URL: sqlite://
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt pip-audit==2.10.1
+      - run: python -W error -m unittest discover -s tests
+      - run: pip-audit -r requirements-dev.txt
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: python scripts/test-e2e.py

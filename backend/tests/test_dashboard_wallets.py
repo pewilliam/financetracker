@@ -40,7 +40,7 @@ class DashboardWalletTests(unittest.TestCase):
         return dashboard_wallet_summary(self.db, self.user.id, 2026, 9, today=self.today)
 
     def test_dashboard_route_is_registered(self):
-        paths = {route.path for route in app.routes}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/api/wallets/dashboard", paths)
 
     def test_active_wallets_match_the_month_consolidated_balance(self):

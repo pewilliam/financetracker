@@ -102,7 +102,7 @@ export default function BottomNavigation({ hidden = false }) {
   }, [moreOpen]);
 
   return (
-    <nav ref={rootRef} className="bottom-navigation hidden md:flex" aria-label={t("bottomNavigation.navigation")} hidden={hidden}>
+    <nav ref={rootRef} className="bottom-navigation" aria-label={t("bottomNavigation.navigation")} hidden={hidden}>
       {moreOpen && (
         <div className="bottom-navigation-more-menu" role="menu" aria-label={t("bottomNavigation.moreMenu")}>
           {menuLinks.map(renderMenuLink)}
