@@ -136,6 +136,8 @@ class ReceivableOut(APIModel):
     series_id: Optional[str] = None
     series_installment_number: Optional[int] = None
     series_installment_count: Optional[int] = None
+    linked_expense_amount: Optional[Decimal] = None
+    linked_expense_excess_amount: Decimal = Decimal("0.00")
     linked_expense: Optional[LinkedExpenseOut] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

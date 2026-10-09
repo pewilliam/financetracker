@@ -11,7 +11,7 @@ from app.database import Base
 from app.models import CreditCard, InstallmentItem, InstallmentPurchase, Invoice, InvoiceItem, Receivable, ReceivablePerson, Transaction, User
 from app.routers.receivables import create_receivable, list_linked_receivable_transactions, list_receivable_expense_options, update_receivable
 from app.routers.transactions import create_transaction, update_transaction
-from app.schemas.receivables import ReceivableCreate, ReceivableExpenseLinkIn, ReceivableUpdate
+from app.schemas.receivables import ReceivableCreate, ReceivableExpenseLinkIn, ReceivableOut, ReceivableUpdate
 from app.schemas.transactions import TransactionCreate, TransactionOut, TransactionUpdate
 
 
@@ -125,13 +125,13 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.assertEqual(result.source_transaction_id, expense.id)
         self.assertEqual(result.linked_expense["description"], "Roupas")
 
-        with self.assertRaises(HTTPException) as context:
-            create_receivable(
-                self.payload("150.00", ReceivableExpenseLinkIn(source_type="transaction", source_id=expense.id)),
-                self.db,
-                self.user,
-            )
-        self.assertEqual(context.exception.status_code, 400)
+        excess = create_receivable(
+            self.payload("150.00", ReceivableExpenseLinkIn(source_type="transaction", source_id=expense.id)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(excess.linked_expense_amount, Decimal("140.00"))
+        self.assertEqual(excess.linked_expense_excess_amount, Decimal("10.00"))
 
     def test_single_installment_receivable_keeps_selected_due_date(self):
         template = CreditCard(
@@ -244,6 +244,167 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         self.assertTrue(rows[0].series_id)
         self.assertEqual([row.series_installment_number for row in rows], [1, 2, 3])
         self.assertEqual(len({row.series_id for row in rows}), 1)
+
+    def test_installment_purchase_can_be_repaid_as_one_receivable(self):
+        template = CreditCard(
+            user_id=self.user.id,
+            name="Nubank",
+            color="#820AD1",
+            due_day=1,
+            closing_day=25,
+            active=True,
+        )
+        self.db.add(template)
+        self.db.flush()
+        invoices = [
+            Invoice(
+                user_id=self.user.id,
+                credit_card_id=template.id,
+                due_date=date(2026, month, 1),
+                total_amount=Decimal("0.00"),
+            )
+            for month in (11, 12)
+        ]
+        self.db.add_all(invoices)
+        self.db.flush()
+        purchase = InstallmentPurchase(
+            user_id=self.user.id,
+            description="Compra parcelada",
+            total_amount=Decimal("282.33"),
+            installment_count=2,
+            installment_value=Decimal("141.17"),
+            first_invoice_id=invoices[0].id,
+        )
+        self.db.add(purchase)
+        self.db.flush()
+        self.db.add_all([
+            InstallmentItem(
+                purchase_id=purchase.id,
+                invoice_id=invoices[0].id,
+                installment_number=1,
+                amount=Decimal("141.17"),
+                description="Compra parcelada (1/2)",
+                status="pending",
+            ),
+            InstallmentItem(
+                purchase_id=purchase.id,
+                invoice_id=invoices[1].id,
+                installment_number=2,
+                amount=Decimal("141.16"),
+                description="Compra parcelada (2/2)",
+                status="pending",
+            ),
+        ])
+        self.db.commit()
+
+        created = create_receivable(
+            ReceivableCreate(
+                person_id=self.person.id,
+                description="Reembolso integral",
+                total_amount=Decimal("282.33"),
+                due_date=date(2026, 12, 31),
+                series_count=1,
+                allocation_mode="total",
+                expense_link=ReceivableExpenseLinkIn(
+                    source_type="installment_purchase",
+                    source_id=purchase.id,
+                    installment_scope="all",
+                    allocation_mode="total",
+                ),
+            ),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(created.total_amount, Decimal("282.33"))
+        self.assertEqual(created.due_date, date(2026, 12, 31))
+        self.assertIsNone(created.series_id)
+        self.assertEqual(created.linked_expense_amount, Decimal("282.33"))
+        self.assertEqual(created.linked_expense_excess_amount, Decimal("0.00"))
+        option = next(
+            item
+            for item in list_receivable_expense_options(self.db, self.user)
+            if item.source_type == "installment_purchase" and item.source_id == purchase.id
+        )
+        self.assertEqual(option.available_amount, Decimal("0.00"))
+        item_options = [
+            item
+            for item in list_receivable_expense_options(self.db, self.user)
+            if item.source_type == "installment_item" and item.purchase_id == purchase.id
+        ]
+        self.assertTrue(item_options)
+        self.assertTrue(all(item.available_amount == Decimal("0.00") for item in item_options))
+
+        with self.assertRaises(HTTPException):
+            create_transaction(
+                TransactionCreate(
+                    date=date(2026, 12, 31),
+                    type="income",
+                    amount=Decimal("0.01"),
+                    description="Não pode consumir a compra novamente",
+                    expense_link=ReceivableExpenseLinkIn(
+                        source_type="installment_item",
+                        source_id=purchase.items[-1].id,
+                    ),
+                ),
+                self.db,
+                self.user,
+            )
+        self.db.rollback()
+
+        excess = create_receivable(
+            ReceivableCreate(
+                person_id=self.person.id,
+                description="Valor adicional",
+                total_amount=Decimal("0.01"),
+                due_date=date(2027, 1, 31),
+                series_count=1,
+                expense_link=ReceivableExpenseLinkIn(
+                    source_type="installment_purchase",
+                    source_id=purchase.id,
+                    installment_scope="all",
+                ),
+            ),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(excess.total_amount, Decimal("0.01"))
+        self.assertEqual(excess.linked_expense_amount, Decimal("0.00"))
+        self.assertEqual(excess.linked_expense_excess_amount, Decimal("0.01"))
+
+    def test_receivable_above_single_expense_tracks_only_available_part(self):
+        expense = Transaction(
+            user_id=self.user.id,
+            date=date(2026, 10, 1),
+            type="expense",
+            amount=Decimal("250.00"),
+            description="Compra para reembolso",
+        )
+        self.db.add(expense)
+        self.db.commit()
+
+        created = create_receivable(
+            self.payload(
+                "275.00",
+                ReceivableExpenseLinkIn(source_type="transaction", source_id=expense.id),
+            ),
+            self.db,
+            self.user,
+        )
+
+        self.assertEqual(created.total_amount, Decimal("275.00"))
+        self.assertEqual(created.linked_expense_amount, Decimal("250.00"))
+        self.assertEqual(created.linked_expense_excess_amount, Decimal("25.00"))
+        response = ReceivableOut.model_validate(created)
+        self.assertEqual(response.linked_expense_amount, Decimal("250.00"))
+        self.assertEqual(response.linked_expense_excess_amount, Decimal("25.00"))
+        option = next(
+            item
+            for item in list_receivable_expense_options(self.db, self.user)
+            if item.source_type == "transaction" and item.source_id == expense.id
+        )
+        self.assertEqual(option.linked_amount, Decimal("250.00"))
+        self.assertEqual(option.available_amount, Decimal("0.00"))
 
     def test_update_remaining_scope_rewrites_existing_series_instead_of_duplicating(self):
         template = CreditCard(
@@ -459,12 +620,13 @@ class ReceivableExpenseLinkTests(unittest.TestCase):
         )
         self.assertEqual(updated.amount, Decimal("140.00"))
 
-        with self.assertRaises(HTTPException):
-            create_receivable(
-                self.payload("201.00", ReceivableExpenseLinkIn(source_type="transaction", source_id=expense.id)),
-                self.db,
-                self.user,
-            )
+        excess = create_receivable(
+            self.payload("201.00", ReceivableExpenseLinkIn(source_type="transaction", source_id=expense.id)),
+            self.db,
+            self.user,
+        )
+        self.assertEqual(excess.linked_expense_amount, Decimal("200.00"))
+        self.assertEqual(excess.linked_expense_excess_amount, Decimal("1.00"))
 
     def test_linked_income_transaction_is_listed_as_receivable(self):
         expense = Transaction(

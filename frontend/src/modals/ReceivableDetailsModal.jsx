@@ -353,6 +353,18 @@ export default function ReceivableDetailsModal({
                   {linked.installment_number ? ` · ${linked.installment_number}/${linked.installment_count}` : ""}
                 </span>
                 <strong>{linked.description}</strong>
+                {Number(group.linked_expense_excess_amount || 0) > 0 && (
+                  <small className="receivable-details-link-allocation">
+                    {tt(
+                      "receivables.linkedAllocationWithExcess",
+                      `${formatMoney(group.linked_expense_amount, language)} atribuídos ao gasto · ${formatMoney(group.linked_expense_excess_amount, language)} adicionais`,
+                      {
+                        attributed: formatMoney(group.linked_expense_amount, language),
+                        excess: formatMoney(group.linked_expense_excess_amount, language)
+                      }
+                    )}
+                  </small>
+                )}
               </div>
             </div>
           )}

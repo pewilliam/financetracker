@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Layers3, Link2, Minus, Plus, Wallet, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Layers3, Link2, Minus, Plus, Wallet, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
 import CategorySelect from "../components/CategorySelect.jsx";
 import ExpensePicker from "../components/ExpensePicker.jsx";
@@ -105,6 +105,7 @@ function defaultSeriesCountForExpense(option, expenseOptions) {
 export default function ReceivableModal({ form, setForm, editing, receivables = [], people, categories = [], expenseOptions = [], onCreateCategory, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
+  const [excessConfirmed, setExcessConfirmed] = useState(false);
   const updateForm = (patch) => setForm({ ...form, ...patch });
   const selectedExpense = expenseOptions.find((option) => `${option.source_type}:${option.source_id}` === form.expense_source_key);
   const displayExpense = resolveExpenseOption(selectedExpense, expenseOptions);
@@ -118,7 +119,7 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
   const availableCredit = (() => {
     if (!selectedExpense || !editing) return 0;
     if (displayExpense?.source_type === "installment_purchase") {
-      return seriesMates.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+      return seriesMates.reduce((sum, item) => sum + Number(item.linked_expense_amount ?? item.total_amount ?? 0), 0);
     }
     if (scopedInstallmentItems.length) {
       return scopedInstallmentItems.reduce((sum, option) => {
@@ -126,13 +127,13 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
           .filter((id) => seriesCreditIds.has(id))
           .reduce((inner, id) => {
             const mate = seriesMates.find((item) => item.id === id);
-            return inner + Number(mate?.total_amount || 0);
+            return inner + Number(mate?.linked_expense_amount ?? mate?.total_amount ?? 0);
           }, 0);
         return sum + credited;
       }, 0);
     }
     if (selectedExpense.receivable_ids?.includes(editing.id) || displayExpense?.receivable_ids?.includes(editing.id)) {
-      return seriesMates.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+      return seriesMates.reduce((sum, item) => sum + Number(item.linked_expense_amount ?? item.total_amount ?? 0), 0);
     }
     return 0;
   })();
@@ -159,6 +160,12 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
   ]);
 
   const previewTotal = previewRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const excessAmount = selectedExpense ? money(Math.max(previewTotal - installmentAvailable, 0)) : 0;
+  const attributedAmount = money(Math.max(previewTotal - excessAmount, 0));
+
+  useEffect(() => {
+    setExcessConfirmed(false);
+  }, [form.expense_source_key, previewTotal, installmentAvailable]);
 
   const currentAmountLabels = () => (
     form.installment_amounts?.length === seriesCount
@@ -167,9 +174,10 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
   );
 
   const setAllocationMode = (mode) => {
+    const sourceAmount = Number(displayExpense?.amount || selectedExpense?.amount || typedAmount || 0);
     const nextAmount = mode === "per_installment"
-      ? money((installmentAvailable || Number(displayExpense?.amount || selectedExpense?.amount || typedAmount || 0)) / Math.max(seriesCount, 1))
-      : installmentAvailable || Number(displayExpense?.available_amount || selectedExpense?.available_amount || displayExpense?.amount || selectedExpense?.amount || 0);
+      ? money(sourceAmount / Math.max(seriesCount, 1))
+      : sourceAmount;
     updateForm({ allocation_mode: mode, total_amount: formatMoney(nextAmount, language), installment_amounts: [] });
   };
 
@@ -197,7 +205,7 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
       expense_source_key: resolvedKey,
       installment_scope: scope,
       series_count: nextCount,
-      total_amount: formatMoney(available || resolved.amount, language),
+      total_amount: formatMoney(Number(resolved.amount || 0) || available, language),
       due_date: form.due_date || resolved.date || form.due_date,
       description: form.description.trim() ? form.description : resolved.description,
       category_ids: form.category_ids?.length
@@ -248,6 +256,7 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
     const installmentAmounts = previewRows.map((row) => Number(row.amount) || 0);
     if (!hasPerson || !form.description.trim() || !parseTypedMoneyInput(form.total_amount, language) || !form.due_date) return;
     if (seriesCount > 1 && installmentAmounts.some((amount) => amount <= 0)) return;
+    if (excessAmount > 0 && !excessConfirmed) return;
     onSubmit({
       ...form,
       series_count: seriesCount,
@@ -403,12 +412,32 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
             </section>
           )}
 
+          {excessAmount > 0 && (
+            <section className="receivable-excess-warning" role="alert">
+              <AlertTriangle size={20} />
+              <div>
+                <strong>{tt("receivables.excessTitle", "O recebível excede o valor disponível do gasto")}</strong>
+                <p>
+                  {tt(
+                    "receivables.excessDescription",
+                    `${formatMoney(attributedAmount, language)} serão atribuídos ao gasto e ${formatMoney(excessAmount, language)} ficarão como valor adicional.`,
+                    { attributed: formatMoney(attributedAmount, language), excess: formatMoney(excessAmount, language) }
+                  )}
+                </p>
+                <label>
+                  <input type="checkbox" checked={excessConfirmed} onChange={(event) => setExcessConfirmed(event.target.checked)} />
+                  <span>{tt("receivables.confirmExcess", "Entendi e desejo salvar com esse valor adicional.")}</span>
+                </label>
+              </div>
+            </section>
+          )}
+
           <div className="invoice-field"><span>Categorias do recebimento</span><CategorySelect categories={categories} values={form.category_ids || []} onChange={(value) => updateForm({ category_ids: value })} onCreate={onCreateCategory} /></div>
           <div className="field-label"><span>{tt("receivables.notes", "Observações")}</span><textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} rows="3" /></div>
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" type="button" onClick={onClose}>{tt("actions.cancel", "Cancelar")}</button>
-          <button className="btn btn-primary">{tt("actions.save", "Salvar")}</button>
+          <button className="btn btn-primary" disabled={excessAmount > 0 && !excessConfirmed}>{tt("actions.save", "Salvar")}</button>
         </div>
       </form>
     </div>

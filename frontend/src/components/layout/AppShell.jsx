@@ -1220,7 +1220,7 @@ export default function AppShell() {
               .reduce((sum, option) => sum + Number(option.available_amount || 0), 0)
           : null;
         initial.description = resolved.description || "";
-        initial.total_amount = formatMoney(purchaseOption?.available_amount || installmentRemainder || resolved.available_amount || resolved.amount, language);
+        initial.total_amount = formatMoney(resolved.amount || purchaseOption?.amount || installmentRemainder || resolved.available_amount, language);
         initial.due_date = resolved.date || initial.due_date;
         initial.category_ids = (resolved.category_ids?.length ? resolved.category_ids : resolved.category_id ? [resolved.category_id] : []).map(String);
         initial.expense_source_key = `${resolved.source_type}:${resolved.source_id}`;

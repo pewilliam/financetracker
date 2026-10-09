@@ -190,6 +190,7 @@ def _clear_expense_link(receivable: Receivable) -> None:
     receivable.source_transaction_id = None
     receivable.source_invoice_item_id = None
     receivable.source_installment_item_id = None
+    receivable.linked_expense_amount = None
 
 
 def _set_expense_source(receivable: Receivable, source_type: str, source_id: int) -> None:
@@ -220,7 +221,13 @@ def _linked_amount(
     excluded = _normalize_exclude_ids(exclude_ids)
     if excluded:
         query = query.filter(~Receivable.id.in_(excluded))
-    total = sum((_money(item.total_amount) for item in query.all()), Decimal("0.00"))
+    total = sum(
+        (
+            _money(item.linked_expense_amount if item.linked_expense_amount is not None else item.total_amount)
+            for item in query.all()
+        ),
+        Decimal("0.00"),
+    )
     transaction_field = {
         "source_transaction_id": Transaction.linked_expense_transaction_id,
         "source_invoice_item_id": Transaction.linked_expense_invoice_item_id,
@@ -234,17 +241,24 @@ def _linked_amount(
     return total
 
 
-def _validate_source_amount(
+def _available_source_amount(
     db: Session,
     field,
     source_id: int,
     source_amount,
-    requested_amount: Decimal,
     exclude_ids: int | set[int] | list[int] | None = None,
-) -> None:
-    available = max(_money(source_amount) - _linked_amount(db, field, source_id, exclude_ids), Decimal("0.00"))
-    if requested_amount > available:
-        raise HTTPException(status_code=400, detail=f"Receivable amount exceeds expense amount available ({available})")
+) -> Decimal:
+    return max(_money(source_amount) - _linked_amount(db, field, source_id, exclude_ids), Decimal("0.00"))
+
+
+def _allocate_available_amount(amounts: list[Decimal], available: Decimal) -> list[Decimal]:
+    remaining = max(_money(available), Decimal("0.00"))
+    allocated = []
+    for amount in amounts:
+        value = min(_money(amount), remaining)
+        allocated.append(value)
+        remaining = max(remaining - value, Decimal("0.00"))
+    return allocated
 
 
 def _single_source(db: Session, user_id: int, link: ReceivableExpenseLinkIn):
@@ -429,6 +443,7 @@ def _apply_expense_link(
             receivable,
             amounts=amounts,
             source_bindings=[(None, None)] * len(amounts),
+            source_allocations=[None] * len(amounts),
         )
 
     single = _single_source(db, user_id, link)
@@ -438,33 +453,28 @@ def _apply_expense_link(
         source_type, source, _source_due_date, field = single
         amount = amounts[0]
         receivable.total_amount = amount
-        _validate_source_amount(db, field, source.id, source.amount, amount, receivable.id)
+        available = _available_source_amount(db, field, source.id, source.amount, receivable.id)
         stays_in_series = source_type == "installment_item" and receivable.source_installment_item_id == source.id and receivable.series_id
         if not stays_in_series:
             receivable.series_id = None
             receivable.series_installment_number = None
             receivable.series_installment_count = None
         _set_expense_source(receivable, source_type, source.id)
+        receivable.linked_expense_amount = min(amount, available)
         return []
 
     if single:
         count = len(amounts)
         source_type, source, _source_due_date, field = single
         exclude_ids = {item.id for item in _series_siblings(db, user_id, receivable)} | {receivable.id}
-        _validate_source_amount(
-            db,
-            field,
-            source.id,
-            source.amount,
-            sum(amounts, Decimal("0.00")),
-            exclude_ids,
-        )
+        available = _available_source_amount(db, field, source.id, source.amount, exclude_ids)
         return _sync_series_rows(
             db,
             user_id,
             receivable,
             amounts=amounts,
             source_bindings=[(source_type, source.id)] * count,
+            source_allocations=_allocate_available_amount(amounts, available),
         )
 
     items = _installment_sources(db, user_id, link)
@@ -485,21 +495,24 @@ def _apply_expense_link(
     if receivable.source_installment_item_id:
         reusable_by_item_id[receivable.source_installment_item_id] = receivable
 
-    # Validate capacity per linked installment item (grouped).
-    grouped: dict[int, Decimal] = {}
-    for (_source_type, source_id), amount in zip(bindings, amounts):
-        grouped[source_id] = grouped.get(source_id, Decimal("0.00")) + amount
-    item_by_id = {item.id: item for item in items}
-    for source_id, amount in grouped.items():
-        item = item_by_id[source_id]
-        _validate_source_amount(
-            db,
-            Receivable.source_installment_item_id,
-            item.id,
-            item.amount,
-            amount,
-            exclude_ids,
-        )
+    # The repayment schedule can differ from the card schedule. Attribute the
+    # receivable against the selected purchase scope as one pool, while keeping
+    # each generated row linked to an installment for traceability.
+    source_total = sum((_money(item.amount) for item in items), Decimal("0.00"))
+    linked_total = sum(
+        (
+            _linked_amount(
+                db,
+                Receivable.source_installment_item_id,
+                item.id,
+                exclude_ids,
+            )
+            for item in items
+        ),
+        Decimal("0.00"),
+    )
+    available = max(source_total - linked_total, Decimal("0.00"))
+    source_allocations = _allocate_available_amount(amounts, available)
 
     return _sync_series_rows(
         db,
@@ -507,6 +520,7 @@ def _apply_expense_link(
         receivable,
         amounts=amounts,
         source_bindings=bindings,
+        source_allocations=source_allocations,
         reusable_by_item_id=reusable_by_item_id,
     )
 
@@ -518,10 +532,11 @@ def _sync_series_rows(
     *,
     amounts: list[Decimal],
     source_bindings: list[tuple[str | None, int | None]],
+    source_allocations: list[Decimal | None],
     reusable_by_item_id: dict[int, Receivable] | None = None,
 ) -> list[Receivable]:
     count = len(amounts)
-    if count != len(source_bindings):
+    if count != len(source_bindings) or count != len(source_allocations):
         raise HTTPException(status_code=400, detail="Series allocation mismatch")
 
     reusable_by_item_id = reusable_by_item_id or {}
@@ -540,7 +555,14 @@ def _sync_series_rows(
                 detail="Installment amount cannot be lower than amount already received",
             )
 
-    def apply_row(target: Receivable, amount: Decimal, index: int, source_type: str | None, source_id: int | None) -> None:
+    def apply_row(
+        target: Receivable,
+        amount: Decimal,
+        index: int,
+        source_type: str | None,
+        source_id: int | None,
+        source_allocation: Decimal | None,
+    ) -> None:
         ensure_amount_ok(target, amount)
         target.person_id = receivable.person_id
         target.description = receivable.description
@@ -554,14 +576,16 @@ def _sync_series_rows(
         target.series_installment_count = count if count > 1 else None
         if source_type and source_id is not None:
             _set_expense_source(target, source_type, source_id)
+            target.linked_expense_amount = _money(source_allocation)
         else:
             _clear_expense_link(target)
         _sync_status(target)
 
     first_source_type, first_source_id = source_bindings[0]
-    apply_row(receivable, amounts[0], 1, first_source_type, first_source_id)
+    apply_row(receivable, amounts[0], 1, first_source_type, first_source_id, source_allocations[0])
 
-    for index, (amount, (source_type, source_id)) in enumerate(zip(amounts[1:], source_bindings[1:]), start=2):
+    rows = zip(amounts[1:], source_bindings[1:], source_allocations[1:])
+    for index, (amount, (source_type, source_id), source_allocation) in enumerate(rows, start=2):
         existing_row = None
         if source_type == "installment_item" and source_id is not None:
             candidate = reusable_by_item_id.get(source_id)
@@ -573,7 +597,7 @@ def _sync_series_rows(
                 existing_row = existing.pop(0) if existing else None
 
         if existing_row:
-            apply_row(existing_row, amount, index, source_type, source_id)
+            apply_row(existing_row, amount, index, source_type, source_id, source_allocation)
             touched_ids.add(existing_row.id)
             continue
 
@@ -593,6 +617,7 @@ def _sync_series_rows(
         set_item_categories(sibling, categories)
         if source_type and source_id is not None:
             _set_expense_source(sibling, source_type, source_id)
+            sibling.linked_expense_amount = _money(source_allocation)
         _sync_status(sibling)
         db.add(sibling)
         created.append(sibling)
@@ -848,7 +873,13 @@ def list_receivable_expense_options(
     def allocation(field_name: str, transaction_field_name: str, source_id: int):
         matches = [item for item in linked if getattr(item, field_name) == source_id]
         transaction_matches = [item for item in linked_transactions if getattr(item, transaction_field_name) == source_id]
-        linked_amount = sum((_money(item.total_amount) for item in matches), Decimal("0.00"))
+        linked_amount = sum(
+            (
+                _money(item.linked_expense_amount if item.linked_expense_amount is not None else item.total_amount)
+                for item in matches
+            ),
+            Decimal("0.00"),
+        )
         linked_amount += sum((_money(item.amount) for item in transaction_matches), Decimal("0.00"))
         return linked_amount, [item.id for item in matches], [item.id for item in transaction_matches]
 
@@ -930,12 +961,13 @@ def list_receivable_expense_options(
         purchase_linked = Decimal("0.00")
         purchase_receivable_ids = []
         purchase_transaction_ids = []
+        purchase_item_options = []
         for item in items:
             linked_amount, receivable_ids, transaction_ids = allocation("source_installment_item_id", "linked_expense_installment_item_id", item.id)
             purchase_linked += linked_amount
             purchase_receivable_ids.extend(receivable_ids)
             purchase_transaction_ids.extend(transaction_ids)
-            result.append(ExpenseOptionOut(
+            purchase_item_options.append(ExpenseOptionOut(
                 source_type="installment_item",
                 source_id=item.id,
                 description=purchase.description,
@@ -955,12 +987,16 @@ def list_receivable_expense_options(
                 category_ids=purchase.category_ids,
                 categories=purchase.categories,
             ))
+        purchase_available = max(purchase_amount - purchase_linked, Decimal("0.00"))
+        for option in purchase_item_options:
+            option.available_amount = min(option.available_amount, purchase_available)
+            result.append(option)
         result.append(ExpenseOptionOut(
             source_type="installment_purchase",
             source_id=purchase.id,
             description=purchase.description,
             amount=purchase_amount,
-            available_amount=max(purchase_amount - purchase_linked, Decimal("0.00")),
+            available_amount=purchase_available,
             linked_amount=purchase_linked,
             receivable_ids=sorted(set(purchase_receivable_ids)),
             transaction_ids=sorted(set(purchase_transaction_ids)),

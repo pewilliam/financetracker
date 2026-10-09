@@ -28,6 +28,7 @@ class Receivable(Base):
     source_transaction_id = Column(Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True, index=True)
     source_invoice_item_id = Column(Integer, ForeignKey("invoice_items.id", ondelete="SET NULL"), nullable=True, index=True)
     source_installment_item_id = Column(Integer, ForeignKey("installment_items.id", ondelete="SET NULL"), nullable=True, index=True)
+    linked_expense_amount = Column(Numeric(10, 2), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -52,6 +53,15 @@ class Receivable(Base):
     @property
     def remaining_amount(self):
         return max((self.total_amount or 0) - (self.received_amount or 0), 0)
+
+    @property
+    def linked_expense_excess_amount(self):
+        if not (self.source_transaction_id or self.source_invoice_item_id or self.source_installment_item_id):
+            return 0
+        allocated = self.linked_expense_amount
+        if allocated is None:
+            allocated = self.total_amount or 0
+        return max((self.total_amount or 0) - allocated, 0)
 
     @property
     def person_name(self):

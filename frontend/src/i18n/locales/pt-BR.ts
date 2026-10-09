@@ -406,7 +406,11 @@ export const ptBR = {
     splitTotal: "Dividir o valor total",
     samePerInstallment: "Mesmo valor por parcela",
     decreaseCount: "Diminuir quantidade",
-    increaseCount: "Aumentar quantidade"
+    increaseCount: "Aumentar quantidade",
+    excessTitle: "O recebível excede o valor disponível do gasto",
+    excessDescription: "{{attributed}} serão atribuídos ao gasto e {{excess}} ficarão como valor adicional.",
+    confirmExcess: "Entendi e desejo salvar com esse valor adicional.",
+    linkedAllocationWithExcess: "{{attributed}} atribuídos ao gasto · {{excess}} adicionais"
   },
   dates: {
     overdue: "Vencida",

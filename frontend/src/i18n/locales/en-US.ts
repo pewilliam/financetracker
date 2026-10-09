@@ -471,7 +471,11 @@ export const enUS = {
     splitTotal: "Split total amount",
     samePerInstallment: "Same amount per installment",
     decreaseCount: "Decrease count",
-    increaseCount: "Increase count"
+    increaseCount: "Increase count",
+    excessTitle: "The receivable exceeds the expense's available amount",
+    excessDescription: "{{attributed}} will be attributed to the expense and {{excess}} will remain as an additional amount.",
+    confirmExcess: "I understand and want to save this additional amount.",
+    linkedAllocationWithExcess: "{{attributed}} attributed to the expense · {{excess}} additional"
   },
   monthlyTable: {
     openingBalance: "Opening balance",

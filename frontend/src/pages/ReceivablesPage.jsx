@@ -51,6 +51,8 @@ export function buildReceivableGroups(items) {
     const totalAmount = sorted.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
     const receivedAmount = sorted.reduce((sum, item) => sum + Number(item.received_amount || 0), 0);
     const remainingAmount = sorted.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0);
+    const linkedExpenseAmount = sorted.reduce((sum, item) => sum + Number(item.linked_expense_amount || 0), 0);
+    const linkedExpenseExcessAmount = sorted.reduce((sum, item) => sum + Number(item.linked_expense_excess_amount || 0), 0);
     const earliestDue = sorted.reduce((min, item) => (!min || item.due_date < min ? item.due_date : min), null);
     return {
       key,
@@ -64,6 +66,8 @@ export function buildReceivableGroups(items) {
       total_amount: totalAmount,
       received_amount: receivedAmount,
       remaining_amount: remainingAmount,
+      linked_expense_amount: linkedExpenseAmount,
+      linked_expense_excess_amount: linkedExpenseExcessAmount,
       due_date: earliestDue,
       count: sorted.length
     };

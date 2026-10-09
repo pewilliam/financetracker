@@ -75,15 +75,29 @@ def _apply_expense_link(
         raise HTTPException(status_code=400, detail="Only income transactions can be linked as receivables")
 
     source, receivable_field, transaction_field, target_field = _source_for_link(db, user_id, link)
+    source_ids = [source.id]
+    source_amount = _money(source.amount)
+    if link.source_type == "installment_item":
+        purchase_items = db.query(InstallmentItem).filter(
+            InstallmentItem.purchase_id == source.purchase_id,
+            InstallmentItem.status == "pending",
+            InstallmentItem.invoice_id.is_not(None),
+        ).all()
+        source_ids = [item.id for item in purchase_items]
+        source_amount = sum((_money(item.amount) for item in purchase_items), Decimal("0.00"))
+
     receivable_total = sum(
-        (_money(item.total_amount) for item in db.query(Receivable).filter(receivable_field == source.id).all()),
+        (
+            _money(item.linked_expense_amount if item.linked_expense_amount is not None else item.total_amount)
+            for item in db.query(Receivable).filter(receivable_field.in_(source_ids)).all()
+        ),
         Decimal("0.00"),
     )
-    transaction_query = db.query(Transaction).filter(transaction_field == source.id)
+    transaction_query = db.query(Transaction).filter(transaction_field.in_(source_ids))
     if transaction.id:
         transaction_query = transaction_query.filter(Transaction.id != transaction.id)
     transaction_total = sum((_money(item.amount) for item in transaction_query.all()), Decimal("0.00"))
-    available = max(_money(source.amount) - receivable_total - transaction_total, Decimal("0.00"))
+    available = max(source_amount - receivable_total - transaction_total, Decimal("0.00"))
     if _money(transaction.amount) > available:
         raise HTTPException(status_code=400, detail=f"Income amount exceeds expense amount available ({available})")
 
