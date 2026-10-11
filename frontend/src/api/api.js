@@ -472,6 +472,13 @@ export function updateInstallmentCategory(id, categoryIds) {
   });
 }
 
+export function updateReceivablePerson(id, payload) {
+  return request(`/receivables/people/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function updateInstallmentPurchase(id, payload) {
   return request(`/installments/${id}`, {
     method: "PATCH",

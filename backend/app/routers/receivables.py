@@ -17,6 +17,7 @@ from app.schemas.receivables import (
     ReceivablePaymentCreate,
     ReceivablePersonCreate,
     ReceivablePersonOut,
+    ReceivablePersonUpdate,
     ReceivableBoardSummary,
     ReceivableGroupCounts,
     ReceivableUpdate,
@@ -1058,6 +1059,28 @@ def create_receivable_person(
 
     person = ReceivablePerson(user_id=current_user.id, name=name)
     db.add(person)
+    db.commit()
+    db.refresh(person)
+    return person
+
+
+@router.put("/people/{person_id}", response_model=ReceivablePersonOut)
+def update_receivable_person(
+    person_id: int,
+    payload: ReceivablePersonUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    person = _load_person(db, person_id, current_user.id)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Person name is required")
+
+    existing = _person_by_name(db, current_user.id, name)
+    if existing and existing.id != person.id:
+        raise HTTPException(status_code=409, detail="A person with this name already exists")
+
+    person.name = name
     db.commit()
     db.refresh(person)
     return person

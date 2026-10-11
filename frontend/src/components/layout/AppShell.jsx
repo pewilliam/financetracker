@@ -14,6 +14,7 @@ import InstallmentModal from "../../modals/InstallmentModal.jsx";
 import InstallmentDetailsModal from "../../modals/InstallmentDetailsModal.jsx";
 import ReceivableModal from "../../modals/ReceivableModal.jsx";
 import ReceivableDetailsModal from "../../modals/ReceivableDetailsModal.jsx";
+import ReceivablePersonModal from "../../modals/ReceivablePersonModal.jsx";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock.js";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
@@ -24,9 +25,9 @@ import BatchTransactionModal from "../../modals/BatchTransactionModal.jsx";
 import { useI18n } from "../../i18n/index.ts";
 import { useAuth } from "../../hooks/useAuth.jsx";
 import { useInvoiceItemModals } from "../../hooks/useInvoiceItemModals.jsx";
-import { BRAND_MARK_SRC, CREATE_RECEIVABLE_PERSON_VALUE } from "../../app/constants.js";
+import { BRAND_MARK_SRC } from "../../app/constants.js";
 import { defaultInstallmentForm, defaultReceivableForm, isInvoiceTransaction, mergeCreatedTransaction, moveTransactionInMonth, normalizeTransactionPayload, patchMonthCardsForTransaction, patchSummaryForTransaction, shiftMonth, todayIsoDate } from "../../app/helpers.js";
-import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInstallmentPurchase, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateRecurrence, updateTransaction } from "../../api/api.js";
+import { addInvoiceItem, cancelCardSubscription, createCardPurchase, createCategory, createInstallment, createReceivable, createReceivablePayment, createReceivablePerson, createRecurrence, createTransaction, createTransactionBatch, deleteCategory, deleteInstallment, deleteInstallmentItem, deleteInvoice, deleteInvoiceItem, deleteReceivable, deleteReceivablePayment, deleteTransaction, getCategoryBreakdown, getCurrentCardInvoice, getInstallment, getInvoice, getMonth, getMonthlyBudgetPlan, getMonthSummarySeries, getMonthsSummary, getReceivableSummary, listCards, listCategories, listInvoices, listLinkedReceivableTransactions, listReceivableExpenseOptions, listReceivablePeople, listReceivables, listWallets, markReceivablePaid, setInvoicePaid, updateBudgetReserveRule, updateCardSubscription, updateCategory, updateInstallmentCategory, updateInstallmentItem, updateInstallmentPurchase, updateInvoice, updateInvoiceItem, updateMonthlyBudgetPlan, updateReceivable, updateReceivablePerson, updateRecurrence, updateTransaction } from "../../api/api.js";
 import { formatMoney, formatMonthLabel, parseTypedMoneyInput } from "../../utils/format.js";
 
 const Dashboard = lazy(() => import("../Dashboard.jsx"));
@@ -127,6 +128,7 @@ export default function AppShell() {
   const [installmentToDelete, setInstallmentToDelete] = useState(null);
   const [deletingInstallment, setDeletingInstallment] = useState(false);
   const [receivableModal, setReceivableModal] = useState(false);
+  const [receivablePersonModal, setReceivablePersonModal] = useState(null);
   const [receivableForm, setReceivableForm] = useState(defaultReceivableForm);
   const [editingReceivable, setEditingReceivable] = useState(null);
   const [receivablePayment, setReceivablePayment] = useState(null);
@@ -172,7 +174,7 @@ export default function AppShell() {
     () => receivableGroupForId(receivables, receivableDetailsId),
     [receivableDetailsId, receivables]
   );
-  const overlayOpen = drawerOpen || batchModalOpen || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
+  const overlayOpen = drawerOpen || batchModalOpen || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivablePersonModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
   // Lock the body while modal overlays are active so background content does not jump.
   const bodyLocked = overlayOpen;
 
@@ -293,7 +295,7 @@ export default function AppShell() {
     if (location.pathname === "/assinaturas") return ["categories", "cards"];
     if (location.pathname === "/cartoes") return [];
     if (location.pathname === "/simulador") return ["invoiceHeaders", "monthCards", "cards"];
-    if (location.pathname === "/recebiveis") return ["receivablesBoard", "categories"];
+    if (location.pathname === "/recebiveis") return ["receivablesBoard", "people", "categories"];
     if (location.pathname === "/configuracoes") {
       if (settingsSection === "financeiro") return ["summary", "categories"];
       if (settingsSection === "dados") return ["summary", "monthSlim"];
@@ -1239,15 +1241,38 @@ export default function AppShell() {
     openTransactionEditor(transaction);
   };
 
+  const openReceivablePersonModal = (person = null, initialName = "", selectOnSave = false) => {
+    setReceivablePersonModal({ person, initialName, selectOnSave });
+  };
+
+  const saveReceivablePerson = async (payload) => {
+    const editingPerson = receivablePersonModal?.person;
+    const saved = editingPerson
+      ? await updateReceivablePerson(editingPerson.id, payload)
+      : await createReceivablePerson(payload);
+    setReceivablePeople((current) => {
+      const next = current.some((person) => person.id === saved.id)
+        ? current.map((person) => person.id === saved.id ? saved : person)
+        : [...current, saved];
+      return next.sort((left, right) => left.name.localeCompare(right.name, language === "en-US" ? "en" : "pt"));
+    });
+    setReceivables((current) => current.map((receivable) => (
+      receivable.person_id === saved.id
+        ? { ...receivable, person_name: saved.name, person: saved }
+        : receivable
+    )));
+    if (receivablePersonModal?.selectOnSave) {
+      setReceivableForm((current) => ({ ...current, person_id: String(saved.id), person_name: saved.name }));
+    }
+    setReceivablePersonModal(null);
+    toast.success(editingPerson ? "Pessoa atualizada" : "Pessoa cadastrada");
+    return saved;
+  };
+
   const saveReceivable = async (payload) => {
     try {
-      let personId = payload.person_id;
-      if (personId === CREATE_RECEIVABLE_PERSON_VALUE) {
-        const person = await createReceivablePerson({ name: payload.person_name.trim() });
-        personId = String(person.id);
-      }
       const data = {
-        person_id: Number(personId),
+        person_id: Number(payload.person_id),
         description: payload.description.trim(),
         total_amount: parseTypedMoneyInput(payload.total_amount, language),
         due_date: payload.due_date,
@@ -1454,7 +1479,7 @@ export default function AppShell() {
                 <Route path="/parcelamentos" element={<InstallmentsPage categories={categories} invoices={invoices} revision={installmentsRevision} onNew={() => openInstallmentModal()} onDetails={showInstallmentDetails} onRequestDelete={requestInstallmentDelete} />} />
                 <Route path="/assinaturas" element={<SubscriptionsPage revision={subscriptionsRevision} cards={cards} categories={categories} onCreateCategory={saveCategory} onNew={() => invoiceModals.openSubscription()} onSave={saveSubscription} onCancel={cancelSubscription} />} />
                 <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
-                <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
+                <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} people={receivablePeople} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onNewPerson={() => openReceivablePersonModal()} onEditPerson={(person) => openReceivablePersonModal(person)} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePersonModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
                 <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
                 <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -1498,7 +1523,8 @@ export default function AppShell() {
           onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })}
         />
       )}
-      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} receivables={receivables} people={receivablePeople} categories={categories} expenseOptions={receivableExpenseOptions} onCreateCategory={saveCategory} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
+      {receivableModal && <ReceivableModal form={receivableForm} setForm={setReceivableForm} editing={editingReceivable} receivables={receivables} people={receivablePeople} categories={categories} expenseOptions={receivableExpenseOptions} onCreateCategory={saveCategory} onCreatePerson={(initialName) => openReceivablePersonModal(null, initialName, true)} onSubmit={saveReceivable} onClose={() => { setReceivableModal(false); setEditingReceivable(null); }} />}
+      {receivablePersonModal && <ReceivablePersonModal person={receivablePersonModal.person} initialName={receivablePersonModal.initialName} onSubmit={saveReceivablePerson} onClose={() => setReceivablePersonModal(null)} />}
       {receivablePayment && <ReceivablePaymentModal data={receivablePayment} setData={setReceivablePayment} categories={categories} onCreateCategory={saveCategory} onSubmit={saveReceivablePayment} onClose={() => setReceivablePayment(null)} />}
       {paymentToCancel && <CancelReceivablePaymentModal data={paymentToCancel} onClose={() => setPaymentToCancel(null)} onConfirm={() => removeReceivablePayment(paymentToCancel.receivable, paymentToCancel.payment)} />}
       {receivableToDelete && <DeleteReceivableModal receivable={receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={() => removeReceivable(receivableToDelete)} />}

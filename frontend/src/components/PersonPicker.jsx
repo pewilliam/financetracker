@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Plus, Search, UserRound, X } from "lucide-react";
 import { useI18n } from "../i18n/index.ts";
-import { CREATE_RECEIVABLE_PERSON_VALUE } from "../app/constants.js";
 
 function normalizeText(value) {
   return String(value || "")
@@ -22,8 +21,8 @@ function initialsFor(name) {
 export default function PersonPicker({
   people = [],
   value = "",
-  personName = "",
   onChange,
+  onCreate,
   required = false
 }) {
   const { language } = useI18n();
@@ -31,8 +30,7 @@ export default function PersonPicker({
   const searchRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const creating = value === CREATE_RECEIVABLE_PERSON_VALUE;
-  const selected = creating ? null : people.find((person) => String(person.id) === String(value));
+  const selected = people.find((person) => String(person.id) === String(value));
 
   const filtered = useMemo(() => {
     const query = normalizeText(search.trim());
@@ -62,37 +60,33 @@ export default function PersonPicker({
 
   const startCreate = () => {
     const suggestion = search.trim();
-    onChange?.({ person_id: CREATE_RECEIVABLE_PERSON_VALUE, person_name: suggestion });
     setOpen(false);
     setSearch("");
+    onCreate?.(suggestion);
   };
 
   return (
-    <div className={`person-picker ${open ? "open" : ""} ${creating ? "creating" : ""}`} ref={rootRef}>
+    <div className={`person-picker ${open ? "open" : ""}`} ref={rootRef}>
       <button
-        className={`person-picker-trigger ${selected || creating ? "selected" : ""}`}
+        className={`person-picker-trigger ${selected ? "selected" : ""}`}
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-required={required}
       >
         <span className="person-picker-avatar">
-          {selected || creating
-            ? initialsFor(creating ? personName || (language === "en-US" ? "New" : "Nova") : selected.name)
+          {selected
+            ? initialsFor(selected.name)
             : <UserRound size={16} />}
         </span>
         <span className="person-picker-copy">
           <strong>
-            {creating
-              ? (language === "en-US" ? "New person" : "Nova pessoa")
-              : selected?.name || (language === "en-US" ? "Select a person" : "Selecione uma pessoa")}
+            {selected?.name || (language === "en-US" ? "Select a person" : "Selecione uma pessoa")}
           </strong>
           <small>
-            {creating
-              ? (language === "en-US" ? "Will be created on save" : "Será cadastrada ao salvar")
-              : selected
-                ? (language === "en-US" ? "Receivable person" : "Pessoa do recebível")
-                : (language === "en-US" ? "Search or create" : "Busque ou cadastre")}
+            {selected
+              ? (language === "en-US" ? "Receivable person" : "Pessoa do recebível")
+              : (language === "en-US" ? "Search or create" : "Busque ou cadastre")}
           </small>
         </span>
         <ChevronDown size={17} />
@@ -146,18 +140,6 @@ export default function PersonPicker({
         </div>
       )}
 
-      {creating && (
-        <label className="field-label person-picker-name">
-          <span>{language === "en-US" ? "Person name" : "Nome da pessoa"}</span>
-          <input
-            value={personName}
-            onChange={(event) => onChange?.({ person_id: CREATE_RECEIVABLE_PERSON_VALUE, person_name: event.target.value })}
-            placeholder={language === "en-US" ? "Full name" : "Nome completo"}
-            required
-            autoFocus
-          />
-        </label>
-      )}
     </div>
   );
 }

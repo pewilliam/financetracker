@@ -13444,3 +13444,228 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 @media (max-width: 720px) {
   .plastic-card-figures strong { font-size: 13px; }
 }
+
+/* Receivables grouped by person */
+.receivable-people-section,
+.receivable-linked-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+.receivable-people-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.receivable-people-heading > div { display: grid; gap: 4px; }
+.receivable-people-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 850;
+}
+.receivable-people-heading p,
+.receivable-people-heading > small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.receivable-people-heading > small {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--card);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.receivable-people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.receivable-person-card {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.receivable-person-card:hover,
+.receivable-person-card:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
+  outline: none;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--primary) 11%, transparent);
+  transform: translateY(-1px);
+}
+.receivable-person-card > header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 11px;
+}
+.receivable-person-avatar {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 900;
+}
+.receivable-person-title { min-width: 0; }
+.receivable-person-title h3 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.receivable-person-title p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.receivable-person-menu { position: relative; }
+.receivable-person-menu-popover {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 5px);
+  right: 0;
+  width: 170px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .16);
+}
+.receivable-person-menu-popover button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
+}
+.receivable-person-menu-popover button:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.receivable-person-balance { display: grid; gap: 3px; }
+.receivable-person-balance span,
+.receivable-person-metrics span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.receivable-person-balance strong { font-size: 24px; line-height: 1.2; }
+.receivable-person-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.receivable-person-metrics > div {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px 5px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+}
+.receivable-person-metrics svg { color: var(--muted); }
+.receivable-person-metrics strong { grid-column: 2; font-size: 13px; }
+.receivable-person-metrics .danger svg,
+.receivable-person-metrics .danger strong { color: var(--expense); }
+.receivable-people-empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 38px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.receivable-people-empty strong { color: var(--text); }
+.receivable-people-empty p { margin: 0 0 8px; font-size: 13px; }
+.receivable-person-layer { z-index: 90; }
+.receivable-person-modal { width: min(460px, calc(100% - 32px)); }
+.receivable-person-form-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.receivable-person-form-error { margin: 0; color: var(--expense); font-size: 12px; font-weight: 700; }
+.receivable-person-details-modal { width: min(720px, calc(100% - 32px)); }
+.receivable-person-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.receivable-person-detail-summary > div {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.receivable-person-detail-summary svg { color: var(--primary); }
+.receivable-person-detail-summary span { color: var(--muted); font-size: 11px; }
+.receivable-person-detail-summary strong { grid-column: 2; font-size: 17px; }
+.receivable-person-detail-summary .danger svg,
+.receivable-person-detail-summary .danger strong { color: var(--expense); }
+.receivable-person-history { display: grid; gap: 10px; }
+.receivable-person-history > header h3 { margin: 0; font-size: 14px; }
+.receivable-person-history > header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.receivable-person-history-list { display: grid; gap: 7px; }
+.receivable-person-history-list > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.receivable-person-history-list > button:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.receivable-person-history-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+.receivable-person-history-icon.overdue { background: color-mix(in srgb, var(--expense) 10%, transparent); color: var(--expense); }
+.receivable-person-history-copy { display: grid; min-width: 0; gap: 3px; }
+.receivable-person-history-copy strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.receivable-person-history-copy small { color: var(--muted); font-size: 11px; }
+.receivable-person-history-list > button > strong { font-size: 13px; white-space: nowrap; }
+.receivable-person-history-empty { margin: 0; border: 1px dashed var(--border); border-radius: 9px; padding: 22px; color: var(--muted); font-size: 13px; text-align: center; }
+
+@media (max-width: 720px) {
+  .receivable-view-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .receivable-view-actions .btn-primary { grid-column: 1 / -1; }
+  .receivable-people-grid { grid-template-columns: 1fr; }
+  .receivable-person-detail-summary { grid-template-columns: 1fr; }
+  .receivable-person-history-list > button { grid-template-columns: 34px minmax(0, 1fr); }
+  .receivable-person-history-list > button > strong { grid-column: 2; }
+}

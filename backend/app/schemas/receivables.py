@@ -7,7 +7,11 @@ from app.schemas.categories import CategoryOut
 
 
 class ReceivablePersonCreate(APIModel):
-    name: str
+    name: str = Field(min_length=1, max_length=255)
+
+
+class ReceivablePersonUpdate(APIModel):
+    name: str = Field(min_length=1, max_length=255)
 
 
 class ReceivablePersonOut(APIModel):

@@ -5,7 +5,6 @@ import CategorySelect from "../components/CategorySelect.jsx";
 import ExpensePicker from "../components/ExpensePicker.jsx";
 import PersonPicker from "../components/PersonPicker.jsx";
 import { useI18n } from "../i18n/index.ts";
-import { CREATE_RECEIVABLE_PERSON_VALUE } from "../app/constants.js";
 import { formatDateShort, formatMoney, formatTypedMoneyAsCurrency, formatTypedMoneyForEditing, parseTypedMoneyInput } from "../utils/format.js";
 
 function addMonths(isoDate, amount) {
@@ -102,7 +101,7 @@ function defaultSeriesCountForExpense(option, expenseOptions) {
   return 1;
 }
 
-export default function ReceivableModal({ form, setForm, editing, receivables = [], people, categories = [], expenseOptions = [], onCreateCategory, onSubmit, onClose }) {
+export default function ReceivableModal({ form, setForm, editing, receivables = [], people, categories = [], expenseOptions = [], onCreateCategory, onCreatePerson, onSubmit, onClose }) {
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [excessConfirmed, setExcessConfirmed] = useState(false);
@@ -252,7 +251,7 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
 
   const submit = (event) => {
     event.preventDefault();
-    const hasPerson = form.person_id && (form.person_id !== CREATE_RECEIVABLE_PERSON_VALUE || form.person_name.trim());
+    const hasPerson = Boolean(form.person_id);
     const installmentAmounts = previewRows.map((row) => Number(row.amount) || 0);
     if (!hasPerson || !form.description.trim() || !parseTypedMoneyInput(form.total_amount, language) || !form.due_date) return;
     if (seriesCount > 1 && installmentAmounts.some((amount) => amount <= 0)) return;
@@ -284,9 +283,9 @@ export default function ReceivableModal({ form, setForm, editing, receivables = 
             <PersonPicker
               people={people}
               value={form.person_id || ""}
-              personName={form.person_name || ""}
               required
               onChange={(next) => updateForm(next)}
+              onCreate={onCreatePerson}
             />
           </div>
           <div className="field-label"><span>{tt("receivables.description", "Descrição")}</span><input value={form.description} onChange={(event) => updateForm({ description: event.target.value })} required /></div>
