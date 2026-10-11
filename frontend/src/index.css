@@ -13921,7 +13921,23 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   background: color-mix(in srgb, var(--expense) 7%, var(--card));
 }
 .receivable-details-modal .installment-details-actions {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   padding: 14px 24px;
+}
+.receivable-details-actions-left,
+.receivable-details-actions-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.receivable-details-actions-left { flex: 0 0 auto; }
+.receivable-details-actions-right {
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 .receivable-details-modal .modal-actions.installment-details-actions .btn {
   flex: 0 0 auto;
@@ -13933,21 +13949,39 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-details-modal .receivable-payments button { padding: 7px 10px; font-size: 11px; }
 
 @media (max-width: 700px) {
-  .receivable-details-modal { width: 100%; max-width: none; border-radius: 16px 16px 0 0; }
+  .receivable-details-modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 8px);
+    border-radius: 16px 16px 0 0;
+  }
   .receivable-details-modal .installment-details-titlebar {
     grid-template-columns: 38px minmax(0, 1fr) 36px;
     gap: 10px;
-    padding: 14px 16px;
+    padding: 12px 14px 13px;
   }
   .receivable-details-modal .installment-details-titlebar .transaction-entry-icon { width: 38px; height: 38px; }
   .receivable-details-modal .installment-details-titlebar .transaction-entry-heading h2 { font-size: 18px; }
   .receivable-details-modal .installment-details-heading-meta { align-items: flex-start; gap: 4px; }
   .receivable-details-modal .installment-details-heading-meta > span { font-size: 11px; }
-  .receivable-details-modal .installment-details-scroll { gap: 16px; padding: 16px; }
-  .receivable-details-modal .installment-financial-summary > div { padding: 14px; }
+  .receivable-details-modal .installment-details-scroll {
+    grid-auto-rows: max-content;
+    gap: 12px;
+    padding: 14px;
+  }
+  .receivable-details-modal .installment-financial-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .receivable-details-modal .installment-financial-summary > div { gap: 6px; padding: 12px 10px; }
+  .receivable-details-modal .installment-financial-summary > div:nth-child(3) {
+    grid-column: auto;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
   .receivable-details-modal .installment-financial-summary span { font-size: 9px; }
-  .receivable-details-modal .installment-financial-summary strong { font-size: 18px; }
+  .receivable-details-modal .installment-financial-summary strong { font-size: clamp(14px, 4.5vw, 18px); }
   .receivable-details-modal .installment-purchase-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receivable-details-modal .installment-purchase-meta > div { padding: 9px 10px; }
   .receivable-details-modal .installment-details-group-head { padding: 10px 12px; }
   .receivable-details-modal .receivable-details-row {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -13957,5 +13991,23 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
     font-size: 13px;
   }
   .receivable-details-modal .receivable-row-actions .icon-btn.small { width: 38px; min-height: 38px; }
-  .receivable-details-modal .modal-actions.installment-details-actions .btn { width: 100%; min-width: 0; min-height: 42px; }
+  .receivable-details-modal .receivable-details-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 14px max(14px, env(safe-area-inset-bottom));
+  }
+  .receivable-details-modal .receivable-details-actions-left { flex: 0 0 auto; }
+  .receivable-details-modal .receivable-details-actions-right {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+  .receivable-details-modal .modal-actions.receivable-details-actions .btn {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 42px;
+  }
 }

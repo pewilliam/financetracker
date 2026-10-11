@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Check, Link2, Pencil, Trash2, Undo2, Wallet, X } from "lucide-react";
+import { Check, HandCoins, Link2, Pencil, Trash2, Undo2, Wallet, X } from "lucide-react";
 import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useI18n } from "../i18n/index.ts";
 import { formatDateShort, formatMoney } from "../utils/format.js";
@@ -57,6 +57,7 @@ export default function ReceivableDetailsModal({
   const closeButtonRef = useRef(null);
   const isGroup = Boolean(group?.isGroup);
   const item = !isGroup ? group?.items?.[0] : null;
+  const canReceivePayment = Boolean(item && item.status !== "paid" && Number(item.remaining_amount || 0) > 0);
   const paidCount = group?.items?.filter(isPaidReceivable).length || 0;
   const nextOpen = group?.items?.find((entry) => !isPaidReceivable(entry));
 
@@ -204,7 +205,7 @@ export default function ReceivableDetailsModal({
                     title={tt("receivables.partialPayment", "Pagamento parcial")}
                     aria-label={tt("receivables.partialPayment", "Pagamento parcial")}
                   >
-                    <Wallet size={15} />
+                    <HandCoins size={15} />
                   </button>
                   <button
                     className="icon-btn small success"
@@ -418,40 +419,40 @@ export default function ReceivableDetailsModal({
           )}
         </div>
 
-        <footer className="modal-actions installment-details-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={busy}>{language === "en-US" ? "Close" : "Fechar"}</button>
-          {!isGroup && item && (
-            item.record_kind === "linked_transaction" ? (
-              <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => runAction("editLinked", item)}>
-                <Pencil size={15} /> {tt("receivables.editLinkedEntry", "Editar lançamento")}
+        <footer className="modal-actions installment-details-actions receivable-details-actions">
+          <div className="receivable-details-actions-left">
+            {!isGroup && item?.record_kind !== "linked_transaction" && (
+              <button className="btn btn-ghost danger-text receivable-action-danger" type="button" disabled={busy} onClick={() => runAction("delete", item)}>
+                <Trash2 size={15} /> {tt("actions.delete", "Excluir")}
               </button>
-            ) : (
-              <>
-                <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => runAction("edit", item)}>
-                  <Pencil size={15} /> {tt("actions.edit", "Editar")}
+            )}
+          </div>
+          <div className="receivable-details-actions-right">
+            <button className="btn btn-ghost receivable-action-close" type="button" onClick={onClose} disabled={busy}>{language === "en-US" ? "Close" : "Fechar"}</button>
+            {!isGroup && item && (
+              item.record_kind === "linked_transaction" ? (
+                <button className="btn btn-ghost receivable-action-edit" type="button" disabled={busy} onClick={() => runAction("editLinked", item)}>
+                  <Pencil size={15} /> {tt("receivables.editLinkedEntry", "Editar lançamento")}
                 </button>
-                {item.status !== "paid" && (
-                  <>
-                    <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => runAction("payment", item)}>
-                      {tt("receivables.partialPayment", "Pagamento parcial")}
-                    </button>
-                    <button className="btn btn-primary" type="button" disabled={busy} onClick={() => runAction("paid", item)}>
-                      <Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}
-                    </button>
-                  </>
-                )}
-                {item.payments?.length === 1 ? (
-                  <button className="btn btn-ghost danger-text" type="button" disabled={busy} onClick={() => handleDeletePayment(item, item.payments[0])}>
-                    <Undo2 size={15} /> {tt("receivables.cancelPayment", "Cancelar pagamento")}
+              ) : (
+                <>
+                  <button className="btn btn-ghost receivable-action-edit" type="button" disabled={busy} onClick={() => runAction("edit", item)}>
+                    <Pencil size={15} /> {tt("actions.edit", "Editar")}
                   </button>
-                ) : !item.payments?.length ? (
-                  <button className="btn btn-ghost danger-text" type="button" disabled={busy} onClick={() => runAction("delete", item)}>
-                    <Trash2 size={15} /> {tt("actions.delete", "Excluir")}
-                  </button>
-                ) : null}
-              </>
-            )
-          )}
+                  {canReceivePayment && (
+                    <>
+                      <button className="btn btn-ghost receivable-action-payment" type="button" disabled={busy} onClick={() => runAction("payment", item)}>
+                        <HandCoins size={15} /> {tt("receivables.partialPayment", "Pagamento parcial")}
+                      </button>
+                      <button className="btn btn-primary receivable-action-primary" type="button" disabled={busy} onClick={() => runAction("paid", item)}>
+                        <Check size={15} /> {tt("receivables.markPaid", "Marcar como pago")}
+                      </button>
+                    </>
+                  )}
+                </>
+              )
+            )}
+          </div>
         </footer>
       </div>
     </div>,
