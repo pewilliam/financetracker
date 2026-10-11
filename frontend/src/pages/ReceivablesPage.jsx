@@ -89,19 +89,25 @@ export function buildReceivablePeople(people, receivables) {
     const items = (receivables || []).filter((item) => Number(item.person_id) === Number(person.id));
     const groups = buildReceivableGroups(items);
     const openGroups = groups.filter((group) => group.status !== "paid");
+    const paidGroups = groups.filter((group) => group.status === "paid");
     const overdueGroups = groups.filter((group) => group.status === "overdue");
     const totalAmount = openGroups.reduce((sum, group) => sum + Number(group.total_amount || 0), 0);
     return {
       ...person,
       items,
       groups,
+      open_groups: openGroups,
+      paid_groups: paidGroups,
       open_count: openGroups.length,
+      paid_count: paidGroups.length,
       overdue_count: overdueGroups.length,
       total_open: openGroups.reduce((sum, group) => sum + Number(group.remaining_amount || 0), 0),
       total_overdue: overdueGroups.reduce((sum, group) => sum + Number(group.remaining_amount || 0), 0),
       total_amount: totalAmount,
       received_amount: openGroups.reduce((sum, group) => sum + Number(group.received_amount || 0), 0),
-      next_due: openGroups.reduce((next, group) => (!next || group.due_date < next ? group.due_date : next), null)
+      total_paid: paidGroups.reduce((sum, group) => sum + Number(group.total_amount || 0), 0),
+      next_due: openGroups.reduce((next, group) => (!next || group.due_date < next ? group.due_date : next), null),
+      last_paid_due: paidGroups.reduce((latest, group) => (!latest || group.due_date > latest ? group.due_date : latest), null)
     };
   }).sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
 }
@@ -117,15 +123,24 @@ function ReceivableSummaryCard({ group, language, tt, onOpen }) {
         <div><small>{group.status === "paid" ? tt("receivables.total", "Total") : tt("receivables.remaining", "Restante")}</small><strong>{formatMoney(group.status === "paid" ? group.total_amount : group.remaining_amount, language)}</strong></div>
         <div><small>{tt("receivables.dueDate", "Vencimento")}</small><strong>{formatDateShort(group.due_date, language)}</strong></div>
       </div>
-      <div className="installment-progress receivable-progress"><span style={{ width: `${progress}%` }} /></div>
+      <div className="receivable-card-progress">
+        <div>
+          <span>Progresso do recebimento</span>
+          <strong>{group.status === "paid" ? "Concluído" : `${Math.round(progress)}% recebido`}</strong>
+        </div>
+        <div className="installment-progress receivable-progress" role="progressbar" aria-label="Progresso do recebimento" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(progress)}>
+          <span style={{ width: `${progress}%` }} />
+        </div>
+      </div>
     </article>
   );
 }
 
-function ReceivablePersonCard({ person, language, onDetails, onEdit }) {
+function ReceivablePersonCard({ person, language, scope, onDetails, onEdit }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const progress = Math.min((Number(person.received_amount || 0) / Math.max(Number(person.total_amount || 1), 1)) * 100, 100);
+  const paid = scope === "paid";
+  const progress = paid ? 100 : Math.min((Number(person.received_amount || 0) / Math.max(Number(person.total_amount || 1), 1)) * 100, 100);
   useEffect(() => {
     if (!menuOpen) return undefined;
     const close = (event) => { if (!menuRef.current?.contains(event.target)) setMenuOpen(false); };
@@ -138,7 +153,7 @@ function ReceivablePersonCard({ person, language, onDetails, onEdit }) {
     }}>
       <header>
         <span className="receivable-person-avatar">{initialsFor(person.name)}</span>
-        <div className="receivable-person-title"><h3>{person.name}</h3><p>{person.open_count === 1 ? "1 recebível em aberto" : `${person.open_count} recebíveis em aberto`}</p></div>
+        <div className="receivable-person-title"><h3>{person.name}</h3><p>{paid ? (person.paid_count === 1 ? "1 recebível pago" : `${person.paid_count} recebíveis pagos`) : (person.open_count === 1 ? "1 recebível em aberto" : `${person.open_count} recebíveis em aberto`)}</p></div>
         <div className="receivable-person-menu" ref={menuRef}>
           <button className="icon-btn" type="button" aria-label={`Opções de ${person.name}`} aria-expanded={menuOpen} onClick={(event) => { event.stopPropagation(); setMenuOpen((current) => !current); }}><MoreVertical size={18} /></button>
           {menuOpen && <div className="receivable-person-menu-popover">
@@ -147,12 +162,25 @@ function ReceivablePersonCard({ person, language, onDetails, onEdit }) {
           </div>}
         </div>
       </header>
-      <div className="receivable-person-balance"><span>Total a receber</span><strong>{formatMoney(person.total_open, language)}</strong></div>
+      <div className="receivable-person-balance"><span>{paid ? "Total recebido" : "Total a receber"}</span><strong>{formatMoney(paid ? person.total_paid : person.total_open, language)}</strong></div>
       <div className="receivable-person-metrics">
-        <div className={person.total_overdue > 0 ? "danger" : ""}><TriangleAlert size={15} /><span>Vencido</span><strong>{formatMoney(person.total_overdue, language)}</strong></div>
-        <div><CalendarClock size={15} /><span>Próximo vencimento</span><strong>{person.next_due ? formatDateShort(person.next_due, language) : "—"}</strong></div>
+        {paid ? <>
+          <div><ReceiptText size={15} /><span>Contas quitadas</span><strong>{person.paid_count}</strong></div>
+          <div><CalendarClock size={15} /><span>Último vencimento</span><strong>{person.last_paid_due ? formatDateShort(person.last_paid_due, language) : "—"}</strong></div>
+        </> : <>
+          <div className={person.total_overdue > 0 ? "danger" : ""}><TriangleAlert size={15} /><span>Vencido</span><strong>{formatMoney(person.total_overdue, language)}</strong></div>
+          <div><CalendarClock size={15} /><span>Próximo vencimento</span><strong>{person.next_due ? formatDateShort(person.next_due, language) : "—"}</strong></div>
+        </>}
       </div>
-      <div className="installment-progress receivable-progress"><span style={{ width: `${progress}%` }} /></div>
+      <div className="receivable-card-progress">
+        <div>
+          <span>Progresso do recebimento</span>
+          <strong>{paid ? "Concluído" : `${Math.round(progress)}% recebido`}</strong>
+        </div>
+        <div className="installment-progress receivable-progress" role="progressbar" aria-label="Progresso do recebimento" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(progress)}>
+          <span style={{ width: `${progress}%` }} />
+        </div>
+      </div>
     </article>
   );
 }
@@ -162,6 +190,7 @@ export default function ReceivablesPage({ receivables, people = [], linkedTransa
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [filters, setFilters] = useState({ search: "" });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [scope, setScope] = useState("pending");
   const [detailsKey, setDetailsKey] = useState(null);
   const [personDetailsId, setPersonDetailsId] = useState(null);
   const [personDetailsLoading, setPersonDetailsLoading] = useState(false);
@@ -174,12 +203,21 @@ export default function ReceivablesPage({ receivables, people = [], linkedTransa
   const normalizedReceivables = receivables.map((item) => ({ ...item, record_kind: "receivable" }));
   const personSummaries = useMemo(() => buildReceivablePeople(people, normalizedReceivables), [people, receivables]);
   const search = filters.search.trim().toLocaleLowerCase(language === "en-US" ? "en-US" : "pt-BR");
-  const filteredPeople = personSummaries.filter((person) => !search || person.name.toLocaleLowerCase().includes(search) || person.items.some((item) => `${item.description} ${item.due_date}`.toLocaleLowerCase().includes(search)));
-  const linkedGroups = buildReceivableGroups(linkedReceivables.filter((item) => !search || `${item.description} ${item.due_date}`.toLocaleLowerCase().includes(search)));
+  const scopedPeople = personSummaries.filter((person) => scope === "paid" ? person.paid_count > 0 : person.open_count > 0 || person.groups.length === 0);
+  const filteredPeople = scopedPeople.filter((person) => {
+    if (!search || person.name.toLocaleLowerCase().includes(search)) return true;
+    const groups = scope === "paid" ? person.paid_groups : person.open_groups;
+    return groups.some((group) => group.items.some((item) => `${item.description} ${item.due_date}`.toLocaleLowerCase().includes(search)));
+  });
+  const linkedGroups = buildReceivableGroups(linkedReceivables.filter((item) => {
+    const matchesScope = scope === "paid" ? item.status === "paid" : item.status !== "paid";
+    return matchesScope && (!search || `${item.description} ${item.due_date}`.toLocaleLowerCase().includes(search));
+  }));
   const allReceivables = [...normalizedReceivables, ...linkedReceivables];
   const openReceivables = allReceivables.filter((item) => item.status !== "paid");
   const detailsGroup = detailsKey ? buildReceivableGroups(allReceivables).find((group) => group.key === detailsKey) || null : null;
   const personDetails = personDetailsId ? personSummaries.find((person) => Number(person.id) === Number(personDetailsId)) || null : null;
+  const personDetailGroups = personDetails ? (scope === "paid" ? personDetails.paid_groups : personDetails.open_groups) : [];
   const summaries = {
     totalOpen: openReceivables.reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
     overdue: allReceivables.filter((item) => item.status === "overdue").reduce((sum, item) => sum + Number(item.remaining_amount || 0), 0),
@@ -190,9 +228,15 @@ export default function ReceivablesPage({ receivables, people = [], linkedTransa
 
   const openPersonDetails = async (person) => {
     setPersonDetailsId(person.id);
-    if (paidLoaded || !onExpandPaid) return;
+    if (scope !== "paid" || paidLoaded || !onExpandPaid) return;
     setPersonDetailsLoading(true);
     try { await onExpandPaid(); } finally { setPersonDetailsLoading(false); }
+  };
+  const selectScope = async (nextScope) => {
+    setScope(nextScope);
+    setPersonDetailsId(null);
+    setDetailsKey(null);
+    if (nextScope === "paid" && !paidLoaded && !paidLoading) await onExpandPaid?.();
   };
   useEffect(() => {
     onOverlayChange?.(Boolean(detailsGroup || personDetails));
@@ -216,18 +260,26 @@ export default function ReceivablesPage({ receivables, people = [], linkedTransa
         <article className="card stat-card"><p className="stat-label">{tt("receivables.dueThisMonth", "A vencer este mês")}</p><p className="stat-value">{formatMoney(cards.dueThisMonth, language)}</p><p className="stat-meta">{formatMonthLabel(new Date().getFullYear(), new Date().getMonth() + 1, language)}</p></article>
         <article className="card stat-card stat-card-balance"><p className="stat-label">{tt("receivables.receivedThisMonth", "Recebido no mês")}</p><p className="stat-value">{formatMoney(cards.receivedThisMonth, language)}</p><p className="stat-meta">{tt("receivables.realizedIncome", "Ganho realizado")}</p></article>
       </section>
+      <div className="receivable-scope-tabs" role="tablist" aria-label="Situação dos recebíveis">
+        <button className={scope === "pending" ? "active" : ""} type="button" role="tab" aria-selected={scope === "pending"} onClick={() => selectScope("pending")}>
+          Pendentes <span>{Number(summary?.group_counts?.overdue || 0) + Number(summary?.group_counts?.pending || 0) + Number(summary?.group_counts?.partial || 0)}</span>
+        </button>
+        <button className={scope === "paid" ? "active" : ""} type="button" role="tab" aria-selected={scope === "paid"} onClick={() => selectScope("paid")}>
+          Pagos <span>{Number(summary?.group_counts?.paid || 0)}</span>
+        </button>
+      </div>
       {filterOpen && <div className="invoice-filter receivable-filter">
-        <div className="invoice-filter-head"><span><Filter size={15} /> {tt("receivables.filter", "Filtrar pessoas e recebíveis")}</span><small>{filteredPeople.length} de {personSummaries.length}</small></div>
+        <div className="invoice-filter-head"><span><Filter size={15} /> {tt("receivables.filter", "Filtrar pessoas e recebíveis")}</span><small>{filteredPeople.length} de {scopedPeople.length}</small></div>
         <div className="invoice-filter-grid receivable-filter-grid"><label className="invoice-filter-search"><span>{tt("receivables.search", "Pessoa ou descrição")}</span><input value={filters.search} onChange={(event) => setFilters({ search: event.target.value })} placeholder={tt("receivables.searchPlaceholder", "Buscar por pessoa, descrição ou data")} /></label></div>
         {search && <button className="invoice-filter-reset" type="button" onClick={() => setFilters({ search: "" })}>Limpar filtros</button>}
       </div>}
       <section className="receivable-people-section">
-        <header className="receivable-people-heading"><div><span><ReceiptText size={17} /> Pessoas</span><p>Os recebíveis estão agrupados por quem deve pagar.</p></div><small>{filteredPeople.length} {filteredPeople.length === 1 ? "pessoa" : "pessoas"}</small></header>
-        {filteredPeople.length ? <div className="receivable-people-grid">{filteredPeople.map((person) => <ReceivablePersonCard key={person.id} person={person} language={language} onDetails={openPersonDetails} onEdit={onEditPerson} />)}</div> : <div className="receivable-people-empty"><UserPlus size={26} /><strong>Nenhuma pessoa encontrada</strong><p>Cadastre uma pessoa para organizar seus recebíveis.</p><button className="btn btn-primary" type="button" onClick={onNewPerson}><Plus size={16} /> Nova pessoa</button></div>}
+        <header className="receivable-people-heading"><div><span><ReceiptText size={17} /> {scope === "paid" ? "Recebíveis pagos" : "Recebíveis pendentes"}</span><p>{scope === "paid" ? "Histórico de valores já recebidos, agrupado por pessoa." : "Valores em aberto, parciais ou vencidos, agrupados por pessoa."}</p></div><small>{filteredPeople.length} {filteredPeople.length === 1 ? "pessoa" : "pessoas"}</small></header>
+        {scope === "paid" && paidLoading ? <div className="receivable-people-empty"><strong>Carregando recebíveis pagos...</strong></div> : filteredPeople.length ? <div className="receivable-people-grid">{filteredPeople.map((person) => <ReceivablePersonCard key={person.id} person={person} language={language} scope={scope} onDetails={openPersonDetails} onEdit={onEditPerson} />)}</div> : <div className="receivable-people-empty"><ReceiptText size={26} /><strong>{scope === "paid" ? "Nenhum recebível pago" : "Nenhum recebível pendente"}</strong><p>{search ? "Nenhum resultado corresponde ao filtro informado." : scope === "paid" ? "Os recebíveis quitados aparecerão aqui." : "Cadastre uma nova conta a receber para começar."}</p>{scope === "pending" && !search && <button className="btn btn-primary" type="button" onClick={onNew}><Plus size={16} /> Nova conta</button>}</div>}
       </section>
       {linkedGroups.length > 0 && <section className="receivable-linked-section"><header className="receivable-people-heading"><div><span>Lançamentos associados</span><p>Entradas vinculadas diretamente a gastos, sem uma pessoa cadastrada.</p></div><small>{linkedGroups.length}</small></header><div className="receivable-list">{linkedGroups.map((group) => <ReceivableSummaryCard key={group.key} group={group} language={language} tt={tt} onOpen={setDetailsKey} />)}</div></section>}
       <button className="fab" onClick={onNew} aria-label="Criar recebível"><Plus /></button>
-      {personDetails && <ReceivablePersonDetailsModal person={personDetails} groups={personDetails.groups} loading={personDetailsLoading || paidLoading} onClose={() => setPersonDetailsId(null)} onEdit={(person) => { setPersonDetailsId(null); onEditPerson(person); }} onOpenReceivable={(key) => { setPersonDetailsId(null); setDetailsKey(key); }} />}
+      {personDetails && <ReceivablePersonDetailsModal person={personDetails} groups={personDetailGroups} scope={scope} loading={personDetailsLoading || (scope === "paid" && paidLoading)} onClose={() => setPersonDetailsId(null)} onEdit={(person) => { setPersonDetailsId(null); onEditPerson(person); }} onOpenReceivable={(key) => { setPersonDetailsId(null); setDetailsKey(key); }} />}
       {detailsGroup && <ReceivableDetailsModal group={detailsGroup} busy={actionOverlayOpen} onClose={() => setDetailsKey(null)} onEdit={onEdit} onEditLinkedTransaction={onEditLinkedTransaction} onPaid={onPaid} onPayment={onPayment} onDelete={onDelete} onDeletePayment={onDeletePayment} />}
     </section>
   );

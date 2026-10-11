@@ -13446,6 +13446,45 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 
 /* Receivables grouped by person */
+.receivable-scope-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(130px, 1fr));
+  gap: 4px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+}
+.receivable-scope-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+.receivable-scope-tabs button:hover { color: var(--text); }
+.receivable-scope-tabs button.active {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 2px 9px rgba(15, 23, 42, .08);
+}
+.receivable-scope-tabs button span {
+  min-width: 22px;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 10px;
+}
 .receivable-people-section,
 .receivable-linked-section {
   display: grid;
@@ -13560,6 +13599,24 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 }
 .receivable-person-menu-popover button:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
 .receivable-person-balance { display: grid; gap: 3px; }
+.receivable-card-progress {
+  display: grid;
+  gap: 7px;
+}
+.receivable-card-progress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.receivable-card-progress > div:first-child strong {
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .receivable-person-balance span,
 .receivable-person-metrics span {
   color: var(--muted);
@@ -13611,6 +13668,7 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
+.receivable-person-detail-summary.paid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .receivable-person-detail-summary > div {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
@@ -13662,10 +13720,242 @@ button.installment-badge:focus-visible { filter: brightness(.94); outline: 0; }
 .receivable-person-history-empty { margin: 0; border: 1px dashed var(--border); border-radius: 9px; padding: 22px; color: var(--muted); font-size: 13px; text-align: center; }
 
 @media (max-width: 720px) {
+  .receivable-scope-tabs { display: grid; width: 100%; }
   .receivable-view-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .receivable-view-actions .btn-primary { grid-column: 1 / -1; }
   .receivable-people-grid { grid-template-columns: 1fr; }
+  .receivable-person-modal,
+  .receivable-person-details-modal {
+    width: 100%;
+    max-width: none;
+  }
   .receivable-person-detail-summary { grid-template-columns: 1fr; }
+  .receivable-person-detail-summary.paid { grid-template-columns: 1fr; }
   .receivable-person-history-list > button { grid-template-columns: 34px minmax(0, 1fr); }
   .receivable-person-history-list > button > strong { grid-column: 2; }
+}
+
+/* Receivable details: stronger visual hierarchy and easier scanning */
+.receivable-details-modal {
+  width: min(1040px, calc(100vw - 32px));
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(9, 30, 21, .22);
+}
+.receivable-details-modal .installment-details-titlebar {
+  grid-template-columns: 46px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 20px;
+  background:
+    radial-gradient(circle at 8% 10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 42%),
+    var(--card);
+}
+.receivable-details-modal .installment-details-titlebar .transaction-entry-icon {
+  width: 46px;
+  height: 46px;
+  margin-top: 0;
+  border-radius: 12px;
+}
+.receivable-details-modal .installment-details-titlebar .transaction-entry-heading > p {
+  margin-bottom: 3px;
+  font-size: 10px;
+  letter-spacing: .14em;
+}
+.receivable-details-modal .installment-details-titlebar .transaction-entry-heading h2 {
+  font-size: 23px;
+  letter-spacing: -.02em;
+  line-height: 1.25;
+}
+.receivable-details-modal .installment-details-heading-meta {
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+}
+.receivable-details-modal .installment-details-heading-meta > span {
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  font-size: 12px;
+  font-weight: 700;
+}
+.receivable-details-modal .installment-details-categories { gap: 6px; }
+.receivable-details-modal .category-badge,
+.receivable-details-modal .receivable-series-badge {
+  min-height: 22px;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.receivable-details-modal .installment-details-scroll {
+  gap: 20px;
+  padding: 22px 24px 26px;
+}
+.receivable-details-modal .installment-financial-summary {
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--text) 5%, transparent);
+}
+.receivable-details-modal .installment-financial-summary > div {
+  position: relative;
+  gap: 8px;
+  padding: 18px 20px;
+}
+.receivable-details-modal .installment-financial-summary > div::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.receivable-details-modal .installment-financial-summary .receivable-summary-received::before { background: var(--primary); }
+.receivable-details-modal .installment-financial-summary .receivable-summary-remaining::before { background: #d99a18; }
+.receivable-details-modal .installment-financial-summary span {
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.receivable-details-modal .installment-financial-summary strong {
+  font-size: 23px;
+  letter-spacing: -.025em;
+}
+.receivable-details-modal .installment-financial-summary .receivable-summary-received strong { color: var(--primary); }
+.receivable-details-modal .installment-financial-summary .receivable-summary-remaining strong { color: color-mix(in srgb, #d99a18 86%, var(--text)); }
+.receivable-details-modal .installment-purchase-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 9px;
+}
+.receivable-details-modal .installment-purchase-meta > div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface) 42%, var(--card));
+}
+.receivable-details-modal .installment-purchase-meta dt {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.receivable-details-modal .installment-purchase-meta dd {
+  display: flex;
+  align-items: center;
+  min-height: 23px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.receivable-details-modal .installment-status {
+  padding: 5px 9px;
+  font-size: 10px;
+}
+.receivable-details-modal .receivable-details-link {
+  gap: 12px;
+  padding: 14px 16px;
+}
+.receivable-details-modal .receivable-details-link span { font-size: 12px; }
+.receivable-details-modal .receivable-details-link strong { font-size: 14px; line-height: 1.4; }
+.receivable-details-modal .installment-items-section { gap: 12px; }
+.receivable-details-modal .installment-items-title h3 { font-size: 16px; }
+.receivable-details-modal .installment-items-title p { margin-top: 4px; font-size: 12px; line-height: 1.45; }
+.receivable-details-modal .installment-items-title > span {
+  min-width: 30px;
+  height: 28px;
+  font-size: 11px;
+}
+.receivable-details-modal .installment-details-table {
+  border-radius: 11px;
+  background: var(--card);
+}
+.receivable-details-modal .installment-details-table-head,
+.receivable-details-modal .receivable-details-row {
+  grid-template-columns: 82px 116px 116px 124px 102px minmax(150px, auto);
+  gap: 10px;
+  padding: 11px 14px;
+}
+.receivable-details-modal .installment-details-table-head {
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  font-size: 10px;
+  letter-spacing: .045em;
+}
+.receivable-details-modal .installment-details-list { max-height: min(48vh, 430px); }
+.receivable-details-modal .installment-details-group-head {
+  gap: 10px;
+  padding: 11px 14px;
+  background: color-mix(in srgb, var(--surface) 58%, var(--card));
+}
+.receivable-details-modal .installment-details-group-head > span { font-size: 12px; }
+.receivable-details-modal .installment-details-group-head > small {
+  min-width: 25px;
+  height: 22px;
+  font-size: 10px;
+}
+.receivable-details-modal .installment-details-group-head > strong { font-size: 12px; }
+.receivable-details-modal .receivable-details-row {
+  min-height: 66px;
+  font-size: 13px;
+}
+.receivable-details-modal .receivable-details-row > span > strong { font-size: 13px; }
+.receivable-details-modal .installment-item-number em {
+  padding: 3px 6px;
+  font-size: 8px;
+}
+.receivable-details-modal .receivable-row-actions { gap: 6px; }
+.receivable-details-modal .receivable-row-actions .icon-btn.small {
+  width: 34px;
+  min-height: 34px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 55%, var(--card));
+}
+.receivable-details-modal .receivable-row-actions .icon-btn.small:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+  color: var(--primary);
+}
+.receivable-details-modal .receivable-row-actions .icon-btn.success {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background: color-mix(in srgb, var(--primary) 9%, var(--card));
+}
+.receivable-details-modal .receivable-row-actions .icon-btn.danger {
+  border-color: color-mix(in srgb, var(--expense) 24%, var(--border));
+  background: color-mix(in srgb, var(--expense) 7%, var(--card));
+}
+.receivable-details-modal .installment-details-actions {
+  padding: 14px 24px;
+}
+.receivable-details-modal .modal-actions.installment-details-actions .btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 118px;
+  min-height: 40px;
+  font-size: 12px;
+}
+.receivable-details-modal .receivable-payments button { padding: 7px 10px; font-size: 11px; }
+
+@media (max-width: 700px) {
+  .receivable-details-modal { width: 100%; max-width: none; border-radius: 16px 16px 0 0; }
+  .receivable-details-modal .installment-details-titlebar {
+    grid-template-columns: 38px minmax(0, 1fr) 36px;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+  .receivable-details-modal .installment-details-titlebar .transaction-entry-icon { width: 38px; height: 38px; }
+  .receivable-details-modal .installment-details-titlebar .transaction-entry-heading h2 { font-size: 18px; }
+  .receivable-details-modal .installment-details-heading-meta { align-items: flex-start; gap: 4px; }
+  .receivable-details-modal .installment-details-heading-meta > span { font-size: 11px; }
+  .receivable-details-modal .installment-details-scroll { gap: 16px; padding: 16px; }
+  .receivable-details-modal .installment-financial-summary > div { padding: 14px; }
+  .receivable-details-modal .installment-financial-summary span { font-size: 9px; }
+  .receivable-details-modal .installment-financial-summary strong { font-size: 18px; }
+  .receivable-details-modal .installment-purchase-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receivable-details-modal .installment-details-group-head { padding: 10px 12px; }
+  .receivable-details-modal .receivable-details-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 10px;
+    min-height: 0;
+    padding: 13px;
+    font-size: 13px;
+  }
+  .receivable-details-modal .receivable-row-actions .icon-btn.small { width: 38px; min-height: 38px; }
+  .receivable-details-modal .modal-actions.installment-details-actions .btn { width: 100%; min-width: 0; min-height: 42px; }
 }

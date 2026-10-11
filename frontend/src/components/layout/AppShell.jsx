@@ -1492,7 +1492,11 @@ export default function AppShell() {
       <BottomNavigation
         hidden={overlayOpen}
       />
-      <MobileDock hidden={overlayOpen} onHiddenChange={setMobileDockHidden} onNew={() => openAddForm()} />
+      <MobileDock
+        hidden={overlayOpen}
+        onHiddenChange={setMobileDockHidden}
+        onNew={() => location.pathname === "/recebiveis" ? openReceivableModal() : openAddForm()}
+      />
 
       {scrollToTopVisible && !overlayOpen && (
         <button

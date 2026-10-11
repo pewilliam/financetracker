@@ -42,7 +42,10 @@ describe("receivables grouped by person", () => {
       overdue_count: 1,
       total_open: 80,
       total_overdue: 80,
-      next_due: "2026-10-01"
+      next_due: "2026-10-01",
+      paid_count: 1,
+      total_paid: 50,
+      last_paid_due: "2026-09-01"
     });
     expect(result[1]).toMatchObject({
       id: 2,

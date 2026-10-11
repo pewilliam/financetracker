@@ -301,15 +301,15 @@ export default function ReceivableDetailsModal({
 
         <div className="installment-details-scroll">
           <section className="installment-financial-summary" aria-label={language === "en-US" ? "Financial summary" : "Resumo financeiro"}>
-            <div>
+            <div className="receivable-summary-total">
               <span>{tt("receivables.total", "Total")}</span>
               <strong>{formatMoney(group.total_amount, language)}</strong>
             </div>
-            <div>
+            <div className="receivable-summary-received">
               <span>{tt("receivables.received", "Recebido")}</span>
               <strong>{formatMoney(group.received_amount, language)}</strong>
             </div>
-            <div>
+            <div className="receivable-summary-remaining">
               <span>{tt("receivables.remaining", "Restante")}</span>
               <strong>{formatMoney(group.remaining_amount, language)}</strong>
             </div>

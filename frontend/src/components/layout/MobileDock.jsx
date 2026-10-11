@@ -11,6 +11,7 @@ export default function MobileDock({ hidden = false, onHiddenChange, onNew }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const closeMore = useCallback(() => setMoreOpen(false), []);
   const hiddenOnScroll = useHideOnScroll({ disabled: moreOpen || hidden });
+  const onReceivablesPage = location.pathname === "/recebiveis";
   const moreIsActive = moreOpen || MORE_SHEET_PATHS.some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const links = [
     [t("bottomNavigation.home"), "/", LayoutDashboard],
@@ -42,7 +43,14 @@ export default function MobileDock({ hidden = false, onHiddenChange, onNew }) {
           <CalendarDays aria-hidden="true" />
           <span>{links[1][0]}</span>
         </NavLink>
-        <button className="mobile-dock-new" type="button" onClick={onNew} aria-label={language === "en-US" ? "New transaction" : "Novo lançamento"}>
+        <button
+          className="mobile-dock-new"
+          type="button"
+          onClick={onNew}
+          aria-label={onReceivablesPage
+            ? (language === "en-US" ? "New receivable" : "Novo recebível")
+            : (language === "en-US" ? "New transaction" : "Novo lançamento")}
+        >
           <span aria-hidden="true"><Plus /></span>
         </button>
         <NavLink to={links[2][1]} className={({ isActive }) => `mobile-dock-item${isActive ? " active" : ""}`}>

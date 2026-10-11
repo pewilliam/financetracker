@@ -3,12 +3,14 @@ import { useI18n } from "../i18n/index.ts";
 import { receivableStatusText } from "../app/helpers.js";
 import { formatDateShort, formatMoney } from "../utils/format.js";
 
-export default function ReceivablePersonDetailsModal({ person, groups = [], loading = false, onClose, onEdit, onOpenReceivable }) {
+export default function ReceivablePersonDetailsModal({ person, groups = [], scope = "pending", loading = false, onClose, onEdit, onOpenReceivable }) {
   const { language } = useI18n();
+  const paidScope = scope === "paid";
   const openGroups = groups.filter((group) => group.status !== "paid");
   const overdueGroups = groups.filter((group) => group.status === "overdue");
   const totalOpen = openGroups.reduce((sum, group) => sum + Number(group.remaining_amount || 0), 0);
   const totalOverdue = overdueGroups.reduce((sum, group) => sum + Number(group.remaining_amount || 0), 0);
+  const totalPaid = groups.reduce((sum, group) => sum + Number(group.total_amount || 0), 0);
 
   return (
     <div className="modal-layer receivable-action-layer">
@@ -26,16 +28,16 @@ export default function ReceivablePersonDetailsModal({ person, groups = [], load
         </header>
 
         <div className="invoice-modal-body">
-          <div className="receivable-person-detail-summary">
-            <div><CircleDollarSign size={17} /><span>{language === "en-US" ? "Open amount" : "Total a receber"}</span><strong>{formatMoney(totalOpen, language)}</strong></div>
-            <div className={totalOverdue > 0 ? "danger" : ""}><TriangleAlert size={17} /><span>{language === "en-US" ? "Overdue" : "Total vencido"}</span><strong>{formatMoney(totalOverdue, language)}</strong></div>
-            <div><ReceiptText size={17} /><span>{language === "en-US" ? "Receivables" : "Recebíveis"}</span><strong>{groups.length}</strong></div>
+          <div className={`receivable-person-detail-summary ${paidScope ? "paid" : ""}`}>
+            <div><CircleDollarSign size={17} /><span>{paidScope ? (language === "en-US" ? "Received amount" : "Total recebido") : (language === "en-US" ? "Open amount" : "Total a receber")}</span><strong>{formatMoney(paidScope ? totalPaid : totalOpen, language)}</strong></div>
+            {!paidScope && <div className={totalOverdue > 0 ? "danger" : ""}><TriangleAlert size={17} /><span>{language === "en-US" ? "Overdue" : "Total vencido"}</span><strong>{formatMoney(totalOverdue, language)}</strong></div>}
+            <div><ReceiptText size={17} /><span>{paidScope ? (language === "en-US" ? "Paid receivables" : "Recebíveis pagos") : (language === "en-US" ? "Open receivables" : "Recebíveis pendentes")}</span><strong>{groups.length}</strong></div>
           </div>
 
           <section className="receivable-person-history">
             <header>
               <div>
-                <h3>{language === "en-US" ? "Receivable history" : "Histórico de recebíveis"}</h3>
+                <h3>{paidScope ? (language === "en-US" ? "Paid receivables" : "Recebíveis pagos") : (language === "en-US" ? "Pending receivables" : "Recebíveis pendentes")}</h3>
                 <p>{language === "en-US" ? "Select an item to see payments and actions." : "Selecione um item para ver pagamentos e ações."}</p>
               </div>
             </header>
