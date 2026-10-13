@@ -5,10 +5,10 @@ import useModalLifecycle from "../hooks/useModalLifecycle.js";
 import { useI18n } from "../i18n/index.ts";
 import { formatMoney } from "../utils/format.js";
 import CalendarEntry from "../components/months/CalendarEntry.jsx";
-import { entriesForDay, describeEntry } from "../components/months/calendarEntries.js";
+import { dailyTotals, entriesForDay } from "../components/months/calendarEntries.js";
 import "./financeSheets.css";
 
-export default function DayEntriesModal({ day, onClose, onOpen, onAdd }) {
+export default function DayEntriesModal({ day, invoices = [], onClose, onOpen, onAdd }) {
   const { language } = useI18n();
   const english = language === "en-US";
   const titleId = useId();
@@ -19,12 +19,8 @@ export default function DayEntriesModal({ day, onClose, onOpen, onAdd }) {
     const trigger = document.activeElement;
     return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
   }, []);
-  const entries = entriesForDay(day);
-  const totals = entries.reduce((result, entry) => {
-    const info = describeEntry(entry, language);
-    result[info.kind] += Number(info.amount || 0);
-    return result;
-  }, { income: 0, expense: 0, planned: 0 });
+  const entries = entriesForDay(day, invoices);
+  const totals = dailyTotals(day);
   const date = new Date(`${day.date.slice(0, 10)}T12:00:00`);
   const fullDate = new Intl.DateTimeFormat(language, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date);
   const trapFocus = event => {
@@ -42,13 +38,18 @@ export default function DayEntriesModal({ day, onClose, onOpen, onAdd }) {
         <div className="finance-sheet-heading"><small>{fullDate}</small><h2 id={titleId}>{english ? "Day entries" : "Lançamentos do dia"}</h2><p>{entries.length} {english ? (entries.length === 1 ? "entry" : "entries") : (entries.length === 1 ? "lançamento" : "lançamentos")}</p></div>
         <button ref={closeRef} className="finance-sheet-close" type="button" onClick={onClose} aria-label={english ? "Close" : "Fechar"}><X size={18} /></button>
       </header>
+      <div className="month-day-balance-summary">
+        <div><small>{english ? "Day balance" : "Saldo do dia"}</small><strong className={Number(day.balance) < 0 ? "expense" : "neutral"}>{formatMoney(day.balance, language)}</strong></div>
+        <div><small>{english ? "Day change" : "Variação do dia"}</small><strong className={day.variation < 0 ? "expense" : day.variation > 0 ? "income" : "neutral"}>{day.variation > 0 ? "+ " : day.variation < 0 ? "− " : ""}{formatMoney(Math.abs(day.variation || 0), language)}</strong></div>
+      </div>
       <div className="finance-sheet-summary month-day-summary">
         <div><small>{english ? "Income" : "Ganhos"}</small><strong className="money-income">{formatMoney(totals.income, language)}</strong></div>
-        <div><small>{english ? "Expenses" : "Gastos"}</small><strong className="money-expense">{formatMoney(totals.expense, language)}</strong></div>
+        <div><small>{english ? "Expenses" : "Gastos"}</small><strong className="expense">{formatMoney(totals.expense, language)}</strong></div>
         <div><small>{english ? "Expected" : "Previstos"}</small><strong className="money-planned">{formatMoney(totals.planned, language)}</strong></div>
       </div>
       <div className="finance-sheet-scroll"><div className="finance-sheet-body month-day-entries">
         {entries.map(entry => <CalendarEntry key={entry.key} entry={entry} detailed onOpen={onOpen} />)}
+        {!entries.length && <p className="month-day-entries-empty">{english ? "No entries on this day." : "Nenhum lançamento neste dia."}</p>}
       </div></div>
       <footer className="month-day-modal-footer"><button className="btn btn-ghost" type="button" onClick={onClose}>{english ? "Close" : "Fechar"}</button>
         <button className="btn btn-primary" type="button" onClick={() => onAdd(day.date)}><Plus size={16} />{english ? "Add entry" : "Adicionar lançamento"}</button></footer>

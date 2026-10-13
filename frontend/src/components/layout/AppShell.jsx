@@ -1139,6 +1139,17 @@ export default function AppShell() {
     }
   };
 
+  const moveCalendarEntryDate = async (entry, date) => {
+    if (entry.kind === "receivable") {
+      await updateReceivable(entry.item.id, { due_date: date });
+      await Promise.all([syncReceivableCollections(), syncMonthCollections()]);
+    } else if (entry.item.invoice_id) {
+      const updated = await updateInvoice(entry.item.invoice_id, { planned_payment_date: date });
+      upsertInvoice(updated);
+      await syncInvoiceAndMonthCollections();
+    }
+  };
+
   const removeInvoice = async (invoiceId) => {
     try {
       await deleteInvoice(invoiceId);
@@ -1468,7 +1479,7 @@ export default function AppShell() {
             <Suspense fallback={<Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} />}>
               <Routes>
                 <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisonView} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} historyLoading={historyLoading} categoriesLoading={categoriesLoading} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} year={year} month={month} walletRefreshKey={walletRefreshKey} />} />
-                <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveTransaction={moveMonthTransaction} />} />
+                <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveTransaction={moveMonthTransaction} onMoveCalendarEntry={moveCalendarEntryDate} />} />
                 <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
                 <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
                 <Route path="/produtos-desejados" element={<DesiredProductsPage categories={categories} onCreateCategory={saveCategory} onOverlayChange={setPageOverlayOpen} />} />
