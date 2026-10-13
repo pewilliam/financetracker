@@ -33,7 +33,7 @@ function getTutorialContent(language) {
         { target: "new", eyebrow: "New movement", title: "Add entries from anywhere", description: "Use + New at the top or the floating + button to create an entry. In the form, you can also switch to bulk entry when several movements need to be registered." },
         { target: "history", eyebrow: "Financial timeline", title: "Compare months and years", description: "The Cards view groups months by year and shows the result for each period, including projections. Expand or collapse a year to focus on what matters." },
         { target: "month-card", eyebrow: "Month summary", title: "Open a month or add an entry quickly", description: "Each card compares income and expenses, shows opening and closing balances and indicates whether the month is current, past or future. Open it in the table or add an entry directly." },
-        { target: "calendar", eyebrow: "Monthly calendar", title: "See your entries across the month", description: "Each day shows up to five entries, including expected receivables. Select View all to open every entry on that day, or use + to add an entry." },
+        { target: "calendar", eyebrow: "Monthly calendar", title: "See your entries across the month", description: "Each day shows up to two entries, including expected receivables. Select +N more or a day number to open every entry on that day, or use + to add an entry." },
         { target: "views", eyebrow: "Ready to use", title: "The monthly table is always one click away", description: "Select Table whenever you want to review or change the selected month. You can reopen this tutorial at any time using the help icon.", nextLabel: "Finish" }
       ]
     };
@@ -55,7 +55,7 @@ function getTutorialContent(language) {
       { target: "new", eyebrow: "Nova movimentação", title: "Adicione lançamentos de qualquer ponto", description: "Use + Novo no topo ou o botão flutuante + para criar um lançamento. No formulário, também é possível alternar para o modo em lote quando houver várias movimentações." },
       { target: "history", eyebrow: "Linha do tempo financeira", title: "Compare meses e anos", description: "A visão em Cards agrupa os meses por ano e mostra o resultado de cada período, incluindo previsões. Expanda ou recolha um ano para focar no que importa." },
       { target: "month-card", eyebrow: "Resumo do mês", title: "Abra um mês ou faça um lançamento rápido", description: "Cada card compara ganhos e gastos, mostra saldos inicial e final e indica se o mês é atual, passado ou futuro. Abra-o na tabela ou adicione um lançamento diretamente." },
-      { target: "calendar", eyebrow: "Calendário mensal", title: "Veja os lançamentos ao longo do mês", description: "Cada dia mostra até cinco lançamentos, incluindo recebíveis previstos. Use Ver todos para abrir a lista completa daquele dia ou o + para adicionar um lançamento." },
+      { target: "calendar", eyebrow: "Calendário mensal", title: "Veja os lançamentos ao longo do mês", description: "Cada dia mostra até dois lançamentos, incluindo recebíveis previstos. Use +N mais ou o número do dia para abrir a lista completa daquele dia ou o + para adicionar um lançamento." },
       { target: "views", eyebrow: "Tudo pronto", title: "A tabela mensal está sempre a um clique", description: "Selecione Tabela sempre que quiser revisar ou alterar o mês escolhido. Você pode abrir este tutorial novamente pelo ícone de ajuda.", nextLabel: "Concluir" }
     ]
   };
@@ -194,7 +194,7 @@ function MonthsTutorial({ content, layoutKey, open, stepIndex, onBack, onClose, 
   );
 }
 
-export default function MonthsPage({ monthData, summary, monthCards, invoices = [], expenseOptions = [], year, month, setYear, setMonth, openAddForm, onEditTransaction, removeTransaction, onOpenReceivable, onLoadCategoryDetails, onOverlayChange, onMoveTransaction }) {
+export default function MonthsPage({ monthData, summary, monthCards, invoices = [], expenseOptions = [], year, month, setYear, setMonth, openAddForm, onEditTransaction, removeTransaction, onOpenReceivable, onLoadCategoryDetails, onOverlayChange, onMoveTransaction, onMoveCalendarEntry }) {
   const { user, completeTutorial } = useAuth();
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -442,7 +442,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
           )}
         </div>
       ) : viewMode === "calendar" ? (
-        <div data-months-tour="calendar"><MonthCalendar days={monthData?.days || []} year={year} month={month} invoices={invoices} onAdd={openAddForm} onEdit={onEditTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} todayJump={todayJump} /></div>
+        <div data-months-tour="calendar"><MonthCalendar days={monthData?.days || []} year={year} month={month} invoices={invoices} summary={summary} openingBalance={monthData?.opening_balance} onMoveEntry={onMoveCalendarEntry} onAdd={openAddForm} onEdit={onEditTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} todayJump={todayJump} /></div>
       ) : (
         <div className="month-year-list">
           {orderedMonthCards.length ? sortedYears.map((groupYear) => {

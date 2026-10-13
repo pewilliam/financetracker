@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
+import {auditCalendarContrast} from './calendar-contrast.mjs';
 const {chromium} = await import(process.env.KASHY_E2E_PLAYWRIGHT_MODULE || 'playwright');
 const webUrl = process.env.KASHY_E2E_WEB_URL || 'http://127.0.0.1:4173';
 const apiUrl = process.env.KASHY_E2E_API_URL || 'http://127.0.0.1:8010/api';
@@ -12,9 +13,10 @@ try {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
+  let expectedFailure = null;
   page.on('pageerror', error => errors.push(error.message));
-  page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
-  page.on('response', response => {if (response.url().includes('/api/') && response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);});
+  page.on('console', message => {if (message.type() === 'error' && !(expectedFailure && message.text().startsWith('Failed to load resource:'))) errors.push(message.text());});
+  page.on('response', response => {if (response.url().includes('/api/') && response.status() >= 400 && !(expectedFailure && response.status() === 503 && response.url().endsWith(expectedFailure))) errors.push(`${response.status()} ${response.url()}`);});
   const email = `calendar${Date.now()}@example.com`;
   const password = 'Compra segura! 2026 long';
   const registration = await context.request.post(`${apiUrl}/auth/register`, {data: {name: 'Pessoa do calendário', email, password}});
@@ -32,7 +34,7 @@ try {
   };
   for (let index = 1; index <= 18; index++) await create('/transactions', {date, type: index % 2 ? 'expense' : 'income', amount: index * 10, description: `Movimentação ${String(index).padStart(2, '0')}`});
   for (let index = 1; index <= 5; index++) await create('/transactions', {date: otherDate, type: 'expense', amount: 15, description: `Outro dia ${index}`});
-  await create('/receivables', {person_name: 'Maria', description: 'Recebível do calendário', total_amount: 250, due_date: date});
+  const receivable = await create('/receivables', {person_name: 'Maria', description: 'Recebível do calendário', total_amount: 250, due_date: date});
   await page.goto(`${webUrl}/login`);
   await page.getByLabel('E-mail', {exact: true}).fill(email);
   await page.getByLabel('Senha', {exact: true}).fill(password);
@@ -44,9 +46,11 @@ try {
   if (await tutorial.isVisible()) await tutorial.click();
   await page.getByRole('button', {name: 'Calendário', exact: true}).click();
   const cell = page.locator(`.month-calendar-day[data-day="${date}"]`);
-  assert.equal(await cell.getByRole('button', {name: /^Ver detalhes:/}).count(), 5);
-  assert.equal(await page.locator(`.month-calendar-day[data-day="${otherDate}"]`).getByRole('button', {name: /^Ver todos/}).count(), 0);
-  await cell.getByRole('button', {name: /^Ver todos/}).click();
+  assert.equal(await cell.getByRole('button', {name: /^Ver detalhes:/}).count(), 2);
+  assert.equal(await page.locator(`.month-calendar-day[data-day="${otherDate}"]`).getByRole('button', {name: /^Abrir todos/}).count(), 1);
+  assert.equal(await cell.locator('.month-calendar-see-all').innerText(), '+17 mais');
+  assert.equal(await page.locator('.month-calendar-empty').count(), 0);
+  await cell.getByRole('button', {name: /^Abrir todos/}).click();
   let modal = page.getByRole('dialog', {name: 'Lançamentos do dia', exact: true});
   assert.equal(await modal.getByRole('button', {name: /^Ver detalhes:/}).count(), 19);
   await modal.getByText('Recebível do calendário', {exact: true}).waitFor();
@@ -58,7 +62,7 @@ try {
   }
   await page.keyboard.press('Escape');
   await modal.waitFor({state: 'hidden'});
-  assert.ok(await cell.getByRole('button', {name: /^Ver todos/}).evaluate(node => node === document.activeElement));
+  assert.ok(await cell.getByRole('button', {name: /^Abrir todos/}).evaluate(node => node === document.activeElement));
   await page.reload();
   await page.getByRole('button', {name: 'Calendário', pressed: true}).waitFor();
   await cell.getByRole('button', {name: /^Ver detalhes:/}).first().click();
@@ -66,11 +70,85 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({state: 'hidden'});
   if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path: `${process.env.KASHY_E2E_SCREENSHOT_DIR}/calendar-desktop.png`, fullPage: true});
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => {document.documentElement.dataset.theme = theme; document.documentElement.classList.toggle('dark', theme === 'dark');}, theme);
+    await page.waitForTimeout(250);
+    const calendarContrast = await auditCalendarContrast(page);
+    assert.deepEqual(calendarContrast.failures, [], `Calendar AA contrast (${theme})`);
+    await cell.getByRole('button', {name: /^Abrir dia/}).click();
+    await page.getByRole('dialog', {name: 'Lançamentos do dia'}).waitFor();
+    await page.waitForTimeout(250);
+    const modalContrast = await auditCalendarContrast(page);
+    assert.deepEqual(modalContrast.failures, [], `Day sheet AA contrast (${theme})`);
+    console.log(`AA ${theme}: text ${Math.min(calendarContrast.minimumText, modalContrast.minimumText).toFixed(2)}:1, icons ${Math.min(calendarContrast.minimumIcon, modalContrast.minimumIcon).toFixed(2)}:1 (${calendarContrast.count + modalContrast.count} checks)`);
+    if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path: `${process.env.KASHY_E2E_SCREENSHOT_DIR}/calendar-${theme}-modal.png`});
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({state: 'hidden'});
+    if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path: `${process.env.KASHY_E2E_SCREENSHOT_DIR}/calendar-${theme}.png`, fullPage: true});
+  }
+  await page.evaluate(() => {document.documentElement.dataset.theme = 'light'; document.documentElement.classList.remove('dark');});
+  const weekHeights = await page.locator('.month-calendar-week').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height));
+  assert.ok(weekHeights.every(height => Math.abs(height - weekHeights[0]) < 1), 'Uniform week heights');
+  assert.equal(await cell.evaluate(node => node.style.getPropertyValue('--calendar-heat')), '15%');
+  await page.getByRole('button', {name: 'Mapa de gastos', pressed: true}).click();
+  assert.equal(await cell.evaluate(node => node.style.getPropertyValue('--calendar-heat')), '0%');
+  await page.getByRole('button', {name: 'Mapa de gastos', pressed: false}).click();
+  await page.getByRole('button', {name: 'Ganhos', exact: true}).click();
+  await page.getByRole('button', {name: 'Gastos/faturas', exact: true}).click();
+  const receiptChip = cell.locator(`[data-entry-key="receivable-${receivable.id}"]`);
+  await receiptChip.waitFor();
+  assert.equal(await receiptChip.getAttribute('draggable'), 'true');
+  const targetNumber = now.getDate() < new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() ? now.getDate() + 1 : now.getDate() - 1;
+  const targetDate = prefix + String(targetNumber).padStart(2, '0');
+  const target = page.locator(`.month-calendar-day[data-day="${targetDate}"]`);
+  await receiptChip.scrollIntoViewIfNeeded();
+  await receiptChip.dragTo(target, {sourcePosition: {x: 10, y: 10}, targetPosition: {x: 40, y: 40}});
+  await target.locator(`[data-entry-key="receivable-${receivable.id}"]`).waitFor();
+  await page.getByRole('status').filter({hasText: 'Data atualizada'}).waitFor();
+  assert.equal((await (await context.request.get(`${apiUrl}/receivables`, {headers})).json()).find(item => item.id === receivable.id).due_date, targetDate);
+  expectedFailure = `/receivables/${receivable.id}`;
+  await page.route(`**/api${expectedFailure}`, route => route.request().method() === 'PUT' ? route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({detail: 'Simulated unavailable service'})}) : route.continue());
+  await target.locator(`[data-entry-key="receivable-${receivable.id}"]`).dragTo(cell, {sourcePosition: {x: 10, y: 10}, targetPosition: {x: 40, y: 40}});
+  await page.getByRole('alert').filter({hasText: 'A data original foi restaurada'}).waitFor();
+  await target.locator(`[data-entry-key="receivable-${receivable.id}"]`).waitFor();
+  assert.equal((await (await context.request.get(`${apiUrl}/receivables`, {headers})).json()).find(item => item.id === receivable.id).due_date, targetDate);
+  await page.unroute(`**/api${expectedFailure}`);
+  expectedFailure = null;
+  const card = await create('/cards', {name: 'Cartão do calendário', closing_day: 25, due_day: 5});
+  const invoice = await create(`/cards/${card.id}/purchases`, {description: 'Compra de teste', amount: 400, purchase_date: date});
+  const updatedInvoice = await context.request.put(`${apiUrl}/invoices/${invoice.id}`, {headers, data: {planned_payment_date: targetDate}});
+  assert.equal(updatedInvoice.status(), 200, await updatedInvoice.text());
+  const paid = await context.request.patch(`${apiUrl}/invoices/${invoice.id}/paid`, {headers, data: {paid: true}});
+  assert.equal(paid.status(), 200, await paid.text());
+  await page.reload();
+  const invoiceChip = target.locator('.month-calendar-entry.is-invoice');
+  await invoiceChip.waitFor();
+  await invoiceChip.getByRole('img', {name: 'Pago', exact: true}).waitFor();
+  assert.equal(await invoiceChip.getAttribute('draggable'), 'true');
+  await invoiceChip.dragTo(cell, {sourcePosition: {x: 10, y: 10}, targetPosition: {x: 40, y: 40}});
+  await page.getByRole('status').filter({hasText: 'Data atualizada'}).waitFor();
+  const savedInvoice = await (await context.request.get(`${apiUrl}/invoices/${invoice.id}`, {headers})).json();
+  assert.equal(savedInvoice.planned_payment_date, date);
+  assert.equal(savedInvoice.paid, true);
+  await page.getByRole('button', {name: /^Dia de menor saldo:/}).click();
+  await page.getByRole('dialog', {name: 'Lançamentos do dia'}).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state: 'hidden'});
   await page.setViewportSize({width: 390, height: 844});
-  await cell.getByRole('button', {name: /^Ver todos/}).click();
+  await cell.getByRole('button', {name: /^Abrir todos/}).click();
   modal = page.getByRole('dialog', {name: 'Lançamentos do dia', exact: true});
   assert.equal(await modal.getByRole('button', {name: /^Ver detalhes:/}).count(), 19);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The calendar/modal must not overflow the mobile page');
+  await page.waitForTimeout(250);
+  const sheetBox = await modal.boundingBox();
+  assert.ok(Math.abs(sheetBox.y + sheetBox.height - 844) < 2, 'Mobile day panel must attach to the bottom');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => {document.documentElement.dataset.theme = theme; document.documentElement.classList.toggle('dark', theme === 'dark');}, theme);
+    await page.waitForTimeout(250);
+    const contrast = await auditCalendarContrast(page);
+    assert.deepEqual(contrast.failures, [], `Mobile AA contrast (${theme})`);
+    console.log(`AA mobile ${theme}: text ${contrast.minimumText.toFixed(2)}:1, icons ${contrast.minimumIcon.toFixed(2)}:1 (${contrast.count} checks)`);
+  }
   const footer = await modal.getByRole('button', {name: 'Adicionar lançamento', exact: true}).boundingBox();
   assert.ok(footer.y >= 0 && footer.y + footer.height <= 844, 'Modal action must remain visible');
   if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path: `${process.env.KASHY_E2E_SCREENSHOT_DIR}/calendar-mobile-modal.png`});
@@ -86,7 +164,7 @@ try {
   await page.getByRole('button', {name: 'Cards', exact: true}).click();
   await page.locator('.month-year-list').waitFor();
   assert.deepEqual(errors, [], 'Calendar must not introduce API or browser errors');
-  console.log('PASS: calendar/table/cards navigation, preference persistence, five-entry limit including receivables, full day modal with 19 entries, scrolling, Escape/focus restoration, entry details, mobile overflow/footer and adding on the selected date.');
+  console.log('PASS: calendar/table/cards navigation, preference persistence, two-entry limit, filters, heatmap, weekly/monthly summaries, AA contrast in both themes, invoice/receivable drag and rollback, full day modal with 19 entries, scrolling, Escape/focus restoration, entry details, mobile overflow/footer and adding on the selected date.');
 } finally {
   await browser.close();
 }
