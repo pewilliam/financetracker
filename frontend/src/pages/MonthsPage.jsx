@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown, ChevronRight, CircleHelp, Grid2X2, List, Plu
 import { toast } from "react-hot-toast";
 import MonthlyTable from "../components/MonthlyTable.jsx";
 import MonthCard from "../components/months/MonthCard.jsx";
+import MonthCalendar from "../components/months/MonthCalendar.jsx";
 import ProjectionBreakdownModal from "../modals/ProjectionBreakdownModal.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { useI18n } from "../i18n/index.ts";
@@ -25,13 +26,14 @@ function getTutorialContent(language) {
       steps: [
         { target: "intro", eyebrow: "Welcome", title: "Your financial routine lives here", description: "Monthly control brings together the detailed table for the selected month and a timeline for comparing your financial history." },
         { target: "period", eyebrow: "Selected period", title: "Navigate to any month", description: "Use Previous and Next, choose a month and year directly, or return to the current month with one click. The table and totals follow the selected period." },
-        { target: "views", eyebrow: "Two ways to view", title: "Switch between Table and Cards", description: "Table is for managing the selected month in detail. Cards provides a broader view to compare months and years. Your preferred view is remembered." },
+        { target: "views", eyebrow: "Three ways to view", title: "Switch between Table, Cards and Calendar", description: "Use Table for detailed management, Cards to compare months, and Calendar to see entries across the month. Your preferred view is remembered." },
         { target: "table", eyebrow: "Monthly table", title: "Follow the month day by day", description: "The table shows each day in sequence, including days without entries, future dates and the running balance after each movement." },
         { target: "entries", eyebrow: "Entries", title: "Understand and manage every movement", description: "See whether an entry is income or an expense, its amount, description, categories, recurrence and linked expense. Use the row actions to edit or delete it and + to add on that date." },
         { target: "summary", eyebrow: "Month closing", title: "Check the totals at the end", description: "The summary adds the month's income and expenses and shows the projected closing balance for the selected period." },
         { target: "new", eyebrow: "New movement", title: "Add entries from anywhere", description: "Use + New at the top or the floating + button to create an entry. In the form, you can also switch to bulk entry when several movements need to be registered." },
         { target: "history", eyebrow: "Financial timeline", title: "Compare months and years", description: "The Cards view groups months by year and shows the result for each period, including projections. Expand or collapse a year to focus on what matters." },
         { target: "month-card", eyebrow: "Month summary", title: "Open a month or add an entry quickly", description: "Each card compares income and expenses, shows opening and closing balances and indicates whether the month is current, past or future. Open it in the table or add an entry directly." },
+        { target: "calendar", eyebrow: "Monthly calendar", title: "See your entries across the month", description: "Each day shows up to five entries, including expected receivables. Select View all to open every entry on that day, or use + to add an entry." },
         { target: "views", eyebrow: "Ready to use", title: "The monthly table is always one click away", description: "Select Table whenever you want to review or change the selected month. You can reopen this tutorial at any time using the help icon.", nextLabel: "Finish" }
       ]
     };
@@ -46,13 +48,14 @@ function getTutorialContent(language) {
     steps: [
       { target: "intro", eyebrow: "Boas-vindas", title: "Sua rotina financeira fica aqui", description: "O Controle mensal reúne a tabela detalhada do mês selecionado e uma linha do tempo para comparar seu histórico financeiro." },
       { target: "period", eyebrow: "Período selecionado", title: "Navegue para qualquer mês", description: "Use Anterior e Próximo, escolha diretamente o mês e o ano ou volte ao mês atual com um clique. A tabela e os totais acompanham o período selecionado." },
-      { target: "views", eyebrow: "Duas visualizações", title: "Alterne entre Tabela e Cards", description: "A Tabela serve para administrar em detalhes o mês selecionado. Os Cards oferecem uma visão ampla para comparar meses e anos. Sua visualização preferida fica salva." },
+      { target: "views", eyebrow: "Três visualizações", title: "Alterne entre Tabela, Cards e Calendário", description: "Use a Tabela para administrar em detalhes, os Cards para comparar meses e o Calendário para enxergar os lançamentos ao longo do mês. Sua preferência fica salva." },
       { target: "table", eyebrow: "Tabela mensal", title: "Acompanhe o mês dia após dia", description: "A tabela mostra cada dia em sequência, incluindo dias sem lançamentos, datas futuras e o saldo acumulado depois de cada movimentação." },
       { target: "entries", eyebrow: "Lançamentos", title: "Entenda e administre cada movimentação", description: "Veja se é ganho ou gasto, valor, descrição, categorias, recorrência e gasto associado. Use as ações da linha para editar ou excluir e o + para adicionar naquela data." },
       { target: "summary", eyebrow: "Fechamento do mês", title: "Confira os totais no final", description: "O resumo soma os ganhos e gastos do mês e mostra a projeção de fechamento para o período selecionado." },
       { target: "new", eyebrow: "Nova movimentação", title: "Adicione lançamentos de qualquer ponto", description: "Use + Novo no topo ou o botão flutuante + para criar um lançamento. No formulário, também é possível alternar para o modo em lote quando houver várias movimentações." },
       { target: "history", eyebrow: "Linha do tempo financeira", title: "Compare meses e anos", description: "A visão em Cards agrupa os meses por ano e mostra o resultado de cada período, incluindo previsões. Expanda ou recolha um ano para focar no que importa." },
       { target: "month-card", eyebrow: "Resumo do mês", title: "Abra um mês ou faça um lançamento rápido", description: "Cada card compara ganhos e gastos, mostra saldos inicial e final e indica se o mês é atual, passado ou futuro. Abra-o na tabela ou adicione um lançamento diretamente." },
+      { target: "calendar", eyebrow: "Calendário mensal", title: "Veja os lançamentos ao longo do mês", description: "Cada dia mostra até cinco lançamentos, incluindo recebíveis previstos. Use Ver todos para abrir a lista completa daquele dia ou o + para adicionar um lançamento." },
       { target: "views", eyebrow: "Tudo pronto", title: "A tabela mensal está sempre a um clique", description: "Selecione Tabela sempre que quiser revisar ou alterar o mês escolhido. Você pode abrir este tutorial novamente pelo ícone de ajuda.", nextLabel: "Concluir" }
     ]
   };
@@ -207,7 +210,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   const projectionRequestRef = useRef(0);
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem(MONTHS_VIEW_MODE_KEY);
-    return saved === "cards" || saved === "table" ? saved : "table";
+    return ["cards", "table", "calendar"].includes(saved) ? saved : "table";
   });
   const orderedMonthCards = useMemo(() => {
     return [...monthCards].sort((left, right) => {
@@ -251,6 +254,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
     if (!tutorialOpen) return;
     const target = tutorialContent.steps[tutorialStep]?.target;
     if (target === "history" || target === "month-card") setViewMode("cards");
+    if (target === "calendar") setViewMode("calendar");
     if (["table", "entries", "summary", "new"].includes(target) || (target === "views" && tutorialStep === tutorialContent.steps.length - 1)) setViewMode("table");
     if (target === "month-card" && tutorialYear) {
       setExpandedYears((previous) => previous[tutorialYear] ? previous : { ...previous, [tutorialYear]: true });
@@ -340,10 +344,11 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
 
   const goToToday = () => {
     const today = new Date();
-    sessionStorage.setItem(TODAY_JUMP_KEY, "1");
+    if (viewMode === "calendar") sessionStorage.removeItem(TODAY_JUMP_KEY);
+    else sessionStorage.setItem(TODAY_JUMP_KEY, "1");
     setYear(today.getFullYear());
     setMonth(today.getMonth() + 1);
-    changeView("table");
+    changeView(viewMode === "calendar" ? "calendar" : "table");
     setTodayJump((value) => value + 1);
   };
 
@@ -407,13 +412,13 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
   ) : `${tt("monthlyTable.openingBalance", "Saldo inicial")} ${formatMoney(monthData?.opening_balance, language)}`;
 
   return (
-    <section className={viewMode === "table" ? "card" : "months-overview"}>
+    <section className={`months-control-page ${viewMode === "cards" ? "months-overview" : `card${viewMode === "calendar" ? " months-calendar-page" : ""}`}`}>
       <div className={`section-head ${viewMode === "cards" ? "months-overview-head" : ""}`}>
         <div data-months-tour="intro">
-          <p className={`eyebrow${viewMode === "table" && hasSplitOpening ? " opening-balance-eyebrow" : ""}`}>
-            {viewMode === "table" ? tableOpeningEyebrow : (language === "en-US" ? "FINANCIAL TIMELINE" : "LINHA DO TEMPO FINANCEIRA")}
+          <p className={`eyebrow${viewMode !== "cards" && hasSplitOpening ? " opening-balance-eyebrow" : ""}`}>
+            {viewMode !== "cards" ? tableOpeningEyebrow : (language === "en-US" ? "FINANCIAL TIMELINE" : "LINHA DO TEMPO FINANCEIRA")}
           </p>
-          <h2>{viewMode === "table" ? tt("monthlyTable.monthlyTable", "Tabela mensal") : (language === "en-US" ? "Your months at a glance" : "Seus meses em perspectiva")}</h2>
+          <h2>{viewMode === "calendar" ? (language === "en-US" ? "Monthly calendar" : "Calendário mensal") : viewMode === "table" ? tt("monthlyTable.monthlyTable", "Tabela mensal") : (language === "en-US" ? "Your months at a glance" : "Seus meses em perspectiva")}</h2>
           {viewMode === "cards" && <p className="months-overview-description">{language === "en-US" ? "Compare cash flow and see how each month changed your balance." : "Compare o fluxo de caixa e veja como cada mês transformou seu saldo."}</p>}
         </div>
         <div className="view-actions">
@@ -424,8 +429,9 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
             <CircleHelp size={19} />
           </button>
           <div className="view-toggle" data-months-tour="views" aria-label={language === "en-US" ? "Change view" : "Alternar visualização"}>
-            <button type="button" className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
-            <button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => changeView("table")}><List size={16} /> {language === "en-US" ? "Table" : "Tabela"}</button>
+            <button type="button" aria-pressed={viewMode === "cards"} className={viewMode === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Grid2X2 size={16} /> Cards</button>
+            <button type="button" aria-pressed={viewMode === "table"} className={viewMode === "table" ? "active" : ""} onClick={() => changeView("table")}><List size={16} /> {language === "en-US" ? "Table" : "Tabela"}</button>
+            <button type="button" aria-pressed={viewMode === "calendar"} className={viewMode === "calendar" ? "active" : ""} onClick={() => changeView("calendar")}><CalendarDays size={16} /> {language === "en-US" ? "Calendar" : "Calendário"}</button>
           </div>
         </div>
       </div>
@@ -435,6 +441,8 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
             <MonthlyTable days={monthData.days} summary={summary} invoices={invoices} expenseOptions={expenseOptions} onAdd={openAddForm} onEdit={onEditTransaction} onDelete={removeTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} onMoveTransaction={onMoveTransaction} />
           )}
         </div>
+      ) : viewMode === "calendar" ? (
+        <div data-months-tour="calendar"><MonthCalendar days={monthData?.days || []} year={year} month={month} invoices={invoices} onAdd={openAddForm} onEdit={onEditTransaction} onOpenReceivable={onOpenReceivable} onLoadCategoryDetails={onLoadCategoryDetails} onOverlayChange={onOverlayChange} todayJump={todayJump} /></div>
       ) : (
         <div className="month-year-list">
           {orderedMonthCards.length ? sortedYears.map((groupYear) => {
