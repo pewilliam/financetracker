@@ -47,6 +47,8 @@ describe("custom select keyboard and form behavior", () => {
     const user = userEvent.setup();
     render(<FormFixture onSave={vi.fn()} />);
     const category = screen.getByRole("combobox", { name: "Categoria" });
+    // The production stylesheet hides native mobile selects on desktop. JSDOM does not load that CSS.
+    document.querySelectorAll(".category-multi-native-control").forEach((control) => { control.style.display = "none"; });
     category.focus();
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{Escape}");
