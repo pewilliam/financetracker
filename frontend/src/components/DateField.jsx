@@ -71,11 +71,14 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
   const inputRef = useRef(null);
   const popoverRef = useRef(null);
   const selectedYearRef = useRef(null);
+  const dayRefs = useRef({});
+  const [focusedDay, setFocusedDay] = useState(value || toIsoDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()));
   const [popoverStyle, setPopoverStyle] = useState(null);
 
   useEffect(() => {
     setText(formatDisplayDate(value, language));
     if (parsedValue) setCursor(parsedValue);
+    if (value) setFocusedDay(value);
   }, [value, language]);
 
   useEffect(() => {
@@ -178,6 +181,46 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
 
   const blocked = (iso) => Boolean(max) && iso > max;
 
+  const focusDay = (iso) => {
+    if (blocked(iso)) return;
+    setFocusedDay(iso);
+    const date = parseIsoDate(iso);
+    if (date && (date.getMonth() !== cursor.getMonth() || date.getFullYear() !== cursor.getFullYear())) setCursor(date);
+    requestAnimationFrame(() => dayRefs.current[iso]?.focus());
+  };
+
+  const handleCalendarKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (periodPicker) setPeriodPicker(null);
+      else setOpen(false);
+      inputRef.current?.focus();
+      return;
+    }
+    if (periodPicker) return;
+    const current = parseIsoDate(focusedDay) || parseIsoDate(value) || cursor;
+    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[event.key];
+    let next;
+    if (delta !== undefined) next = new Date(current.getFullYear(), current.getMonth(), current.getDate() + delta);
+    else if (event.key === "Home") next = new Date(current.getFullYear(), current.getMonth(), current.getDate() - current.getDay());
+    else if (event.key === "End") next = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 6 - current.getDay());
+    else if (event.key === "PageUp" || event.key === "PageDown") {
+      const offset = (event.key === "PageUp" ? -1 : 1) * (event.shiftKey ? 12 : 1);
+      const start = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+      next = new Date(start.getFullYear(), start.getMonth(), Math.min(current.getDate(), new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()));
+    }
+    if (next) {
+      event.preventDefault();
+      focusDay(toIsoDate(next.getFullYear(), next.getMonth() + 1, next.getDate()));
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+      selectDate(focusedDay);
+      inputRef.current?.focus();
+    }
+  };
+
   const selectDate = (nextValue) => {
     if (blocked(nextValue)) return;
     onChange(nextValue);
@@ -206,7 +249,8 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       if (event.key === "Escape" && open) {
         event.preventDefault();
         event.stopPropagation();
-        setOpen(false);
+        if (periodPicker) setPeriodPicker(null);
+        else setOpen(false);
       }
     }}>
       <div className="date-native-control">
@@ -235,6 +279,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
         <div className="date-input-shell">
           <input
             ref={inputRef}
+            onKeyDown={(event) => { if (event.key === "ArrowDown" && open) { event.preventDefault(); focusDay(focusedDay); } }}
             disabled={disabled}
             aria-label={ariaLabel}
             inputMode="numeric"
@@ -259,7 +304,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       </div>
 
       {open && createPortal(
-        <div className="date-popover date-popover-floating date-day-popover" ref={popoverRef} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
+        <div className="date-popover date-popover-floating date-day-popover" ref={popoverRef} onKeyDown={handleCalendarKeyDown} style={popoverStyle ? { top: `${popoverStyle.top}px`, left: `${popoverStyle.left}px` } : undefined}>
           <div className="date-popover-head">
             <button type="button" onClick={() => moveMonth(-1)} aria-label={language === "en-US" ? "Previous month" : "Mes anterior"}><ChevronLeft size={16} /></button>
             <div className="date-calendar-period">
@@ -285,9 +330,13 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
                 <button
                   type="button"
                   key={day.iso}
+                  ref={(node) => { if (node) dayRefs.current[day.iso] = node; }}
+                  tabIndex={day.iso === focusedDay ? 0 : -1}
+                  aria-label={day.date.toLocaleDateString(language, { day: "numeric", month: "long", year: "numeric" })}
                   className={`${day.currentMonth ? "" : "muted"} ${day.iso === value ? "selected" : ""} ${day.iso === todayIso ? "today" : ""}`}
                   disabled={blocked(day.iso)}
                   onClick={() => selectDate(day.iso)}
+                  onFocus={() => setFocusedDay(day.iso)}
                 >
                   {day.date.getDate()}
                 </button>
