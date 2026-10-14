@@ -5,7 +5,7 @@ import { useHideOnScroll } from "../../hooks/useHideOnScroll.js";
 import { useI18n } from "../../i18n/index.ts";
 import MoreSheet, { MORE_SHEET_PATHS } from "./MoreSheet.jsx";
 
-export default function MobileDock({ hidden = false, onHiddenChange, onNew }) {
+export default function MobileDock({ hidden = false, onHiddenChange, onNew, newShortcutEnabled = false }) {
   const { t, language } = useI18n();
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -47,6 +47,8 @@ export default function MobileDock({ hidden = false, onHiddenChange, onNew }) {
           className="mobile-dock-new"
           type="button"
           onClick={onNew}
+          aria-keyshortcuts={newShortcutEnabled ? "N" : undefined}
+          title={newShortcutEnabled ? `${language === "en-US" ? "New" : "Novo"} (N)` : undefined}
           aria-label={onReceivablesPage
             ? (language === "en-US" ? "New receivable" : "Novo recebível")
             : (language === "en-US" ? "New transaction" : "Novo lançamento")}
