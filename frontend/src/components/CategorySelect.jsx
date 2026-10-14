@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import CategoryModal from "../modals/CategoryModal.jsx";
+import useSelectKeyboard from "../hooks/useSelectKeyboard.js";
 
 function normalizeValues(value, values) {
   const source = values ?? value;
@@ -38,6 +39,12 @@ export default function CategorySelect({
   const [search, setSearch] = useState("");
   const [menuPosition, setMenuPosition] = useState({});
   const [creating, setCreating] = useState(false);
+  const { triggerRef, closeAndFocusTrigger, handleTriggerKeyDown } = useSelectKeyboard({
+    open,
+    disabled,
+    onOpen: () => { setSearch(""); setOpen(true); },
+    onClose: () => setOpen(false),
+  });
   const selectedIds = useMemo(() => normalizeValues(value, values), [value, values]);
   const selected = categories.filter((category) => selectedIds.includes(String(category.id)));
   const filteredCategories = useMemo(() => {
@@ -85,12 +92,13 @@ export default function CategorySelect({
     const id = String(categoryId);
     if (!multiple) {
       onChange?.(id);
-      setOpen(false);
+      closeAndFocusTrigger();
       return;
     }
     onChange?.(selectedIds.includes(id)
       ? selectedIds.filter((current) => current !== id)
       : [...selectedIds, id]);
+    closeAndFocusTrigger();
   };
 
   const selectAllVisible = () => {
@@ -106,14 +114,14 @@ export default function CategorySelect({
     const category = await onCreate(payload);
     onChange?.(multiple ? [...selectedIds, String(category.id)] : String(category.id));
     setCreating(false);
-    setOpen(false);
+    closeAndFocusTrigger();
   };
 
   const clear = (event) => {
     event?.preventDefault();
     event?.stopPropagation();
     onChange?.([]);
-    setOpen(false);
+    closeAndFocusTrigger();
   };
 
   const handleFocusLeave = (event) => {
@@ -133,25 +141,18 @@ export default function CategorySelect({
     return true;
   };
 
-  const closeAndFocusSubmit = () => {
-    const form = rootRef.current?.closest("form");
-    const submitControl = form?.querySelector([
-      'button[type="submit"]:not(:disabled)',
-      'input[type="submit"]:not(:disabled)',
-      'button:not([type]):not(:disabled)',
-    ].join(", "));
-    setOpen(false);
-    requestAnimationFrame(() => {
-      if (submitControl) submitControl.focus();
-      else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    });
-  };
-
   const handleSearchKeyDown = (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      closeAndFocusSubmit();
+      closeAndFocusTrigger();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (filteredCategories[0]) toggle(filteredCategories[0].id);
       return;
     }
 
@@ -170,7 +171,14 @@ export default function CategorySelect({
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      closeAndFocusSubmit();
+      closeAndFocusTrigger();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (filteredCategories[index]) toggle(filteredCategories[index].id);
       return;
     }
 
@@ -233,7 +241,7 @@ export default function CategorySelect({
           <span className={`category-choice-chip ${canRemoveChips ? "is-removable" : ""}`} style={{ "--category-color": category.color }} key={category.id}>
             <span className="category-choice-label">{category.name}</span>
             {canRemoveChips && (
-              <button className="category-choice-remove" type="button" onClick={(event) => removeSelected(event, category.id)} aria-label={`Remover ${category.name}`}>
+              <button className="category-choice-remove" type="button" tabIndex={-1} onClick={(event) => removeSelected(event, category.id)} aria-label={`Remover ${category.name}`}>
                 <X size={11} />
               </button>
             )}
@@ -248,22 +256,20 @@ export default function CategorySelect({
 
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
-  const toggleOpen = () => { if (disabled) return; setSearch(""); setOpen((current) => !current); };
-
-  const handleTriggerKeyDown = (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    toggleOpen();
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (open) closeAndFocusTrigger();
+    else { setSearch(""); setOpen(true); }
   };
 
   return (
     <div className={`category-select category-multi-select ${open ? "open" : ""} ${className}`.trim()} ref={rootRef} onBlurCapture={handleFocusLeave}>
       <div className="category-multi-desktop-control">
-        <div className="category-multi-trigger" role="combobox" aria-disabled={disabled} tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={toggleOpen} onKeyDown={handleTriggerKeyDown}>
+        <div className="category-multi-trigger" ref={triggerRef} role="combobox" aria-disabled={disabled} tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={toggleOpen} onKeyDown={handleTriggerKeyDown}>
           <span className="category-multi-values">{selectedValues}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
         </div>
-        {clearable && !!selected.length && <button className="category-multi-clear" type="button" disabled={disabled} onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
+        {clearable && !!selected.length && <button className="category-multi-clear" type="button" tabIndex={-1} disabled={disabled} onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
       </div>
 
       <div className="category-multi-native-control">
