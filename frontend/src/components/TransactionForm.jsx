@@ -1,3 +1,4 @@
+import useModalEscape from "../hooks/useModalEscape.js";
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Layers3, Link2, Loader2, ReceiptText, Repeat2, WalletCards, X } from "lucide-react";
 import DateField from "./DateField.jsx";
@@ -65,6 +66,7 @@ export default function TransactionForm({
   onClose,
   onSave
 }) {
+  useModalEscape({ onClose, active: open && !initial?.invoice_id, busy: false });
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [form, setForm] = useState({
