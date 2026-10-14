@@ -241,7 +241,7 @@ export default function CategorySelect({
           <span className={`category-choice-chip ${canRemoveChips ? "is-removable" : ""}`} style={{ "--category-color": category.color }} key={category.id}>
             <span className="category-choice-label">{category.name}</span>
             {canRemoveChips && (
-              <button className="category-choice-remove" type="button" onClick={(event) => removeSelected(event, category.id)} aria-label={`Remover ${category.name}`}>
+              <button className="category-choice-remove" type="button" tabIndex={-1} onClick={(event) => removeSelected(event, category.id)} aria-label={`Remover ${category.name}`}>
                 <X size={11} />
               </button>
             )}
@@ -269,7 +269,7 @@ export default function CategorySelect({
           <span className="category-multi-values">{selectedValues}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
         </div>
-        {clearable && !!selected.length && <button className="category-multi-clear" type="button" disabled={disabled} onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
+        {clearable && !!selected.length && <button className="category-multi-clear" type="button" tabIndex={-1} disabled={disabled} onClick={clear} aria-label={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`} title={`Limpar ${ariaLabel.toLocaleLowerCase("pt-BR")}`}><X size={14} /></button>}
       </div>
 
       <div className="category-multi-native-control">
