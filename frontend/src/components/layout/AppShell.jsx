@@ -17,6 +17,7 @@ import ReceivableDetailsModal from "../../modals/ReceivableDetailsModal.jsx";
 import ReceivablePersonModal from "../../modals/ReceivablePersonModal.jsx";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock.js";
 import useNewShortcut, { NEW_SHORTCUT_STORAGE_KEY, readNewShortcutEnabled } from "../../hooks/useNewShortcut.js";
+import useTopShortcut, { TOP_SHORTCUT_STORAGE_KEY, readTopShortcutEnabled } from "../../hooks/useTopShortcut.js";
 import { hasOpenPicker } from "../../hooks/useModalEscape.js";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
@@ -84,6 +85,11 @@ export default function AppShell() {
   const [scrollToTopVisible, setScrollToTopVisible] = useState(false);
   const [mobileDockHidden, setMobileDockHidden] = useState(false);
   const [newShortcutEnabled, setNewShortcutEnabled] = useState(readNewShortcutEnabled);
+  const [topShortcutEnabled, setTopShortcutEnabled] = useState(readTopShortcutEnabled);
+  const updateTopShortcutEnabled = (enabled) => {
+    setTopShortcutEnabled(enabled);
+    try { localStorage.setItem(TOP_SHORTCUT_STORAGE_KEY, enabled ? "1" : "0"); } catch { /* Storage unavailable. */ }
+  };
   const updateNewShortcutEnabled = (enabled) => {
     setNewShortcutEnabled(enabled);
     try {
@@ -1470,6 +1476,8 @@ export default function AppShell() {
     await refreshCards();
   };
 
+  useTopShortcut({ enabled: topShortcutEnabled, blocked: overlayOpen, onTop: scrollToTop });
+
   useNewShortcut({
     enabled: newShortcutEnabled,
     blocked: overlayOpen,
@@ -1528,7 +1536,7 @@ export default function AppShell() {
                 <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
                 <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} people={receivablePeople} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onNewPerson={() => openReceivablePersonModal()} onEditPerson={(person) => openReceivablePersonModal(person)} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePersonModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
                 <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
-                <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} newShortcutEnabled={newShortcutEnabled} onNewShortcutEnabledChange={updateNewShortcutEnabled} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
+                <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} newShortcutEnabled={newShortcutEnabled} onNewShortcutEnabledChange={updateNewShortcutEnabled} topShortcutEnabled={topShortcutEnabled} onTopShortcutEnabledChange={updateTopShortcutEnabled} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
@@ -1552,7 +1560,8 @@ export default function AppShell() {
           type="button"
           onClick={scrollToTop}
           aria-label={t("actions.backToTop")}
-          title={t("actions.backToTop")}
+          title={topShortcutEnabled ? `${t("actions.backToTop")} (T)` : t("actions.backToTop")}
+          aria-keyshortcuts={topShortcutEnabled ? "T" : undefined}
         >
           <ArrowUp size={20} aria-hidden="true" />
         </button>
