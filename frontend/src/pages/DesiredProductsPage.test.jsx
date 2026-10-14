@@ -24,7 +24,8 @@ function show(route = "/produtos-desejados") {
 }
 
 async function select(user, scope, name, option) {
-  await user.click(scope.getByRole("button", { name, exact: true }));
+  const trigger = scope.getAllByRole("combobox", { name, exact: true }).find((element) => element.getAttribute("role") === "combobox");
+  await user.click(trigger);
   await user.click(within(screen.getByRole("listbox", { name, exact: true })).getByRole("option", { name: option, exact: true }));
 }
 
@@ -338,7 +339,7 @@ it("changes how many projection months are shown per page", async () => {
   show("/produtos-desejados/1");
   await user.click(await screen.findByRole("button", { name: "Ver impacto desta compra" }));
   await waitFor(() => expect(screen.getAllByRole("button", { name: /Ver detalhes de/ })).toHaveLength(5));
-  expect(screen.getByRole("button", { name: "Limite da projeção" })).toHaveTextContent("5");
+  expect(screen.getAllByRole("combobox", { name: "Limite da projeção" }).find((element) => element.getAttribute("role") === "combobox")).toHaveTextContent("5");
   expect(screen.getByText("1–5")).toBeInTheDocument();
 
   await select(user, screen, "Limite da projeção", "10");
