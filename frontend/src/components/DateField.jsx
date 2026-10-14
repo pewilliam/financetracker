@@ -69,6 +69,7 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
   const [cursor, setCursor] = useState(parsedValue || parseIsoDate(max) || new Date());
   const rootRef = useRef(null);
   const inputRef = useRef(null);
+  const skipNextOpenRef = useRef(false);
   const popoverRef = useRef(null);
   const selectedYearRef = useRef(null);
   const dayRefs = useRef({});
@@ -195,7 +196,10 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       event.stopPropagation();
       if (periodPicker) setPeriodPicker(null);
       else setOpen(false);
-      inputRef.current?.focus();
+      if (document.activeElement !== inputRef.current) {
+        skipNextOpenRef.current = true;
+        inputRef.current?.focus();
+      }
       return;
     }
     if (periodPicker) return;
@@ -217,7 +221,10 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
       event.preventDefault();
       event.stopPropagation();
       selectDate(focusedDay);
-      inputRef.current?.focus();
+      if (document.activeElement !== inputRef.current) {
+        skipNextOpenRef.current = true;
+        inputRef.current?.focus();
+      }
     }
   };
 
@@ -287,7 +294,10 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
             value={text}
             onBlur={handleInputBlur}
             onChange={(event) => setText(formatTypedDate(event.target.value))}
-            onFocus={() => setOpen(true)}
+            onFocus={() => {
+              if (skipNextOpenRef.current) { skipNextOpenRef.current = false; return; }
+              setOpen(true);
+            }}
             aria-invalid={ariaInvalid}
           />
           <span
