@@ -20,7 +20,7 @@ try {
   const screenshot = async name => { if (process.env.KASHY_E2E_SCREENSHOT_DIR) await page.screenshot({path:`${process.env.KASHY_E2E_SCREENSHOT_DIR}/${name}.png`, fullPage:true}); };
   await page.addInitScript(() => localStorage.setItem('kashy365-language', 'pt-BR'));
   async function select(scope, name, value, label) {
-    const custom = scope.getByRole('button', { name, exact: true });
+    const custom = scope.locator(`.category-multi-desktop-control [role="combobox"][aria-label="${name}"]`);
     if (await custom.isVisible()) {
       await custom.click();
       await page.getByRole('option', { name: label, exact: true }).click();
@@ -224,7 +224,7 @@ try {
   await page.getByRole('button', { name: 'Marcar como comprado', exact: true }).click();
   dialog = page.getByRole('dialog');
   await labelsDoNotFocus(dialog);
-  await dialog.getByRole('button', { name: 'Oferta escolhida', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Oferta escolhida', exact: true }).click();
   await page.getByRole('option', { name: /Mercado Livre/ }).click();
   await dialog.getByRole('textbox', { name: 'Data da compra' }).click();
   await page.locator('.date-days .selected').click();
