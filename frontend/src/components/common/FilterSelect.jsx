@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
+import useSelectKeyboard from "../../hooks/useSelectKeyboard.js";
 
 function normalize(value) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
@@ -22,6 +23,11 @@ export default function FilterSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [position, setPosition] = useState({});
+  const { triggerRef, closeAndFocusTrigger, handleTriggerKeyDown } = useSelectKeyboard({
+    open, disabled,
+    onOpen: () => { setSearch(""); setOpen(true); },
+    onClose: () => setOpen(false),
+  });
   const selected = options.find((option) => String(option.value) === String(value)) || null;
   const visibleOptions = useMemo(() => {
     const term = normalize(search.trim());
@@ -74,7 +80,7 @@ export default function FilterSelect({
 
   const choose = (nextValue) => {
     onChange?.(String(nextValue));
-    setOpen(false);
+    closeAndFocusTrigger();
     setSearch("");
   };
 
@@ -87,8 +93,13 @@ export default function FilterSelect({
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      setOpen(false);
-      rootRef.current?.querySelector("button")?.focus();
+      closeAndFocusTrigger();
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (visibleOptions[index]) choose(visibleOptions[index].value);
+      return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
@@ -110,29 +121,21 @@ export default function FilterSelect({
   return (
     <div className={`filter-select category-select category-multi-select ${open ? "open" : ""} ${disabled ? "is-disabled" : ""}`} ref={rootRef}>
       <div className="category-multi-desktop-control">
-        <button
+        <div
           className="category-multi-trigger"
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            if (disabled) return;
-            setSearch("");
-            setOpen((current) => !current);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && open) {
-              event.preventDefault();
-              event.stopPropagation();
-              setOpen(false);
-            }
-          }}
+          ref={triggerRef}
+          role="combobox"
+          tabIndex={disabled ? -1 : 0}
+          aria-disabled={disabled}
+          onClick={() => { if (open) closeAndFocusTrigger(); else if (!disabled) { setSearch(""); setOpen(true); } }}
+          onKeyDown={handleTriggerKeyDown}
           aria-label={ariaLabel}
           aria-haspopup="listbox"
           aria-expanded={open}
         >
           <span className="category-multi-values">{renderOptionContent(selected, true)}</span>
           <ChevronDown className="category-multi-chevron" size={15} />
-        </button>
+        </div>
       </div>
       <div className="category-multi-native-control">
         <div className="category-multi-native-picker">
@@ -160,14 +163,19 @@ export default function FilterSelect({
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (visibleOptions[0]) choose(visibleOptions[0].value);
+                  }
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
                     focusOption(0);
                   }
                   if (event.key === "Escape") {
                     event.stopPropagation();
-                    setOpen(false);
-                    rootRef.current?.querySelector("button")?.focus();
+                    event.preventDefault();
+                    closeAndFocusTrigger();
                   }
                 }}
                 placeholder={searchPlaceholder}
