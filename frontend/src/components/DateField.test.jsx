@@ -77,8 +77,23 @@ it("closes only the date picker on Escape without changing the date", async () =
   const user = userEvent.setup();
   const onChange = vi.fn();
   show({ onChange });
-  await user.click(screen.getByRole("textbox", { name: "Data" }));
-  await user.keyboard("{ArrowDown}{Escape}");
+  const input = screen.getByRole("textbox", { name: "Data" });
+  await user.click(input);
+  await user.keyboard("{ArrowDown}");
+  await waitFor(() => expect(document.activeElement).not.toBe(input));
+  await user.keyboard("{Escape}");
   expect(document.querySelector(".date-day-popover")).not.toBeInTheDocument();
   expect(onChange).not.toHaveBeenCalled();
+  expect(input).toHaveFocus();
+});
+
+it("commits an edited date on blur outside the calendar", async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  show({ onChange });
+  const input = screen.getByRole("textbox", { name: "Data" });
+  await user.clear(input);
+  await user.type(input, "15102026");
+  await user.tab();
+  expect(onChange).toHaveBeenCalledWith("2026-10-15");
 });
