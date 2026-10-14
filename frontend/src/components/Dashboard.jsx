@@ -136,7 +136,7 @@ function SinceMonthStartMeta({ value, language }) {
   );
 }
 
-export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, historyLoading = false, categoriesLoading = false, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction, activeSection = "overview", onActiveSectionChange, year, month, walletRefreshKey = 0 }) {
+export default function Dashboard({ summary, balanceSeries = [], comparisons = [], invoices = [], monthData, categories = [], categoryBreakdown = EMPTY_CATEGORY_BREAKDOWN, historyLoading = false, categoriesLoading = false, loadError = false, onRetry, onLoadCategoryDetails, onOpenTransaction, onNewTransaction, newShortcutEnabled = false, activeSection = "overview", onActiveSectionChange, year, month, walletRefreshKey = 0 }) {
   const { t, language } = useI18n();
   const safeSummary = summary || {};
   const safeCategoryBreakdown = categoryBreakdown || EMPTY_CATEGORY_BREAKDOWN;
@@ -568,7 +568,7 @@ export default function Dashboard({ summary, balanceSeries = [], comparisons = [
       {selectedExpenseGroup && <CategoryExpenseDetailsModal group={selectedExpenseGroup} language={language} loading={expenseDetailsLoading} error={expenseDetailsError} income={viewingIncome} onClose={() => setSelectedExpenseGroup(null)} />}
       {flowDetailsType && <MonthlyFlowDetailsModal days={monthData?.days || []} type={flowDetailsType} total={flowDetailsType === "income" ? safeSummary.total_income : safeSummary.total_expenses} language={language} year={year ?? monthData?.year ?? safeSummary.year} month={month ?? monthData?.month ?? safeSummary.month} onClose={() => setFlowDetailsType(null)} />}
       {projectionOpen && safeSummary && <ProjectionBreakdownModal summary={safeSummary} onClose={() => setProjectionOpen(false)} />}
-      <button className="dashboard-new-fab" type="button" onClick={onNewTransaction} aria-label={copy("Novo lançamento", "New transaction")}><Plus size={24} /></button>
+      <button className="dashboard-new-fab" type="button" onClick={onNewTransaction} aria-label={copy("Novo lançamento", "New transaction")} aria-keyshortcuts={newShortcutEnabled ? "N" : undefined} title={newShortcutEnabled ? `${copy("Novo lançamento", "New transaction")} (N)` : undefined}><Plus size={24} /></button>
     </div>
   );
 }

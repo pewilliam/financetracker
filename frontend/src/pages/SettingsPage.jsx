@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { ChevronDown, ChevronUp, CircleDollarSign, Download, Edit3, EyeOff, Languages, LockKeyhole, PanelBottom, PanelLeft, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDollarSign, Download, Edit3, EyeOff, Languages, LockKeyhole, PanelBottom, PanelLeft, Keyboard, Plus, Settings2, ShieldCheck, Tags, Trash2, UserRound, WalletCards } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { updatePassword } from "../api/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -18,6 +18,8 @@ export default function SettingsPage({
   categories = [],
   navigationMode = "sidebar",
   onNavigationModeChange,
+  newShortcutEnabled = true,
+  onNewShortcutEnabledChange,
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
@@ -241,6 +243,14 @@ export default function SettingsPage({
                 <span><strong>{t("settings.dockNavigation")}</strong><small>{t("settings.dockNavigationDescription")}</small></span>
               </button>
             </div>
+          </div>
+
+          <div className="card settings-panel">
+            <div className="settings-panel-title"><i><Keyboard size={18} /></i><div><h3>{tt("settings.keyboardShortcuts", "Atalhos de teclado")}</h3><p>{tt("settings.keyboardShortcutsDescription", "Use N para criar um lançamento sem clicar no botão Novo.")}</p></div></div>
+            <label className={`toggle-row ${newShortcutEnabled ? "active" : ""}`}>
+              <input type="checkbox" checked={newShortcutEnabled} onChange={(event) => onNewShortcutEnabledChange?.(event.target.checked)} />
+              <span>{tt("settings.enableNewShortcut", "Ativar atalho N para Novo")}</span>
+            </label>
           </div>
 
           <form className="card settings-panel" onSubmit={saveInvoiceProtection}>

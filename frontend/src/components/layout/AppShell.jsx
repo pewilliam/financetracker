@@ -16,6 +16,7 @@ import ReceivableModal from "../../modals/ReceivableModal.jsx";
 import ReceivableDetailsModal from "../../modals/ReceivableDetailsModal.jsx";
 import ReceivablePersonModal from "../../modals/ReceivablePersonModal.jsx";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock.js";
+import useNewShortcut, { NEW_SHORTCUT_STORAGE_KEY, readNewShortcutEnabled } from "../../hooks/useNewShortcut.js";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
@@ -81,6 +82,15 @@ export default function AppShell() {
   const [chromeHidden, setChromeHidden] = useState(false);
   const [scrollToTopVisible, setScrollToTopVisible] = useState(false);
   const [mobileDockHidden, setMobileDockHidden] = useState(false);
+  const [newShortcutEnabled, setNewShortcutEnabled] = useState(readNewShortcutEnabled);
+  const updateNewShortcutEnabled = (enabled) => {
+    setNewShortcutEnabled(enabled);
+    try {
+      localStorage.setItem(NEW_SHORTCUT_STORAGE_KEY, enabled ? "1" : "0");
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  };
   const [navigationMode, setNavigationMode] = useState(() => {
     try {
       return localStorage.getItem(NAVIGATION_MODE_STORAGE_KEY) === "dock" ? "dock" : "sidebar";
@@ -1440,6 +1450,12 @@ export default function AppShell() {
     await refreshCards();
   };
 
+  useNewShortcut({
+    enabled: newShortcutEnabled,
+    blocked: overlayOpen,
+    onNew: () => location.pathname === "/recebiveis" ? openReceivableModal() : openAddForm(),
+  });
+
   return (
     <div className={`app-layout navigation-${navigationMode} ${menuOpen ? "sidebar-open" : "sidebar-closed"}${chromeHidden ? " chrome-hidden" : ""}${mobileDockHidden ? " mobile-dock-hidden" : ""}`}>
       <Toaster position="top-right" />
@@ -1469,7 +1485,7 @@ export default function AppShell() {
                 <button className="btn month-nav-button" type="button" aria-label={t("actions.previous")} onClick={() => { const target = shiftMonth(year, month, -1); goToMonth(target.year, target.month); }}><ChevronLeft className="month-nav-icon" size={22} /><span>{t("actions.previous")}</span></button>
                 <MonthField value={monthInputValue} displayLabel={viewingBudget ? formatMonthLabel(year, month, language) : ""} ariaLabel={viewingBudget ? t("categories.chooseMonth") : language === "en-US" ? "Choose month" : "Escolher mês"} onChange={(value) => { const [y, m] = value.split("-").map(Number); if (y && m) goToMonth(y, m); }} />
                 <button className="btn month-nav-button" type="button" aria-label={t("actions.next")} onClick={() => { const target = shiftMonth(year, month, 1); goToMonth(target.year, target.month); }}><ChevronRight className="month-nav-icon" size={22} /><span>{t("actions.next")}</span></button>
-                <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()}><Plus size={16} /> {t("actions.new")}</button>
+                <button className="btn btn-primary header-new-btn" data-months-tour={location.pathname === "/meses" ? "new" : undefined} type="button" onClick={() => openAddForm()} aria-keyshortcuts={newShortcutEnabled ? "N" : undefined} title={newShortcutEnabled ? `${t("actions.new")} (N)` : undefined}><Plus size={16} /> {t("actions.new")}</button>
               </div>
             </header>
             </>
@@ -1478,8 +1494,8 @@ export default function AppShell() {
           {loading ? <Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} /> : (
             <Suspense fallback={<Skeleton variant={loadingVariant} label={loadingLabel} hint={loadingHint} />}>
               <Routes>
-                <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisonView} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} historyLoading={historyLoading} categoriesLoading={categoriesLoading} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} year={year} month={month} walletRefreshKey={walletRefreshKey} />} />
-                <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveTransaction={moveMonthTransaction} onMoveCalendarEntry={moveCalendarEntryDate} />} />
+                <Route path="/" element={<Dashboard summary={summary} balanceSeries={balanceSeries} comparisons={comparisonView} invoices={invoices} monthData={monthData} categories={categories} categoryBreakdown={categoryBreakdown} historyLoading={historyLoading} categoriesLoading={categoriesLoading} loadError={dashboardLoadError} onRetry={() => refresh()} onLoadCategoryDetails={loadCategoryExpenseDetails} onOpenTransaction={openTransactionEditor} onNewTransaction={() => openAddForm()} newShortcutEnabled={newShortcutEnabled} activeSection={dashboardSection} onActiveSectionChange={setDashboardSection} year={year} month={month} walletRefreshKey={walletRefreshKey} />} />
+                <Route path="/meses" element={<MonthsPage monthData={monthData} summary={summary} monthCards={monthCards} invoices={invoices} expenseOptions={receivableExpenseOptions} year={year} month={month} setYear={setYear} setMonth={setMonth} openAddForm={openAddForm} newShortcutEnabled={newShortcutEnabled} onEditTransaction={openTransactionEditor} removeTransaction={setTransactionToDelete} onOpenReceivable={openReceivableDetails} onLoadCategoryDetails={loadCategoryExpenseDetails} onOverlayChange={setPageOverlayOpen} onMoveTransaction={moveMonthTransaction} onMoveCalendarEntry={moveCalendarEntryDate} />} />
                 <Route path="/categorias" element={<CategoriesPage categories={categories} categoryBreakdown={categoryBreakdown} previousCategoryBreakdown={previousCategoryBreakdown} budgetPlan={budgetPlan} mobileTab={budgetMobileTab} onMobileTabChange={setBudgetMobileTab} onLoadExpenseDetails={loadCategoryExpenseDetails} onUpdateCategory={editCategory} onSavePlanning={saveBudgetPlanning} />} />
                 <Route path="/carteiras" element={<WalletsPage summary={walletSummary} onChanged={syncMonthCollections} onOverlayChange={setPageOverlayOpen} />} />
                 <Route path="/produtos-desejados" element={<DesiredProductsPage categories={categories} onCreateCategory={saveCategory} onOverlayChange={setPageOverlayOpen} />} />
@@ -1492,7 +1508,7 @@ export default function AppShell() {
                 <Route path="/simulador" element={<SimulationPage invoices={invoices} cards={cards} allowOverdueInvoiceEdits={allowOverdueInvoiceEdits} monthCards={monthCards} onInserted={refresh} />} />
                 <Route path="/recebiveis" element={<ReceivablesPage receivables={receivables} people={receivablePeople} linkedTransactions={linkedReceivableTransactions} summary={receivableBoardSummary} paidLoaded={paidReceivablesLoaded} paidLoading={paidReceivablesLoading} onExpandPaid={ensurePaidReceivables} onNew={() => openReceivableModal()} onNewPerson={() => openReceivablePersonModal()} onEditPerson={(person) => openReceivablePersonModal(person)} onEdit={openReceivableModal} onEditLinkedTransaction={editLinkedReceivableTransaction} onPaid={openReceivablePaidModal} onPayment={openReceivablePaymentModal} onDelete={(receivable) => receivable.payments?.length ? removeReceivable(receivable) : setReceivableToDelete(receivable)} onDeletePayment={(receivable, payment) => setPaymentToCancel({ receivable, payment })} onOverlayChange={setPageOverlayOpen} actionOverlayOpen={receivableModal || !!receivablePersonModal || !!receivablePayment || !!paymentToCancel || !!receivableToDelete} />} />
                 <Route path="/contas-a-receber" element={<Navigate to="/recebiveis" replace />} />
-                <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
+                <Route path="/configuracoes" element={<SettingsPage summary={summary} monthLabel={formatMonthLabel(year, month, language)} monthData={monthData} year={year} month={month} categories={categories} navigationMode={navigationMode} onNavigationModeChange={setNavigationMode} newShortcutEnabled={newShortcutEnabled} onNewShortcutEnabledChange={updateNewShortcutEnabled} onCreateCategory={saveCategory} onUpdateCategory={editCategory} onDeleteCategory={removeCategory} refresh={refresh} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
@@ -1504,6 +1520,7 @@ export default function AppShell() {
         hidden={overlayOpen}
       />
       <MobileDock
+        newShortcutEnabled={newShortcutEnabled}
         hidden={overlayOpen}
         onHiddenChange={setMobileDockHidden}
         onNew={() => location.pathname === "/recebiveis" ? openReceivableModal() : openAddForm()}
