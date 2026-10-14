@@ -243,11 +243,18 @@ export default function DateField({ value, onChange, onBlur, className = "", ari
     setOpen(false);
   };
 
-  const handleInputBlur = () => {
+  const handleInputBlur = (event) => {
+    // Moving focus into the portaled calendar is not leaving the date field.
+    if (popoverRef.current?.contains(event.relatedTarget)) return;
+
     const nextValue = parseDisplayDate(text, language);
-    if (clearable && !text.trim()) onChange("");
-    else if (nextValue && !blocked(nextValue)) onChange(nextValue);
-    else setText(formatDisplayDate(value, language));
+    if (clearable && !text.trim()) {
+      if (value) onChange("");
+    } else if (nextValue && !blocked(nextValue)) {
+      if (nextValue !== value) onChange(nextValue);
+    } else {
+      setText(formatDisplayDate(value, language));
+    }
     onBlur?.();
   };
 
