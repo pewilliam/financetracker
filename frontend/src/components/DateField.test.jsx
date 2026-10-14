@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../i18n/index.ts";
@@ -57,4 +57,28 @@ it("resets the year panel when reopening and limits the available range", async 
   expect(screen.queryByRole("listbox", { name: "Ano" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Selecionar ano, 2026" }));
   expect(screen.getByRole("option", { name: "2026" })).toHaveAttribute("aria-selected", "true");
+});
+
+it("navigates days and weeks with arrows, then selects with Enter", async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  show({ onChange });
+  await user.click(screen.getByRole("textbox", { name: "Data" }));
+  const input = screen.getByRole("textbox", { name: "Data" });
+  await user.keyboard("{ArrowDown}");
+  await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toMatch(/outubro de 2026/i));
+  await user.keyboard("{ArrowRight}{ArrowDown}{Enter}");
+  expect(onChange).toHaveBeenCalledWith("2026-10-14");
+  expect(document.querySelector(".date-day-popover")).not.toBeInTheDocument();
+  expect(input).toHaveFocus();
+});
+
+it("closes only the date picker on Escape without changing the date", async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  show({ onChange });
+  await user.click(screen.getByRole("textbox", { name: "Data" }));
+  await user.keyboard("{ArrowDown}{Escape}");
+  expect(document.querySelector(".date-day-popover")).not.toBeInTheDocument();
+  expect(onChange).not.toHaveBeenCalled();
 });

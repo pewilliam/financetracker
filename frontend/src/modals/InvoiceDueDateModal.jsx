@@ -1,3 +1,4 @@
+import useModalEscape from "../hooks/useModalEscape.js";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, Loader2, X } from "lucide-react";
@@ -15,14 +16,7 @@ export default function InvoiceDueDateModal({ invoice, onSave, onClose }) {
   const changed = Boolean(dueDate) && dueDate !== currentPayment;
   const overdue = Boolean(dueDate) && getDaysUntil(dueDate) < 0;
 
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (document.querySelector(".date-popover")) return;
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, saving]);
+  useModalEscape({ onClose, busy: saving });
 
   const submit = async (event) => {
     event.preventDefault();

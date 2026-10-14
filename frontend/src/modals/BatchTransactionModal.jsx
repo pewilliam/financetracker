@@ -1,3 +1,4 @@
+import useModalEscape from "../hooks/useModalEscape.js";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, CalendarRange, Layers3, Loader2, Plus, ReceiptText, Trash2, WalletCards, X } from "lucide-react";
 import CategorySelect from "../components/CategorySelect.jsx";
@@ -78,6 +79,7 @@ function buildEntries(form) {
 }
 
 export default function BatchTransactionModal({ open, year, month, categories = [], wallets = [], onCreateCategory, onOpenSingle, onClose, onSave }) {
+  useModalEscape({ onClose, active: open, busy: false });
   const { language } = useI18n();
   const english = language === "en-US";
   const copy = (pt, en) => english ? en : pt;

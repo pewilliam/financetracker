@@ -17,6 +17,7 @@ import ReceivableDetailsModal from "../../modals/ReceivableDetailsModal.jsx";
 import ReceivablePersonModal from "../../modals/ReceivablePersonModal.jsx";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock.js";
 import useNewShortcut, { NEW_SHORTCUT_STORAGE_KEY, readNewShortcutEnabled } from "../../hooks/useNewShortcut.js";
+import { hasOpenPicker } from "../../hooks/useModalEscape.js";
 import ReceivablePaymentModal from "../../modals/ReceivablePaymentModal.jsx";
 import CancelReceivablePaymentModal from "../../modals/CancelReceivablePaymentModal.jsx";
 import DeleteReceivableModal from "../../modals/DeleteReceivableModal.jsx";
@@ -185,6 +186,25 @@ export default function AppShell() {
     [receivableDetailsId, receivables]
   );
   const overlayOpen = drawerOpen || batchModalOpen || installmentModal || !!installmentDetails || !!installmentToDelete || receivableModal || !!receivablePersonModal || !!receivableDetailsGroup || !!receivablePayment || !!paymentToCancel || !!receivableToDelete || !!transactionToDelete || pageOverlayOpen || invoiceItemsOverlay;
+  useEffect(() => {
+    const closeTopDialog = (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || hasOpenPicker()) return;
+      const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"]')]
+        .filter((dialog) => dialog.getClientRects().length || dialog.getAttribute("aria-modal") === "true");
+      const top = dialogs.at(-1);
+      if (!top) return;
+      const close = [...top.querySelectorAll('button')]
+        .find((button) => /^(Fechar|Close|Cancelar|Cancel)/i.test(button.getAttribute("aria-label") || button.textContent?.trim() || ""))
+        || top.querySelector('button.icon-btn');
+      if (!close || close.disabled) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      close.click();
+    };
+    document.addEventListener("keydown", closeTopDialog, true);
+    return () => document.removeEventListener("keydown", closeTopDialog, true);
+  }, []);
+
   // Lock the body while modal overlays are active so background content does not jump.
   const bodyLocked = overlayOpen;
 

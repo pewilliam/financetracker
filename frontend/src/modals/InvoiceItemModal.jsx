@@ -1,3 +1,4 @@
+import useModalEscape from "../hooks/useModalEscape.js";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CircleMinus, Link2, Loader2, Pencil, ShoppingBag, X } from "lucide-react";
@@ -45,14 +46,7 @@ export default function InvoiceItemModal({ invoice, item, categories = [], expen
     return () => cancelAnimationFrame(focusFrame);
   }, []);
 
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (document.querySelector(".category-modal-layer")) return;
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, saving]);
+  useModalEscape({ onClose, busy: saving });
 
   const submit = async (event) => {
     event.preventDefault();

@@ -1,3 +1,4 @@
+import useModalEscape from "../hooks/useModalEscape.js";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CircleDollarSign, EyeOff, Loader2, Tags, X } from "lucide-react";
@@ -19,15 +20,10 @@ export default function CategoryModal({ category = null, onSave, onClose, layerC
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
+    return () => { document.body.style.overflow = previousOverflow; };
   }, [onClose, saving]);
+
+  useModalEscape({ onClose, busy: saving });
 
   const cleanName = name.trim();
   const submit = async (event) => {

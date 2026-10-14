@@ -1,3 +1,4 @@
+import useModalEscape from "../hooks/useModalEscape.js";
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Layers3, Link2, Minus, Plus, Wallet, X } from "lucide-react";
 import DateField from "../components/DateField.jsx";
@@ -102,6 +103,7 @@ function defaultSeriesCountForExpense(option, expenseOptions) {
 }
 
 export default function ReceivableModal({ form, setForm, editing, receivables = [], people, categories = [], expenseOptions = [], onCreateCategory, onCreatePerson, onSubmit, onClose }) {
+  useModalEscape({ onClose, active: true, busy: false });
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
   const [excessConfirmed, setExcessConfirmed] = useState(false);
