@@ -194,7 +194,7 @@ function MonthsTutorial({ content, layoutKey, open, stepIndex, onBack, onClose, 
   );
 }
 
-export default function MonthsPage({ monthData, summary, monthCards, invoices = [], expenseOptions = [], year, month, setYear, setMonth, openAddForm, onEditTransaction, removeTransaction, onOpenReceivable, onLoadCategoryDetails, onOverlayChange, onMoveTransaction, onMoveCalendarEntry }) {
+export default function MonthsPage({ monthData, summary, monthCards, invoices = [], expenseOptions = [], year, month, setYear, setMonth, openAddForm, newShortcutEnabled = false, onEditTransaction, removeTransaction, onOpenReceivable, onLoadCategoryDetails, onOverlayChange, onMoveTransaction, onMoveCalendarEntry }) {
   const { user, completeTutorial } = useAuth();
   const { t, language } = useI18n();
   const tt = (key, pt, values) => language === "en-US" ? t(key, values) : pt;
@@ -544,7 +544,7 @@ export default function MonthsPage({ monthData, summary, monthCards, invoices = 
           <span>{tt("monthlyTable.today", "Hoje")}</span>
         </button>
       )}
-      <button className="month-new-fab" data-months-tour="new" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")}>
+      <button className="month-new-fab" data-months-tour="new" type="button" onClick={() => openAddForm()} aria-label={tt("actions.new", "Novo lançamento")} aria-keyshortcuts={newShortcutEnabled ? "N" : undefined} title={newShortcutEnabled ? `${tt("actions.new", "Novo lançamento")} (N)` : undefined}>
         <Plus size={24} />
       </button>
       {projectionSummary && <ProjectionBreakdownModal summary={projectionSummary} onClose={closeCardProjection} />}
