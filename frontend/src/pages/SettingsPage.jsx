@@ -20,6 +20,8 @@ export default function SettingsPage({
   onNavigationModeChange,
   newShortcutEnabled = true,
   onNewShortcutEnabledChange,
+  topShortcutEnabled = true,
+  onTopShortcutEnabledChange,
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
@@ -250,6 +252,10 @@ export default function SettingsPage({
             <label className={`toggle-row ${newShortcutEnabled ? "active" : ""}`}>
               <input type="checkbox" checked={newShortcutEnabled} onChange={(event) => onNewShortcutEnabledChange?.(event.target.checked)} />
               <span>{tt("settings.enableNewShortcut", "Ativar atalho N para Novo")}</span>
+            </label>
+            <label className={`toggle-row ${topShortcutEnabled ? "active" : ""}`}>
+              <input type="checkbox" checked={topShortcutEnabled} onChange={(event) => onTopShortcutEnabledChange?.(event.target.checked)} />
+              <span>{tt("settings.enableTopShortcut", "Ativar atalho T para voltar ao topo")}</span>
             </label>
           </div>
 
