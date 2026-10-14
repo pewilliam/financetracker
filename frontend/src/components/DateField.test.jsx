@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { I18nProvider, LANGUAGE_STORAGE_KEY } from "../i18n/index.ts";
@@ -66,7 +66,7 @@ it("navigates days and weeks with arrows, then selects with Enter", async () => 
   await user.click(screen.getByRole("textbox", { name: "Data" }));
   const input = screen.getByRole("textbox", { name: "Data" });
   await user.keyboard("{ArrowDown}");
-  expect(document.activeElement?.getAttribute("aria-label")).toMatch(/outubro de 2026/i);
+  await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toMatch(/outubro de 2026/i));
   await user.keyboard("{ArrowRight}{ArrowDown}{Enter}");
   expect(onChange).toHaveBeenCalledWith("2026-10-14");
   expect(document.querySelector(".date-day-popover")).not.toBeInTheDocument();
